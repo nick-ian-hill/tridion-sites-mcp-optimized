@@ -1,0 +1,12 @@
+{
+  "mcpServers": [
+    {
+      "name": "example-tridion-sitesmcp-server",
+      "command": "node",
+      "args": ["--inspect=9229", "--loader", "ts-node/esm", "src/index.ts"],
+      "tools": ["echo", "getItemById", "getDynamicItemById", "bulkReadItemsById", "updateComponentById", "search", "createItem", "updateItemById", "dependencyGraphForItem", "getPublications"],
+      "mode": "stdio",
+      "cwd": "."
+    }
+  ]
+}

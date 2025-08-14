@@ -1,0 +1,19 @@
+{
+  "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/schema/main/sdk/tools-config.json",
+  "tools": [
+    {
+      "name": "example-tridion-sites-mcp-server",
+      "displayName": "Example MCP Server",
+      "mode": "stdio",
+      "command": "node",
+      "args": [
+        "--inspect=9229",
+        "--loader",
+        "ts-node/esm",
+        "src/index.ts"
+      ],
+      "tools": ["echo", "getItemById", "getDynamicItemById", "bulkReadItemsById", "updateComponentById", "search", "createItem", "updateItemById", "dependencyGraphForItem", "getPublications"],
+      "cwd": "."
+    }
+  ]
+}
