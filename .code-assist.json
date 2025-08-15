@@ -25,7 +25,8 @@
         "dependencyGraphForItem",
         "getPublications",
         "getKeywordsForCategory",
-        "getCategories"
+        "getCategories",
+        "getItemsInContainer"
       ],
       "cwd": "."
     }

@@ -22,7 +22,8 @@
         "dependencyGraphForItem",
         "getPublications",
         "getKeywordsForCategory",
-        "getCategories"
+        "getCategories",
+        "getItemsInContainer"
       ],
       "mode": "stdio",
       "cwd": "."
