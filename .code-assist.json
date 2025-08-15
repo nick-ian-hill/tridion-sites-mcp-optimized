@@ -12,7 +12,21 @@
         "ts-node/esm",
         "src/index.ts"
       ],
-      "tools": ["echo", "getItemById", "getDynamicItemById", "bulkReadItemsById", "updateComponentById", "search", "createItem", "updateItemById", "dependencyGraphForItem", "getPublications"],
+      "tools": [
+        "echo",
+        "getItemById",
+        "getDynamicItemById",
+        "bulkReadItemsById",
+        "updateComponentById",
+        "search",
+        "createItem",
+        "createSchema",
+        "updateItemById",
+        "dependencyGraphForItem",
+        "getPublications",
+        "getKeywordsForCategory",
+        "getCategories"
+      ],
       "cwd": "."
     }
   ]
