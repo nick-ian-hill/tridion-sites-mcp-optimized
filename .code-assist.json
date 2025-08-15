@@ -1,5 +1,5 @@
 {
-  "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/schema/main/sdk/tools-config.json",
+  "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/modelcontextprotocol/main/schema/2025-03-26/schema.json",
   "tools": [
     {
       "name": "example-tridion-sites-mcp-server",
