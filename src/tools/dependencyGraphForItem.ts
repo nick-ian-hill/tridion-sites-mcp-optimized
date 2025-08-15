@@ -29,6 +29,26 @@ export const dependencyGraphForItem = {
         resultLimit: z.number().int().optional().default(1000).describe("The maximum number of dependency nodes to return."),
         details: z.enum(["IdAndTitleOnly", "WithApplicableActions", "Contentless"]).optional().default("IdAndTitleOnly").describe("Specifies the level of detail for the items returned in the graph."),
     },
+    examples: [
+        {
+            input: {
+                itemId: "tcm:5-256-8",
+                direction: "UsedBy",
+                details: "IdAndTitleOnly"
+            },
+            description: "Finds all items that are directly using the Schema with ID tcm:5-256-8, returning only their IDs and titles."
+        },
+        {
+            // Example 2: More complex 'Uses' check
+            input: {
+                itemId: "tcm:5-310-64",
+                direction: "Uses",
+                rloItemTypes: ["Component", "ComponentTemplate"],
+                includeContainers: true
+            },
+            description: "Finds all Components and Component Templates that the Page tcm:5-310-64 depends on, including the Folders that contain them. This request returns linked Components in addition to Components directly added to the page."
+        }
+    ],
     execute: async ({ itemId, direction, contextRepositoryId, rloItemTypes, includeContainers, resultLimit, details }: any) => {
         try {
             // The API requires the colon in the TCM URI to be replaced with an underscore.
