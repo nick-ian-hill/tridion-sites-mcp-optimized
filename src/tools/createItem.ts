@@ -10,7 +10,7 @@ export const createItem = {
     input: {
         itemType: z.enum([
             "Component", "Folder", "StructureGroup", "Keyword",
-            "Category", "Page", "Schema", "Bundle", "SearchFolder"
+            "Category", "Page", "Bundle", "SearchFolder"
         ]).describe("The type of CMS item to create."),
         title: z.string().describe("The title for the new item."),
         locationId: z.string().regex(/^(tcm|ecl):\d+-\d+(-\d+)?$/).describe("The TCM URI of the parent container (e.g., Folder, Structure Group, Category) where the new item will be created."),
@@ -115,7 +115,7 @@ export const createItem = {
 
             console.log('parent keywords', payload.ParentKeywords);
             // Add description for other applicable types
-            if ((itemType === 'Category' || itemType === 'Bundle' || itemType === 'Schema' || itemType === 'SearchFolder') && description) {
+            if ((itemType === 'Category' || itemType === 'Bundle' || itemType === 'SearchFolder') && description) {
                 payload.Description = description;
             }
 
