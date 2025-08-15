@@ -26,7 +26,11 @@
         "getPublications",
         "getKeywordsForCategory",
         "getCategories",
-        "getItemsInContainer"
+        "getItemsInContainer",
+        "localizeItemById",
+        "unlocalizeItemById",
+        "batchLocalizeItemsById",
+        "batchUnlocalizeItemsById"
       ],
       "cwd": "."
     }

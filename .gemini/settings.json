@@ -23,7 +23,11 @@
         "getPublications",
         "getKeywordsForCategory",
         "getCategories",
-        "getItemsInContainer"
+        "getItemsInContainer",
+        "localizeItemById",
+        "unlocalizeItemById",
+        "batchLocalizeItemsById",
+        "batchUnlocalizeItemsById"
       ],
       "mode": "stdio",
       "cwd": "."
