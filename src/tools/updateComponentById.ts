@@ -45,7 +45,8 @@ export const updateComponentById = {
                 const checkOutResponse = await authenticatedAxios.post(`/items/${restItemId}/checkOut`, checkOutRequestModel);
                 checkedOutItem = checkOutResponse.data;
             } else {
-                // Item is checked out by the agent, so we can use the existing item data.                checkedOutItem = item;
+                // Item is checked out by the agent, so we can use the existing item data.
+                checkedOutItem = item;
             }
 
             // Steps 3 & 4: Apply the new content and metadata to the stored item model.
