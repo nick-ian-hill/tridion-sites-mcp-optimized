@@ -3,32 +3,65 @@ import { authenticatedAxios } from "../lib/axios.js";
 import axios from "axios";
 
 /**
+ * Escapes special HTML characters for Graphviz HTML-like labels.
+ */
+const escapeHTML = (s: string): string =>
+    s
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, '\\"');
+
+/**
  * Converts a graph structure (nodes and edges) into the DOT language format.
  */
 const convertGraphToDot = (nodes: any[], edges: any[]): string => {
-    let dot = 'digraph Blueprint {\n';
-    dot += '  rankdir="TB";\n';
-    dot += '  bgcolor="transparent";\n';
-    dot += '  node [shape=box, style="filled", fillcolor="#4D2C91", fontcolor="#FFFFFF", color="#F50057", fontname="Arial"];\n';
-    dot += '  edge [arrowhead=vee, color="#F50057"];\n\n';
+    const parts: string[] = [];
+    parts.push('digraph Blueprint {');
+    parts.push('  rankdir="TB";');
+    parts.push('  bgcolor="transparent";');
 
+    // Minimal global styles
+    parts.push('  node [shape=plaintext, fontname="Arial, Helvetica, sans-serif"];');
+    parts.push('  edge [arrowhead=vee, color="#F50057"];');
+    parts.push('');
+
+    // Nodes
     nodes.forEach(node => {
-        let label = node.label.replace(/"/g, '\\"');
+        let textLabel = escapeHTML(node.label);
         if (node.metadata?.item?.title && node.label !== node.metadata.item.title) {
-            const itemTitle = node.metadata.item.title.replace(/"/g, '\\"');
-            label += `\\n(${itemTitle})`;
+            const itemTitle = escapeHTML(node.metadata.item.title);
+            textLabel += `<BR/>(${itemTitle})`;
         }
-        dot += `  "${node.id}" [label="${label}"];\n`;
+
+        // Double-table structure for border → gap → fill
+        const htmlLabel = `
+<TABLE BORDER="2" COLOR="#F50057" CELLBORDER="0" CELLSPACING="0" CELLPADDING="1" BGCOLOR="#FFFFFF">
+  <TR>
+    <TD>
+      <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="3" BGCOLOR="#4D2C91">
+        <TR>
+          <TD ALIGN="CENTER">
+            <FONT COLOR="#FFFFFF">${textLabel}</FONT>
+          </TD>
+        </TR>
+      </TABLE>
+    </TD>
+  </TR>
+</TABLE>`;
+
+        parts.push(`  "${node.id}" [label=<${htmlLabel}>];`);
     });
 
-    dot += '\n';
+    parts.push('');
 
+    // Edges (parent → child)
     edges.forEach(edge => {
-        dot += `  "${edge.target}" -> "${edge.source}";\n`;
+        parts.push(`  "${edge.source}" -> "${edge.target}";`);
     });
 
-    dot += '}';
-    return dot;
+    parts.push('}');
+    return parts.join("\n");
 };
 
 export const getBluePrintHierarchy = {
@@ -42,7 +75,7 @@ export const getBluePrintHierarchy = {
     execute: async ({ itemId, outputFormat, details }: { itemId: string; outputFormat: "Raw" | "JsonGraph" | "Svg"; details: "IdAndTitleOnly" | "WithApplicableActions" | "Contentless" }) => {
         try {
             const apiDetails = (outputFormat === 'JsonGraph' || outputFormat === 'Svg') ? 'IdAndTitleOnly' : details;
-            
+
             const escapedItemId = itemId.replace(':', '_');
             const response = await authenticatedAxios.get(`/items/${escapedItemId}/bluePrintHierarchy`, {
                 params: { details: apiDetails }
@@ -80,14 +113,15 @@ export const getBluePrintHierarchy = {
                         if (!nodes.has(parentPubId)) {
                             nodes.set(parentPubId, { id: parentPubId, label: parent.Title });
                         }
-                        const uniqueEdgeId = `${childPubId}->${parentPubId}`;
+                        // Parent points to child
+                        const uniqueEdgeId = `${parentPubId}->${childPubId}`;
                         if (!edges.some(e => `${e.source}->${e.target}` === uniqueEdgeId)) {
-                           edges.push({ source: childPubId, target: parentPubId, relation: "is child of" });
+                            edges.push({ source: parentPubId, target: childPubId, relation: "has child" });
                         }
                     });
                 }
             });
-            
+
             if (outputFormat === 'JsonGraph') {
                 const graph = {
                     graph: {
@@ -108,7 +142,7 @@ export const getBluePrintHierarchy = {
                 const dotString = convertGraphToDot(Array.from(nodes.values()), edges);
                 const viz = await instance();
                 const svgOutput = await viz.renderString(dotString, { format: "svg", engine: "dot" });
-                
+
                 return {
                     content: [{
                         type: "text",
@@ -116,7 +150,7 @@ export const getBluePrintHierarchy = {
                     }],
                 };
             }
-            
+
             return { content: [], errors: [{ message: "Invalid output format specified." }] };
 
         } catch (error) {
