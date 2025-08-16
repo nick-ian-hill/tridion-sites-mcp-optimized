@@ -19,6 +19,7 @@ import { getKeywordsForCategory } from "./tools/getKeywordsForCategory.js";
 import { getItemsInContainer } from "./tools/getItemsInContainer.js";
 import { createSchema } from "./tools/createSchema.js";
 import { createPublication } from "./tools/createPublication.js";
+import { getBluePrintHierarchy } from "./tools/getBluePrintHierarchy.js";
 
 const server = new McpServer({
   name: "tridion-sites-mcp-server",
@@ -28,6 +29,7 @@ const server = new McpServer({
 const tools: any[] = [
   echo,
   bulkReadItemsById,
+  getBluePrintHierarchy,
   getCategories,
   getDynamicItemById,
   getItemById,
