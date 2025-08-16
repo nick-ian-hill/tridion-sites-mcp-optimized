@@ -18,6 +18,7 @@
         "search",
         "createItem",
         "createSchema",
+        "createPublication",
         "updateItemById",
         "dependencyGraphForItem",
         "getPublications",

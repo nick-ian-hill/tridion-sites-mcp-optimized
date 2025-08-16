@@ -18,6 +18,7 @@ import { getCategories } from "./tools/getCategories.js";
 import { getKeywordsForCategory } from "./tools/getKeywordsForCategory.js";
 import { getItemsInContainer } from "./tools/getItemsInContainer.js";
 import { createSchema } from "./tools/createSchema.js";
+import { createPublication } from "./tools/createPublication.js";
 
 const server = new McpServer({
   name: "tridion-sites-mcp-server",
@@ -26,23 +27,24 @@ const server = new McpServer({
 
 const tools: any[] = [
   echo,
-  getItemById,
-  getDynamicItemById,
   bulkReadItemsById,
-  updateComponentById,
-  search,
-  createItem,
-  updateItemById,
-  dependencyGraphForItem,
+  getCategories,
+  getDynamicItemById,
+  getItemById,
+  getItemsInContainer,
+  getKeywordsForCategory,
   getPublications,
+  updateComponentById,
+  updateItemById,
+  createItem,
+  createSchema,
+  createPublication,
+  search,
+  dependencyGraphForItem,
   localizeItemById,
   unlocalizeItemById,
   batchLocalizeItemsById,
   batchUnlocalizeItemsById,
-  getCategories,
-  getKeywordsForCategory,
-  getItemsInContainer,
-  createSchema,
 ];
 
 tools.forEach(tool => {
