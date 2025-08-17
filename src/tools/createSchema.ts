@@ -12,7 +12,7 @@ export const createSchema = {
     Allowed Multimedia Types are only applicable when the purpose of the Schema is 'Multimedia'.`,
     input: {
         title: z.string().describe("The title for the new Schema."),
-        locationId: z.string().regex(/^(tcm|ecl):\d+-\d+(-\d+)?$/).describe("The TCM URI of the parent Folder where the new Schema will be created."),
+        locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new Schema will be created."),
         purpose: z.enum([
             "Component", "Multimedia", "Embedded",
             "Metadata", "Bundle", "Region"
