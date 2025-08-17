@@ -1,8 +1,7 @@
 import { z } from "zod";
 import { authenticatedAxios } from "../lib/axios.js";
 import axios from "axios";
-
-const toLinkArray = (ids: string[] | undefined) => (ids && ids.length > 0 ? ids.map(id => ({ "$type": "Link", "IdRef": id })) : undefined);
+import { toLinkArray } from "../utils/links.js";
 
 export const createSchema = {
     name: "createSchema",
@@ -17,7 +16,7 @@ export const createSchema = {
         rootElementName: z.string().describe("The name of the root element for the XML structure defined by the Schema."),
         description: z.string().optional().describe("An optional description for the Schema."),
         namespaceUri: z.string().optional().describe("The namespace URI (target namespace) of the Schema."),
-        fields: z.string().optional().describe("An XML string defining the content fields of the Schema, compliant with XSD 1.0. This is used for 'Component', 'Multimedia', and 'Embedded' purpose Schemas."),
+        fields: z.string().optional().describe("An XML string defining the content fields of the Schema, compliant with XSD 1.0. This is used for 'Component' and 'Embedded' purpose Schemas. When creating a text field where the values are provided by a Category (i.e., where the values are keywords), the Category must be specified. It is therefore recommended to create the Category before creating the Schema."),
         metadataFields: z.string().optional().describe("An XML string defining the metadata fields of the Schema, compliant with XSD 1.0."),
         allowedMultimediaTypes: z.array(z.string().regex(/^(tcm|ecl):\d+-\d+(-\d+)?$/)).optional().describe("An array of TCM URIs for allowed Multimedia Types. Only applicable when 'purpose' is 'Multimedia'."),
         bundleProcessId: z.string().regex(/^(tcm|ecl):\d+-\d+(-\d+)?$/).optional().describe("The TCM URI of a Process Definition to associate as the Bundle Process."),

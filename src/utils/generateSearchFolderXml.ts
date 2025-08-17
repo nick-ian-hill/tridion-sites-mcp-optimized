@@ -1,8 +1,5 @@
 import { SearchQuery } from "../schemas/searchSchema.js";
 
-// =====================================================================================================================
-// HELPER FUNCTION TO GENERATE XML CONFIGURATION FOR SEARCH FOLDER
-// =====================================================================================================================
 /**
  * Generates the XML configuration string for a SearchFolder based on the provided SearchQuery.
  * @param searchQuery The search query object.

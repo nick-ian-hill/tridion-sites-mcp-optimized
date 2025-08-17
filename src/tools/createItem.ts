@@ -3,6 +3,7 @@ import { authenticatedAxios } from "../lib/axios.js";
 import axios from "axios";
 import { SearchQueryValidation } from "../schemas/searchSchema.js";
 import { generateSearchFolderXmlConfiguration } from "../utils/generateSearchFolderXml.js";
+import { toLinkArray } from "../utils/links.js";
 
 export const createItem = {
     name: "createItem",
@@ -30,8 +31,6 @@ export const createItem = {
         resultLimit: z.number().int().default(100).describe("The maximum number of results to return. Only applicable to SearchFolder type")
     },
     execute: async ({ itemType, title, locationId, schemaId, metadataSchemaId, content, metadata, fileName, pageTemplateId, isAbstract, description, key, parentKeywords, relatedKeywords, itemsInBundle, searchQuery, resultLimit }: any) => {
-        // Helper function to create a Link array
-        const toLinkArray = (ids: string[] | undefined) => (ids && ids.length > 0 ? ids.map(id => ({ "$type": "Link", "IdRef": id })) : undefined);
         console.log('SearchQuery', searchQuery);
         console.log('Creating item of type:', itemType);
         if (!itemType) {

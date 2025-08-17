@@ -3,6 +3,7 @@ import { authenticatedAxios } from "../lib/axios.js";
 import axios from "axios";
 import { SearchQueryValidation } from "../schemas/searchSchema.js";
 import { generateSearchFolderXmlConfiguration } from "../utils/generateSearchFolderXml.js";
+import { toLinkArray } from "../utils/links.js";
 
 export const updateItemById = {
     name: "updateItemById",
@@ -42,9 +43,6 @@ If the item is locked by another user, the operation will be aborted.`,
 
         let agentId = null;
         let wasCheckedOutByTool = false;
-
-        // Helper function to create a Link array
-        const toLinkArray = (ids: string[] | undefined) => (ids && ids.length > 0 ? ids.map(id => ({ "$type": "Link", "IdRef": id })) : undefined);
 
         try {
             let itemToUpdate;

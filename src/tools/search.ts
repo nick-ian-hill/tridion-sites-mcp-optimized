@@ -2,6 +2,7 @@ import { z } from "zod";
 import { authenticatedAxios } from "../lib/axios.js";
 import axios from "axios";
 import { SearchQueryValidation } from "../schemas/searchSchema.js";
+import { toLink, toLinkArray } from "../utils/links.js";
 
 export const search = {
     name: "search",
@@ -20,10 +21,6 @@ export const search = {
     // The function now takes a single `searchQuery` object instead of an array.
     execute: async ({ searchQuery, resultLimit, details }: { searchQuery?: z.infer<typeof SearchQueryValidation>, resultLimit?: number, details?: "IdAndTitleOnly" | "WithApplicableActions" | "Contentless" }) => {
         try {
-            // Helper functions remain the same
-            const toLink = (id: string | undefined) => (id ? { "$type": "Link", "IdRef": id } : undefined);
-            const toLinkArray = (ids: string[] | undefined) => (ids && ids.length > 0 ? ids.map(id => ({ "$type": "Link", "IdRef": id })) : undefined);
-
             // Build the search request payload.
             // If searchQuery is provided, wrap it in an array for the API.
             // If not, create the default search payload.

@@ -22,6 +22,9 @@ import { createPublication } from "./tools/createPublication.js";
 import { getBluePrintHierarchy } from "./tools/getBluePrintHierarchy.js";
 import { moveItem } from "./tools/moveItem.js";
 import { copyItem } from "./tools/copyItem.js";
+import { updatePublicationById } from "./tools/updatePublicationById.js";
+import { getPublicationTypes } from "./tools/getPublicationTypes.js";
+import { createRootStructureGroup } from "./tools/createRootStructureGroup.js";
 
 const server = new McpServer({
   name: "tridion-sites-mcp-server",
@@ -38,13 +41,16 @@ const tools: any[] = [
   getItemsInContainer,
   getKeywordsForCategory,
   getPublications,
+  getPublicationTypes,
   copyItem,
   moveItem,
   updateComponentById,
   updateItemById,
+  updatePublicationById,
   createItem,
-  createSchema,
   createPublication,
+  createRootStructureGroup,
+  createSchema,
   search,
   dependencyGraphForItem,
   localizeItemById,
