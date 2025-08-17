@@ -20,6 +20,8 @@ import { getItemsInContainer } from "./tools/getItemsInContainer.js";
 import { createSchema } from "./tools/createSchema.js";
 import { createPublication } from "./tools/createPublication.js";
 import { getBluePrintHierarchy } from "./tools/getBluePrintHierarchy.js";
+import { moveItem } from "./tools/moveItem.js";
+import { copyItem } from "./tools/copyItem.js";
 
 const server = new McpServer({
   name: "tridion-sites-mcp-server",
@@ -36,6 +38,8 @@ const tools: any[] = [
   getItemsInContainer,
   getKeywordsForCategory,
   getPublications,
+  copyItem,
+  moveItem,
   updateComponentById,
   updateItemById,
   createItem,

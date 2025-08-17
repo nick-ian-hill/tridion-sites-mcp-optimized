@@ -22,6 +22,8 @@
         "getItemsInContainer",
         "getKeywordsForCategory",
         "getPublications",
+        "copyItem",
+        "moveItem",
         "updateComponentById",
         "updateItemById",
         "createItem",
