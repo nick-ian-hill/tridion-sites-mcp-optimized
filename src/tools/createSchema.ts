@@ -29,61 +29,70 @@ const baseFieldSchema = z.object({
 });
 
 // Schema for a simple text field
-const singleLineTextFieldSchema = baseFieldSchema.extend({
-    "$type": z.literal("SingleLineTextFieldDefinition"),
+const singleLineTextFieldSchema = z.object({
+    "$type": z.literal("SingleLineTextFieldDefinition")
+}).merge(baseFieldSchema).extend({
     List: listDefinitionSchema.optional()
 });
 
 // Schema for a multi-line text area
-const multiLineTextFieldSchema = baseFieldSchema.extend({
-    "$type": z.literal("MultiLineTextFieldDefinition"),
+const multiLineTextFieldSchema = z.object({
+    "$type": z.literal("MultiLineTextFieldDefinition")
+}).merge(baseFieldSchema).extend({
     Height: z.number().int().optional().describe("The height of the text area in the UI.")
 });
 
 // Schema for a rich-text (HTML) editor
-const xhtmlFieldSchema = baseFieldSchema.extend({
-    "$type": z.literal("XhtmlFieldDefinition"),
+const xhtmlFieldSchema = z.object({
+    "$type": z.literal("XhtmlFieldDefinition")
+}).merge(baseFieldSchema).extend({
     Height: z.number().int().optional().describe("The height of the rich text editor in the UI.")
 });
 
 // Schema for a Keyword link field
-const keywordFieldSchema = baseFieldSchema.extend({
-    "$type": z.literal("KeywordFieldDefinition"),
+const keywordFieldSchema = z.object({
+    "$type": z.literal("KeywordFieldDefinition")
+}).merge(baseFieldSchema).extend({
     List: listDefinitionSchema.optional()
 });
 
 // Schema for a numeric field
-const numberFieldSchema = baseFieldSchema.extend({
-    "$type": z.literal("NumberFieldDefinition"),
+const numberFieldSchema = z.object({
+    "$type": z.literal("NumberFieldDefinition")
+}).merge(baseFieldSchema).extend({
     List: listDefinitionSchema.optional()
 });
 
 // Schema for a date/time field
-const dateFieldSchema = baseFieldSchema.extend({
-    "$type": z.literal("DateFieldDefinition"),
+const dateFieldSchema = z.object({
+    "$type": z.literal("DateFieldDefinition")
+}).merge(baseFieldSchema).extend({
     List: listDefinitionSchema.optional()
 });
 
 // Schema for a URL field
-const externalLinkFieldSchema = baseFieldSchema.extend({
-    "$type": z.literal("ExternalLinkFieldDefinition"),
-});
+const externalLinkFieldSchema = z.object({
+    "$type": z.literal("ExternalLinkFieldDefinition")
+}).merge(baseFieldSchema);
 
 // Schema for a Component link field
-const componentLinkFieldSchema = baseFieldSchema.extend({
-    "$type": z.literal("ComponentLinkFieldDefinition"),
+const componentLinkFieldSchema = z.object({
+    "$type": z.literal("ComponentLinkFieldDefinition")
+}).merge(baseFieldSchema).extend({
     AllowedTargetSchemas: z.array(linkSchema).optional().describe("Restricts which types of Components can be linked.")
 });
 
 // Schema for a Multimedia link field
-const multimediaLinkFieldSchema = baseFieldSchema.extend({
-    "$type": z.literal("MultimediaLinkFieldDefinition"),
+const multimediaLinkFieldSchema = z.object({
+    "$type": z.literal("MultimediaLinkFieldDefinition")
+}).merge(baseFieldSchema).extend({
     AllowedTargetSchemas: z.array(linkSchema).optional().describe("Restricts which types of multimedia can be linked.")
 });
 
 // Schema for an embedded Schema field
-const embeddedSchemaFieldSchema = baseFieldSchema.extend({
-    "$type": z.literal("EmbeddedSchemaFieldDefinition"),
+const embeddedSchemaFieldSchema = z.object({
+    "$type": z.literal("EmbeddedSchemaFieldDefinition")
+}).merge(baseFieldSchema).extend({
     EmbeddedSchema: linkSchema.describe("A Link object to the Schema to be embedded.")
 });
 
@@ -154,11 +163,11 @@ Certain top-level properties are only applicable when the Schema has a specific 
         ]).describe("The purpose of the Schema, which determines where it can be used."),
         rootElementName: z.string().describe("The name of the root element for the XML structure defined by the Schema."),
         description: z.string().nonempty().describe("An mandatory description of the Schema."),
-        
+
         fields: z.record(fieldDefinitionSchema).optional().describe("A dictionary of field definitions for the Schema's content. The keys of the dictionary are the machine names of the fields."),
-        
+
         metadataFields: z.record(fieldDefinitionSchema).optional().describe("A dictionary of field definitions for the Schema's metadata. The keys of the dictionary are the machine names of the fields."),
-        
+
         allowedMultimediaTypes: z.array(z.string().regex(/^tcm:0-\d+-65544$/)).optional().describe("An array of TCM URIs for allowed Multimedia Types. Only applicable when 'purpose' is 'Multimedia'."),
         bundleProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of a Process Definition to associate as the Bundle Process."),
         componentProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of a Process Definition to associate as the Component Process for workflow."),
