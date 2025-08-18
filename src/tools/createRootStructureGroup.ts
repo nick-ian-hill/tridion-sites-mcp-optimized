@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { authenticatedAxios } from "../lib/axios.js";
-import axios from "axios";
+import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const createRootStructureGroup = {
     name: "createRootStructureGroup",
@@ -75,22 +75,11 @@ export const createRootStructureGroup = {
                     ],
                 };
             } else {
-                return {
-                    content: [],
-                    errors: [
-                        { message: `Unexpected response status during item creation: ${createResponse.status}` },
-                    ],
-                };
+                return handleUnexpectedResponse(createResponse);
             }
 
         } catch (error) {
-            const errorMessage = axios.isAxiosError(error)
-                ? (error.response ? `API Error Status ${error.response.status}: ${JSON.stringify(error.response.data)}` : error.message)
-                : String(error);
-            return {
-                content: [],
-                errors: [{ message: `Failed to create root Structure Group: ${errorMessage}` }],
-            };
+            return handleAxiosError(error, "Failed to create root Structure Group");
         }
     }
 };

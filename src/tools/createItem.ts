@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { authenticatedAxios } from "../lib/axios.js";
-import axios from "axios";
 import { SearchQueryValidation } from "../schemas/searchSchema.js";
 import { generateSearchFolderXmlConfiguration } from "../utils/generateSearchFolderXml.js";
 import { toLinkArray } from "../utils/links.js";
+import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const createItem = {
     name: "createItem",
@@ -35,22 +35,18 @@ export const createItem = {
         console.log('Creating item of type:', itemType);
         if (!itemType) {
             console.log('No model type.');
-            return { content: [], errors: [{ message: `Invalid itemType specified: ${itemType}` }] };
+            return { content: [{ type: "text", text: `Invalid itemType specified: ${itemType}` }], errors: [] };
         }
 
         // Perform validation for type-specific required fields
         if (itemType === 'Page' && (!fileName || !pageTemplateId)) {
-            console.log('Missing parameters for Page creation.');
-            return { content: [], errors: [{ message: "To create a 'Page', both 'fileName' and 'pageTemplateId' parameters are required." }] };
+            return { content: [{ type: "text", text: "To create a 'Page', both 'fileName' and 'pageTemplateId' parameters are required." }], errors: [] };
         }
         if (itemType === 'Component' && !schemaId) {
-            console.log('Missing parameters for Component creation.');
-            return { content: [], errors: [{ message: "To create a 'Component', the 'schemaId' parameter is required." }] };
+            return { content: [{ type: "text", text: "To create a 'Component', the 'schemaId' parameter is required." }], errors: [] };
         }
-        console.log('Query', searchQuery);
         if (itemType === 'SearchFolder' && !searchQuery) {
-            console.log('Missing parameters for SearchFolder creation.');
-            return { content: [], errors: [{ message: "To create a 'SearchFolder', the 'searchQuery' parameter is required." }] };
+            return { content: [{ type: "text", text: "To create a 'SearchFolder', the 'searchQuery' parameter is required." }], errors: [] };
         }
 
         try {
@@ -61,10 +57,8 @@ export const createItem = {
                     containerId: locationId
                 }
             });
-            console.log('default model', defaultModelResponse);
             if (defaultModelResponse.status !== 200) {
-                console.log('Failed to retrieve default model.');
-                return { content: [], errors: [{ message: `Failed to retrieve default model. Status: ${defaultModelResponse.status}, Message: ${defaultModelResponse.statusText}` }] };
+                return handleUnexpectedResponse(defaultModelResponse);
             }
 
             const payload = defaultModelResponse.data;
@@ -138,24 +132,13 @@ export const createItem = {
                     ],
                 };
             } else {
-                return {
-                    content: [],
-                    errors: [
-                        { message: `Unexpected response status during item creation: ${createResponse.status}` },
-                    ],
-                };
+                return handleUnexpectedResponse(createResponse);
             }
 
         } catch (error) {
             console.error('Error during item creation:', error);
             // Provide detailed error feedback for easier debugging by the agent
-            const errorMessage = axios.isAxiosError(error)
-                ? (error.response ? `API Error Status ${error.response.status}: ${JSON.stringify(error.response.data)}` : error.message)
-                : String(error);
-            return {
-                content: [],
-                errors: [{ message: `Failed to create CMS item: ${errorMessage}` }],
-            };
+            return handleAxiosError(error, "Failed to create CMS item");
         }
     }
 };

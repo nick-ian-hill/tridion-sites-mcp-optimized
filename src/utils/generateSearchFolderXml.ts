@@ -11,7 +11,6 @@ export const generateSearchFolderXmlConfiguration = (
   resultLimit: number = 100,
 ): string => {
   const itemTypeMap: Record<string, number> = {
-    "Publication": 1,
     "Folder": 2,
     "StructureGroup": 4,
     "Schema": 8,

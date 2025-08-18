@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { authenticatedAxios } from "../lib/axios.js";
-import axios from "axios";
+import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 /**
  * Escapes special HTML characters for Graphviz HTML-like labels.
@@ -82,7 +82,7 @@ export const getBluePrintHierarchy = {
             });
 
             if (response.status !== 200) {
-                return { content: [], errors: [{ message: `Failed to retrieve BluePrint hierarchy. Status: ${response.status}, Message: ${response.statusText}` }] };
+                return handleUnexpectedResponse(response);
             }
 
             const rawData = response.data;
@@ -151,13 +151,10 @@ export const getBluePrintHierarchy = {
                 };
             }
 
-            return { content: [], errors: [{ message: "Invalid output format specified." }] };
+            return { content: [{ type: "text", text: "Invalid output format specified." }], errors: [] };
 
         } catch (error) {
-            const errorMessage = axios.isAxiosError(error)
-                ? (error.response ? `API Error Status ${error.response.status}: ${JSON.stringify(error.response.data)}` : error.message)
-                : String(error);
-            return { content: [], errors: [{ message: `Failed to process BluePrint hierarchy request for item ${itemId}: ${errorMessage}` }] };
+            return handleAxiosError(error, `Failed to process BluePrint hierarchy request for item ${itemId}`);
         }
     }
 };

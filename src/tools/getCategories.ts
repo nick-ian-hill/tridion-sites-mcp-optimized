@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { authenticatedAxios } from "../lib/axios.js";
-import axios from "axios";
+import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const getCategories = {
     name: "getCategories",
@@ -16,41 +16,21 @@ export const getCategories = {
     execute: async ({ itemId }: { itemId: string }) => {
         try {
             const restItemId = itemId.replace(':', '_');
-
-            // Construct the API endpoint URL with the provided escaped item ID.
-            const endpoint = `/api/v3.0/items/${restItemId}/categories`;
-
-            // Make a GET request to the categories endpoint.
+            const endpoint = `/items/${restItemId}/categories`;
             const response = await authenticatedAxios.get(endpoint);
 
-            // A successful request will return a 200 OK status.
             if (response.status === 200) {
                 return {
-                    content: [
-                        {
-                            type: "text",
-                            text: JSON.stringify(response.data, null, 2)
-                        }
-                    ],
+                    content: [{
+                        type: "text",
+                        text: JSON.stringify(response.data, null, 2)
+                    }],
                 };
             } else {
-                // Handle any unexpected, non-error status codes.
-                return {
-                    content: [],
-                    errors: [
-                        { message: `Unexpected response status: ${response.status}` },
-                    ],
-                };
+                return handleUnexpectedResponse(response);
             }
         } catch (error) {
-            // Handle errors from the API call, such as a 404 Not Found or 500 Internal Server Error.
-            const errorMessage = axios.isAxiosError(error)
-                ? (error.response ? `Status ${error.response.status}: ${error.response.statusText} - ${JSON.stringify(error.response.data)}` : error.message)
-                : String(error);
-            return {
-                content: [],
-                errors: [{ message: `Failed to retrieve categories for publication '${itemId}': ${errorMessage}` }],
-            };
+            return handleAxiosError(error, `Failed to retrieve categories for publication '${itemId}'`);
         }
     }
 };

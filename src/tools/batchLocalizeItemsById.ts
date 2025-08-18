@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { authenticatedAxios } from "../lib/axios.js";
-import axios from "axios";
+import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const batchLocalizeItemsById = {
     name: "batchLocalizeItemsById",
@@ -13,37 +13,21 @@ export const batchLocalizeItemsById = {
     },
     execute: async ({ itemIds }: { itemIds: string[] }) => {
         try {
-            const requestModel = {
-                Ids: itemIds
-            };
+            const requestModel = { Ids: itemIds };
             const response = await authenticatedAxios.post('/batch/localize', requestModel);
 
-            // A successful batch request returns a 202 status code.
             if (response.status === 202) {
                 return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Batch localization process started for ${itemIds.length} items.\n\n${JSON.stringify(response.data, null, 2)}`
-                        }
-                    ],
+                    content: [{
+                        type: "text",
+                        text: `Batch localization process started for ${itemIds.length} items.\n\n${JSON.stringify(response.data, null, 2)}`
+                    }],
                 };
             } else {
-                return {
-                    content: [],
-                    errors: [
-                        { message: `Unexpected response status: ${response.status}` },
-                    ],
-                };
+                return handleUnexpectedResponse(response);
             }
         } catch (error) {
-            const errorMessage = axios.isAxiosError(error)
-                ? (error.response ? `Status ${error.response.status}: ${JSON.stringify(error.response.data)}` : error.message)
-                : String(error);
-            return {
-                content: [],
-                errors: [{ message: `Failed to start batch localization: ${errorMessage}` }],
-            };
+            return handleAxiosError(error, "Failed to start batch localization");
         }
     }
 };

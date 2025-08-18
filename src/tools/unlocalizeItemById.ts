@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { authenticatedAxios } from "../lib/axios.js";
-import axios from "axios";
+import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const unlocalizeItemById = {
     name: "unlocalizeItemById",
@@ -18,32 +18,18 @@ export const unlocalizeItemById = {
                 }
             });
 
-            // A successful unlocalization returns a 200 status code.
             if (response.status === 200) {
                 return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Successfully unlocalized item ${itemId}.\n\n${JSON.stringify(response.data, null, 2)}`
-                        }
-                    ],
+                    content: [{
+                        type: "text",
+                        text: `Successfully unlocalized item ${itemId}.\n\n${JSON.stringify(response.data, null, 2)}`
+                    }],
                 };
             } else {
-                return {
-                    content: [],
-                    errors: [
-                        { message: `Unexpected response status: ${response.status}` },
-                    ],
-                };
+                return handleUnexpectedResponse(response);
             }
         } catch (error) {
-            const errorMessage = axios.isAxiosError(error)
-                ? (error.response ? `Status ${error.response.status}: ${JSON.stringify(error.response.data)}` : error.message)
-                : String(error);
-            return {
-                content: [],
-                errors: [{ message: `Failed to unlocalize item ${itemId}: ${errorMessage}` }],
-            };
+            return handleAxiosError(error, `Failed to unlocalize item ${itemId}`);
         }
     }
 };

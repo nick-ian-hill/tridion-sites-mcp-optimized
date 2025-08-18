@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { authenticatedAxios } from "../lib/axios.js";
-import axios from "axios";
 import { SearchQueryValidation } from "../schemas/searchSchema.js";
 import { generateSearchFolderXmlConfiguration } from "../utils/generateSearchFolderXml.js";
 import { toLinkArray } from "../utils/links.js";
+import { handleAxiosError } from "../lib/errorUtils.js";
 
 export const updateItemById = {
     name: "updateItemById",
@@ -41,7 +41,6 @@ If the item is locked by another user, the operation will be aborted.`,
         const versionedItemTypes = ["Component", "Page", "Schema"];
         const isVersioned = versionedItemTypes.includes(itemType);
 
-        let agentId = null;
         let wasCheckedOutByTool = false;
 
         try {
@@ -51,7 +50,7 @@ If the item is locked by another user, the operation will be aborted.`,
                 // --- Versioned Item Handling ---
                 // 1. Get agent's user ID
                 const whoAmIResponse = await authenticatedAxios.get('/whoAmI');
-                agentId = whoAmIResponse.data?.User?.Id;
+                const agentId = whoAmIResponse.data?.User?.Id;
                 if (!agentId) {
                     throw new Error("Could not retrieve agent's user ID from whoAmI endpoint.");
                 }
@@ -64,8 +63,11 @@ If the item is locked by another user, the operation will be aborted.`,
 
                 if (isCheckedOut && checkedOutUser !== agentId) {
                     return {
-                        content: [],
-                        errors: [{ message: `Item ${itemId} is already checked out by another user with ID ${checkedOutUser}.` }],
+                        content: [{
+                            type: "text",
+                            text: `Item ${itemId} is already checked out by another user with ID ${checkedOutUser}.`
+                        }],
+                        errors: [],
                     };
                 }
 
@@ -153,13 +155,7 @@ If the item is locked by another user, the operation will be aborted.`,
                 }
             }
 
-            const errorMessage = axios.isAxiosError(error)
-                ? (error.response ? `API Error Status ${error.response.status}: ${JSON.stringify(error.response.data)}` : error.message)
-                : String(error);
-            return {
-                content: [],
-                errors: [{ message: `Failed to update ${itemType} ${itemId}: ${errorMessage}` }],
-            };
+            return handleAxiosError(error, `Failed to update ${itemType} ${itemId}`);
         }
     }
 };

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { authenticatedAxios } from "../lib/axios.js";
-import axios from "axios";
+import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const undoCheckOutItem = {
     name: "undoCheckOutItem",
@@ -19,33 +19,19 @@ export const undoCheckOutItem = {
 
             const response = await authenticatedAxios.post(`/items/${escapedItemId}/undoCheckOut`, requestModel);
 
-            // A successful undo check-out returns 200 (with item) or 204 (no content).
             if (response.status === 200 || response.status === 204) {
                 const responseData = response.data ? `\n\n${JSON.stringify(response.data, null, 2)}` : " The operation returned no content.";
                 return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Successfully reverted check-out for item ${itemId}.${responseData}`
-                        }
-                    ],
+                    content: [{
+                        type: "text",
+                        text: `Successfully reverted check-out for item ${itemId}.${responseData}`
+                    }],
                 };
             } else {
-                return {
-                    content: [],
-                    errors: [
-                        { message: `Unexpected response status: ${response.status}` },
-                    ],
-                };
+                return handleUnexpectedResponse(response);
             }
         } catch (error) {
-            const errorMessage = axios.isAxiosError(error)
-                ? (error.response ? `Status ${error.response.status}: ${JSON.stringify(error.response.data)}` : error.message)
-                : String(error);
-            return {
-                content: [],
-                errors: [{ message: `Failed to undo check-out for item ${itemId}: ${errorMessage}` }],
-            };
+            return handleAxiosError(error, `Failed to undo check-out for item ${itemId}`);
         }
     }
 };

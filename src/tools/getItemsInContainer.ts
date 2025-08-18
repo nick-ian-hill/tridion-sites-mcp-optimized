@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { authenticatedAxios } from "../lib/axios.js";
-import axios from "axios";
+import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const getItemsInContainer = {
     name: "getItemsInContainer",
@@ -21,7 +21,6 @@ export const getItemsInContainer = {
     }) => {
         try {
             const escapedContainerId = containerId.replace(':', '_');
-
             const response = await authenticatedAxios.get(`/items/${escapedContainerId}/items`, {
                 params: {
                     recursive: recursive,
@@ -33,29 +32,16 @@ export const getItemsInContainer = {
 
             if (response.status === 200) {
                 return {
-                    content: [
-                        {
-                            type: "text",
-                            text: JSON.stringify(response.data, null, 2)
-                        }
-                    ],
+                    content: [{
+                        type: "text",
+                        text: JSON.stringify(response.data, null, 2)
+                    }],
                 };
             } else {
-                return {
-                    content: [],
-                    errors: [
-                        { message: `Unexpected response status: ${response.status}` },
-                    ],
-                };
+                return handleUnexpectedResponse(response);
             }
         } catch (error) {
-            const errorMessage = axios.isAxiosError(error)
-                ? (error.response ? `Status ${error.response.status}: ${error.response.statusText} - ${JSON.stringify(error.response.data)}` : error.message)
-                : String(error);
-            return {
-                content: [],
-                errors: [{ message: `Failed to retrieve items from container: ${errorMessage}` }],
-            };
+            return handleAxiosError(error, "Failed to retrieve items from container");
         }
     }
 };

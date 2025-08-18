@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { authenticatedAxios } from "../lib/axios.js";
-import axios from "axios";
+import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const promoteItem = {
     name: "promoteItem",
@@ -23,32 +23,18 @@ export const promoteItem = {
 
             const response = await authenticatedAxios.post(`/items/${escapedItemId}/promote`, requestModel);
 
-            // A successful promotion returns a 201 status code with an OperationResult.
             if (response.status === 201) {
                 return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Successfully promoted item ${itemId} to ${destinationRepositoryId}.\n\n${JSON.stringify(response.data, null, 2)}`
-                        }
-                    ],
+                    content: [{
+                        type: "text",
+                        text: `Successfully promoted item ${itemId} to ${destinationRepositoryId}.\n\n${JSON.stringify(response.data, null, 2)}`
+                    }],
                 };
             } else {
-                return {
-                    content: [],
-                    errors: [
-                        { message: `Unexpected response status: ${response.status}` },
-                    ],
-                };
+                return handleUnexpectedResponse(response);
             }
         } catch (error) {
-            const errorMessage = axios.isAxiosError(error)
-                ? (error.response ? `Status ${error.response.status}: ${JSON.stringify(error.response.data)}` : error.message)
-                : String(error);
-            return {
-                content: [],
-                errors: [{ message: `Failed to promote item ${itemId}: ${errorMessage}` }],
-            };
+            return handleAxiosError(error, `Failed to promote item ${itemId}`);
         }
     }
 };

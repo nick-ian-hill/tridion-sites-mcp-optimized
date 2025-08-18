@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { authenticatedAxios } from "../lib/axios.js";
-import axios from "axios";
 import { toLinkArray } from "../utils/links.js";
 import { linkSchema } from "../schemas/linkSchema.js";
+import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 // Reusable schema for List definitions
 const listDefinitionSchema = z.object({
@@ -163,11 +163,8 @@ Certain top-level properties are only applicable when the Schema has a specific 
         ]).describe("The purpose of the Schema, which determines where it can be used."),
         rootElementName: z.string().describe("The name of the root element for the XML structure defined by the Schema."),
         description: z.string().nonempty().describe("An mandatory description of the Schema."),
-
         fields: z.record(fieldDefinitionSchema).optional().describe("A dictionary of field definitions for the Schema's content. The keys of the dictionary are the machine names of the fields."),
-
         metadataFields: z.record(fieldDefinitionSchema).optional().describe("A dictionary of field definitions for the Schema's metadata. The keys of the dictionary are the machine names of the fields."),
-
         allowedMultimediaTypes: z.array(z.string().regex(/^tcm:0-\d+-65544$/)).optional().describe("An array of TCM URIs for allowed Multimedia Types. Only applicable when 'purpose' is 'Multimedia'."),
         bundleProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of a Process Definition to associate as the Bundle Process."),
         componentProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of a Process Definition to associate as the Component Process for workflow."),
@@ -339,13 +336,13 @@ Certain top-level properties are only applicable when the Schema has a specific 
 
         // Validation for purpose-specific fields
         if (purpose !== 'Multimedia' && allowedMultimediaTypes) {
-            return { content: [], errors: [{ message: "'allowedMultimediaTypes' can only be set when the Schema 'purpose' is 'Multimedia'." }] };
+            return { content: [{ type: "text", text: "'allowedMultimediaTypes' can only be set when the Schema 'purpose' is 'Multimedia'." }], errors: [] };
         }
         if (purpose !== 'Bundle' && typeof deleteBundleOnProcessFinished === 'boolean') {
-            return { content: [], errors: [{ message: "'deleteBundleOnProcessFinished' can only be set when the Schema 'purpose' is 'Bundle'." }] };
+            return { content: [{ type: "text", text: "'deleteBundleOnProcessFinished' can only be set when the Schema 'purpose' is 'Bundle'." }], errors: [] };
         }
         if (purpose !== 'Region' && regionDefinition) {
-            return { content: [], errors: [{ message: "'regionDefinition' can only be set when the Schema 'purpose' is 'Region'." }] };
+            return { content: [{ type: "text", text: "'regionDefinition' can only be set when the Schema 'purpose' is 'Region'." }], errors: [] };
         }
 
         try {
@@ -355,7 +352,7 @@ Certain top-level properties are only applicable when the Schema has a specific 
             });
 
             if (defaultModelResponse.status !== 200) {
-                return { content: [], errors: [{ message: `Failed to retrieve default model. Status: ${defaultModelResponse.status}, Message: ${defaultModelResponse.statusText}` }] };
+                return handleUnexpectedResponse(defaultModelResponse);
             }
 
             const payload = defaultModelResponse.data;
@@ -394,20 +391,11 @@ Certain top-level properties are only applicable when the Schema has a specific 
                     }],
                 };
             } else {
-                return {
-                    content: [],
-                    errors: [{ message: `Unexpected response status during Schema creation: ${createResponse.status}` }],
-                };
+                return handleUnexpectedResponse(createResponse);
             }
 
         } catch (error) {
-            const errorMessage = axios.isAxiosError(error)
-                ? (error.response ? `API Error Status ${error.response.status}: ${JSON.stringify(error.response.data)}` : error.message)
-                : String(error);
-            return {
-                content: [],
-                errors: [{ message: `Failed to create Schema: ${errorMessage}` }],
-            };
+            return handleAxiosError(error, "Failed to create Schema");
         }
     }
 };

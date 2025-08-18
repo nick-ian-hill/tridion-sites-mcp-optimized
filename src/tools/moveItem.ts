@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { authenticatedAxios } from "../lib/axios.js";
-import axios from "axios";
+import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const moveItem = {
     name: "moveItem",
@@ -17,14 +17,10 @@ export const moveItem = {
     },
     execute: async ({ itemId, destinationId }: { itemId: string, destinationId: string }) => {
         try {
-            // Escape the IDs for the API endpoint URL by replacing the colon with an underscore.
             const escapedItemId = itemId.replace(':', '_');
             const escapedDestinationId = destinationId.replace(':', '_');
-
-            // Make the POST request to the move endpoint.
             const response = await authenticatedAxios.post(`/items/${escapedItemId}/move/${escapedDestinationId}`);
 
-            // A successful move can return 200 (with the moved item in the body) or 204 (no content).
             if (response.status === 200 || response.status === 204) {
                 const responseData = response.data ? `\n\n${JSON.stringify(response.data, null, 2)}` : " The operation returned no content.";
                 return {
@@ -34,22 +30,11 @@ export const moveItem = {
                     }],
                 };
             } else {
-                // Handle any other unexpected, non-error status codes.
-                return {
-                    content: [],
-                    errors: [{ message: `Unexpected response status during move operation: ${response.status}` }],
-                };
+                return handleUnexpectedResponse(response);
             }
 
         } catch (error) {
-            // Handle errors from the API call, providing detailed feedback.
-            const errorMessage = axios.isAxiosError(error)
-                ? (error.response ? `API Error Status ${error.response.status}: ${JSON.stringify(error.response.data)}` : error.message)
-                : String(error);
-            return {
-                content: [],
-                errors: [{ message: `Failed to move item ${itemId}: ${errorMessage}` }],
-            };
+            return handleAxiosError(error, `Failed to move item ${itemId}`);
         }
     }
 };

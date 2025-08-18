@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { authenticatedAxios } from "../lib/axios.js";
-import axios from "axios";
+import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const bulkReadItemsById = {
     name: "bulkReadItemsById",
@@ -43,21 +43,10 @@ This tool cannot modify, update, or delete any CMS items or files.`,
                     ],
                 };
             } else {
-                return {
-                    content: [],
-                    errors: [
-                        { message: `Unexpected response status: ${response.status}` },
-                    ],
-                };
+                return handleUnexpectedResponse(response);
             }
         } catch (error) {
-            const errorMessage = axios.isAxiosError(error)
-                ? (error.response ? `Status ${error.response.status}: ${error.response.statusText}` : error.message)
-                : String(error);
-            return {
-                content: [],
-                errors: [{ message: `Failed to authenticate or retrieve items: ${errorMessage}` }],
-            };
+            return handleAxiosError(error, "Failed to authenticate or retrieve items");
         }
     }
 };

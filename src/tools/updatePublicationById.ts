@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { authenticatedAxios } from "../lib/axios.js";
-import axios from "axios";
 import { toLink, toLinkArray } from "../utils/links.js";
+import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const updatePublicationById = {
     name: "updatePublicationById",
@@ -93,17 +93,11 @@ export const updatePublicationById = {
                     }],
                 };
             } else {
-                throw new Error(`Update failed with status: ${updateResponse.status} - ${updateResponse.statusText}`);
+                return handleUnexpectedResponse(updateResponse);
             }
 
         } catch (error) {
-            const errorMessage = axios.isAxiosError(error)
-                ? (error.response ? `API Error Status ${error.response.status}: ${JSON.stringify(error.response.data)}` : error.message)
-                : String(error);
-            return {
-                content: [],
-                errors: [{ message: `Failed to update Publication ${itemId}: ${errorMessage}` }],
-            };
+            return handleAxiosError(error, `Failed to update Publication ${itemId}`);
         }
     }
 };

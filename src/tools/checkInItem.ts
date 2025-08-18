@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { authenticatedAxios } from "../lib/axios.js";
-import axios from "axios";
+import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const checkInItem = {
     name: "checkInItem",
@@ -24,32 +24,18 @@ export const checkInItem = {
 
             const response = await authenticatedAxios.post(`/items/${escapedItemId}/checkIn`, requestModel);
 
-            // A successful check-in returns a 200 status code with the newly versioned item.
             if (response.status === 200) {
                 return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Successfully checked in item ${itemId}.\n\n${JSON.stringify(response.data, null, 2)}`
-                        }
-                    ],
+                    content: [{
+                        type: "text",
+                        text: `Successfully checked in item ${itemId}.\n\n${JSON.stringify(response.data, null, 2)}`
+                    }],
                 };
             } else {
-                return {
-                    content: [],
-                    errors: [
-                        { message: `Unexpected response status: ${response.status}` },
-                    ],
-                };
+                return handleUnexpectedResponse(response);
             }
         } catch (error) {
-            const errorMessage = axios.isAxiosError(error)
-                ? (error.response ? `Status ${error.response.status}: ${JSON.stringify(error.response.data)}` : error.message)
-                : String(error);
-            return {
-                content: [],
-                errors: [{ message: `Failed to check in item ${itemId}: ${errorMessage}` }],
-            };
+            return handleAxiosError(error, `Failed to check in item ${itemId}`);
         }
     }
 };

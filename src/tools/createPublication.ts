@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { authenticatedAxios } from "../lib/axios.js";
-import axios from "axios";
 import { toLinkArray } from "../utils/links.js";
+import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const createPublication = {
     name: "createPublication",
@@ -25,6 +25,7 @@ export const createPublication = {
         //publicationUrl: z.string().optional().describe("The server-relative URL for the Publication. This will be prefixed to the URLs of published Pages."),
         //multimediaPath: z.string().optional().describe("The physical path on the server where multimedia binaries will be published."),
         //multimediaUrl: z.string().optional().describe("The URL that corresponds to the Multimedia Path, used to construct links to published multimedia."),
+
         locale: z.string().optional().describe("The locale for the Publication (e.g., 'en-US', 'de-DE')."),
         publicationType: z.string().optional().describe("The type of the Publication (e.g., 'Web', 'Content'). Use the getPublicationTypes tool to see the available types.")
     },
@@ -58,10 +59,7 @@ export const createPublication = {
             const defaultModelResponse = await authenticatedAxios.get('/item/defaultModel/Publication');
 
             if (defaultModelResponse.status !== 200) {
-                return {
-                    content: [],
-                    errors: [{ message: `Failed to retrieve default model for Publication. Status: ${defaultModelResponse.status}, Message: ${defaultModelResponse.statusText}` }]
-                };
+                return handleUnexpectedResponse(defaultModelResponse);
             }
 
             const payload = defaultModelResponse.data;
@@ -88,20 +86,11 @@ export const createPublication = {
                     }],
                 };
             } else {
-                return {
-                    content: [],
-                    errors: [{ message: `Unexpected response status during Publication creation: ${createResponse.status}` }],
-                };
+                return handleUnexpectedResponse(createResponse);
             }
 
         } catch (error) {
-            const errorMessage = axios.isAxiosError(error)
-                ? (error.response ? `API Error Status ${error.response.status}: ${JSON.stringify(error.response.data)}` : error.message)
-                : String(error);
-            return {
-                content: [],
-                errors: [{ message: `Failed to create Publication: ${errorMessage}` }],
-            };
+            return handleAxiosError(error, "Failed to create Publication");
         }
     }
 };

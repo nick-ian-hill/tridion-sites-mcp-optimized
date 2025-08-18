@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { authenticatedAxios } from "../lib/axios.js";
-import axios from "axios";
+import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const getItemById = {
     name: "getItemById",
@@ -16,35 +16,20 @@ This tool cannot modify, update, or delete any CMS items or files.`,
     execute: async ({ itemId }: { itemId: string }) => {
         try {
             const restItemId = itemId.replace(':', '_');
-
-            // Make a GET request to item endpoint
             const response = await authenticatedAxios.get(`/items/${restItemId}`);
 
             if (response.status === 200) {
                 return {
-                    content: [
-                        {
-                            type: "text",
-                            text: JSON.stringify(response.data, null, 2)
-                        }
-                    ],
+                    content: [{
+                        type: "text",
+                        text: JSON.stringify(response.data, null, 2)
+                    }],
                 };
             } else {
-                return {
-                    content: [],
-                    errors: [
-                        { message: `Unexpected response status: ${response.status}` },
-                    ],
-                };
+                return handleUnexpectedResponse(response);
             }
         } catch (error) {
-            const errorMessage = axios.isAxiosError(error)
-                ? (error.response ? `Status ${error.response.status}: ${error.response.statusText}` : error.message)
-                : String(error);
-            return {
-                content: [],
-                errors: [{ message: `Failed to authenticate or retrieve item: ${errorMessage}` }],
-            };
+            return handleAxiosError(error, "Failed to authenticate or retrieve item");
         }
     }
 };

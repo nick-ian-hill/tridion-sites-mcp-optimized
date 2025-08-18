@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { authenticatedAxios } from "../lib/axios.js";
-import axios from "axios";
+import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const deleteItem = {
     name: "deleteItem",
@@ -10,37 +10,21 @@ export const deleteItem = {
     },
     execute: async ({ itemId }: { itemId: string }) => {
         try {
-            // The item ID for delete can contain a version (e.g., tcm:5-263-64-v3), so we replace ':' with '_'
             const escapedItemId = itemId.replace(':', '_');
-            
             const response = await authenticatedAxios.delete(`/items/${escapedItemId}`);
 
-            // A successful deletion returns a 204 status code.
             if (response.status === 204) {
                 return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Successfully deleted item ${itemId}.`
-                        }
-                    ],
+                    content: [{
+                        type: "text",
+                        text: `Successfully deleted item ${itemId}.`
+                    }],
                 };
             } else {
-                return {
-                    content: [],
-                    errors: [
-                        { message: `Unexpected response status: ${response.status}` },
-                    ],
-                };
+                return handleUnexpectedResponse(response);
             }
         } catch (error) {
-            const errorMessage = axios.isAxiosError(error)
-                ? (error.response ? `Status ${error.response.status}: ${JSON.stringify(error.response.data)}` : error.message)
-                : String(error);
-            return {
-                content: [],
-                errors: [{ message: `Failed to delete item ${itemId}: ${errorMessage}` }],
-            };
+            return handleAxiosError(error, `Failed to delete item ${itemId}`);
         }
     }
 };
