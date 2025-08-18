@@ -2,7 +2,7 @@ import axios, { InternalAxiosRequestConfig } from "axios";
 
 // CMS API base and UserSessionID cookie
 const CMS_BASE_API_URL = "http://10.100.92.199:81/ui/api/v3.0";
-const USER_SESSION_ID = "CfDJ8MFdR0UUsZtPi5oTnQ5q67LJpNYdwwC_Lb8_hHZxzR-uMPlnY1_wBjhLKgwO8BHGAAZXmq9GEjQrEkB3ywu5Tb5oNSh1UR1-Hx7pHA7G2rSOaZCTb-0jLvXvowdfJB9-_2wuSUdMewmdMfYqn7cSUjtpGxjmjgeoewDesqTL07VMAhHXHmrSOdx-Dv4V90737Nyf4qfI-OyNqBD-UMBHropCNCryii2M06EkUWVR6uvVWRBYRpegjPuHa9M95rrrwn9C7-xnQS5akttUQ_zpVM5aSLpq93O3CDWHfLc6k0M_DpPTW5TlGEHswNUJxh7mVKedQGRZ1JaB7AtwAV3pEG8";
+const USER_SESSION_ID = "CfDJ8MFdR0UUsZtPi5oTnQ5q67KDPU1OtlhH-N420C6VCOl6UtF2YWDJorAUbfUWGcI0SCEaziYqtvCliafRItXnN7v2cHezdR8ilWMV0OFQ5Imz3Fs4nAGx0XcQ2SsnOFoTWHI5g6KDgV6IV5vOYrqLEj_94plHryV7tydbmGEcLcz6pLfzFUBwKDX4buc01eyx42ASh8YEDiprINqgulqQBrLI7GQSD9_RigdZz2-bbeVr0rhx4ELVctRvUiPxRTvuhG7RTAMKJGwF3iKzO-mVw3ObiU9647fahvSN-6p2LTxYJ9VKgN6YfJ0aE6EQBjLkfBD1H6JmjbvAsHNGysth5jk";
 
 export const authenticatedAxios = axios.create({
   baseURL: CMS_BASE_API_URL,

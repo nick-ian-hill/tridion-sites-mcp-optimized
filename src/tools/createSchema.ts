@@ -19,8 +19,8 @@ const listDefinitionSchema = z.object({
 
 // Base schema with common properties for all field types
 const baseFieldSchema = z.object({
-    Name: z.string().describe("The machine name of the field (must match the key in the dictionary)."),
-    Description: z.string().describe("A human-readable description of the field's purpose."),
+    Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
+    Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),
     MinOccurs: z.number().int().optional().describe("The minimum number of times the field can occur (e.g., 0 for optional, 1 for mandatory)."),
     MaxOccurs: z.number().int().optional().describe("The maximum number of times the field can occur (e.g., 1 for single-value, -1 for unlimited multi-value)."),
     IsIndexable: z.boolean().optional().describe("Whether the field value is included when performing a search."),
@@ -113,7 +113,7 @@ A Schema is defined by its content fields (in the 'fields' property) and metadat
 ### Field Definition Objects
 Each Field Definition object **must** include a '$type' property to identify its type from the list below. Other common properties include:
 - **Name**: The machine name of the field (must match the key in the dictionary).
-- **Description**: A human-readable description of the field's purpose.
+- **Description**: A human-readable description of the field's purpose. This is mandatory.
 - **MinOccurs**: The minimum number of times the field can occur (e.g., 0 for optional, 1 for mandatory).
 - **MaxOccurs**: The maximum number of times the field can occur (e.g., 1 for single-value, -1 for unlimited multi-value).
 - **IsIndexable** (Default: true) Whether the field value is included when performing a search.
