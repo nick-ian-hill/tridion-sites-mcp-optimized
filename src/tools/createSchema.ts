@@ -146,7 +146,7 @@ Certain top-level properties are only applicable when the Schema has a specific 
 - **'purpose' is 'Bundle'**: 'deleteBundleOnProcessFinished' can be used.
 - **'purpose' is 'Region'**: 'regionDefinition' can be used.`,
     input: {
-        title: z.string().describe("The title for the new Schema."),
+        title: z.string().nonempty().describe("The title for the new Schema."),
         locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new Schema will be created."),
         purpose: z.enum([
             "Component", "Multimedia", "Embedded",
