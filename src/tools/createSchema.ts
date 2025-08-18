@@ -9,7 +9,39 @@ export const createSchema = {
     Schemas define the structure of content and metadata for other CMS items.
     Content fields are defined in the fields property, and metadata fields in the metadataFields property.
     Fields and metadata fields are dictionaries that map field names to their corresponding field definition objects.
-    Allowed Multimedia Types are only applicable when the purpose of the Schema is 'Multimedia'.`,
+
+    The Name property for a field is an XML name and should not contain any space characters.
+    The Description property of a field provides a human readable description of the field's purpose.
+    
+    The following field definitions are supported:
+        SingleLineTextFieldDefinition
+        MultiLineTextFieldDefinition
+        KeywordFieldDefinition
+        XhtmlFieldDefinition
+        NumberFieldDefinition
+        DateFieldDefinition
+        ExternalLinkFieldDefinition
+        ComponentLinkFieldDefinition
+        MultimediaLinkFieldDefinition
+        EmbeddedSchemaFieldDefinition
+
+    For MultiLineTextFieldDefinition and XhtmlFieldDefinition fields, the Height property specifies the height of the field. This is only used in the User Interface.
+
+    For lists, the following ListDefinition types are available:
+        ListDefinition(for Keyword fields)
+        SingleLineTextListDefinition
+        NumberListDefinition
+        DateListDefinition (for Date fields)
+
+    For ListDefinition types, it's necessary to specify the 'Height' of the list and the list 'Type' (Tree, Select, Radio, Checkbox).
+
+    The MaxOccurs and MinOccurs properties behave as described in XML Schema Definition 1.0 and can be used to make fields mandatory (e.g., MinOccurs: 1), multivalue (e.g., MaxOccurs: -1), etc.
+
+    Allowed Multimedia Types are only applicable when the purpose of the Schema is 'Multimedia'.
+
+    The IsIndexable property (true by default) means that the field value is included when performing a search.
+    The IsLocalizable property (true by default) means that the field value can be modified in localized items.
+    The IsPublishable property (true by default) means that the field value in included when publishing the item.`,
     input: {
         title: z.string().describe("The title for the new Schema."),
         locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new Schema will be created."),
@@ -132,6 +164,52 @@ export const createSchema = {
                     "2025-10-29T00:00:00"
                 ]
             }
+        }
+    }
+});`
+        },
+        {
+            description: "Create a Schema with a multi-value Component Link field. This allows linking to multiple other Components. The 'MaxOccurs' property is set to -1 for unlimited values.",
+            example: `const result = await tools.createSchema({
+    title: "Linked Articles",
+    locationId: "tcm:1-2-2",
+    purpose: "Component",
+    rootElementName: "Links",
+    fields: {
+        "relatedArticles": {
+            "$type": "ComponentLinkFieldDefinition",
+            "Name": "relatedArticles",
+            "Description": "Links to related articles.",
+            "MaxOccurs": -1,
+            "AllowedTargetSchemas": [
+                {
+                    "$type": "Link",
+                    "IdRef": "tcm:1-103-8"
+                }
+            ]
+        }
+    }
+});`
+        },
+        {
+            description: "Create a Schema with a multi-value Multimedia Link field. This allows linking to multiple multimedia items like images or videos.",
+            example: `const result = await tools.createSchema({
+    title: "Image Gallery",
+    locationId: "tcm:1-2-2",
+    purpose: "Component",
+    rootElementName: "Gallery",
+    fields: {
+        "images": {
+            "$type": "MultimediaLinkFieldDefinition",
+            "Name": "images",
+            "Description": "Select multiple images for the gallery.",
+            "MaxOccurs": -1,
+            "AllowedTargetSchemas": [
+                {
+                    "$type": "Link",
+                    "IdRef": "tcm:1-66-8"
+                }
+            ]
         }
     }
 });`

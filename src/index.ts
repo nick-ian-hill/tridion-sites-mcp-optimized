@@ -1,30 +1,38 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { bulkReadItemsById } from "./tools/bulkReadItemsById.js";
-import { createItem } from "./tools/createItem.js";
-import { dependencyGraphForItem } from "./tools/dependencyGraphForItem.js";
-import { echo } from "./tools/echo.js";
-import { getDynamicItemById } from "./tools/getDynamicItemById.js";
-import { getItemById } from "./tools/getItemById.js";
-import { getPublications } from "./tools/getPublications.js";
-import { search } from "./tools/search.js";
-import { updateComponentById } from "./tools/updateComponentById.js";
-import { updateItemById } from "./tools/updateItemById.js";
-import { localizeItemById } from "./tools/localizeItemById.js";
-import { unlocalizeItemById } from "./tools/unlocalizeItemById.js";
+
+// Tool Imports
 import { batchLocalizeItemsById } from "./tools/batchLocalizeItemsById.js";
 import { batchUnlocalizeItemsById } from "./tools/batchUnlocalizeItemsById.js";
-import { getCategories } from "./tools/getCategories.js";
-import { getKeywordsForCategory } from "./tools/getKeywordsForCategory.js";
-import { getItemsInContainer } from "./tools/getItemsInContainer.js";
-import { createSchema } from "./tools/createSchema.js";
-import { createPublication } from "./tools/createPublication.js";
-import { getBluePrintHierarchy } from "./tools/getBluePrintHierarchy.js";
-import { moveItem } from "./tools/moveItem.js";
+import { bulkReadItemsById } from "./tools/bulkReadItemsById.js";
+import { checkInItem } from "./tools/checkInItem.js";
+import { checkOutItem } from "./tools/checkOutItem.js";
 import { copyItem } from "./tools/copyItem.js";
-import { updatePublicationById } from "./tools/updatePublicationById.js";
-import { getPublicationTypes } from "./tools/getPublicationTypes.js";
+import { createItem } from "./tools/createItem.js";
+import { createPublication } from "./tools/createPublication.js";
 import { createRootStructureGroup } from "./tools/createRootStructureGroup.js";
+import { createSchema } from "./tools/createSchema.js";
+import { deleteItem } from "./tools/deleteItem.js";
+import { demoteItem } from "./tools/demoteItem.js";
+import { dependencyGraphForItem } from "./tools/dependencyGraphForItem.js";
+import { echo } from "./tools/echo.js";
+import { getBluePrintHierarchy } from "./tools/getBluePrintHierarchy.js";
+import { getCategories } from "./tools/getCategories.js";
+import { getDynamicItemById } from "./tools/getDynamicItemById.js";
+import { getItemById } from "./tools/getItemById.js";
+import { getItemsInContainer } from "./tools/getItemsInContainer.js";
+import { getKeywordsForCategory } from "./tools/getKeywordsForCategory.js";
+import { getPublications } from "./tools/getPublications.js";
+import { getPublicationTypes } from "./tools/getPublicationTypes.js";
+import { localizeItemById } from "./tools/localizeItemById.js";
+import { moveItem } from "./tools/moveItem.js";
+import { promoteItem } from "./tools/promoteItem.js";
+import { search } from "./tools/search.js";
+import { unlocalizeItemById } from "./tools/unlocalizeItemById.js";
+import { undoCheckOutItem } from "./tools/undoCheckOutItem.js";
+import { updateComponentById } from "./tools/updateComponentById.js";
+import { updateItemById } from "./tools/updateItemById.js";
+import { updatePublicationById } from "./tools/updatePublicationById.js";
 
 const server = new McpServer({
   name: "tridion-sites-mcp-server",
@@ -32,31 +40,52 @@ const server = new McpServer({
 });
 
 const tools: any[] = [
+  // General & System
   echo,
-  bulkReadItemsById,
-  getBluePrintHierarchy,
-  getCategories,
-  getDynamicItemById,
+  search,
+
+  // Read Operations
   getItemById,
+  getDynamicItemById,
+  bulkReadItemsById,
   getItemsInContainer,
-  getKeywordsForCategory,
-  getPublications,
-  getPublicationTypes,
-  copyItem,
-  moveItem,
-  updateComponentById,
-  updateItemById,
-  updatePublicationById,
+  
+  // Create Operations
   createItem,
   createPublication,
   createRootStructureGroup,
   createSchema,
-  search,
-  dependencyGraphForItem,
+  
+  // Update Operations
+  updateItemById,
+  updateComponentById,
+  updatePublicationById,
+  
+  // Item Actions (Move, Copy, Delete)
+  moveItem,
+  copyItem,
+  deleteItem,
+
+  // BluePrinting & Localization
+  getBluePrintHierarchy,
   localizeItemById,
   unlocalizeItemById,
+  promoteItem,
+  demoteItem,
   batchLocalizeItemsById,
   batchUnlocalizeItemsById,
+
+  // Versioning
+  checkInItem,
+  checkOutItem,
+  undoCheckOutItem,
+
+  // List & Taxonomy
+  getPublications,
+  getPublicationTypes,
+  getCategories,
+  getKeywordsForCategory,
+  dependencyGraphForItem,
 ];
 
 tools.forEach(tool => {
