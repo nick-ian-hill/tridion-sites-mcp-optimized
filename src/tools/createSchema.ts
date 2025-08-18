@@ -5,43 +5,48 @@ import { toLinkArray } from "../utils/links.js";
 
 export const createSchema = {
     name: "createSchema",
-    description: `Creates a new Content Manager System (CMS) item of type 'Schema'.
-    Schemas define the structure of content and metadata for other CMS items.
-    Content fields are defined in the fields property, and metadata fields in the metadataFields property.
-    Fields and metadata fields are dictionaries that map field names to their corresponding field definition objects.
+    description: `Creates a new Content Manager System (CMS) item of type 'Schema'. Schemas define the structure of content and metadata for other CMS items.
 
-    The Name property for a field is an XML name and should not contain any space characters.
-    The Description property of a field provides a human readable description of the field's purpose.
-    
-    The following field definitions are supported:
-        SingleLineTextFieldDefinition
-        MultiLineTextFieldDefinition
-        KeywordFieldDefinition
-        XhtmlFieldDefinition
-        NumberFieldDefinition
-        DateFieldDefinition
-        ExternalLinkFieldDefinition
-        ComponentLinkFieldDefinition
-        MultimediaLinkFieldDefinition
-        EmbeddedSchemaFieldDefinition
+### Schema Structure
+A Schema is defined by its content fields (in the 'fields' property) and metadata fields (in the 'metadataFields' property). Both of these properties are dictionaries where:
+- The **key** is the field's machine name (a valid XML name without spaces, e.g., "articleTitle").
+- The **value** is a Field Definition object that specifies the field's type and properties.
 
-    For MultiLineTextFieldDefinition and XhtmlFieldDefinition fields, the Height property specifies the height of the field. This is only used in the User Interface.
+### Field Definition Objects
+Each Field Definition object **must** include a '$type' property to identify its type from the list below. Other common properties include:
+- **Name**: The machine name of the field (must match the key in the dictionary).
+- **Description**: A human-readable description of the field's purpose.
+- **MinOccurs**: The minimum number of times the field can occur (e.g., 1 for mandatory).
+- **MaxOccurs**: The maximum number of times the field can occur (e.g., 1 for single-value, -1 for unlimited multi-value).
+- **IsIndexable** (Default: true) Whether the field value is included when performing a search.
+- **IsLocalizable**: (Default: true) Whether the field value can be changed in localized items.
+- **IsPublishable**: (Default: true) Whether the field value is included when publishing.
 
-    For lists, the following ListDefinition types are available:
-        ListDefinition(for Keyword fields)
-        SingleLineTextListDefinition
-        NumberListDefinition
-        DateListDefinition (for Date fields)
+### Supported Field Types ('$type' values)
+- **SingleLineTextFieldDefinition**: A simple text input.
+- **MultiLineTextFieldDefinition**: A multi-line text area. Supports a 'Height' property for the UI.
+- **XhtmlFieldDefinition**: A rich-text (HTML) editor. Supports a 'Height' property for the UI.
+- **KeywordFieldDefinition**: A link to a Keyword from a Category.
+- **NumberFieldDefinition**: A field for numeric values.
+- **DateFieldDefinition**: A field for date/time values.
+- **ExternalLinkFieldDefinition**: A field for a URL.
+- **ComponentLinkFieldDefinition**: A link to another Component. Can use 'AllowedTargetSchemas' to restrict which types of Components can be linked.
+- **MultimediaLinkFieldDefinition**: A link to a multimedia item (e.g., image, video). Can use 'AllowedTargetSchemas' to restrict which types of multimedia can be linked.
+- **EmbeddedSchemaFieldDefinition**: Allows embedding fields from another Schema (which must have a purpose of 'Embedded'). Requires an 'EmbeddedSchema' property with a Link object (e.g., { "$type": "Link", "IdRef": "tcm:1-123-8" }).
 
-    For ListDefinition types, it's necessary to specify the 'Height' of the list and the list 'Type' (Tree, Select, Radio, Checkbox).
+### List Types
+Some field types can be configured as lists to provide a selection of predefined values. This is done by adding a 'List' property to the field definition.
+- **Supported List '$type' values**: ListDefinition (for Keywords), SingleLineTextListDefinition, NumberListDefinition, DateListDefinition.
+- **List Properties**:
+    - **Type**: The UI control for the list ('Select', 'Radio', 'Checkbox', 'Tree').
+    - **Height**: The height of the list control in the UI.
+    - **Entries**: An array of predefined values for the list.
 
-    The MaxOccurs and MinOccurs properties behave as described in XML Schema Definition 1.0 and can be used to make fields mandatory (e.g., MinOccurs: 1), multivalue (e.g., MaxOccurs: -1), etc.
-
-    Allowed Multimedia Types are only applicable when the purpose of the Schema is 'Multimedia'.
-
-    The IsIndexable property (true by default) means that the field value is included when performing a search.
-    The IsLocalizable property (true by default) means that the field value can be modified in localized items.
-    The IsPublishable property (true by default) means that the field value in included when publishing the item.`,
+### Purpose-Specific Properties
+Certain top-level properties are only applicable when the Schema has a specific 'purpose':
+- **'purpose' is 'Multimedia'**: 'allowedMultimediaTypes' can be used.
+- **'purpose' is 'Bundle'**: 'deleteBundleOnProcessFinished' can be used.
+- **'purpose' is 'Region'**: 'regionDefinition' can be used.`,
     input: {
         title: z.string().describe("The title for the new Schema."),
         locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new Schema will be created."),
