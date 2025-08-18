@@ -6,7 +6,7 @@ export const getItemsInContainer = {
     name: "getItemsInContainer",
     description: `Gets a list of items inside a specified container item (e.g., a Publication, Folder, Structure Group, Category, or Bundle).`,
     input: {
-        containerId: z.string().regex(/^(tcm|ecl):\d+-\d+(-\d+)?$/).describe("The TCM URI or ECL URI of the container item."),
+        containerId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The TCM URI or ECL URI of the container item."),
         recursive: z.boolean().optional().default(false).describe("If true, items in nested containers are also returned recursively. This is not applicable for External Containers."),
         useDynamicVersion: z.boolean().optional().default(false).describe("If true, loads the latest saved version (dynamic version) for any versioned items returned."),
         itemTypes: z.array(z.string()).optional().describe("An array of item types to filter the results, e.g., ['Component', 'Page', 'Folder']. If omitted, all item types are returned."),

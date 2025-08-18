@@ -12,12 +12,12 @@ export const SearchQueryValidation = z.object({
   ])).optional().describe("An array of item types to limit the search results to."),
 
   // --- Location and Scope ---
-  SearchIn: z.string().regex(/^(tcm|ecl):\d+-\d+(-\d+)?$/).optional().describe("The unique TCM URI of the publication or folder to search within. MUST be provided as a string."),
+  SearchIn: z.string().regex(/^(tcm:\d+-\d+-[124]|ecl:[a-zA-Z0-9-]+)$/).optional().describe("The unique TCM URI of the publication or folder to search within. MUST be provided as a string."),
   SearchInSubtree: z.boolean().default(true).optional().describe("When true, searches recursively in the publication/folder specified in SearchIn. Defaults to true."),
 
   // --- Schema and Keyword Criteria ---
   BasedOnSchemas: z.array(z.string().regex(/^tcm:\d+-\d+-8?$/)).optional().describe("An array of Schema TCM URIs. Only items based on these schemas will be returned."),
-  UsedKeywords: z.array(z.string().regex(/^(tcm|ecl):\d+-\d+(-\d+)?$/)).optional().describe("An array of Keyword TCM URIs. Only items classified with these keywords will be returned."),
+  UsedKeywords: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)).optional().describe("An array of Keyword TCM URIs. Only items classified with these keywords will be returned."),
 
   // --- Date and Modification Criteria ---
   LastModifiedAfter: z.string().datetime().optional().describe("Filters items last modified after this date (ISO 8601 format, e.g., '2023-10-27T10:00:00Z')."),

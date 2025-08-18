@@ -6,7 +6,7 @@ export const unlocalizeItemById = {
     name: "unlocalizeItemById",
     description: `Unlocalizes a local item, effectively deleting the local copy and re-establishing the inheritance from its primary item. The tool returns the shared parent item that is now being inherited.`,
     input: {
-        itemId: z.string().regex(/^(tcm|ecl):\d+-\d+(-\d+)?$/).describe("The unique ID (TCM URI) of the local item to unlocalize."),
+        itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID (TCM URI) of the local item to unlocalize."),
         useDynamicVersion: z.boolean().optional().default(true).describe("Loads the latest saved version of the item if available."),
     },
     execute: async ({ itemId, useDynamicVersion }: { itemId: string, useDynamicVersion: boolean }) => {

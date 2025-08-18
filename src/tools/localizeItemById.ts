@@ -9,7 +9,7 @@ export const localizeItemById = {
     The values for non-localizable fields are inherited from the primary item, that is, the instance of the item that is highest (closest to the root) in the BluePrint.
     The tool returns a confirmation that the item has been successfully localized.`,
     input: {
-        itemId: z.string().regex(/^(tcm|ecl):\d+-\d+(-\d+)?$/).describe("The unique ID (TCM URI) of the shared item to localize."),
+        itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID (TCM URI) of the shared item to localize."),
     },
     execute: async ({ itemId }: { itemId: string }) => {
         try {

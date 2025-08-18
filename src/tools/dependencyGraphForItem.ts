@@ -6,9 +6,9 @@ export const dependencyGraphForItem = {
     name: "dependencyGraphForItem",
     description: `Returns items in the Content Management System that are either dependencies of (direction = uses) or dependent on (direction = UsedBy) the specified item.`,
     input: {
-        itemId: z.string().regex(/^(tcm|ecl):\d+-\d+(-\d+)?$/).describe("The unique ID of the item for which the dependency graph should be retrieved."),
+        itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the item for which the dependency graph should be retrieved."),
         direction: z.enum(["Uses", "UsedBy"]).optional().default("Uses").describe("Specifies the direction of the dependencies. 'Uses' returns items this item depends on; 'UsedBy' returns items that depend on this item."),
-        contextRepositoryId: z.string().regex(/^tcm:\d+-\d+-1$/).optional().describe("The TCM URI of an ancestor Publication (a Publication higher in the BluePrint). If specified, the response will indicate whether the dependent items exist in this Publication."),
+        contextRepositoryId: z.string().regex(/^tcm:0-\d+-1$/).optional().describe("The TCM URI of an ancestor Publication (a Publication higher in the BluePrint). If specified, the response will indicate whether the dependent items exist in this Publication."),
         rloItemTypes: z.array(z.enum([
             "Component",
             "Page",

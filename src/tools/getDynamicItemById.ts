@@ -18,7 +18,7 @@ ID formats for versioned items:
 For items that do not support versioning or for versioned items without recent changes, this tool
 returns the same data as getItemById. It cannot modify, update, or delete any CMS items or files.`,
     input: {
-        itemId: z.string().regex(/^(tcm|ecl):\d+-\d+(-\d+)?$/).describe("The unique ID of the item."),
+        itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the item."),
     },
     execute: async ({ itemId }: { itemId: string }) => {
         try {

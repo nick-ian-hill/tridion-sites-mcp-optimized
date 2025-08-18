@@ -31,7 +31,7 @@ If the item is locked by another user, the operation will be aborted.`,
         key: z.string().optional().describe("A new custom key for the Keyword. (Applicable to Keyword)"),
         parentKeywords: z.array(z.string().regex(/^tcm:\d+-\d+-1024$/)).optional().describe("An array of parent Keyword URIs. Replaces existing parents. (Applicable to Keyword)"),
         relatedKeywords: z.array(z.string().regex(/^tcm:\d+-\d+-1024$/)).optional().describe("An array of related Keyword URIs. Replaces existing relations. (Applicable to Keyword)"),
-        itemsInBundle: z.array(z.string().regex(/^(tcm|ecl):\d+-\d+(-\d+)?$/)).optional().describe("An array of item URIs for the Bundle. Replaces existing items. (Applicable to Bundle)"),
+        itemsInBundle: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)).optional().describe("An array of item URIs for the Bundle. Replaces existing items. (Applicable to Bundle)"),
         searchQuery: SearchQueryValidation.optional().describe("A new search query model for the Search Folder."),
         resultLimit: z.number().int().optional().describe("A new result limit for the Search Folder.")
     },

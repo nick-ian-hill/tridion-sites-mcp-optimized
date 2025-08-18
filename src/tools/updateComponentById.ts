@@ -6,7 +6,7 @@ export const updateComponentById = {
     name: "updateComponentById",
     description: `Updates content and/or metadata field values for a single Content Manager System (CMS) item of type 'Component' with the specified ID.The ID of the schema defining the allowed content and metadata fields can be found under the component's 'Schema' property.Fields are defined using XML Schema Definition 1.0.This tool cannot be used to update other item types or other component fields (e.g., Title).`,
     input: {
-        itemId: z.string().regex(/^(tcm|ecl):\d+-\d+$/).describe("The unique ID of the component to update, without the version number."),
+        itemId: z.string().regex(/^(tcm:\d+-\d+(-16)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the component to update, without the version number."),
         content: z.string().optional().describe("The updated content for the component. Must be a string representing a valid JSON object."),
         metadata: z.string().optional().describe("The updated metadata for the component. Must be a string representing a valid JSON object."),
     },

@@ -68,7 +68,7 @@ export const getBluePrintHierarchy = {
     name: "getBluePrintHierarchy",
     description: "Retrieves the BluePrint hierarchy for a specified Content Manager item. The hierarchy shows the parent and child relationships for the item within the BluePrint, which is fundamental for content inheritance and reuse.",
     input: {
-        itemId: z.string().regex(/^(tcm|ecl):\d+-\d+(-\d+)?$/).describe("The TCM URI of the item for which to retrieve the BluePrint hierarchy."),
+        itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The TCM URI of the item for which to retrieve the BluePrint hierarchy."),
         outputFormat: z.enum(["Raw", "JsonGraph", "Svg"]).optional().default("Raw").describe("Specifies the output format. 'Raw' returns the API JSON. 'JsonGraph' formats the data for graph processing. 'Svg' generates and returns an SVG image of the hierarchy."),
         details: z.enum(["IdAndTitleOnly", "WithApplicableActions", "Contentless"]).optional().default("Contentless").describe("Specifies the level of detail for the items returned in the hierarchy. This is ignored if outputFormat is 'JsonGraph' or 'Svg' (which use 'IdAndTitleOnly')."),
     },

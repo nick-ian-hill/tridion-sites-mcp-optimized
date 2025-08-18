@@ -11,7 +11,7 @@ item uses for custom field values (Schema, MetadataSchema), content field values
 metadata field values (Metadata), version information like creation and revision dates (VersionInfo) etc.
 This tool cannot modify, update, or delete any CMS items or files.`,
     input: {
-        itemId: z.string().regex(/^(tcm|ecl):\d+-\d+(-\d+)?$/).describe("The unique ID of the item."),
+        itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the item."),
     },
     execute: async ({ itemId }: { itemId: string }) => {
         try {

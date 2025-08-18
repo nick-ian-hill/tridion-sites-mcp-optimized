@@ -11,7 +11,7 @@ export const getKeywordsForCategory = {
     When used in classification, the keywords' title property is usually assumed to reflect some aspect of the item's content/metadata.
     typically used to determine whether a keywordof the keyword typically what would be to navigatiofor a given parent Category or Keyword.`,
     input: {
-        itemId: z.string().regex(/^(tcm|ecl):\d+-\d+(-\d+)?$/).describe("The unique ID of the category (e.g., 'tcm:5-123-512')."),
+        itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the category (e.g., 'tcm:5-123-512')."),
     },
     execute: async ({ itemId }: { itemId: string }) => {
         try {
