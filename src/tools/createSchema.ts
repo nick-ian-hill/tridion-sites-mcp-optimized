@@ -2,6 +2,104 @@ import { z } from "zod";
 import { authenticatedAxios } from "../lib/axios.js";
 import axios from "axios";
 import { toLinkArray } from "../utils/links.js";
+import { linkSchema } from "../schemas/linkSchema.js";
+
+// Reusable schema for List definitions
+const listDefinitionSchema = z.object({
+    "$type": z.enum([
+        "ListDefinition",
+        "SingleLineTextListDefinition",
+        "NumberListDefinition",
+        "DateListDefinition"
+    ]),
+    Type: z.enum(["Select", "Radio", "Checkbox", "Tree"]),
+    Height: z.number().int().optional(),
+    Entries: z.array(z.string()).optional()
+}).describe("Defines a list of predefined values for a field.");
+
+// Base schema with common properties for all field types
+const baseFieldSchema = z.object({
+    Name: z.string().describe("The machine name of the field (must match the key in the dictionary)."),
+    Description: z.string().describe("A human-readable description of the field's purpose."),
+    MinOccurs: z.number().int().optional().describe("The minimum number of times the field can occur (e.g., 0 for optional, 1 for mandatory)."),
+    MaxOccurs: z.number().int().optional().describe("The maximum number of times the field can occur (e.g., 1 for single-value, -1 for unlimited multi-value)."),
+    IsIndexable: z.boolean().optional().describe("Whether the field value is included when performing a search."),
+    IsLocalizable: z.boolean().optional().describe("Whether the field value can be changed in localized items."),
+    IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing."),
+});
+
+// Schema for a simple text field
+const singleLineTextFieldSchema = baseFieldSchema.extend({
+    "$type": z.literal("SingleLineTextFieldDefinition"),
+    List: listDefinitionSchema.optional()
+});
+
+// Schema for a multi-line text area
+const multiLineTextFieldSchema = baseFieldSchema.extend({
+    "$type": z.literal("MultiLineTextFieldDefinition"),
+    Height: z.number().int().optional().describe("The height of the text area in the UI.")
+});
+
+// Schema for a rich-text (HTML) editor
+const xhtmlFieldSchema = baseFieldSchema.extend({
+    "$type": z.literal("XhtmlFieldDefinition"),
+    Height: z.number().int().optional().describe("The height of the rich text editor in the UI.")
+});
+
+// Schema for a Keyword link field
+const keywordFieldSchema = baseFieldSchema.extend({
+    "$type": z.literal("KeywordFieldDefinition"),
+    List: listDefinitionSchema.optional()
+});
+
+// Schema for a numeric field
+const numberFieldSchema = baseFieldSchema.extend({
+    "$type": z.literal("NumberFieldDefinition"),
+    List: listDefinitionSchema.optional()
+});
+
+// Schema for a date/time field
+const dateFieldSchema = baseFieldSchema.extend({
+    "$type": z.literal("DateFieldDefinition"),
+    List: listDefinitionSchema.optional()
+});
+
+// Schema for a URL field
+const externalLinkFieldSchema = baseFieldSchema.extend({
+    "$type": z.literal("ExternalLinkFieldDefinition"),
+});
+
+// Schema for a Component link field
+const componentLinkFieldSchema = baseFieldSchema.extend({
+    "$type": z.literal("ComponentLinkFieldDefinition"),
+    AllowedTargetSchemas: z.array(linkSchema).optional().describe("Restricts which types of Components can be linked.")
+});
+
+// Schema for a Multimedia link field
+const multimediaLinkFieldSchema = baseFieldSchema.extend({
+    "$type": z.literal("MultimediaLinkFieldDefinition"),
+    AllowedTargetSchemas: z.array(linkSchema).optional().describe("Restricts which types of multimedia can be linked.")
+});
+
+// Schema for an embedded Schema field
+const embeddedSchemaFieldSchema = baseFieldSchema.extend({
+    "$type": z.literal("EmbeddedSchemaFieldDefinition"),
+    EmbeddedSchema: linkSchema.describe("A Link object to the Schema to be embedded.")
+});
+
+// The master schema for any valid field definition, using a discriminated union
+const fieldDefinitionSchema = z.discriminatedUnion("$type", [
+    singleLineTextFieldSchema,
+    multiLineTextFieldSchema,
+    xhtmlFieldSchema,
+    keywordFieldSchema,
+    numberFieldSchema,
+    dateFieldSchema,
+    externalLinkFieldSchema,
+    componentLinkFieldSchema,
+    multimediaLinkFieldSchema,
+    embeddedSchemaFieldSchema
+]);
 
 export const createSchema = {
     name: "createSchema",
@@ -16,7 +114,7 @@ A Schema is defined by its content fields (in the 'fields' property) and metadat
 Each Field Definition object **must** include a '$type' property to identify its type from the list below. Other common properties include:
 - **Name**: The machine name of the field (must match the key in the dictionary).
 - **Description**: A human-readable description of the field's purpose.
-- **MinOccurs**: The minimum number of times the field can occur (e.g., 1 for mandatory).
+- **MinOccurs**: The minimum number of times the field can occur (e.g., 0 for optional, 1 for mandatory).
 - **MaxOccurs**: The maximum number of times the field can occur (e.g., 1 for single-value, -1 for unlimited multi-value).
 - **IsIndexable** (Default: true) Whether the field value is included when performing a search.
 - **IsLocalizable**: (Default: true) Whether the field value can be changed in localized items.
@@ -55,9 +153,12 @@ Certain top-level properties are only applicable when the Schema has a specific 
             "Metadata", "Bundle", "Region"
         ]).describe("The purpose of the Schema, which determines where it can be used."),
         rootElementName: z.string().describe("The name of the root element for the XML structure defined by the Schema."),
-        description: z.string().describe("A description for the Schema."),
-        fields: z.record(z.any()).optional().describe("A dictionary of field definitions for the Schema's content. The keys of the dictionary are the machine names of the fields, and the values are the corresponding field definition objects."),
-        metadataFields: z.record(z.any()).optional().describe("A dictionary of field definitions for the Schema's metadata. The keys of the dictionary are the machine names of the fields, and the values are the corresponding field definition objects."),
+        description: z.string().optional().describe("An optional description for the Schema itself."),
+        
+        fields: z.record(fieldDefinitionSchema).optional().describe("A dictionary of field definitions for the Schema's content. The keys of the dictionary are the machine names of the fields."),
+        
+        metadataFields: z.record(fieldDefinitionSchema).optional().describe("A dictionary of field definitions for the Schema's metadata. The keys of the dictionary are the machine names of the fields."),
+        
         allowedMultimediaTypes: z.array(z.string().regex(/^tcm:0-\d+-65544$/)).optional().describe("An array of TCM URIs for allowed Multimedia Types. Only applicable when 'purpose' is 'Multimedia'."),
         bundleProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of a Process Definition to associate as the Bundle Process."),
         componentProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of a Process Definition to associate as the Component Process for workflow."),
@@ -221,7 +322,7 @@ Certain top-level properties are only applicable when the Schema has a specific 
     ],
     execute: async (args: any) => {
         const {
-            title, locationId, purpose, rootElementName, description, namespaceUri,
+            title, locationId, purpose, rootElementName, description,
             fields, metadataFields, allowedMultimediaTypes, bundleProcessId,
             componentProcessId, deleteBundleOnProcessFinished, isIndexable,
             isPublishable, regionDefinition
@@ -256,7 +357,6 @@ Certain top-level properties are only applicable when the Schema has a specific 
             payload.RootElementName = rootElementName;
 
             if (description) payload.Description = description;
-            if (namespaceUri) payload.NamespaceUri = namespaceUri;
             if (fields) payload.Fields = { "$type": "FieldsDefinitionDictionary", ...fields };
             if (metadataFields) payload.MetadataFields = { "$type": "FieldsDefinitionDictionary", ...metadataFields };
 
