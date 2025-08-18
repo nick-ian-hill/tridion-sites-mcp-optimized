@@ -55,8 +55,7 @@ Certain top-level properties are only applicable when the Schema has a specific 
             "Metadata", "Bundle", "Region"
         ]).describe("The purpose of the Schema, which determines where it can be used."),
         rootElementName: z.string().describe("The name of the root element for the XML structure defined by the Schema."),
-        description: z.string().optional().describe("An optional description for the Schema."),
-        namespaceUri: z.string().optional().describe("The namespace URI (target namespace) of the Schema."),
+        description: z.string().describe("A description for the Schema."),
         fields: z.record(z.any()).optional().describe("A dictionary of field definitions for the Schema's content. The keys of the dictionary are the machine names of the fields, and the values are the corresponding field definition objects."),
         metadataFields: z.record(z.any()).optional().describe("A dictionary of field definitions for the Schema's metadata. The keys of the dictionary are the machine names of the fields, and the values are the corresponding field definition objects."),
         allowedMultimediaTypes: z.array(z.string().regex(/^tcm:0-\d+-65544$/)).optional().describe("An array of TCM URIs for allowed Multimedia Types. Only applicable when 'purpose' is 'Multimedia'."),
