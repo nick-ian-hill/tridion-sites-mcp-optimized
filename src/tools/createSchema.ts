@@ -153,7 +153,7 @@ Certain top-level properties are only applicable when the Schema has a specific 
             "Metadata", "Bundle", "Region"
         ]).describe("The purpose of the Schema, which determines where it can be used."),
         rootElementName: z.string().describe("The name of the root element for the XML structure defined by the Schema."),
-        description: z.string().optional().describe("An optional description for the Schema itself."),
+        description: z.string().nonempty().describe("An mandatory description of the Schema."),
         
         fields: z.record(fieldDefinitionSchema).optional().describe("A dictionary of field definitions for the Schema's content. The keys of the dictionary are the machine names of the fields."),
         
