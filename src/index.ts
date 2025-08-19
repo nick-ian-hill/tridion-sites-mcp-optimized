@@ -18,7 +18,6 @@ import { dependencyGraphForItem } from "./tools/dependencyGraphForItem.js";
 import { echo } from "./tools/echo.js";
 import { getBluePrintHierarchy } from "./tools/getBluePrintHierarchy.js";
 import { getCategories } from "./tools/getCategories.js";
-import { getDynamicItemById } from "./tools/getDynamicItemById.js";
 import { getItemById } from "./tools/getItemById.js";
 import { getItemsInContainer } from "./tools/getItemsInContainer.js";
 import { getKeywordsForCategory } from "./tools/getKeywordsForCategory.js";
@@ -46,7 +45,6 @@ const tools: any[] = [
 
   // Read Operations
   getItemById,
-  getDynamicItemById,
   bulkReadItemsById,
   getItemsInContainer,
   

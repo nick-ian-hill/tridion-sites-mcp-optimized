@@ -80,7 +80,7 @@ export const updatePublicationById = {
             if (updates.pageTemplateProcess) itemToUpdate.PageTemplateProcess = toLink(updates.pageTemplateProcess);
             if (updates.componentTemplateProcess) itemToUpdate.ComponentTemplateProcess = toLink(updates.componentTemplateProcess);
             if (updates.templateBundleProcess) itemToUpdate.TemplateBundleProcess = toLink(updates.templateBundleProcess);
-            if (updates.parentPublications) itemToUpdate.parentPublications = toLinkArray(updates.parentPublications);
+            if (updates.parentPublications) itemToUpdate.ParentPublications = toLinkArray(updates.parentPublications);
 
             // 3. Send the PUT request to update the item
             const updateResponse = await authenticatedAxios.put(`/items/${restItemId}`, itemToUpdate);

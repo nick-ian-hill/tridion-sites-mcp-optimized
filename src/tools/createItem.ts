@@ -4,6 +4,7 @@ import { SearchQueryValidation } from "../schemas/searchSchema.js";
 import { generateSearchFolderXmlConfiguration } from "../utils/generateSearchFolderXml.js";
 import { toLinkArray } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
+import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 
 export const createItem = {
     name: "createItem",
@@ -17,8 +18,8 @@ export const createItem = {
         locationId: z.string().regex(/^(tcm|ecl):\d+-\d+(-\d+)?$/).describe("The TCM URI of the parent container (e.g., Folder, Structure Group, Category) where the new item will be created."),
         schemaId: z.string().regex(/^tcm:\d+-\d+(-\d+)?$/).optional().describe("Required for 'Component' and 'Page'. The TCM URI of the Schema to use for the item's content."),
         metadataSchemaId: z.string().regex(/^(tcm):\d+-\d+(-\d+)?$/).optional().describe("Optional. The TCM URI of the Metadata Schema for the item's metadata."),
-        content: z.record(z.any()).optional().describe("A JSON object for the item's content fields, structured according to its Schema. Required if the Schema has mandatory fields without default values."),
-        metadata: z.record(z.any()).optional().describe("A JSON object for the item's metadata fields, structured according to its Metadata Schema. Required if the Metadata Schema has mandatory fields without default values."),
+        content: z.record(fieldValueSchema).optional().describe("A JSON object for the item's content fields, structured according to its Schema. Required if the Schema has mandatory fields without default values."),
+        metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields, structured according to its Metadata Schema. Required if the Metadata Schema has mandatory fields without default values."),
         fileName: z.string().optional().describe("Required for 'Page' type. The file name for the page, including the extension (e.g., 'about-us.html')."),
         pageTemplateId: z.string().optional().describe("Required for 'Page' type. The TCM URI of the Page Template to be associated with the Page."),
         isAbstract: z.boolean().optional().describe("Only for 'Keyword' type. Set to true to create an abstract Keyword. Defaults to false."),

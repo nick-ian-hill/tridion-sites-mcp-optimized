@@ -2,8 +2,9 @@ import { z } from "zod";
 import { authenticatedAxios } from "../lib/axios.js";
 import { SearchQueryValidation } from "../schemas/searchSchema.js";
 import { generateSearchFolderXmlConfiguration } from "../utils/generateSearchFolderXml.js";
-import { toLinkArray } from "../utils/links.js";
+import { toLink, toLinkArray } from "../utils/links.js";
 import { handleAxiosError } from "../lib/errorUtils.js";
+import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 
 export const updateItemById = {
     name: "updateItemById",
@@ -22,8 +23,8 @@ If the item is locked by another user, the operation will be aborted.`,
         title: z.string().optional().describe("The new title for the item."),
         schemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the Schema to use for the item's content. (Applicable to Component/Page)"),
         metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the Metadata Schema for the item's metadata."),
-        content: z.record(z.any()).optional().describe("A JSON object for the item's content fields. Replaces existing content."),
-        metadata: z.record(z.any()).optional().describe("A JSON object for the item's metadata fields. Replaces existing metadata."),
+        content: z.record(fieldValueSchema).optional().describe("A JSON object for the item's content fields. Replaces existing content."),
+        metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields. Replaces existing metadata."),
         fileName: z.string().optional().describe("The new file name for the page. (Applicable to Page)"),
         pageTemplateId: z.string().regex(/^tcm:\d+-\d+-128$/).optional().describe("The TCM URI of the Page Template. (Applicable to Page)"),
         isAbstract: z.boolean().optional().describe("Set to true to make a Keyword abstract. (Applicable to Keyword)"),
@@ -94,8 +95,8 @@ If the item is locked by another user, the operation will be aborted.`,
 
             // --- Apply Updates to the Item JSON ---
             if (updates.title) itemToUpdate.Title = updates.title;
-            if (updates.schemaId) itemToUpdate.Schema = { IdRef: updates.schemaId };
-            if (updates.metadataSchemaId) itemToUpdate.MetadataSchema = { IdRef: updates.metadataSchemaId };
+            if (updates.schemaId) itemToUpdate.Schema = toLink(updates.schemaId);
+            if (updates.metadataSchemaId) itemToUpdate.MetadataSchema = toLink(updates.metadataSchemaId);
             if (updates.content) itemToUpdate.Content = updates.content;
             if (updates.metadata) itemToUpdate.Metadata = updates.metadata;
             if (updates.description) itemToUpdate.Description = updates.description;
@@ -103,7 +104,7 @@ If the item is locked by another user, the operation will be aborted.`,
             // Type-specific updates
             if (itemType === 'Page') {
                 if (updates.fileName) itemToUpdate.FileName = updates.fileName;
-                if (updates.pageTemplateId) itemToUpdate.PageTemplate = { IdRef: updates.pageTemplateId };
+                if (updates.pageTemplateId) itemToUpdate.PageTemplate = toLink(updates.pageTemplateId);
             }
             if (itemType === 'Keyword') {
                 if (updates.isAbstract !== undefined) itemToUpdate.IsAbstract = updates.isAbstract;

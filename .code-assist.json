@@ -18,7 +18,6 @@
         "bulkReadItemsById",
         "getBluePrintHierarchy",
         "getCategories",
-        "getDynamicItemById",
         "getItemById",
         "getItemsInContainer",
         "getKeywordsForCategory",

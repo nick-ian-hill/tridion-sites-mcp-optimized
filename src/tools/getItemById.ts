@@ -5,18 +5,23 @@ import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js
 export const getItemById = {
     name: "getItemById",
     description: `Retrieves read-only details for a single Content Manager System (CMS) item using its unique ID.
-The returned details typically include the item type ($type), identified (Id), title (Title),
-actions that can be performed on the item (ApplicableActions), the schema or metadata schema the
-item uses for custom field values (Schema, MetadataSchema), content field values (Content),
-metadata field values (Metadata), version information like creation and revision dates (VersionInfo) etc.
+For versioned item types (Components, Component Templates, Pages, Page Templates, Template Building Blocks and Schemas), set useDynamicVersion to true to get the most recent saved data, including any revisions made since the last major version.
+The returned details typically include item type ($type), title (Title), content fields (Content), and metadata fields (Metadata).
 This tool cannot modify, update, or delete any CMS items or files.`,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the item."),
+        useDynamicVersion: z.boolean().optional().default(false).describe("Set to true for versioned items to get the most recent saved data, including minor revisions since the last major version.")
     },
-    execute: async ({ itemId }: { itemId: string }) => {
+    execute: async ({ itemId, useDynamicVersion }: { itemId: string, useDynamicVersion?: boolean }) => {
         try {
             const restItemId = itemId.replace(':', '_');
-            const response = await authenticatedAxios.get(`/items/${restItemId}`);
+            const params: { useDynamicVersion?: boolean } = {};
+
+            if (useDynamicVersion) {
+                params.useDynamicVersion = true;
+            }
+
+            const response = await authenticatedAxios.get(`/items/${restItemId}`, { params });
 
             if (response.status === 200) {
                 return {

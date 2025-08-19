@@ -1,114 +1,9 @@
 import { z } from "zod";
 import { authenticatedAxios } from "../lib/axios.js";
-import { toLinkArray } from "../utils/links.js";
-import { linkSchema } from "../schemas/linkSchema.js";
+import { toLink, toLinkArray } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
-
-// Reusable schema for List definitions
-const listDefinitionSchema = z.object({
-    "$type": z.enum([
-        "ListDefinition",
-        "SingleLineTextListDefinition",
-        "NumberListDefinition",
-        "DateListDefinition"
-    ]),
-    Type: z.enum(["Select", "Radio", "Checkbox", "Tree"]),
-    Height: z.number().int().optional(),
-    Entries: z.array(z.string()).optional()
-}).describe("Defines a list of predefined values for a field.");
-
-// Base schema with common properties for all field types
-const baseFieldSchema = z.object({
-    Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
-    Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),
-    MinOccurs: z.number().int().optional().describe("The minimum number of times the field can occur (e.g., 0 for optional, 1 for mandatory)."),
-    MaxOccurs: z.number().int().optional().describe("The maximum number of times the field can occur (e.g., 1 for single-value, -1 for unlimited multi-value)."),
-    IsIndexable: z.boolean().optional().describe("Whether the field value is included when performing a search."),
-    IsLocalizable: z.boolean().optional().describe("Whether the field value can be changed in localized items."),
-    IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing."),
-});
-
-// Schema for a simple text field
-const singleLineTextFieldSchema = z.object({
-    "$type": z.literal("SingleLineTextFieldDefinition")
-}).merge(baseFieldSchema).extend({
-    List: listDefinitionSchema.optional()
-});
-
-// Schema for a multi-line text area
-const multiLineTextFieldSchema = z.object({
-    "$type": z.literal("MultiLineTextFieldDefinition")
-}).merge(baseFieldSchema).extend({
-    Height: z.number().int().optional().describe("The height of the text area in the UI.")
-});
-
-// Schema for a rich-text (HTML) editor
-const xhtmlFieldSchema = z.object({
-    "$type": z.literal("XhtmlFieldDefinition")
-}).merge(baseFieldSchema).extend({
-    Height: z.number().int().optional().describe("The height of the rich text editor in the UI.")
-});
-
-// Schema for a Keyword link field
-const keywordFieldSchema = z.object({
-    "$type": z.literal("KeywordFieldDefinition")
-}).merge(baseFieldSchema).extend({
-    List: listDefinitionSchema.optional()
-});
-
-// Schema for a numeric field
-const numberFieldSchema = z.object({
-    "$type": z.literal("NumberFieldDefinition")
-}).merge(baseFieldSchema).extend({
-    List: listDefinitionSchema.optional()
-});
-
-// Schema for a date/time field
-const dateFieldSchema = z.object({
-    "$type": z.literal("DateFieldDefinition")
-}).merge(baseFieldSchema).extend({
-    List: listDefinitionSchema.optional()
-});
-
-// Schema for a URL field
-const externalLinkFieldSchema = z.object({
-    "$type": z.literal("ExternalLinkFieldDefinition")
-}).merge(baseFieldSchema);
-
-// Schema for a Component link field
-const componentLinkFieldSchema = z.object({
-    "$type": z.literal("ComponentLinkFieldDefinition")
-}).merge(baseFieldSchema).extend({
-    AllowedTargetSchemas: z.array(linkSchema).optional().describe("Restricts which types of Components can be linked.")
-});
-
-// Schema for a Multimedia link field
-const multimediaLinkFieldSchema = z.object({
-    "$type": z.literal("MultimediaLinkFieldDefinition")
-}).merge(baseFieldSchema).extend({
-    AllowedTargetSchemas: z.array(linkSchema).optional().describe("Restricts which types of multimedia can be linked.")
-});
-
-// Schema for an embedded Schema field
-const embeddedSchemaFieldSchema = z.object({
-    "$type": z.literal("EmbeddedSchemaFieldDefinition")
-}).merge(baseFieldSchema).extend({
-    EmbeddedSchema: linkSchema.describe("A Link object to the Schema to be embedded.")
-});
-
-// The master schema for any valid field definition, using a discriminated union
-const fieldDefinitionSchema = z.discriminatedUnion("$type", [
-    singleLineTextFieldSchema,
-    multiLineTextFieldSchema,
-    xhtmlFieldSchema,
-    keywordFieldSchema,
-    numberFieldSchema,
-    dateFieldSchema,
-    externalLinkFieldSchema,
-    componentLinkFieldSchema,
-    multimediaLinkFieldSchema,
-    embeddedSchemaFieldSchema
-]);
+import { xmlNameSchema } from "../schemas/xmlNameSchema.js";
+import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
 
 export const createSchema = {
     name: "createSchema",
@@ -161,7 +56,7 @@ Certain top-level properties are only applicable when the Schema has a specific 
             "Component", "Multimedia", "Embedded",
             "Metadata", "Bundle", "Region"
         ]).describe("The purpose of the Schema, which determines where it can be used."),
-        rootElementName: z.string().describe("The name of the root element for the XML structure defined by the Schema."),
+        rootElementName: xmlNameSchema.describe("The name of the root element for the XML structure defined by the Schema. When using two or more embeddable schemas in a schema (via embedded schema fields), this value needs to be unique between the embeddable schemas."),
         description: z.string().nonempty().describe("An mandatory description of the Schema."),
         fields: z.record(fieldDefinitionSchema).optional().describe("A dictionary of field definitions for the Schema's content. The keys of the dictionary are the machine names of the fields."),
         metadataFields: z.record(fieldDefinitionSchema).optional().describe("A dictionary of field definitions for the Schema's metadata. The keys of the dictionary are the machine names of the fields."),
@@ -377,7 +272,7 @@ Certain top-level properties are only applicable when the Schema has a specific 
             if (regionDefinition) payload.RegionDefinition = regionDefinition;
 
             if (!payload.LocationInfo?.OrganizationalItem?.IdRef) {
-                payload.LocationInfo = { ...payload.LocationInfo, OrganizationalItem: { IdRef: locationId } };
+                payload.LocationInfo = { ...payload.LocationInfo, OrganizationalItem: toLink(locationId) };
             }
 
             // 3. Post the customized payload to create the Schema
