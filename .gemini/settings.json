@@ -1,7 +1,7 @@
 {
   "mcpServers": [
     {
-      "name": "example-tridion-sitesmcp-server",
+      "name": "mcp-test-server",
       "command": "node",
       "args": [
         "--inspect=9229",

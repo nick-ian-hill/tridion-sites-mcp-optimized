@@ -1,8 +1,13 @@
 {
   "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/modelcontextprotocol/main/schema/2025-03-26/schema.json",
+  "ignore": [
+    "node_modules",
+    "dist",
+    "build"
+  ],
   "tools": [
     {
-      "name": "tridion-sites-mcp-server",
+      "name": "mcp-test-server",
       "displayName": "Tridion Sites MCP Server",
       "mode": "stdio",
       "command": "node",

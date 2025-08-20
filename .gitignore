@@ -1,0 +1,17 @@
+# Dependencies
+/node_modules
+
+# Build output
+/dist
+/build
+
+# Next.js cache
+/.next
+/.cache
+
+# Log files
+*.log
+
+# Environment variables
+.env
+.env.local

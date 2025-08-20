@@ -1,0 +1,10 @@
+# Dependencies to exclude from Gemini's context
+/node_modules
+
+# Build output
+/dist
+/build
+
+# Caches
+/.next
+/.cache
