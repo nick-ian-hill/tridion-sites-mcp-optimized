@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { authenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
+import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 
 export const createRootStructureGroup = {
     name: "createRootStructureGroup",
@@ -13,8 +14,8 @@ export const createRootStructureGroup = {
     input: {
         title: z.string().describe("The title for the new root Structure Group."),
         publicationId: z.string().regex(/^tcm:0-\d+-1$/).describe("The TCM URI of the root Publication that will contain this Structure Group."),
-        metadataSchemaId: z.string().regex(/^tcm:\d+-\d+(-\d+)?$/).optional().describe("The TCM URI of a Metadata Schema to apply to the root Structure Group."),
-        metadata: z.record(z.any()).optional().describe("A JSON object containing the values for the metadata fields, structured according to the Metadata Schema.")
+        metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of a Metadata Schema to apply to the root Structure Group."),
+        metadata: z.record(fieldValueSchema).optional().describe("A JSON object containing the values for the metadata fields, structured according to the Metadata Schema.")
     },
     examples: [
         {

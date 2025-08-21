@@ -14,7 +14,7 @@ For versioned item types ('Component', 'Page', 'Schema'), it automatically handl
 If only updating content or metadata for a Component, you can use the updateComponentById tool.
 If the item is locked by another user, the operation will be aborted.`,
     input: {
-        itemId: z.string().regex(/^(tcm|ecl):\d+-\d+(-\d+)?$/).describe("The unique ID of the CMS item to update."),
+        itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the CMS item to update."),
         itemType: z.enum([
             "Component", "Folder", "StructureGroup", "Keyword",
             "Category", "Page", "Schema", "Bundle", "SearchFolder"

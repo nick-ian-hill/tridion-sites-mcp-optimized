@@ -123,18 +123,24 @@ export const fieldDefinitionSchema = z.discriminatedUnion("$type", [
     embeddedSchemaFieldSchema
 ]);
 
-// Define the recursive type explicitly for TypeScript to understand the structure.
-type FieldValue = string | number | boolean | z.infer<typeof linkSchema> | { [key: string]: FieldValue } | FieldValue[];
+const primitiveFieldValueSchema = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  linkSchema,
+]);
 
-// A schema for the actual values of fields, which can be a single value or an array of values.
-// We apply the explicit ZodType to the constant to resolve the TypeScript error.
-export const fieldValueSchema: z.ZodType<FieldValue> = z.lazy(() =>
-    z.union([
-        z.string(),
-        z.number(),
-        z.boolean(),
-        linkSchema,
-        z.record(fieldValueSchema), // For embedded fields
-        z.array(fieldValueSchema)    // For multi-value fields
-    ])
-);
+// --- New "Guidance" Schema for Container Elements ---
+// This explicitly says: "Try to match a primitive first, otherwise, allow anything."
+const flexibleElementSchema = z.union([primitiveFieldValueSchema, z.unknown()]);
+
+export const fieldValueSchema = z.union([
+  // 1. A simple primitive is still allowed at the top level.
+  primitiveFieldValueSchema,
+
+  // 2. An array is allowed, containing our new flexible element type.
+  z.array(flexibleElementSchema),
+
+  // 3. A record is allowed, containing our new flexible element type.
+  z.record(flexibleElementSchema),
+]);

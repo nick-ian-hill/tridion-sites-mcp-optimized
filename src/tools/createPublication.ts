@@ -20,7 +20,7 @@ export const createPublication = {
     input: {
         title: z.string().describe("The title for the new Publication."),
         parentPublications: z.array(z.string().regex(/^tcm:\d+-\d+-1$/)).optional().describe("An array of URIs for parent Publications. If no parent Publications are specified, a root Publication will be created. Given two parents, the parent with the lower index has the higher priority. This can be relevant when determining from which parent an item is inherited."),
-        publicationKey: z.string().optional().describe("The publication key, which can be used as an additional unique identifier for a Publication. If not specified, the Publication title will used."),
+        publicationKey: z.string().optional().describe("Optional unique key. Only provide this if the key must be different from the title. If omitted, the title is used as the key."),
         //publicationPath: z.string().optional().describe("The publication path, which forms the base of the publish path for Structure Groups and Pages within this Publication."),
         //publicationUrl: z.string().optional().describe("The server-relative URL for the Publication. This will be prefixed to the URLs of published Pages."),
         //multimediaPath: z.string().optional().describe("The physical path on the server where multimedia binaries will be published."),
@@ -66,7 +66,7 @@ export const createPublication = {
 
             // 2. Customize the payload with the provided arguments
             payload.Title = title;
-            if (publicationKey) payload.Key = publicationKey;
+            payload.Key = publicationKey || title;
             if (publicationPath) payload.PublicationPath = publicationPath;
             if (publicationUrl) payload.PublicationUrl = publicationUrl;
             if (multimediaPath) payload.MultimediaPath = multimediaPath;

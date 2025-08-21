@@ -1,5 +1,7 @@
+
+import http from 'node:http';
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 
 // Tool Imports
 import { batchLocalizeItemsById } from "./tools/batchLocalizeItemsById.js";
@@ -34,7 +36,7 @@ import { updateItemById } from "./tools/updateItemById.js";
 import { updatePublicationById } from "./tools/updatePublicationById.js";
 
 const server = new McpServer({
-  name: "tridion-sites-mcp-server",
+  name: "mcp-test-server",
   version: "1.0.0",
 });
 
@@ -58,7 +60,7 @@ const tools: any[] = [
   updateItemById,
   updateComponentById,
   updatePublicationById,
-  
+
   // Item Actions (Move, Copy, Delete)
   moveItem,
   copyItem,
@@ -90,5 +92,30 @@ tools.forEach(tool => {
   server.tool(tool.name, tool.description, tool.input, tool.execute as any);
 });
 
-const transport = new StdioServerTransport();
+const transport = new StreamableHTTPServerTransport({
+  sessionIdGenerator: undefined,
+});
 server.connect(transport);
+
+const httpServer = http.createServer((req, res) => {
+  if (req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => {
+      body += chunk.toString();
+    });
+    req.on('end', () => {
+      try {
+        const parsedBody = JSON.parse(body);
+        transport.handleRequest(req, res, parsedBody);
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Invalid JSON' }));
+      }
+    });
+  } else {
+    transport.handleRequest(req, res);
+  }
+});
+
+const port = 8090;
+httpServer.listen(port, () => {});

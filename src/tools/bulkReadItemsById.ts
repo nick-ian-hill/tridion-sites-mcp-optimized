@@ -19,7 +19,7 @@ ID formats for versioned items:
 
 This tool cannot modify, update, or delete any CMS items or files.`,
     input: {
-        itemIds: z.array(z.string().regex(/^(tcm|ecl):\d+-\d+(-\d+)?$/)).describe("An array of unique IDs for the items to retrieve."),
+        itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)).describe("An array of unique IDs for the items to retrieve."),
         useDynamicVersion: z.boolean().default(false).describe("When true, loads the latest revisions for versioned items. Defaults to false."),
         loadFullItems: z.boolean().default(false).describe("When true, loads the full content and metadata for each item. Defaults to false."),
     },

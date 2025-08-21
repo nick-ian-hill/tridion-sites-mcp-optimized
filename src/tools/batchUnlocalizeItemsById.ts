@@ -8,7 +8,7 @@ export const batchUnlocalizeItemsById = {
     This batch tool is more efficient than unlocalizing items one by one and returns a confirmation that the process has been accepted and is running in the background.
     You can load the batch process referenced in the repsonse to check the status of the process.`,
     input: {
-        itemIds: z.array(z.string().regex(/^(tcm|ecl):\d+-\d+(-\d+)?$/)).describe("An array of unique IDs (TCM URIs) for the local items to be unlocalized."),
+        itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)).describe("An array of unique IDs (TCM URIs) for the local items to be unlocalized."),
     },
     execute: async ({ itemIds }: { itemIds: string[] }) => {
         try {

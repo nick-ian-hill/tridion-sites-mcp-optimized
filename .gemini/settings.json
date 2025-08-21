@@ -1,7 +1,14 @@
 {
-  "mcpServers": [
-    {
-      "name": "mcp-test-server",
+  "coreTools": [
+    "ShellTool",
+    "WebFetchTool",
+    "WebSearchTool"
+  ],
+  "mcpServers": {
+    "mcp-test-server": {
+      "httpUrl": "http://localhost:8090"
+    }/*,
+    "mcp-test-server2": {
       "command": "node",
       "args": [
         "--inspect=9229",
@@ -9,42 +16,9 @@
         "ts-node/esm",
         "src/index.ts"
       ],
-      "tools": [
-        "echo",
-        "search",
-        "bulkReadItemsById",
-        "getBluePrintHierarchy",
-        "getCategories",
-        "getItemById",
-        "getItemsInContainer",
-        "getKeywordsForCategory",
-        "getPublications",
-        "getPublicationTypes",
-        "dependencyGraphForItem",
-        "createItem",
-        "createPublication",
-        "createRootStructureGroup",
-        "createSchema",
-        "updateComponentById",
-        "updateItemById",
-        "updatePublicationById",
-        "copyItem",
-        "moveItem",
-        "deleteItem",
-        "deletePublicationById",
-        "deleteComponentById",
-        "localizeItemById",
-        "unlocalizeItemById",
-        "batchLocalizeItemsById",
-        "batchUnlocalizeItemsById",
-        "promoteItem",
-        "demoteItem",
-        "checkOutItem",
-        "checkInItem",
-        "undoCheckOutItem"
-      ],
       "mode": "stdio",
-      "cwd": "."
-    }
-  ]
+      "cwd": ".",
+      "timeout": 10000
+    }*/
+  }
 }

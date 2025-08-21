@@ -9,7 +9,7 @@ export const batchLocalizeItemsById = {
     This batch tool is more efficient than localizing items one by one and returns a confirmation that the process has been accepted and is running in the background.
     You can load the batch process referenced in the response to check the status of the process.`,
     input: {
-        itemIds: z.array(z.string().regex(/^(tcm|ecl):\d+-\d+(-\d+)?$/)).describe("An array of unique IDs (TCM URIs) for the shared items to be localized."),
+        itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)).describe("An array of unique IDs (TCM URIs) for the shared items to be localized."),
     },
     execute: async ({ itemIds }: { itemIds: string[] }) => {
         try {
