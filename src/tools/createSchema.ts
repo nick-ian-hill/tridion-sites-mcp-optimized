@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { authenticatedAxios } from "../lib/axios.js";
 import { toLink, toLinkArray } from "../utils/links.js";
+import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 import { xmlNameSchema } from "../schemas/xmlNameSchema.js";
 import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
@@ -230,6 +231,52 @@ Certain top-level properties are only applicable when the Schema has a specific 
             componentProcessId, deleteBundleOnProcessFinished, isIndexable,
             isPublishable, regionDefinition
         } = args;
+        
+        // Helper function to recursively find and convert all Link IdRefs within any object or array.
+        const convertLinksRecursively = (currentObject: any, contextId: string) => {
+            if (!currentObject || typeof currentObject !== 'object') {
+                return;
+            }
+
+            if (Array.isArray(currentObject)) {
+                currentObject.forEach(item => convertLinksRecursively(item, contextId));
+            } else {
+                // Check if the object is a Link and convert its IdRef
+                if (currentObject.$type === "Link" && typeof currentObject.IdRef === 'string') {
+                    currentObject.IdRef = convertItemIdToContextPublication(currentObject.IdRef, contextId);
+                }
+
+                // Continue traversal for nested objects
+                for (const key in currentObject) {
+                    if (Object.prototype.hasOwnProperty.call(currentObject, key)) {
+                        convertLinksRecursively(currentObject[key], contextId);
+                    }
+                }
+            }
+        };
+
+        // Helper function to process a dictionary of field definitions.
+        const processFieldDefinitions = (fieldDict: Record<string, any> | undefined, contextId: string) => {
+            if (!fieldDict) return;
+
+            for (const fieldName in fieldDict) {
+                const fieldDef = fieldDict[fieldName];
+
+                // 1. Enforce EmbeddedFields is an empty object for EmbeddedSchemaFieldDefinition
+                if (fieldDef.$type === "EmbeddedSchemaFieldDefinition") {
+                    if (!fieldDef.EmbeddedFields || typeof fieldDef.EmbeddedFields !== 'object' || Object.keys(fieldDef.EmbeddedFields).length !== 0) {
+                        fieldDef.EmbeddedFields = {};
+                    }
+                }
+
+                // 2. Recursively convert all IdRefs in the field definition
+                convertLinksRecursively(fieldDef, contextId);
+            }
+        };
+
+        // Process both fields and metadataFields using the helper.
+        processFieldDefinitions(fields, locationId);
+        processFieldDefinitions(metadataFields, locationId);
 
         // Validation for purpose-specific fields
         if (purpose !== 'Multimedia' && allowedMultimediaTypes) {
