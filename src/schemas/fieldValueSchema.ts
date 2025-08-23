@@ -106,7 +106,8 @@ const multimediaLinkFieldSchema = z.object({
 const embeddedSchemaFieldSchema = z.object({
     "$type": z.literal("EmbeddedSchemaFieldDefinition")
 }).merge(baseFieldSchema).extend({
-    EmbeddedSchema: linkSchema.describe("A Link object to the Schema to be embedded.")
+    EmbeddedSchema: linkSchema.describe("A Link object to the Schema to be embedded."),
+    EmbeddedFields: z.object({}).describe("An empty object. This property must be provided when defining an embedded schema field.")
 });
 
 // The master schema for any valid field definition, using a discriminated union
@@ -130,17 +131,14 @@ const primitiveFieldValueSchema = z.union([
   linkSchema,
 ]);
 
-// --- New "Guidance" Schema for Container Elements ---
-// This explicitly says: "Try to match a primitive first, otherwise, allow anything."
-const flexibleElementSchema = z.union([primitiveFieldValueSchema, z.unknown()]);
+const deepFieldSchema = z.union([
+  primitiveFieldValueSchema,
+  z.array(primitiveFieldValueSchema),
+  z.record(primitiveFieldValueSchema),
+]);
 
 export const fieldValueSchema = z.union([
-  // 1. A simple primitive is still allowed at the top level.
   primitiveFieldValueSchema,
-
-  // 2. An array is allowed, containing our new flexible element type.
-  z.array(flexibleElementSchema),
-
-  // 3. A record is allowed, containing our new flexible element type.
-  z.record(flexibleElementSchema),
+  z.array(z.union([deepFieldSchema, z.unknown()])),
+  z.record(z.union([deepFieldSchema, z.unknown()])),
 ]);
