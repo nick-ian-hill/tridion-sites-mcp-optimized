@@ -3,15 +3,40 @@ import { authenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 
-export const updateComponentById = {
-    name: "updateComponentById",
-    description: `Updates content and/or metadata field values for a single Content Manager System (CMS) item of type 'Component' with the specified ID. The ID of the schema defining the allowed content and metadata fields can be found under the component's 'Schema' property. Fields are defined using XML Schema Definition 1.0. This tool cannot be used to update other item types or other component fields (e.g., Title).`,
+export const updateContentById = {
+    name: "updateContentById",
+    description: `Updates the content fields for an item of type 'Component' in the Content Management System.
+
+Important Constraints:
+- This tool is only for Components. It cannot update other item types (e.g., 'Page', 'Folder', 'Schema').
+- This tool only updates the content fields and cannot be used to update other Component properties like Title, or Metadata.
+- The content fields must be a JSON object with keys corresponding to the field names. The order of these fields must match the exact order defined in the Component's schema.
+
+To update metadata for components or other item types, use the 'updateMetadataById' tool.
+To update other properties, use the 'updateItemById' tool.
+If the component is locked by another user, the operation will be aborted.`,
     input: {
-        itemId: z.string().regex(/^(tcm:\d+-\d+(-16)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the component to update. The item type (the third number in the ID) must be 16, but is optional."),
-        content: z.record(fieldValueSchema).optional().describe("A JSON object for the component's content fields. Replaces existing content."),
-        metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the component's metadata fields. Replaces existing metadata."),
+        itemId: z.string().regex(/^(tcm:\d+-\d+(-16)?)$/).describe("The unique ID of the component to update (e.g., 'tcm:5-123'). The item type (16) is optional and usually not provided."),
+        content: z.record(fieldValueSchema).describe("A JSON object containing the Component's content fields. This object's properties (the field names and their values) must be in the exact order defined by the Schema."),
     },
-    execute: async ({ itemId, content, metadata }: { itemId: string, content?: Record<string, any>, metadata?: Record<string, any> }) => {
+    examples: [
+        {
+            input: {
+                "itemId": "tcm:5-123",
+                "content": {
+                    "TitleField": "Component Title",
+                    "Abstract": "<p>The <em>quick</em> brown fox jumped over the lazy dog.</p>",
+                    "Tags": [
+                        "AI",
+                        "Google",
+                        "Machine Learning"
+                    ]
+                }
+            },
+            description: "Updates the values of the content fields with XML names 'TitleField', 'Abstract', and 'Tags'."
+        }
+    ],
+    execute: async ({ itemId, content }: { itemId: string, content: Record<string, any> }) => {
         let wasCheckedOutByTool = false;
         const restItemId = itemId.replace(':', '_');
 
@@ -25,7 +50,11 @@ export const updateComponentById = {
                 return handleAxiosError(new Error("Could not retrieve agent's user ID from whoAmI endpoint."), "Failed to update component");
             }
 
-            const getItemResponse = await authenticatedAxios.get(`/items/${restItemId}`);
+            const getItemResponse = await authenticatedAxios.get(`/items/${restItemId}`, {
+                params: {
+                    useDynamicVersion: true
+                }
+            });
             if (getItemResponse.status !== 200) {
                 return handleUnexpectedResponse(getItemResponse);
             }
@@ -48,26 +77,17 @@ export const updateComponentById = {
                     "SetPermanentLock": true
                 };
                 const checkOutResponse = await authenticatedAxios.post(`/items/${restItemId}/checkOut`, checkOutRequestModel);
-                 if (checkOutResponse.status !== 200) {
+                if (checkOutResponse.status !== 200) {
                     return handleUnexpectedResponse(checkOutResponse);
                 }
                 itemToUpdate = checkOutResponse.data;
                 wasCheckedOutByTool = true;
             } else {
-                const dynamicItemResponse = await authenticatedAxios.get(`/items/${restItemId}`, {
-                    params: { useDynamicVersion: true }
-                });
-                 if (dynamicItemResponse.status !== 200) {
-                    return handleUnexpectedResponse(dynamicItemResponse);
-                }
-                itemToUpdate = dynamicItemResponse.data;
+                itemToUpdate = item;
             }
 
             if (content) {
                 itemToUpdate.Content = content;
-            }
-            if (metadata) {
-                itemToUpdate.Metadata = metadata;
             }
 
             const updateResponse = await authenticatedAxios.put(`/items/${restItemId}`, itemToUpdate);

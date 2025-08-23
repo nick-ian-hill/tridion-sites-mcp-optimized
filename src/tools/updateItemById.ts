@@ -3,16 +3,15 @@ import { authenticatedAxios } from "../lib/axios.js";
 import { SearchQueryValidation } from "../schemas/searchSchema.js";
 import { generateSearchFolderXmlConfiguration } from "../utils/generateSearchFolderXml.js";
 import { toLink, toLinkArray } from "../utils/links.js";
-import { handleAxiosError } from "../lib/errorUtils.js";
-import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
+import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const updateItemById = {
     name: "updateItemById",
     description: `Updates an existing Content Manager System (CMS) item of a specified type.
-This tool can update various properties like title, description, content, and metadata.
-For versioned item types ('Component', 'Page', 'Schema'), it automatically handles check-out and check-in.
-If only updating content or metadata for a Component, you can use the updateComponentById tool.
-If the item is locked by another user, the operation will be aborted.`,
+This tool can update various properties like title, description, metadataSchemaId, and parentKeywords.
+For versioned item types ('Component', 'Page', 'Schema'), check-out and check-in are handled automatically.
+To update an item's content or metadata, use the updateContentById or updateMetadataById tool respectively.
+If a versioned item is locked by another user, the operation will be aborted.`,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the CMS item to update."),
         itemType: z.enum([
@@ -21,10 +20,7 @@ If the item is locked by another user, the operation will be aborted.`,
         ]).describe("The type of the CMS item to update."),
         // Optional fields for update, similar to createItem
         title: z.string().optional().describe("The new title for the item."),
-        schemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the Schema to use for the item's content. (Applicable to Component/Page)"),
         metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the Metadata Schema for the item's metadata."),
-        content: z.record(fieldValueSchema).optional().describe("A JSON object for the item's content fields. Replaces existing content."),
-        metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields. Replaces existing metadata."),
         fileName: z.string().optional().describe("The new file name for the page. (Applicable to Page)"),
         pageTemplateId: z.string().regex(/^tcm:\d+-\d+-128$/).optional().describe("The TCM URI of the Page Template. (Applicable to Page)"),
         isAbstract: z.boolean().optional().describe("Set to true to make a Keyword abstract. (Applicable to Keyword)"),
@@ -41,26 +37,34 @@ If the item is locked by another user, the operation will be aborted.`,
         const restItemId = itemId.replace(':', '_');
         const versionedItemTypes = ["Component", "Page", "Schema"];
         const isVersioned = versionedItemTypes.includes(itemType);
-
         let wasCheckedOutByTool = false;
 
         try {
-            let itemToUpdate;
+            const getItemResponse = await authenticatedAxios.get(`/items/${restItemId}`, {
+                params: {
+                    useDynamicVersion: true
+                }
+            });
+            if (getItemResponse.status !== 200) {
+                return handleUnexpectedResponse(getItemResponse);
+            }
+            let itemToUpdate = getItemResponse.data;
 
             if (isVersioned) {
                 // --- Versioned Item Handling ---
                 // 1. Get agent's user ID
                 const whoAmIResponse = await authenticatedAxios.get('/whoAmI');
+                if (whoAmIResponse.status !== 200) {
+                    return handleUnexpectedResponse(whoAmIResponse);
+                }
                 const agentId = whoAmIResponse.data?.User?.Id;
                 if (!agentId) {
                     throw new Error("Could not retrieve agent's user ID from whoAmI endpoint.");
                 }
 
-                // 2. Get item and check lock status
-                const getItemResponse = await authenticatedAxios.get(`/items/${restItemId}`);
-                const currentItem = getItemResponse.data;
-                const isCheckedOut = currentItem?.LockInfo?.LockType?.includes('CheckedOut');
-                const checkedOutUser = currentItem?.VersionInfo?.CheckOutUser?.IdRef;
+                // 2. Check lock status of the item
+                const isCheckedOut = itemToUpdate?.LockInfo?.LockType?.includes('CheckedOut');
+                const checkedOutUser = itemToUpdate?.VersionInfo?.CheckOutUser?.IdRef;
 
                 if (isCheckedOut && checkedOutUser !== agentId) {
                     return {
@@ -72,33 +76,24 @@ If the item is locked by another user, the operation will be aborted.`,
                     };
                 }
 
-                // 3. Check out if necessary, or get dynamic version if already checked out by agent
+                // 3. Check out if necessary
                 if (!isCheckedOut) {
                     const checkOutResponse = await authenticatedAxios.post(`/items/${restItemId}/checkOut`, {
                         "$type": "CheckOutRequest",
                         "SetPermanentLock": true
                     });
+                    if (checkOutResponse.status !== 200) {
+                        return handleUnexpectedResponse(checkOutResponse);
+                    }
                     itemToUpdate = checkOutResponse.data;
                     wasCheckedOutByTool = true;
-                } else {
-                    // Already checked out by agent, get the latest dynamic version to apply updates to
-                    const dynamicItemResponse = await authenticatedAxios.get(`/items/${restItemId}`, {
-                        params: { useDynamicVersion: true }
-                    });
-                    itemToUpdate = dynamicItemResponse.data;
                 }
-            } else {
-                // --- Non-Versioned Item Handling ---
-                const getItemResponse = await authenticatedAxios.get(`/items/${restItemId}`);
-                itemToUpdate = getItemResponse.data;
             }
 
             // --- Apply Updates to the Item JSON ---
             if (updates.title) itemToUpdate.Title = updates.title;
             if (updates.schemaId) itemToUpdate.Schema = toLink(updates.schemaId);
             if (updates.metadataSchemaId) itemToUpdate.MetadataSchema = toLink(updates.metadataSchemaId);
-            if (updates.content) itemToUpdate.Content = updates.content;
-            if (updates.metadata) itemToUpdate.Metadata = updates.metadata;
             if (updates.description) itemToUpdate.Description = updates.description;
 
             // Type-specific updates
@@ -122,25 +117,22 @@ If the item is locked by another user, the operation will be aborted.`,
             // --- Send PUT request to update the item ---
             const updateResponse = await authenticatedAxios.put(`/items/${restItemId}`, itemToUpdate);
             if (updateResponse.status !== 200) {
-                throw new Error(`Update failed with status: ${updateResponse.status} - ${updateResponse.statusText}`);
+                return handleUnexpectedResponse(updateResponse);
             }
             const updatedItem = updateResponse.data;
 
             // --- Check-in for versioned items ---
-            if (isVersioned) {
+            if (isVersioned && wasCheckedOutByTool) {
                 const checkInResponse = await authenticatedAxios.post(`/items/${restItemId}/checkIn`, {
                     "$type": "CheckInRequest",
                     "RemovePermanentLock": true
                 });
                 if (checkInResponse.status !== 200) {
-                    throw new Error(`Check-in failed with status: ${checkInResponse.status}`);
+                    return handleUnexpectedResponse(checkInResponse);
                 }
-                return {
-                    content: [{ type: "text", text: `Successfully updated and checked in ${itemType} ${itemId}.\n\n${JSON.stringify(updatedItem, null, 2)}` }],
-                };
             }
-
-            // --- Success for non-versioned items ---
+            
+            // --- Success for both versioned and non-versioned items ---
             return {
                 content: [{ type: "text", text: `Successfully updated ${itemType} ${itemId}.\n\n${JSON.stringify(updatedItem, null, 2)}` }],
             };

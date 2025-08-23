@@ -31,9 +31,10 @@ import { promoteItem } from "./tools/promoteItem.js";
 import { search } from "./tools/search.js";
 import { unlocalizeItemById } from "./tools/unlocalizeItemById.js";
 import { undoCheckOutItem } from "./tools/undoCheckOutItem.js";
-import { updateComponentById } from "./tools/updateComponentById.js";
+import { updateContentById } from "./tools/updateContentById.js";
 import { updateItemById } from "./tools/updateItemById.js";
 import { updatePublicationById } from "./tools/updatePublicationById.js";
+import { updateMetadataById } from './tools/updateMetadataById.js';
 
 const server = new McpServer({
   name: "mcp-test-server",
@@ -58,7 +59,8 @@ const tools: any[] = [
   
   // Update Operations
   updateItemById,
-  updateComponentById,
+  updateContentById,
+  updateMetadataById,
   updatePublicationById,
 
   // Item Actions (Move, Copy, Delete)
