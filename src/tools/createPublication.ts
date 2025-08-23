@@ -13,13 +13,15 @@ export const createPublication = {
     A BluePrint hierarchy has a single root Publication, that is, a single Publication with no parent.
     A child Publication inherits content from its parent Publications.
     BluePrint hierarchies are ideal for managing multi-language websites, different brand channels, or various stages of a project (like development, staging, and live).
-    
+    When creating a set of related websites or translating a site to multiple languages, it is important to work within a single BluePrint hierarchy.
+    Content cannot be moved between different publications, and content from a publication in one hierarchy cannot be used by publications in a different hierarchy (i.e., with a different root publication).
+
     When a Publication has multiple parents, specific rules govern item inheritance conflicts:
-    1.  **Proximity Rule**: If an item exists in multiple parent paths, the child inherits from the closest parent (fewest hops) that contains a localized or original version of that item, not a shared one.
-    2.  **Priority Rule (Tie-Breaker)**: If multiple parents are equally close, the one with the highest priority is chosen. Priority is determined by the order in the 'parentPublications' array; the Publication with the lowest index has the highest priority.`,
+    1.  Proximity Rule: If an item exists in multiple parent paths, the child inherits from the closest parent (fewest hops) that contains a localized or original version of that item, not a shared one.
+    2.  Priority Rule (Tie-Breaker): If multiple parents are equally close, the one with the highest priority is chosen. Priority is determined by the order in the 'parentPublications' array; the Publication with the lowest index has the highest priority.`,
     input: {
         title: z.string().describe("The title for the new Publication."),
-        parentPublications: z.array(z.string().regex(/^tcm:\d+-\d+-1$/)).optional().describe("An array of URIs for parent Publications. If no parent Publications are specified, a root Publication will be created. Given two parents, the parent with the lower index has the higher priority. This can be relevant when determining from which parent an item is inherited."),
+        parentPublications: z.array(z.string().regex(/^tcm:\d+-\d+-1$/)).optional().describe("An array of URIs for parent Publications. The parents must belong to the same BluePrint hierarchy. If no parent Publications are specified, a root Publication will be created. Given two parents, the parent with the lower index has the higher priority. This can be relevant when determining from which parent an item is inherited."),
         publicationKey: z.string().optional().describe("Optional unique key. Only provide this if the key must be different from the title. If omitted, the title is used as the key."),
         //publicationPath: z.string().optional().describe("The publication path, which forms the base of the publish path for Structure Groups and Pages within this Publication."),
         //publicationUrl: z.string().optional().describe("The server-relative URL for the Publication. This will be prefixed to the URLs of published Pages."),
