@@ -120,26 +120,32 @@ Certain top-level properties are only applicable when the Schema has a specific 
 });`
         },
         {
-            description: "Create a Schema that uses another Schema for an embedded field. First, ensure you have an 'Embeddable' Schema created (e.g., a 'Date' Schema with TCM URI tcm:1-123-8).",
+            description: "Create a Schema that uses an embeddable Schema for an embedded field. First, ensure you have an 'Embeddable' Schema created (e.g., an 'Author' Schema with TCM URI tcm:1-123-8). The embeddable Schema will be referenced via the 'EmbeddedSchema' property, the value of which should be a Link. There should also be an EmbeddedFields property, the value of which should be an empty object.",
             example: `const result = await tools.createSchema({
-    title: "Event",
+    title: "ArticleSchema",
     locationId: "tcm:1-2-2",
     purpose: "Component",
-    rootElementName: "Event",
+    rootElementName: "ArticleRoot",
     fields: {
-        "eventName": {
+        "Title": {
             "$type": "SingleLineTextFieldDefinition",
-            "Name": "eventName",
-            "Description": "The name of the event."
+            "Name": "Title",
+            "Description": "The title of the article."
         },
-        "eventDate": {
+        "Abstract": {
+            "$type": "MultiLineTextFieldDefinition",
+            "Name": "Abstract",
+            "Description": "The abstract of the article."
+        },
+        "Author": {
             "$type": "EmbeddedSchemaFieldDefinition",
-            "Name": "eventDate",
-            "Description": "The date of the event.",
+            "Name": "Author",
+            "Description": "An author of the article.",
             "EmbeddedSchema": {
                 "$type": "Link",
                 "IdRef": "tcm:1-123-8"
-            }
+            },
+            "EmbeddedFields": {}
         }
     }
 });`
