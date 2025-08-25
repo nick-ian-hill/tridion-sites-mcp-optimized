@@ -13,7 +13,7 @@ Introduction to Publications and BluePrints
 - The system can contain multiple BluePrint hierarchies, but a Publication can only belong to at most one hierarchy. It is not possible to remove a Publication from a hierarchy, but it can be deleted if none of its items are published or localized.
 
 Core Concepts and Terminology
-- Root Publication: The top-level parent in a BluePrint hierarchy. Since it has no parent, it contains only items created within that Publication (local items). To create a root Publication, do not specify any parent Publications. To be referenced as a parent, a Publication must have a Structure Group.
+- Root Publication: The top-level parent in a BluePrint hierarchy. Since it has no parent, it contains only items created within that Publication (local items). To create a root Publication, do not specify any parent Publications. To be referenced as a parent, a Publication must have a root Structure Group. IMPORTANT It is only neccessary to create a root structure group for the root Publication, as it will be inherited by child Publications.
 - BluePrint Hierarchy: A system of two or more Publications where every Publication is a direct child or descendent of a common root Publication.
 - Inheritance: Items created in a parent Publication are shared down the BluePrint hierarchy to all child Publications.
 - Parent Publication: A Publication that is refenced as a parent by one or more Publications. All items in a parent Publication are inherited by its children and their descendents. When you make changes to a Primary item in a parent Publication, those changes are automatically applied to shared items in child Publications.

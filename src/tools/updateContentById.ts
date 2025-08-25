@@ -17,7 +17,7 @@ To update other properties, use the 'updateItemById' tool.
 If the component is locked by another user, the operation will be aborted.`,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-16)?)$/).describe("The unique ID of the component to update (e.g., 'tcm:5-123'). The item type (16) is optional and usually not provided."),
-        content: z.record(fieldValueSchema).describe("A JSON object containing the Component's content fields. This object's properties (the field names and their values) must be in the exact order defined by the Schema."),
+        content: z.record(fieldValueSchema).describe("A JSON object containing the Component's content fields. IMPORTANT: The order of the fields in this object MUST exactly match the order defined in the Schema. This ordering requirement also applies to any fields within an embedded schema field."),
     },
     examples: [
         {

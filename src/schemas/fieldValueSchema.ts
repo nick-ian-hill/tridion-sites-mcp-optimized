@@ -140,5 +140,5 @@ const deepFieldSchema = z.union([
 export const fieldValueSchema = z.union([
   primitiveFieldValueSchema,
   z.array(z.union([deepFieldSchema, z.unknown()])),
-  z.record(z.union([deepFieldSchema, z.unknown()])),
+  z.record(z.union([deepFieldSchema, z.unknown()])).describe("For an embedded schema field, this represents the object containing the embedded fields. The order of the fields in this object MUST exactly match the order defined in the embedded Schema."),
 ]);
