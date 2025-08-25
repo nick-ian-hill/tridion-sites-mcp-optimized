@@ -3,6 +3,7 @@ import { authenticatedAxios } from "../lib/axios.js";
 import { SearchQueryValidation } from "../schemas/searchSchema.js";
 import { generateSearchFolderXmlConfiguration } from "../utils/generateSearchFolderXml.js";
 import { toLinkArray } from "../utils/links.js";
+import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 
@@ -17,8 +18,8 @@ const createItemInputProperties = {
     locationId: z.string().regex(/^tcm:\d+-\d+-\d+$/).describe("The TCM URI of the parent container (e.g., Folder, Structure Group, Category) where the new item will be created."),
     schemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("Required for 'Component' and 'Page'. The TCM URI of the Schema to use for the item's content."),
     metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("Optional. The TCM URI of the Metadata Schema for the item's metadata."),
-    content: z.record(fieldValueSchema).optional().describe("A JSON object for the item's content fields. Required if the Schema has mandatory fields without default values. The field order MUST match the exact order defined in the Schema."),
-    metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields. Required if the Metadata Schema has mandatory fields without default values. The field order MUST match the exact order defined in the Metadata Schema."),
+    content: z.record(fieldValueSchema).optional().describe("A JSON object for the item's content fields. IMPORTANT: The order of the fields in this object MUST exactly match the order defined in the Schema. This ordering requirement also applies to any fields within an embedded schema field."),
+    metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields. IMPORTANT: The order of the fields in this object MUST exactly match the order defined in the Schema. This ordering requirement also applies to any fields within an embedded schema field."),
     fileName: z.string().optional().describe("Required for 'Page' type. The file name for the page, including the extension (e.g., 'about-us.html')."),
     pageTemplateId: z.string().regex(/^tcm:\d+-\d+-128$/).optional().describe("Required for 'Page' type. The TCM URI of the Page Template to be associated with the Page."),
     isAbstract: z.boolean().optional().describe("Only for 'Keyword' type. Set to true to create an abstract Keyword. Defaults to false."),
@@ -57,8 +58,24 @@ export const createItem = {
 
     // Use the inferred type for the 'args' parameter for full type safety.
     execute: async (args: CreateItemInput) => {
-        // Destructure the strongly-typed args to use them in the function
-        const { itemType, title, locationId, schemaId, metadataSchemaId, content, metadata, fileName, pageTemplateId, isAbstract, description, key, parentKeywords, relatedKeywords, itemsInBundle, searchQuery, resultLimit } = args;
+        const { locationId } = args;
+        if (args.schemaId) {
+            args.schemaId = convertItemIdToContextPublication(args.schemaId, locationId);
+        }
+        if (args.metadataSchemaId) {
+            args.metadataSchemaId = convertItemIdToContextPublication(args.metadataSchemaId, locationId);
+        }
+        if (args.pageTemplateId) {
+            args.pageTemplateId = convertItemIdToContextPublication(args.pageTemplateId, locationId);
+        }
+        if (args.parentKeywords) {
+            args.parentKeywords = args.parentKeywords.map(kw => convertItemIdToContextPublication(kw, locationId));
+        }
+        if (args.relatedKeywords) {
+            args.relatedKeywords = args.relatedKeywords.map(kw => convertItemIdToContextPublication(kw, locationId));
+        }
+
+        const { itemType, title, schemaId, metadataSchemaId, content, metadata, fileName, pageTemplateId, isAbstract, description, key, parentKeywords, relatedKeywords, itemsInBundle, searchQuery, resultLimit } = args;
 
         try {
             // 1. Get the default model for the item type and location from the API
