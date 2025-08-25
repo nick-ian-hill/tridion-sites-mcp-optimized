@@ -6,9 +6,9 @@ import { toLinkArray } from "../utils/links.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
+import { reorderFieldsBySchema } from "../utils/fieldReordering.js";
 
 // STEP 1: Define the properties for the tool's input as a standalone object.
-// This makes the schema reusable and easier to manage.
 const createItemInputProperties = {
     itemType: z.enum([
         "Component", "Folder", "StructureGroup", "Keyword",
@@ -18,8 +18,8 @@ const createItemInputProperties = {
     locationId: z.string().regex(/^tcm:\d+-\d+-\d+$/).describe("The TCM URI of the parent container (e.g., Folder, Structure Group, Category) where the new item will be created."),
     schemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("Required for 'Component' and 'Page'. The TCM URI of the Schema to use for the item's content."),
     metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("Optional. The TCM URI of the Metadata Schema for the item's metadata."),
-    content: z.record(fieldValueSchema).optional().describe("A JSON object for the item's content fields. IMPORTANT: The order of the fields in this object MUST exactly match the order defined in the Schema. This ordering requirement also applies to any fields within an embedded schema field."),
-    metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields. IMPORTANT: The order of the fields in this object MUST exactly match the order defined in the Schema. This ordering requirement also applies to any fields within an embedded schema field."),
+    content: z.record(fieldValueSchema).optional().describe("A JSON object for the item's content fields. The tool will automatically order the fields to match the Schema definition."),
+    metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields. The tool will automatically order the fields to match the Metadata Schema definition."),
     fileName: z.string().optional().describe("Required for 'Page' type. The file name for the page, including the extension (e.g., 'about-us.html')."),
     pageTemplateId: z.string().regex(/^tcm:\d+-\d+-128$/).optional().describe("Required for 'Page' type. The TCM URI of the Page Template to be associated with the Page."),
     isAbstract: z.boolean().optional().describe("Only for 'Keyword' type. Set to true to create an abstract Keyword. Defaults to false."),
@@ -32,8 +32,7 @@ const createItemInputProperties = {
     resultLimit: z.number().int().default(100).describe("The maximum number of results to return. Only applicable to SearchFolder type")
 };
 
-// STEP 2: Create the final Zod schema and centralize validation logic using .refine().
-// This keeps all validation rules in one place.
+// STEP 2: Create the final Zod schema and centralize validation logic.
 const createItemInputSchema = z.object(createItemInputProperties)
     .refine(data => !(data.itemType === 'Page' && (!data.fileName || !data.pageTemplateId)), {
         message: "To create a 'Page', both 'fileName' and 'pageTemplateId' parameters are required."
@@ -46,17 +45,14 @@ const createItemInputSchema = z.object(createItemInputProperties)
     });
 
 // STEP 3: Infer the TypeScript type directly from the schema.
-// This is the magic that provides full type safety and autocomplete.
 type CreateItemInput = z.infer<typeof createItemInputSchema>;
 
-
-// STEP 4: Define the final tool object, using the pieces we created above.
+// STEP 4: Define the final tool object.
 export const createItem = {
     name: "createItem",
     description: `Creates a new Content Manager System (CMS) item of a specified type. The tool handles different item types and their specific properties automatically.`,
-    input: createItemInputProperties, // Use the properties object for the agent-facing definition
+    input: createItemInputProperties,
 
-    // Use the inferred type for the 'args' parameter for full type safety.
     execute: async (args: CreateItemInput) => {
         const { locationId } = args;
         if (args.schemaId) {
@@ -75,10 +71,18 @@ export const createItem = {
             args.relatedKeywords = args.relatedKeywords.map(kw => convertItemIdToContextPublication(kw, locationId));
         }
 
-        const { itemType, title, schemaId, metadataSchemaId, content, metadata, fileName, pageTemplateId, isAbstract, description, key, parentKeywords, relatedKeywords, itemsInBundle, searchQuery, resultLimit } = args;
+        let { itemType, title, schemaId, metadataSchemaId, content, metadata, fileName, pageTemplateId, isAbstract, description, key, parentKeywords, relatedKeywords, itemsInBundle, searchQuery, resultLimit } = args;
 
         try {
-            // 1. Get the default model for the item type and location from the API
+            // Reorder content and metadata fields based on their respective schemas
+            if (content && schemaId) {
+                content = await reorderFieldsBySchema(content, schemaId, 'content');
+            }
+            if (metadata && metadataSchemaId) {
+                metadata = await reorderFieldsBySchema(metadata, metadataSchemaId, 'metadata');
+            }
+            
+            // 1. Get the default model for the item type and location
             const defaultModelResponse = await authenticatedAxios.get(`/item/defaultModel/${itemType}`, {
                 params: {
                     containerId: locationId
@@ -87,44 +91,27 @@ export const createItem = {
             if (defaultModelResponse.status !== 200) {
                 return handleUnexpectedResponse(defaultModelResponse);
             }
-
             const payload = defaultModelResponse.data;
 
-            // 2. Customize the payload by merging the default model with the provided arguments
+            // 2. Customize the payload
             payload.Title = title;
-            
-            if (schemaId) {
-                payload.Schema = { IdRef: schemaId };
-            }
-            if (metadataSchemaId) {
-                payload.MetadataSchema = { IdRef: metadataSchemaId };
-            }
-            if (content) {
-                payload.Content = content;
-            }
-            if (metadata) {
-                payload.Metadata = metadata;
-            }
+            if (schemaId) payload.Schema = { IdRef: schemaId };
+            if (metadataSchemaId) payload.MetadataSchema = { IdRef: metadataSchemaId };
+            if (content) payload.Content = content;
+            if (metadata) payload.Metadata = metadata;
 
-            // Add properties specific to certain item types
+            // Type-specific properties
             if (itemType === 'Page') {
                 payload.FileName = fileName;
                 payload.PageTemplate = { IdRef: pageTemplateId };
             }
             if (itemType === 'Keyword') {
-                if (typeof isAbstract === 'boolean') {
-                    payload.IsAbstract = isAbstract;
-                }
-                if (description) {
-                    payload.Description = description;
-                }
-                if (key) {
-                    payload.Key = key;
-                }
+                if (typeof isAbstract === 'boolean') payload.IsAbstract = isAbstract;
+                if (description) payload.Description = description;
+                if (key) payload.Key = key;
                 payload.ParentKeywords = toLinkArray(parentKeywords);
                 payload.RelatedKeywords = toLinkArray(relatedKeywords);
             }
-
             if (itemType === 'SearchFolder' && searchQuery) {
                 const searchInValue = searchQuery.SearchIn as any;
                 if (searchInValue && typeof searchInValue === 'object' && searchInValue.IdRef) {
@@ -132,22 +119,18 @@ export const createItem = {
                 }
                 payload.Configuration = generateSearchFolderXmlConfiguration(searchQuery, resultLimit);
             }
-
             if (itemType === 'Bundle') {
                 payload.Items = toLinkArray(itemsInBundle);
             }
-
             if ((itemType === 'Category' || itemType === 'Bundle' || itemType === 'SearchFolder') && description) {
                 payload.Description = description;
             }
-
             if (!payload.LocationInfo?.OrganizationalItem?.IdRef) {
                 payload.LocationInfo = { ...payload.LocationInfo, OrganizationalItem: { IdRef: locationId } };
             }
 
-            // 3. Post the customized payload to the /items endpoint to create the item
+            // 3. Post the payload to create the item
             const createResponse = await authenticatedAxios.post('/items', payload);
-
             if (createResponse.status === 201) {
                 return {
                     content: [
@@ -160,7 +143,6 @@ export const createItem = {
             } else {
                 return handleUnexpectedResponse(createResponse);
             }
-
         } catch (error) {
             return handleAxiosError(error, "Failed to create CMS item");
         }
