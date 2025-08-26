@@ -1,15 +1,15 @@
 import { z } from "zod";
 import { authenticatedAxios } from "../lib/axios.js";
 import { toLink, toLinkArray } from "../utils/links.js";
-import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 import { xmlNameSchema } from "../schemas/xmlNameSchema.js";
 import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
+import { processSchemaFieldDefinitions } from "../utils/fieldReordering.js";
 
 export const createSchema = {
     name: "createSchema",
     description: `Creates a new Content Manager System (CMS) item of type 'Schema'. Schemas define the structure of content and metadata for other CMS items.
-
+    
 A Schema is defined by its content fields (in the 'fields' property) and metadata fields (in the 'metadataFields' property). Both of these properties are dictionaries where:
   - The KEY is the field's machine name (a valid XML name without spaces, e.g., "articleTitle").
   - The VALUE is a Field Definition object that specifies the field's type and properties.
@@ -231,54 +231,7 @@ Certain top-level properties are only applicable when the Schema has a specific 
             componentProcessId, deleteBundleOnProcessFinished, isIndexable,
             isPublishable, regionDefinition
         } = args;
-        
-        // Helper function to recursively find and convert all Link IdRefs within any object or array.
-        const convertLinksRecursively = (currentObject: any, contextId: string) => {
-            if (!currentObject || typeof currentObject !== 'object') {
-                return;
-            }
 
-            if (Array.isArray(currentObject)) {
-                currentObject.forEach(item => convertLinksRecursively(item, contextId));
-            } else {
-                // Check if the object is a Link and convert its IdRef
-                if (currentObject.$type === "Link" && typeof currentObject.IdRef === 'string') {
-                    currentObject.IdRef = convertItemIdToContextPublication(currentObject.IdRef, contextId);
-                }
-
-                // Continue traversal for nested objects
-                for (const key in currentObject) {
-                    if (Object.prototype.hasOwnProperty.call(currentObject, key)) {
-                        convertLinksRecursively(currentObject[key], contextId);
-                    }
-                }
-            }
-        };
-
-        // Helper function to process a dictionary of field definitions.
-        const processFieldDefinitions = (fieldDict: Record<string, any> | undefined, contextId: string) => {
-            if (!fieldDict) return;
-
-            for (const fieldName in fieldDict) {
-                const fieldDef = fieldDict[fieldName];
-
-                // 1. Enforce EmbeddedFields is an empty object for EmbeddedSchemaFieldDefinition
-                if (fieldDef.$type === "EmbeddedSchemaFieldDefinition") {
-                    if (!fieldDef.EmbeddedFields || typeof fieldDef.EmbeddedFields !== 'object' || Object.keys(fieldDef.EmbeddedFields).length !== 0) {
-                        fieldDef.EmbeddedFields = {};
-                    }
-                }
-
-                // 2. Recursively convert all IdRefs in the field definition
-                convertLinksRecursively(fieldDef, contextId);
-            }
-        };
-
-        // Process both fields and metadataFields using the helper.
-        processFieldDefinitions(fields, locationId);
-        processFieldDefinitions(metadataFields, locationId);
-
-        // Validation for purpose-specific fields
         if (purpose !== 'Multimedia' && allowedMultimediaTypes) {
             return { content: [{ type: "text", text: "'allowedMultimediaTypes' can only be set when the Schema 'purpose' is 'Multimedia'." }], errors: [] };
         }
@@ -290,43 +243,35 @@ Certain top-level properties are only applicable when the Schema has a specific 
         }
 
         try {
-            // 1. Get the default model for the Schema type
+            const processedFields = fields ? await processSchemaFieldDefinitions(fields, locationId) : undefined;
+            const processedMetadataFields = metadataFields ? await processSchemaFieldDefinitions(metadataFields, locationId) : undefined;
+
             const defaultModelResponse = await authenticatedAxios.get('/item/defaultModel/Schema', {
                 params: { containerId: locationId }
             });
-
             if (defaultModelResponse.status !== 200) {
                 return handleUnexpectedResponse(defaultModelResponse);
             }
 
             const payload = defaultModelResponse.data;
-
-            // 2. Customize the payload with provided arguments
             payload.Title = title;
             payload.Purpose = purpose;
             payload.RootElementName = rootElementName;
-
             if (description) payload.Description = description;
-            if (fields) payload.Fields = { "$type": "FieldsDefinitionDictionary", ...fields };
-            if (metadataFields) payload.MetadataFields = { "$type": "FieldsDefinitionDictionary", ...metadataFields };
-
+            if (processedFields) payload.Fields = { "$type": "FieldsDefinitionDictionary", ...processedFields };
+            if (processedMetadataFields) payload.MetadataFields = { "$type": "FieldsDefinitionDictionary", ...processedMetadataFields };
             if (allowedMultimediaTypes) payload.AllowedMultimediaTypes = toLinkArray(allowedMultimediaTypes);
-            if (bundleProcessId) payload.BundleProcess = { "$type": "Link", "IdRef": bundleProcessId };
-            if (componentProcessId) payload.ComponentProcess = { "$type": "Link", "IdRef": componentProcessId };
-
+            if (bundleProcessId) payload.BundleProcess = toLink(bundleProcessId);
+            if (componentProcessId) payload.ComponentProcess = toLink(componentProcessId);
             if (typeof deleteBundleOnProcessFinished === 'boolean') payload.DeleteBundleOnProcessFinished = deleteBundleOnProcessFinished;
             if (typeof isIndexable === 'boolean') payload.IsIndexable = isIndexable;
             if (typeof isPublishable === 'boolean') payload.IsPublishable = isPublishable;
-
             if (regionDefinition) payload.RegionDefinition = regionDefinition;
-
             if (!payload.LocationInfo?.OrganizationalItem?.IdRef) {
                 payload.LocationInfo = { ...payload.LocationInfo, OrganizationalItem: toLink(locationId) };
             }
 
-            // 3. Post the customized payload to create the Schema
             const createResponse = await authenticatedAxios.post('/items', payload);
-
             if (createResponse.status === 201) {
                 return {
                     content: [{
@@ -337,7 +282,6 @@ Certain top-level properties are only applicable when the Schema has a specific 
             } else {
                 return handleUnexpectedResponse(createResponse);
             }
-
         } catch (error) {
             return handleAxiosError(error, "Failed to create Schema");
         }

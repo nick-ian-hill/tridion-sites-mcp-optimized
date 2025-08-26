@@ -2,7 +2,7 @@ import { z } from "zod";
 import { authenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
-import { reorderFieldsBySchema } from "../utils/fieldReordering.js";
+import { reorderFieldsBySchema, convertLinksRecursively } from "../utils/fieldReordering.js";
 
 export const updateContentById = {
     name: "updateContentById",
@@ -37,7 +37,6 @@ If the component is locked by another user, the operation will be aborted.`,
         const restItemId = itemId.replace(':', '_');
 
         try {
-            // First, get the item to retrieve its schema ID for field reordering
             const getInitialItemResponse = await authenticatedAxios.get(`/items/${restItemId}`, { params: { useDynamicVersion: true } });
             if (getInitialItemResponse.status !== 200) {
                 return handleUnexpectedResponse(getInitialItemResponse);
@@ -48,7 +47,9 @@ If the component is locked by another user, the operation will be aborted.`,
             if (!schemaId) {
                 return handleAxiosError(new Error(`Component ${itemId} does not have an associated Schema.`), "Failed to update component");
             }
-            // Reorder the provided content fields based on the component's schema
+
+            convertLinksRecursively(content, itemId);
+            
             const orderedContent = await reorderFieldsBySchema(content, schemaId, 'content');
 
             const whoAmIResponse = await authenticatedAxios.get('/whoAmI');

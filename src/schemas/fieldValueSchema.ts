@@ -28,8 +28,8 @@ const listDefinitionSchema = z.discriminatedUnion("$type", [
   })
 ]);
 
-// Base schema with common properties for all field types
-const baseFieldSchema = z.object({
+const singleLineTextFieldSchema = z.object({
+    "$type": z.literal("SingleLineTextFieldDefinition"),
     Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
     Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),
     MinOccurs: z.number().int().optional().describe("The minimum number of times the field can occur (e.g., 0 for optional, 1 for mandatory)."),
@@ -37,77 +37,117 @@ const baseFieldSchema = z.object({
     IsIndexable: z.boolean().optional().describe("Whether the field value is included when performing a search."),
     IsLocalizable: z.boolean().optional().describe("Whether the field value can be changed in localized items."),
     IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing."),
-});
-
-// Schema for a simple text field
-const singleLineTextFieldSchema = z.object({
-    "$type": z.literal("SingleLineTextFieldDefinition")
-}).merge(baseFieldSchema).extend({
     List: listDefinitionSchema.optional()
 });
 
-// Schema for a multi-line text area
 const multiLineTextFieldSchema = z.object({
-    "$type": z.literal("MultiLineTextFieldDefinition")
-}).merge(baseFieldSchema).extend({
+    "$type": z.literal("MultiLineTextFieldDefinition"),
+    Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
+    Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),
+    MinOccurs: z.number().int().optional().describe("The minimum number of times the field can occur (e.g., 0 for optional, 1 for mandatory)."),
+    MaxOccurs: z.number().int().optional().describe("The maximum number of times the field can occur (e.g., 1 for single-value, -1 for unlimited multi-value)."),
+    IsIndexable: z.boolean().optional().describe("Whether the field value is included when performing a search."),
+    IsLocalizable: z.boolean().optional().describe("Whether the field value can be changed in localized items."),
+    IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing."),
     Height: z.number().int().optional().describe("The height of the text area in the UI.")
 });
 
-// Schema for a rich-text (HTML) editor
 const xhtmlFieldSchema = z.object({
-    "$type": z.literal("XhtmlFieldDefinition")
-}).merge(baseFieldSchema).extend({
+    "$type": z.literal("XhtmlFieldDefinition"),
+    Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
+    Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),
+    MinOccurs: z.number().int().optional().describe("The minimum number of times the field can occur (e.g., 0 for optional, 1 for mandatory)."),
+    MaxOccurs: z.number().int().optional().describe("The maximum number of times the field can occur (e.g., 1 for single-value, -1 for unlimited multi-value)."),
+    IsIndexable: z.boolean().optional().describe("Whether the field value is included when performing a search."),
+    IsLocalizable: z.boolean().optional().describe("Whether the field value can be changed in localized items."),
+    IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing."),
     Height: z.number().int().optional().describe("The height of the rich text editor in the UI.")
 });
 
-// Schema for a Keyword link field
 const keywordFieldSchema = z.object({
-    "$type": z.literal("KeywordFieldDefinition")
-}).merge(baseFieldSchema).extend({
-    List: listDefinitionSchema.optional(),
+    "$type": z.literal("KeywordFieldDefinition"),
+    Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
+    Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),
+    MinOccurs: z.number().int().optional().describe("The minimum number of times the field can occur (e.g., 0 for optional, 1 for mandatory)."),
+    MaxOccurs: z.number().int().optional().describe("The maximum number of times the field can occur (e.g., 1 for single-value, -1 for unlimited multi-value)."),
+    IsIndexable: z.boolean().optional().describe("Whether the field value is included when performing a search."),
+    IsLocalizable: z.boolean().optional().describe("Whether the field value can be changed in localized items."),
+    IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing."),
+    List: listDefinitionSchema,
     Category: linkSchema.describe("A Link to the Category from which Keywords can be selected."),
     AllowAutoClassification: z.boolean().optional().describe("Whether to allow automatic classification for this Keyword field.")
 });
 
-// Schema for a numeric field
 const numberFieldSchema = z.object({
-    "$type": z.literal("NumberFieldDefinition")
-}).merge(baseFieldSchema).extend({
+    "$type": z.literal("NumberFieldDefinition"),
+    Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
+    Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),
+    MinOccurs: z.number().int().optional().describe("The minimum number of times the field can occur (e.g., 0 for optional, 1 for mandatory)."),
+    MaxOccurs: z.number().int().optional().describe("The maximum number of times the field can occur (e.g., 1 for single-value, -1 for unlimited multi-value)."),
+    IsIndexable: z.boolean().optional().describe("Whether the field value is included when performing a search."),
+    IsLocalizable: z.boolean().optional().describe("Whether the field value can be changed in localized items."),
+    IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing."),
     List: listDefinitionSchema.optional()
 });
 
-// Schema for a date/time field
 const dateFieldSchema = z.object({
-    "$type": z.literal("DateFieldDefinition")
-}).merge(baseFieldSchema).extend({
+    "$type": z.literal("DateFieldDefinition"),
+    Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
+    Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),
+    MinOccurs: z.number().int().optional().describe("The minimum number of times the field can occur (e.g., 0 for optional, 1 for mandatory)."),
+    MaxOccurs: z.number().int().optional().describe("The maximum number of times the field can occur (e.g., 1 for single-value, -1 for unlimited multi-value)."),
+    IsIndexable: z.boolean().optional().describe("Whether the field value is included when performing a search."),
+    IsLocalizable: z.boolean().optional().describe("Whether the field value can be changed in localized items."),
+    IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing."),
     List: listDefinitionSchema.optional()
 });
 
-// Schema for a URL field
 const externalLinkFieldSchema = z.object({
-    "$type": z.literal("ExternalLinkFieldDefinition")
-}).merge(baseFieldSchema);
+    "$type": z.literal("ExternalLinkFieldDefinition"),
+    Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
+    Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),
+    MinOccurs: z.number().int().optional().describe("The minimum number of times the field can occur (e.g., 0 for optional, 1 for mandatory)."),
+    MaxOccurs: z.number().int().optional().describe("The maximum number of times the field can occur (e.g., 1 for single-value, -1 for unlimited multi-value)."),
+    IsIndexable: z.boolean().optional().describe("Whether the field value is included when performing a search."),
+    IsLocalizable: z.boolean().optional().describe("Whether the field value can be changed in localized items."),
+    IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing.")
+});
 
-// Schema for a Component link field
 const componentLinkFieldSchema = z.object({
-    "$type": z.literal("ComponentLinkFieldDefinition")
-}).merge(baseFieldSchema).extend({
+    "$type": z.literal("ComponentLinkFieldDefinition"),
+    Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
+    Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),
+    MinOccurs: z.number().int().optional().describe("The minimum number of times the field can occur (e.g., 0 for optional, 1 for mandatory)."),
+    MaxOccurs: z.number().int().optional().describe("The maximum number of times the field can occur (e.g., 1 for single-value, -1 for unlimited multi-value)."),
+    IsIndexable: z.boolean().optional().describe("Whether the field value is included when performing a search."),
+    IsLocalizable: z.boolean().optional().describe("Whether the field value can be changed in localized items."),
+    IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing."),
     AllowedTargetSchemas: z.array(linkSchema).optional().describe("Restricts which types of Components can be linked.")
 });
 
-// Schema for a Multimedia link field
 const multimediaLinkFieldSchema = z.object({
-    "$type": z.literal("MultimediaLinkFieldDefinition")
-}).merge(baseFieldSchema).extend({
+    "$type": z.literal("MultimediaLinkFieldDefinition"),
+    Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
+    Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),
+    MinOccurs: z.number().int().optional().describe("The minimum number of times the field can occur (e.g., 0 for optional, 1 for mandatory)."),
+    MaxOccurs: z.number().int().optional().describe("The maximum number of times the field can occur (e.g., 1 for single-value, -1 for unlimited multi-value)."),
+    IsIndexable: z.boolean().optional().describe("Whether the field value is included when performing a search."),
+    IsLocalizable: z.boolean().optional().describe("Whether the field value can be changed in localized items."),
+    IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing."),
     AllowedTargetSchemas: z.array(linkSchema).optional().describe("Restricts which types of multimedia can be linked.")
 });
 
-// Schema for an embedded Schema field
 const embeddedSchemaFieldSchema = z.object({
-    "$type": z.literal("EmbeddedSchemaFieldDefinition")
-}).merge(baseFieldSchema).extend({
+    "$type": z.literal("EmbeddedSchemaFieldDefinition"),
+    Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
+    Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),
+    MinOccurs: z.number().int().optional().describe("The minimum number of times the field can occur (e.g., 0 for optional, 1 for mandatory)."),
+    MaxOccurs: z.number().int().optional().describe("The maximum number of times the field can occur (e.g., 1 for single-value, -1 for unlimited multi-value)."),
+    IsIndexable: z.boolean().optional().describe("Whether the field value is included when performing a search."),
+    IsLocalizable: z.boolean().optional().describe("Whether the field value can be changed in localized items."),
+    IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing."),
     EmbeddedSchema: linkSchema.describe("A Link object to the Schema to be embedded."),
-    EmbeddedFields: z.object({}).describe("An empty object. This property must be provided when defining an embedded schema field.")
+    EmbeddedFields: z.object({}).optional().describe("This property is handled automatically by the tool and does not need to be provided.")
 });
 
 // The master schema for any valid field definition, using a discriminated union

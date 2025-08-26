@@ -2,7 +2,7 @@ import { z } from "zod";
 import { authenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
-import { reorderFieldsBySchema } from "../utils/fieldReordering.js";
+import { reorderFieldsBySchema, convertLinksRecursively } from "../utils/fieldReordering.js";
 
 export const updateMetadataById = {
     name: "updateMetadataById",
@@ -29,18 +29,26 @@ If a versioned item is locked by another user, the operation will be aborted.`,
         const restItemId = itemId.replace(':', '_');
 
         try {
-            // Get item data first to determine its metadata schema and version status
             const getItemResponse = await authenticatedAxios.get(`/items/${restItemId}`, { params: { useDynamicVersion: true } });
             if (getItemResponse.status !== 200) return handleUnexpectedResponse(getItemResponse);
             
             const item = getItemResponse.data;
-            const metadataSchemaId = item.MetadataSchema?.IdRef;
-            
-            if (!metadataSchemaId) {
-                return handleAxiosError(new Error(`Item ${itemId} does not have an associated Metadata Schema.`), "Failed to update item metadata");
+            let schemaIdForMetadata: string | undefined;
+
+            if (item.MetadataSchema?.IdRef && item.MetadataSchema.IdRef !== 'tcm:0-0-0') {
+                schemaIdForMetadata = item.MetadataSchema.IdRef;
+            } 
+            else if (item.$type === 'Component') {
+                schemaIdForMetadata = item.Schema?.IdRef;
             }
-            // Reorder the provided metadata fields based on the item's metadata schema
-            const orderedMetadata = await reorderFieldsBySchema(metadata, metadataSchemaId, 'metadata');
+            
+            if (!schemaIdForMetadata) {
+                return handleAxiosError(new Error(`Could not determine a valid Schema for the metadata fields of item ${itemId}.`), "Failed to update item metadata");
+            }
+            
+            convertLinksRecursively(metadata, itemId);
+
+            const orderedMetadata = await reorderFieldsBySchema(metadata, schemaIdForMetadata, 'metadata');
 
             let itemToUpdate;
             const isVersioned = !!item?.VersionInfo?.Version;
