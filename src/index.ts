@@ -35,6 +35,9 @@ import { updateContentById } from "./tools/updateContentById.js";
 import { updateItemById } from "./tools/updateItemById.js";
 import { updatePublicationById } from "./tools/updatePublicationById.js";
 import { updateMetadataById } from './tools/updateMetadataById.js';
+import { getLockedItems } from './tools/getLockedItems.js';
+import { getItemHistory } from './tools/getItemHistory.js';
+import { rollbackItem } from './tools/rollbackItem.js';
 
 const server = new McpServer({
   name: "mcp-test-server",
@@ -49,7 +52,9 @@ const tools: any[] = [
   // Read Operations
   getItemById,
   bulkReadItemsById,
+  getItemHistory,
   getItemsInContainer,
+  getLockedItems,
   
   // Create Operations
   createItem,
@@ -80,6 +85,7 @@ const tools: any[] = [
   // Versioning
   checkInItem,
   checkOutItem,
+  rollbackItem,
   undoCheckOutItem,
 
   // List & Taxonomy
