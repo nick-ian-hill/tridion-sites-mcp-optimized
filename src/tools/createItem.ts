@@ -117,6 +117,33 @@ export const createItem = {
                 if (searchInValue && typeof searchInValue === 'object' && searchInValue.IdRef) {
                     searchQuery.SearchIn = searchInValue.IdRef;
                 }
+
+                // Ensure all URIs within the search query are mapped to the correct publication context.
+                if (searchQuery.SearchIn) {
+                    const contextId = searchQuery.SearchIn;
+
+                    if (searchQuery.BasedOnSchemas) {
+                        searchQuery.BasedOnSchemas = searchQuery.BasedOnSchemas.map(schemaFilter => ({
+                            ...schemaFilter,
+                            schemaUri: convertItemIdToContextPublication(schemaFilter.schemaUri, contextId)
+                        }));
+                    }
+
+                    if (searchQuery.UsedKeywords) {
+                        searchQuery.UsedKeywords = searchQuery.UsedKeywords.map(keywordUri =>
+                            convertItemIdToContextPublication(keywordUri, contextId)
+                        );
+                    }
+
+                    if (searchQuery.ActivityDefinition) {
+                        searchQuery.ActivityDefinition = convertItemIdToContextPublication(searchQuery.ActivityDefinition, contextId);
+                    }
+
+                    if (searchQuery.ProcessDefinition) {
+                        searchQuery.ProcessDefinition = convertItemIdToContextPublication(searchQuery.ProcessDefinition, contextId);
+                    }
+                }
+                
                 payload.Configuration = generateSearchFolderXmlConfiguration(searchQuery, resultLimit);
             }
             if (itemType === 'Bundle') {
