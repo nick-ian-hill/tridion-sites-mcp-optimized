@@ -28,11 +28,11 @@ export const SearchQueryValidation = z.object({
   // --- User and Lock Criteria ---
   Author: z.string().regex(/^tcm:0-\d+-65552$/).optional().describe("The TCM URI of the author (User) to search for."),
   LockUser: z.string().regex(/^tcm:0-\d+-65552$/).optional().describe("The TCM URI of the user that must hold the lock on an item."),
-  LockType: z.array(z.enum(["None", "CheckedOut", "Permanent", "InWorkflow"])).optional().describe("Filters items by their lock state."),
+  LockType: z.array(z.enum(["None", "CheckedOut", "Permanent", "NewItem", "InWorkflow", "Reserved"])).optional().describe("Filters items by their lock state."),
 
   // --- Publishing and Blueprinting ---
   IsPublished: z.boolean().optional().describe("Filters items based on their published state. True for published, false for unpublished."),
-  BlueprintStatus: z.enum(["Primary", "Shared", "Localized"]).optional().describe("Filter items by Blueprint status."),
+  BlueprintStatus: z.enum(["Local", "Shared", "Localized"]).optional().describe("Filter items by Blueprint status."),
   FromRepository: z.string().regex(/^tcm:0-\d+-1$/).optional().describe("If 'Shared' was selected as the BlueprintStatus, this value is the TCM URI of the Repository (Publication) from which the item is shared."),
 
   // --- Case Sensitivity ---

@@ -21,7 +21,7 @@ export const generateSearchFolderXmlConfiguration = (
     "TargetGroup": 256,
     "Category": 512,
     "Keyword": 1024,
-    "TemplateBuildingBlock": 2042,
+    "TemplateBuildingBlock": 2048,
     "BusinessProcessType": 4096,
     "VirtualFolder": 8192,
     "ProcessDefinition": 131074
@@ -31,7 +31,9 @@ export const generateSearchFolderXmlConfiguration = (
     "None": 0,
     "CheckedOut": 1,
     "Permanent": 2,
-    "InWorkflow": 3,
+    "NewItem": 4,
+    "InWorkflow": 8,
+    "Reserved": 16
   };
 
   const publishStateMap: Record<string, number> = {
@@ -55,21 +57,24 @@ export const generateSearchFolderXmlConfiguration = (
     xml += `<SearchQuery/>`;
   }
   if (searchQuery.SearchIn) {
-    xml += `<SearchIn xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="${searchQuery.SearchIn}" Recursive="${searchQuery.SearchInSubtree || true}"/>`;
+    const recursive = searchQuery.SearchInSubtree ?? true;
+    xml += `<SearchIn xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="${searchQuery.SearchIn}" Recursive="${recursive}"/>`;
   }
   xml += `</GeneralParameters>`;
 
   // --- Advanced Parameters ---
   xml += `<AdvancedParameters>`;
 
-  if (searchQuery.Title) { xml += `<Title>${searchQuery.Title}</Title>`; }
-  if (searchQuery.Description) { xml += `<Description>${searchQuery.Description}</Description>`; }
-  if (searchQuery.LastModifiedAfter) { xml += `<ModifiedAfter>${searchQuery.LastModifiedAfter}</ModifiedAfter>`; }
-  if (searchQuery.LastModifiedBefore) { xml += `<ModifiedBefore>${searchQuery.LastModifiedBefore}</ModifiedBefore>`; }
-  if (searchQuery.ModifiedInLastDays) { xml += `<ModifiedInLastDays>${searchQuery.ModifiedInLastDays}</ModifiedInLastDays>`; }
-  if (searchQuery.ModifiedInLastMonths) { xml += `<ModifiedInLastMonths>${searchQuery.ModifiedInLastMonths}</ModifiedInLastMonths>`; }
-  if (searchQuery.IsTitleCaseSensitive) { xml += `<IsTitleCaseSensitive>${searchQuery.IsTitleCaseSensitive}</IsTitleCaseSensitive>`; }
-  if (searchQuery.IsDescriptionCaseSensitive) { xml += `<IsDescriptionCaseSensitive>${searchQuery.IsDescriptionCaseSensitive}</IsDescriptionCaseSensitive>`; }
+  if (searchQuery.Title) { xml += `<Name caseSensitive="${!!searchQuery.IsTitleCaseSensitive}">${searchQuery.Title}</Name>`; }
+  if (searchQuery.Description) { xml += `<Description caseSensitive="${!!searchQuery.IsDescriptionCaseSensitive}">${searchQuery.Description}</Description>`; }
+
+  if (searchQuery.LastModifiedAfter || searchQuery.LastModifiedBefore) {
+    const startDate = searchQuery.LastModifiedAfter || '0001-01-01T00:00:00';
+    const endDate = searchQuery.LastModifiedBefore || '9999-12-31T23:59:59';
+    xml += `<Modified><BetweenDates><StartDate>${startDate}</StartDate><EndDate>${endDate}</EndDate></BetweenDates></Modified>`;
+  }
+  if (searchQuery.ModifiedInLastDays) { xml += `<Modified><LastDays>${searchQuery.ModifiedInLastDays}</LastDays></Modified>`; }
+  if (searchQuery.ModifiedInLastMonths) { xml += `<Modified><LastMonths>${searchQuery.ModifiedInLastMonths}</LastMonths></Modified>`; }
 
   // --- Arrays and specific item types ---
   if (searchQuery.ItemTypes && searchQuery.ItemTypes.length > 0) {
@@ -89,27 +94,25 @@ export const generateSearchFolderXmlConfiguration = (
   }
 
   if (searchQuery.UsedKeywords && searchQuery.UsedKeywords.length > 0) {
-    xml += `<Keyword>`;
-    searchQuery.UsedKeywords.forEach(id => {
-      xml += toItemXlink(id, 'Keyword');
-    });
-    xml += `</Keyword>`;
+    const firstKeywordId = searchQuery.UsedKeywords[0];
+    xml += toItemXlink(firstKeywordId, 'Keyword');
   }
 
-  // --- Blueprinting ---
   if (searchQuery.BlueprintStatus) {
-    xml += `<BluePrinting`;
-    if (searchQuery.BlueprintStatus) { xml += ` StatusType="${searchQuery.BlueprintStatus}"`; }
-    if (searchQuery.FromRepository) { xml += `/><Publication xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="${searchQuery.FromRepository}" />`; }
-    xml += ` />`;
+    xml += `<BluePrinting StatusType="${searchQuery.BlueprintStatus}">`;
+    if (searchQuery.FromRepository) {
+      xml += `<Publication xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="${searchQuery.FromRepository}"/>`;
+    }
+    xml += `</BluePrinting>`;
   }
 
-  // --- Workflow ---
-  if (searchQuery.ActivityDefinition || searchQuery.ProcessDefinition) {
+  if (searchQuery.ProcessDefinition) {
     xml += `<WorkflowStatus>`;
-    if (searchQuery.ActivityDefinition) { xml += toItemXlink(searchQuery.ActivityDefinition, 'ActivityDefinition'); }
-    if (searchQuery.ProcessDefinition) { xml += toItemXlink(searchQuery.ProcessDefinition, 'ProcessDefinition'); }
-    xml += `</WorkflowStatus>`;
+    xml += `<Process xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="${searchQuery.ProcessDefinition}">`;
+    if (searchQuery.ActivityDefinition) {
+      xml += `<Activity xlink:href="${searchQuery.ActivityDefinition}"></Activity>`;
+    }
+    xml += `</Process></WorkflowStatus>`;
   }
 
   // --- Link-based properties ---
@@ -117,12 +120,11 @@ export const generateSearchFolderXmlConfiguration = (
   if (searchQuery.LockUser) { xml += toItemXlink(searchQuery.LockUser, 'LockUser'); }
 
   // --- Enum/Boolean properties ---
-    if (searchQuery.LockType && searchQuery.LockType.length > 0) {
-    xml += `<LockStatus>`;
-    searchQuery.LockType.forEach(type => {
-      xml += `<LockType>${lockTypeMap[type]}</LockType>`;
-    });
-    xml += `</LockStatus>`;
+  if (searchQuery.LockType && searchQuery.LockType.length > 0) {
+    const lockNum = searchQuery.LockType
+      .map(type => lockTypeMap[type] ?? 0)
+      .reduce((sum, val) => sum + val, 0);
+    xml += `<LockStatus StatusType="${lockNum}"></LockStatus>`;
   }
 
   if (searchQuery.IsPublished !== undefined) {
