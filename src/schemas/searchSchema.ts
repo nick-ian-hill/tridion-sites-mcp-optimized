@@ -1,5 +1,16 @@
 import { z } from "zod";
 
+const SchemaFieldFilterValidation = z.object({
+  name: z.string().describe("The 'baseName' of the schema field to filter on."),
+  value: z.union([z.string(), z.number()]).describe("The value of the field to search for.")
+});
+
+const SchemaFilterValidation = z.object({
+  schemaUri: z.string().regex(/^tcm:\d+-\d+-8?$/),
+  fieldFilter: SchemaFieldFilterValidation.optional().describe("An optional filter for a specific field within the schema.")
+});
+
+
 export const SearchQueryValidation = z.object({
   // --- Core Search Criteria ---
   FullTextQuery: z.string().optional().describe("A full-text query string to search for. Supports query syntax like +, -, &&, ||, *, etc."),
@@ -16,7 +27,7 @@ export const SearchQueryValidation = z.object({
   SearchInSubtree: z.boolean().default(true).optional().describe("When true, searches recursively in the publication/folder specified in SearchIn. Defaults to true."),
 
   // --- Schema and Keyword Criteria ---
-  BasedOnSchemas: z.array(z.string().regex(/^tcm:\d+-\d+-8?$/)).optional().describe("An array of Schema TCM URIs. Only items based on these schemas will be returned."),
+  BasedOnSchemas: z.array(SchemaFilterValidation).optional().describe("An array of Schema filters. Each filter can specify a Schema URI and an optional field-level filter."),
   UsedKeywords: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)).optional().describe("An array of Keyword TCM URIs. Only items classified with these keywords will be returned."),
 
   // --- Date and Modification Criteria ---

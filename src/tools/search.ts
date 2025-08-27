@@ -11,19 +11,12 @@ export const search = {
   The return value will be an array of items that match the search criteria or an empty array if no items are found.
   This tool cannot modify, update, or delete any CMS items or files.`,
     input: {
-        // This search tool supports a single query object, not an array.
         searchQuery: SearchQueryValidation.optional().describe("A search query model. If not provided, a default search for all items is performed."),
-
-        // --- Global Settings ---
         resultLimit: z.number().int().default(100).optional().describe("The maximum number of results to return."),
         details: z.enum(["IdAndTitleOnly", "WithApplicableActions", "Contentless"]).default("IdAndTitleOnly").optional().describe("Specifies the level of details in the returned items."),
     },
-    // The function now takes a single `searchQuery` object instead of an array.
     execute: async ({ searchQuery, resultLimit, details }: { searchQuery?: z.infer<typeof SearchQueryValidation>, resultLimit?: number, details?: "IdAndTitleOnly" | "WithApplicableActions" | "Contentless" }) => {
         try {
-            // Build the search request payload.
-            // If searchQuery is provided, wrap it in an array for the API.
-            // If not, create the default search payload.
             const searchRequestPayload = searchQuery ? [{
                 "$type": "SearchQuery",
                 // Simple properties
@@ -49,41 +42,33 @@ export const search = {
                 ActivityDefinition: toLink(searchQuery.ActivityDefinition),
                 ProcessDefinition: toLink(searchQuery.ProcessDefinition),
                 // Properties that need to be converted to arrays of Link objects
-                BasedOnSchemas: toLinkArray(searchQuery.BasedOnSchemas),
+                BasedOnSchemas: toLinkArray(searchQuery.BasedOnSchemas?.map(s => s.schemaUri)),
                 UsedKeywords: toLinkArray(searchQuery.UsedKeywords),
             }] : [{
                 "$type": "SearchQuery",
             }];
 
-            // Filter out undefined or null values from the payload to create the final, clean payload
             const finalPayload = searchRequestPayload.map(query =>
                 Object.fromEntries(
                     Object.entries(query).filter(([_, value]) => value !== undefined && value !== null)
                 )
             );
 
-            console.log('payload', finalPayload);
-            console.log('details', details);
-            console.log('limit', resultLimit);
-
             type SearchParams = {
                 details: "IdAndTitleOnly" | "WithApplicableActions" | "Contentless";
                 resultLimit?: number;
             };
 
-            // Create a params object using the new type.
-            // Start with a base object.
             const params: SearchParams = {
                 details: details || "IdAndTitleOnly",
             };
 
-            // Conditionally add resultLimit to the params object.
             if (resultLimit !== undefined) {
                 params.resultLimit = resultLimit;
             }
 
             const response = await authenticatedAxios.post(
-                `/system/search`, // Endpoint path
+                `/system/search`,
                 finalPayload,
                 {
                     params: params
@@ -91,7 +76,6 @@ export const search = {
             );
 
             if (response.status === 200) {
-                console.log(response);
                 return {
                     content: [
                         {

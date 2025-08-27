@@ -41,7 +41,6 @@ export const generateSearchFolderXmlConfiguration = (
     "false": 0,
   };
 
-  // Helper function for creating a Link element string for a single item.
   const toItemXlink = (id?: string, name: string = ""): string => {
     if (!id) return '';
     return `<${name} xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="${id}"/>`;
@@ -76,7 +75,6 @@ export const generateSearchFolderXmlConfiguration = (
   if (searchQuery.ModifiedInLastDays) { xml += `<Modified><LastDays>${searchQuery.ModifiedInLastDays}</LastDays></Modified>`; }
   if (searchQuery.ModifiedInLastMonths) { xml += `<Modified><LastMonths>${searchQuery.ModifiedInLastMonths}</LastMonths></Modified>`; }
 
-  // --- Arrays and specific item types ---
   if (searchQuery.ItemTypes && searchQuery.ItemTypes.length > 0) {
     xml += `<ItemTypes>`;
     searchQuery.ItemTypes.forEach(type => {
@@ -87,8 +85,12 @@ export const generateSearchFolderXmlConfiguration = (
 
   if (searchQuery.BasedOnSchemas && searchQuery.BasedOnSchemas.length > 0) {
     xml += `<BasedOnSchema>`;
-    searchQuery.BasedOnSchemas.forEach(id => {
-      xml += toItemXlink(id, 'Schema');
+    searchQuery.BasedOnSchemas.forEach(filter => {
+      xml += `<Schema xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="${filter.schemaUri}">`;
+      if (filter.fieldFilter) {
+        xml += `<Element baseName="${filter.fieldFilter.name}">${filter.fieldFilter.value}</Element>`;
+      }
+      xml += `</Schema>`;
     });
     xml += `</BasedOnSchema>`;
   }
@@ -115,16 +117,18 @@ export const generateSearchFolderXmlConfiguration = (
     xml += `</Process></WorkflowStatus>`;
   }
 
-  // --- Link-based properties ---
   if (searchQuery.Author) { xml += toItemXlink(searchQuery.Author, 'Author'); }
-  if (searchQuery.LockUser) { xml += toItemXlink(searchQuery.LockUser, 'LockUser'); }
 
-  // --- Enum/Boolean properties ---
   if (searchQuery.LockType && searchQuery.LockType.length > 0) {
     const lockNum = searchQuery.LockType
       .map(type => lockTypeMap[type] ?? 0)
       .reduce((sum, val) => sum + val, 0);
-    xml += `<LockStatus StatusType="${lockNum}"></LockStatus>`;
+      
+    xml += `<LockStatus StatusType="${lockNum}">`;
+    if (searchQuery.LockUser) {
+      xml += `<User xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="${searchQuery.LockUser}"></User>`;
+    }
+    xml += `</LockStatus>`;
   }
 
   if (searchQuery.IsPublished !== undefined) {
