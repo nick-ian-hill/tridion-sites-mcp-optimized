@@ -3,6 +3,7 @@ import { authenticatedAxios } from "../lib/axios.js";
 import { SearchQueryValidation } from "../schemas/searchSchema.js";
 import { toLink, toLinkArray } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
+import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 
 export const search = {
     name: "search",
@@ -17,6 +18,31 @@ export const search = {
     },
     execute: async ({ searchQuery, resultLimit, details }: { searchQuery?: z.infer<typeof SearchQueryValidation>, resultLimit?: number, details?: "IdAndTitleOnly" | "WithApplicableActions" | "Contentless" }) => {
         try {
+            if (searchQuery && searchQuery.SearchIn) {
+                const contextId = searchQuery.SearchIn;
+
+                if (searchQuery.BasedOnSchemas) {
+                    searchQuery.BasedOnSchemas = searchQuery.BasedOnSchemas.map(schemaFilter => ({
+                        ...schemaFilter,
+                        schemaUri: convertItemIdToContextPublication(schemaFilter.schemaUri, contextId)
+                    }));
+                }
+
+                if (searchQuery.UsedKeywords) {
+                    searchQuery.UsedKeywords = searchQuery.UsedKeywords.map(keywordUri =>
+                        convertItemIdToContextPublication(keywordUri, contextId)
+                    );
+                }
+
+                if (searchQuery.ActivityDefinition) {
+                    searchQuery.ActivityDefinition = convertItemIdToContextPublication(searchQuery.ActivityDefinition, contextId);
+                }
+
+                if (searchQuery.ProcessDefinition) {
+                    searchQuery.ProcessDefinition = convertItemIdToContextPublication(searchQuery.ProcessDefinition, contextId);
+                }
+            }
+
             const searchRequestPayload = searchQuery ? [{
                 "$type": "SearchQuery",
                 // Simple properties
@@ -42,7 +68,21 @@ export const search = {
                 ActivityDefinition: toLink(searchQuery.ActivityDefinition),
                 ProcessDefinition: toLink(searchQuery.ProcessDefinition),
                 // Properties that need to be converted to arrays of Link objects
-                BasedOnSchemas: toLinkArray(searchQuery.BasedOnSchemas?.map(s => s.schemaUri)),
+                BasedOnSchemas: searchQuery.BasedOnSchemas?.map(s => {
+                    const schemaFilterObject: any = {
+                        Schema: {
+                            "$type": "Link",
+                            IdRef: s.schemaUri
+                        }
+                    };
+
+                    if (s.fieldFilter) {
+                        schemaFilterObject.Field = s.fieldFilter.name;
+                        schemaFilterObject.FieldValue = String(s.fieldFilter.value);
+                    }
+
+                    return schemaFilterObject;
+                }),
                 UsedKeywords: toLinkArray(searchQuery.UsedKeywords),
             }] : [{
                 "$type": "SearchQuery",
