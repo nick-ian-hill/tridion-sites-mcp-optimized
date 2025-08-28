@@ -50,7 +50,14 @@ type CreateItemInput = z.infer<typeof createItemInputSchema>;
 // STEP 4: Define the final tool object.
 export const createItem = {
     name: "createItem",
-    description: `Creates a new Content Manager System (CMS) item of a specified type. The tool handles different item types and their specific properties automatically.`,
+    description: `Creates a new Content Management System (CMS) item of a specified type.  
+The tool automatically handles different item types and their specific properties.  
+The item types that can be created with this tool must have a container item (Folder, Structure Group, Category, or Publication) corresponding to the locationId property.  
+For a Category, the container is the Publication.  
+Any references (e.g., Links) to other items—such as a metadata Schema, parent Keywords, or Component links—must refer to items in the same Publication as the container item.  
+For items other than Publications, the first number in the ID identifies the Publication (e.g., for both tcm:5-127 and tcm:5-2002-2, the Publication is 5).  
+For Publications, the second number identifies the Publication (e.g., tcm:0-5-1 represents Publication 5).  
+Therefore, when creating a Component in the Folder with ID tcm:10-4112-2, the Schema must have an ID in the form tcm:10-###-8.`,
     input: createItemInputProperties,
 
     execute: async (args: CreateItemInput) => {

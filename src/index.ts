@@ -38,6 +38,10 @@ import { updateMetadataById } from './tools/updateMetadataById.js';
 import { getLockedItems } from './tools/getLockedItems.js';
 import { getItemHistory } from './tools/getItemHistory.js';
 import { rollbackItem } from './tools/rollbackItem.js';
+import { getClassifiedItems } from './tools/getClassifiedItems.js';
+import { batchDeleteItemsById } from './tools/batchDeleteItemsById.js';
+import { batchClassify } from './tools/batchClassify.js';
+import { batchUnclassify } from './tools/batchUnclassify.js';
 
 const server = new McpServer({
   name: "mcp-test-server",
@@ -50,6 +54,7 @@ const tools: any[] = [
   search,
 
   // Read Operations
+  getClassifiedItems,
   getItemById,
   bulkReadItemsById,
   getItemHistory,
@@ -61,6 +66,10 @@ const tools: any[] = [
   createPublication,
   createRootStructureGroup,
   createSchema,
+
+  // Classification
+  batchClassify,
+  batchUnclassify,
   
   // Update Operations
   updateItemById,
@@ -72,6 +81,7 @@ const tools: any[] = [
   moveItem,
   copyItem,
   deleteItem,
+  batchDeleteItemsById,
 
   // BluePrinting & Localization
   getBluePrintHierarchy,
