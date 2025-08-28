@@ -42,6 +42,9 @@ import { getClassifiedItems } from './tools/getClassifiedItems.js';
 import { batchDeleteItemsById } from './tools/batchDeleteItemsById.js';
 import { batchClassify } from './tools/batchClassify.js';
 import { batchUnclassify } from './tools/batchUnclassify.js';
+import { batchCheckOut } from './tools/batchCheckOut.js';
+import { batchCheckIn } from './tools/batchCheckIn.js';
+import { batchUndoCheckOut } from './tools/batchUndoCheckOut.js';
 
 const server = new McpServer({
   name: "mcp-test-server",
@@ -93,6 +96,9 @@ const tools: any[] = [
   batchUnlocalizeItemsById,
 
   // Versioning
+  batchCheckOut,
+  batchCheckIn,
+  batchUndoCheckOut,
   checkInItem,
   checkOutItem,
   rollbackItem,

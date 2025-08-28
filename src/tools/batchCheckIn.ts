@@ -1,0 +1,44 @@
+import { z } from "zod";
+import { authenticatedAxios } from "../lib/axios.js";
+import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
+
+export const batchCheckIn = {
+    name: "batchCheckIn",
+    description: `Starts an asynchronous process to check in a batch of versioned items. This saves the current changes for each item as a new version and removes the locks, making them available for other users to edit.`,
+    input: {
+        itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/))
+            .describe("An array of unique IDs (TCM URIs) for the versioned items to check in."),
+        removePermanentLock: z.boolean().optional().default(true)
+            .describe("Set to true to remove the permanent lock from each item after check-in."),
+        userComment: z.string().optional()
+            .describe("An optional comment to describe the changes made. This comment will be applied to all items in the batch."),
+    },
+    execute: async ({ itemIds, removePermanentLock, userComment }: { itemIds: string[]; removePermanentLock: boolean; userComment?: string }) => {
+        try {
+            const requestModel: { [key: string]: any } = {
+                Ids: itemIds,
+                RemovePermanentLock: removePermanentLock
+            };
+
+            if (userComment) {
+                requestModel.UserComment = userComment;
+            }
+
+            const response = await authenticatedAxios.post('/batch/checkIn', requestModel);
+
+            // A 202 status code indicates the batch process was accepted and started.
+            if (response.status === 202) {
+                return {
+                    content: [{
+                        type: "text",
+                        text: `Batch check-in process started for ${itemIds.length} items.\n\n${JSON.stringify(response.data, null, 2)}`
+                    }],
+                };
+            } else {
+                return handleUnexpectedResponse(response);
+            }
+        } catch (error) {
+            return handleAxiosError(error, "Failed to start batch check-in");
+        }
+    }
+};
