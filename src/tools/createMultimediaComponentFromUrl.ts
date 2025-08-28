@@ -1,0 +1,154 @@
+import { z } from "zod";
+import axios from "axios";
+import FormData from "form-data";
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import * as crypto from 'crypto';
+import { authenticatedAxios } from "../lib/axios.js";
+import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
+import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
+
+const createMultimediaComponentFromUrlInputProperties = {
+    mediaUrl: z.string().url().describe("The public URL of the file that will be used for the multimedia component. Must be a fully qualified URL including http:// or https://."),
+    title: z.string().describe("The title for the new multimedia component."),
+    fileName: z.string().describe("The desired file name for the multimedia component in the CMS (e.g., 'product-image.jpg')."),
+    locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new component will be created."),
+    schemaId: z.string().regex(/^tcm:\d+-\d+-8$/).describe("The TCM URI of the Multimedia Schema to use."),
+    metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields.")
+};
+
+const createMultimediaComponentFromUrlSchema = z.object(createMultimediaComponentFromUrlInputProperties);
+
+export const createMultimediaComponentFromUrl = {
+    name: "createMultimediaComponentFromUrl",
+    description: "Creates a new multimedia component by uploading a file from a public URL.",
+    input: createMultimediaComponentFromUrlInputProperties,
+    async execute(input: z.infer<typeof createMultimediaComponentFromUrlSchema>) {
+        const { mediaUrl, title, fileName, locationId, schemaId, metadata } = input;
+        
+        const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
+        const stagedFilePath = path.join(os.tmpdir(), `${crypto.randomUUID()}${path.extname(new URL(mediaUrl).pathname)}`);
+
+        try {
+            // --- Part 1: Staging Logic ---
+            const requestHeaders = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9'
+            };
+
+            console.log(`Checking file size for: ${mediaUrl}`);
+            const headResponse = await axios.head(mediaUrl, { 
+                timeout: 5000,
+                headers: requestHeaders 
+            });
+            const contentLength = headResponse.headers['content-length'];
+
+            if (contentLength && parseInt(contentLength, 10) > MAX_FILE_SIZE_BYTES) {
+                return {
+                   content: [{
+                       type: "text",
+                       text: `Error: File size of ${contentLength} bytes exceeds the limit of ${MAX_FILE_SIZE_BYTES} bytes.`
+                   }],
+                };
+            }
+
+            console.log(`Fetching media from: ${mediaUrl}`);
+            const response = await axios.get(mediaUrl, {
+                responseType: 'arraybuffer',
+                maxBodyLength: MAX_FILE_SIZE_BYTES,
+                maxContentLength: MAX_FILE_SIZE_BYTES,
+                headers: requestHeaders
+            });
+
+            fs.writeFileSync(stagedFilePath, response.data);
+            console.log(`File successfully downloaded and staged to: ${stagedFilePath}`);
+
+            // --- Part 2: Component Creation Logic ---
+            console.log(`Reading file from staged path: ${stagedFilePath}`);
+            const fileBuffer = fs.readFileSync(stagedFilePath);
+            console.log(`Successfully read file. Size: ${fileBuffer.length} bytes.`);
+
+            const formData = new FormData();
+            formData.append('file', fileBuffer, fileName);
+
+            console.log("Uploading binary data to CMS temporary storage...");
+            const uploadResponse = await authenticatedAxios.post('/binary/upload', formData, {
+                headers: formData.getHeaders()
+            });
+
+            if (uploadResponse.status !== 202) {
+                return handleUnexpectedResponse(uploadResponse);
+            }
+            
+            const cmsTempFileId = uploadResponse.data.TempFileId;
+            console.log(`Binary uploaded successfully. CMS Temporary File ID: ${cmsTempFileId}`);
+
+            console.log(`Getting default model for a new component in container: ${locationId}`);
+            const defaultModelResponse = await authenticatedAxios.get('/item/defaultModel/Component', {
+                params: { containerId: locationId }
+            });
+
+            if (defaultModelResponse.status !== 200) {
+                return handleUnexpectedResponse(defaultModelResponse);
+            }
+            const payload = defaultModelResponse.data;
+
+            payload.Title = title;
+            payload.ComponentType = "Multimedia";
+
+            // CORRECTED: Merge the schemaId into the existing Schema object
+            // to preserve its required $type property.
+            payload.Schema = { 
+                ...payload.Schema,
+                IdRef: schemaId 
+            };
+
+            if (metadata) {
+                payload.Metadata = metadata;
+            }
+            if (!payload.LocationInfo?.OrganizationalItem?.IdRef) {
+                payload.LocationInfo = { ...payload.LocationInfo, OrganizationalItem: { IdRef: locationId } };
+            }
+
+            payload.BinaryContent = {
+                ...payload.BinaryContent,
+                UploadFromFile: cmsTempFileId,
+                Filename: fileName,
+            };
+
+            console.log("Creating multimedia component...");
+            const createResponse = await authenticatedAxios.post('/items', payload);
+
+            if (createResponse.status === 201) {
+                console.log(`Successfully created component with ID: ${createResponse.data.Id}`);
+                return {
+                    content: [{
+                        type: "text",
+                        text: `Successfully created multimedia component with ID ${createResponse.data.Id}.\n\n${JSON.stringify(createResponse.data, null, 2)}`
+                    }],
+                };
+            } else {
+                return handleUnexpectedResponse(createResponse);
+            }
+
+        } catch (error) {
+            if (axios.isAxiosError(error) && error.message.includes('maxContentLength')) {
+                const sizeErrorContext = `Error: File exceeds the maximum allowed size of ${MAX_FILE_SIZE_BYTES} bytes.`;
+                return handleAxiosError(error, sizeErrorContext);
+            }
+            return handleAxiosError(error, "Failed to create multimedia component from URL");
+        } finally {
+            // --- Part 3: Cleanup Logic ---
+            try {
+                if (fs.existsSync(stagedFilePath)) {
+                    fs.unlinkSync(stagedFilePath);
+                    console.log(`Successfully cleaned up staged file: ${stagedFilePath}`);
+                }
+            } catch (cleanupError) {
+                handleAxiosError(cleanupError, `Failed to clean up staged file ${stagedFilePath}`);
+            }
+        }
+    }
+};

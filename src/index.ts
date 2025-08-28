@@ -46,6 +46,7 @@ import { batchCheckOut } from './tools/batchCheckOut.js';
 import { batchCheckIn } from './tools/batchCheckIn.js';
 import { batchUndoCheckOut } from './tools/batchUndoCheckOut.js';
 import { getBatchOperationStatus } from './tools/getBatchOperationStatus.js';
+import { createMultimediaComponentFromUrl } from './tools/createMultimediaComponentFromUrl.js';
 
 const server = new McpServer({
   name: "mcp-test-server",
@@ -68,6 +69,7 @@ const tools: any[] = [
   
   // Create Operations
   createItem,
+  createMultimediaComponentFromUrl,
   createPublication,
   createRootStructureGroup,
   createSchema,
