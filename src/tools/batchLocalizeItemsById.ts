@@ -4,10 +4,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js
 
 export const batchLocalizeItemsById = {
     name: "batchLocalizeItemsById",
-    description: `Starts an asynchronous process to localize a batch of shared items in the BluePrint, creating local copies of each. This allows the items to be modified in the current context without affecting their parent items.
-    Note that if a field is set to 'non-localizable' in a schema, it will not be possible to change the value in the local copy of an item based on that schema.
-    This batch tool is more efficient than localizing items one by one and returns a confirmation that the process has been accepted and is running in the background.
-    You can load the batch process referenced in the response to check the status of the process.`,
+    description: `Starts an asynchronous process to localize a batch of shared items, creating local copies that can be edited. This is more efficient than localizing items one by one. The initial response includes a batch ID that can be used to monitor the status of the operation.`,
     input: {
         itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)).describe("An array of unique IDs (TCM URIs) for the shared items to be localized."),
     },

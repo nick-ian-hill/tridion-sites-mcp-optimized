@@ -4,9 +4,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js
 
 export const batchClassify = {
     name: "batchClassify",
-    description: `Starts an asynchronous process to classify a batch of items with a set of keywords.
-    For each item, the tool attempts to apply the specified keywords to any matching keyword fields within that item.
-    This is more efficient than classifying items individually.`,
+    description: `Starts an asynchronous process to classify a batch of items with a set of keywords. For each item, the tool attempts to apply the specified keywords to any matching keyword fields within that item. This is more efficient than classifying items individually. The initial response includes a batch ID that can be used to monitor the status of the operation.`,
     input: {
         itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/))
             .describe("An array of unique IDs (TCM URIs) for the items to be classified."),

@@ -4,9 +4,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js
 
 export const batchUnlocalizeItemsById = {
     name: "batchUnlocalizeItemsById",
-    description: `Starts an asynchronous process to unlocalize a batch of local items. This effectively deletes the local copies and re-establishes the inheritance from their primary parent items in the BluePrint.
-    This batch tool is more efficient than unlocalizing items one by one and returns a confirmation that the process has been accepted and is running in the background.
-    You can load the batch process referenced in the repsonse to check the status of the process.`,
+    description: `Starts an asynchronous process to unlocalize a batch of local items, re-establishing inheritance from their parent items. This is more efficient than unlocalizing items one by one. The initial response includes a batch ID that can be used to monitor the status of the operation.`,
     input: {
         itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)).describe("An array of unique IDs (TCM URIs) for the local items to be unlocalized."),
     },

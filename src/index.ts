@@ -45,6 +45,7 @@ import { batchUnclassify } from './tools/batchUnclassify.js';
 import { batchCheckOut } from './tools/batchCheckOut.js';
 import { batchCheckIn } from './tools/batchCheckIn.js';
 import { batchUndoCheckOut } from './tools/batchUndoCheckOut.js';
+import { getBatchOperationStatus } from './tools/getBatchOperationStatus.js';
 
 const server = new McpServer({
   name: "mcp-test-server",
@@ -57,6 +58,7 @@ const tools: any[] = [
   search,
 
   // Read Operations
+  getBatchOperationStatus,
   getClassifiedItems,
   getItemById,
   bulkReadItemsById,

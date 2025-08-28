@@ -4,7 +4,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js
 
 export const batchUndoCheckOut = {
     name: "batchUndoCheckOut",
-    description: `Starts an asynchronous process to revert (undo) the check-out for a batch of versioned items. This action discards any changes made since the items were checked out and removes their locks.`,
+    description: `Starts an asynchronous process to revert (undo) the check-out for a batch of versioned items. This action discards any changes made since the items were checked out and removes their locks. This is more efficient than performing undoCheckOut on items individually. The initial response includes a batch ID that can be used to monitor the status of the operation.`,
     input: {
         itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/))
             .describe("An array of unique IDs (TCM URIs) for the checked-out items to revert."),

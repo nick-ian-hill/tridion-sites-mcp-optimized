@@ -4,9 +4,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js
 
 export const batchUnclassify = {
     name: "batchUnclassify",
-    description: `Starts an asynchronous process to unclassify a batch of items by removing specified keywords.
-    For each item, the tool attempts to remove the specified keywords from any fields where they are currently set.
-    This is more efficient than unclassifying items individually.`,
+    description: `Starts an asynchronous process to unclassify a batch of items by removing specified keywords. For each item, the tool attempts to remove the specified keywords from any fields where they are currently set. This is more efficient than unclassifying items individually. The initial response includes a batch ID that can be used to monitor the status of the operation.`,
     input: {
         itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/))
             .describe("An array of unique IDs (TCM URIs) for the items to be unclassified."),
