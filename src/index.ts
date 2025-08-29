@@ -47,6 +47,8 @@ import { batchCheckIn } from './tools/batchCheckIn.js';
 import { batchUndoCheckOut } from './tools/batchUndoCheckOut.js';
 import { getBatchOperationStatus } from './tools/getBatchOperationStatus.js';
 import { createMultimediaComponentFromUrl } from './tools/createMultimediaComponentFromUrl.js';
+import { getSchemaLinks } from './tools/getSchemaLinks.js';
+import { createMultimediaComponentFromBase64 } from './tools/createMultimediaComponentFromBase64.js';
 
 const server = new McpServer({
   name: "mcp-test-server",
@@ -66,10 +68,12 @@ const tools: any[] = [
   getItemHistory,
   getItemsInContainer,
   getLockedItems,
+  getSchemaLinks,
   
   // Create Operations
   createItem,
   createMultimediaComponentFromUrl,
+  createMultimediaComponentFromBase64,
   createPublication,
   createRootStructureGroup,
   createSchema,
