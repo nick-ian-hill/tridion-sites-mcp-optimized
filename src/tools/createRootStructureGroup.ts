@@ -42,30 +42,30 @@ export const createRootStructureGroup = {
         const { title, publicationId, metadataSchemaId, metadata } = args;
 
         try {
-            // 1. Construct the payload manually using the provided minimal model
-            const payload = {
-                "$type": "StructureGroup",
-                "Id": "tcm:0-0-0",
-                "Title": title,
-                "IsRootOrganizationalItem": true,
-                "LocationInfo": {
-                    "$type": "PublishLocationInfo",
-                    "ContextRepository": {
-                        "$type": "Link",
-                        "IdRef": publicationId
-                    }
-                },
-                "Metadata": metadata || { "$type": "FieldsValueDictionary" },
-                "MetadataSchema": {
-                    "$type": "Link",
-                    "IdRef": metadataSchemaId || "tcm:0-0-0"
-                }
-            };
+            // 1. Get the default model for a Structure Group, using the Publication as the container.
+            const defaultModelResponse = await authenticatedAxios.get('/item/defaultModel/StructureGroup', {
+                params: { containerId: publicationId }
+            });
+
+            if (defaultModelResponse.status !== 200) {
+                return handleUnexpectedResponse(defaultModelResponse);
+            }
             
-            // 2. Post the customized payload to the /items endpoint to create the item
+            const payload = defaultModelResponse.data;
+
+            // 2. Customize the payload
+            payload.Title = title;
+
+            if (metadata) {
+                payload.Metadata = metadata;
+            }
+            if (metadataSchemaId) {
+                payload.MetadataSchema = { ...payload.MetadataSchema, IdRef: metadataSchemaId };
+            }
+            
+            // 3. Post the customized payload to the /items endpoint to create the item
             const createResponse = await authenticatedAxios.post('/items', payload);
 
-            // A successful creation returns a 201 status code
             if (createResponse.status === 201) {
                 return {
                     content: [
