@@ -85,8 +85,13 @@ Therefore, when creating a Component in the Folder with ID tcm:10-4112-2, the Sc
             if (content && schemaId) {
                 content = await reorderFieldsBySchema(content, schemaId, 'content');
             }
-            if (metadata && metadataSchemaId) {
-                metadata = await reorderFieldsBySchema(metadata, metadataSchemaId, 'metadata');
+            if (metadata) {
+                if (metadataSchemaId && metadataSchemaId !== 'tcm:0-0-0') {
+                    metadata = await reorderFieldsBySchema(metadata, metadataSchemaId, 'metadata');
+                } 
+                else if (schemaId) {
+                    metadata = await reorderFieldsBySchema(metadata, schemaId, 'metadata');
+                }
             }
             
             // 1. Get the default model for the item type and location
