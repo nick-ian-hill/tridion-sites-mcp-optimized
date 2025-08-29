@@ -14,7 +14,7 @@ const createMultimediaComponentFromUrlInputProperties = {
     title: z.string().describe("The title for the new multimedia component."),
     fileName: z.string().describe("The desired file name for the multimedia component in the CMS (e.g., 'product-image.jpg')."),
     locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new component will be created."),
-    schemaId: z.string().regex(/^tcm:\d+-\d+-8$/).describe("The TCM URI of the Multimedia Schema to use."),
+    schemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the Multimedia Schema to use. If not provided, a default will be determined automatically."),
     metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields.")
 };
 
@@ -22,7 +22,7 @@ const createMultimediaComponentFromUrlSchema = z.object(createMultimediaComponen
 
 export const createMultimediaComponentFromUrl = {
     name: "createMultimediaComponentFromUrl",
-    description: "Creates a new multimedia component by uploading a file from a public URL.",
+    description: "Creates a new multimedia component by uploading a file from a public URL. If the parent Folder has a mandatory schema, it will be used automatically, so there is no need to provide a schemaId.",
     input: createMultimediaComponentFromUrlInputProperties,
     async execute(input: z.infer<typeof createMultimediaComponentFromUrlSchema>) {
         const { mediaUrl, title, fileName, locationId, schemaId, metadata } = input;
@@ -98,12 +98,37 @@ export const createMultimediaComponentFromUrl = {
             payload.Title = title;
             payload.ComponentType = "Multimedia";
 
-            // CORRECTED: Merge the schemaId into the existing Schema object
-            // to preserve its required $type property.
-            payload.Schema = { 
-                ...payload.Schema,
-                IdRef: schemaId 
-            };
+            // --- Schema Selection Logic ---
+            if (payload.IsBasedOnMandatorySchema) {
+                console.log(`Using mandatory schema '${payload.Schema?.Title}' (${payload.Schema?.IdRef}) defined on the folder.`);
+            } else if (schemaId) {
+                console.log(`Using user-provided schema: ${schemaId}`);
+                payload.Schema = { ...payload.Schema, IdRef: schemaId };
+            } else if (payload.Schema?.IdRef && payload.Schema.IdRef !== 'tcm:0-0-0') {
+                console.log(`Using default schema '${payload.Schema?.Title}' (${payload.Schema?.IdRef}) from the default model.`);
+            } else {
+                console.log("No mandatory, user-provided, or default schema found. Looking up Publication's default multimedia schema.");
+                const publicationId = payload.LocationInfo?.ContextRepository?.IdRef;
+                if (!publicationId) {
+                    throw new Error("Could not determine the Publication context from the default model.");
+                }
+
+                const restPublicationId = publicationId.replace(':', '_');
+                console.log(`Fetching details for Publication: ${publicationId}`);
+                const publicationResponse = await authenticatedAxios.get(`/items/${restPublicationId}`);
+
+                if (publicationResponse.status !== 200) {
+                    return handleUnexpectedResponse(publicationResponse);
+                }
+
+                const defaultMultimediaSchemaId = publicationResponse.data?.DefaultMultimediaSchema?.IdRef;
+                if (!defaultMultimediaSchemaId || defaultMultimediaSchemaId === 'tcm:0-0-0') {
+                    throw new Error(`The Publication (${publicationId}) does not have a Default Multimedia Schema defined.`);
+                }
+                
+                console.log(`Using Publication's default multimedia schema: ${defaultMultimediaSchemaId}`);
+                payload.Schema = { ...payload.Schema, IdRef: defaultMultimediaSchemaId };
+            }
 
             if (metadata) {
                 payload.Metadata = metadata;
