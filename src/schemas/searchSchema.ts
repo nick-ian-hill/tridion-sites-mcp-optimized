@@ -18,8 +18,8 @@ export const SearchQueryValidation = z.object({
   Description: z.string().optional().describe("A string to search for in the item's description field."),
   ItemTypes: z.array(z.enum([
     "Folder", "Component", "Page", "Schema", "ComponentTemplate", "PageTemplate",
-    "MultimediaType", "Category", "Keyword", "User", "Group", "Publication",
-    "TargetGroup", "TemplateBuildingBlock", "SearchFolder", "StructureGroup",
+    "Category", "Keyword", "User", "Group", "Publication", "TargetGroup",
+    "TemplateBuildingBlock", "SearchFolder", "StructureGroup",
   ])).optional().describe("An array of item types to limit the search results to."),
 
   // --- Location and Scope ---
