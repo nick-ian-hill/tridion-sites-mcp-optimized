@@ -26,7 +26,7 @@ Each Field Definition object MUST include a '$type' property to identify its typ
 Supported Field Types ('$type' values):
   - SingleLineTextFieldDefinition: A simple text input.
   - MultiLineTextFieldDefinition: A multi-line text area. Supports a 'Height' property for the UI.
-  - XhtmlFieldDefinition: A rich-text (HTML) editor. Supports a 'Height' property for the UI.
+  - XhtmlFieldDefinition: A rich-text (HTML) editor. Supports a 'Height' property for the UI. Can also include a 'FormattingFeatures' object to control the editor's toolbar.
   - KeywordFieldDefinition: A link to a Keyword from a Category.
   - NumberFieldDefinition: A field for numeric values.
   - DateFieldDefinition: A field for date/time values.
@@ -116,6 +116,35 @@ Certain top-level properties are only applicable when the Schema has a specific 
             "$type": "DateFieldDefinition",
             "Name": "publishDate",
             "Description": "The date the article was published."
+        }
+    }
+});`
+        },
+        {
+            description: "Create a Schema with an XHTML field that has custom formatting features, disabling several toolbar buttons.",
+            example: `const result = await tools.createSchema({
+    title: "Rich Text Schema with Custom Formatting",
+    locationId: "tcm:1-2-2",
+    purpose: "Component",
+    rootElementName: "RichText",
+    fields: {
+        "formattedContent": {
+            "$type": "XhtmlFieldDefinition",
+            "Name": "formattedContent",
+            "Description": "Rich text content with a restricted toolbar.",
+            "Height": 15,
+            "FormattingFeatures": {
+                "$type": "FormattingFeatures",
+                "DocType": "Strict",
+                "DisallowedActions": [
+                    "Strikethrough",
+                    "Subscript",
+                    "Superscript",
+                    "AlignLeft",
+                    "Center",
+                    "AlignRight"
+                ]
+            }
         }
     }
 });`

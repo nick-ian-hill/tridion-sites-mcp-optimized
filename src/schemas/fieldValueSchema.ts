@@ -1,6 +1,14 @@
 import { z } from "zod";
 import { linkSchema } from "./linkSchema.js";
 
+const formattingFeaturesSchema = z.object({
+  "$type": z.literal("FormattingFeatures"),
+  AccessibilityLevel: z.number().int().optional().describe("Gets or sets the Web Content Accessibility Guidelines (WCAG) setting that you choose, shows or hides buttons for the various WCAG levels."),
+  DisallowedActions: z.array(z.string()).optional().describe("Gets or sets the formatting actions that a user can not perform on text within the format area."),
+  DisallowedStyles: z.array(z.string()).optional().describe("Gets or sets the styles that a user can not apply to text within a format area."),
+  DocType: z.enum(["Strict", "Transitional"]).optional().describe("Gets or sets the rules that are applied to this format area when Components based on this Schema are validated. You have the option of selecting \"Strict\" or \"Transitional\" document types.")
+});
+
 const listDefinitionSchema = z.discriminatedUnion("$type", [
   z.object({
     "$type": z.literal("ListDefinition"),
@@ -49,7 +57,7 @@ const multiLineTextFieldSchema = z.object({
     IsIndexable: z.boolean().optional().describe("Whether the field value is included when performing a search."),
     IsLocalizable: z.boolean().optional().describe("Whether the field value can be changed in localized items."),
     IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing."),
-    Height: z.number().int().optional().describe("The height of the text area in the UI.")
+    Height: z.number().int().default(2).describe("The height of the text area in the UI.")
 });
 
 const xhtmlFieldSchema = z.object({
@@ -61,7 +69,8 @@ const xhtmlFieldSchema = z.object({
     IsIndexable: z.boolean().optional().describe("Whether the field value is included when performing a search."),
     IsLocalizable: z.boolean().optional().describe("Whether the field value can be changed in localized items."),
     IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing."),
-    Height: z.number().int().optional().describe("The height of the rich text editor in the UI.")
+    Height: z.number().int().default(5).describe("The height of the rich text editor in the UI."),
+    FormattingFeatures: formattingFeaturesSchema.optional().describe("Specifies the formatting options for the XHTML field.")
 });
 
 const keywordFieldSchema = z.object({
