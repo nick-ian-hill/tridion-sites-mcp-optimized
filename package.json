@@ -12,6 +12,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@google/genai": "^1.16.0",
     "@modelcontextprotocol/sdk": "^1.17.2",
     "@viz-js/viz": "^3.16.0",
     "axios": "^1.11.0",

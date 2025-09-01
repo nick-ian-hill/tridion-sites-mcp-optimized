@@ -49,6 +49,7 @@ import { getBatchOperationStatus } from './tools/getBatchOperationStatus.js';
 import { createMultimediaComponentFromUrl } from './tools/createMultimediaComponentFromUrl.js';
 import { getSchemaLinks } from './tools/getSchemaLinks.js';
 import { createMultimediaComponentFromBase64 } from './tools/createMultimediaComponentFromBase64.js';
+import { createMultimediaComponentFromPrompt } from './tools/createMultimediaComponentFromPrompt.js';
 
 const server = new McpServer({
   name: "mcp-test-server",
@@ -72,8 +73,9 @@ const tools: any[] = [
   
   // Create Operations
   createItem,
-  createMultimediaComponentFromUrl,
+  createMultimediaComponentFromPrompt,
   createMultimediaComponentFromBase64,
+  createMultimediaComponentFromUrl,
   createPublication,
   createRootStructureGroup,
   createSchema,
