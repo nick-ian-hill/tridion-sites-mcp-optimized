@@ -3,6 +3,7 @@ import { createMultimediaComponentFromBase64 } from "./createMultimediaComponent
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 import { handleAxiosError } from "../lib/errorUtils.js";
 import { GoogleGenAI } from "@google/genai";
+import { authenticatedAxios } from "../lib/axios.js";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 
@@ -24,24 +25,22 @@ export const createMultimediaComponentFromPrompt = {
     async execute(input: z.infer<typeof createMultimediaComponentFromPromptSchema>) {
         const { prompt, title, fileName, locationId, schemaId, metadata } = input;
 
-        const ai = new GoogleGenAI({ vertexai: false, apiKey: GEMINI_API_KEY });
-
         try {
             console.log(`Generating image for prompt: "${prompt}"`);
-
+            let base64Content: string | undefined;
+            //base64Content = 'R0lGODlhAQABAIAAAP8AADAAACwAAAAAAQABAAACAkQBADs=';
+            
+            const ai = new GoogleGenAI({ vertexai: false, apiKey: GEMINI_API_KEY });
             const result = await ai.models.generateContent({
                 model: "gemini-2.5-flash-image-preview",
                 contents: prompt
             });
 
-            let base64Content: string | undefined; // 'R0lGODlhAQABAIAAAP8AADAAACwAAAAAAQABAAACAkQBADs=';
-
-            // Find the image data by iterating through parts
             if (result?.candidates?.[0]?.content?.parts) {
                 for (const part of result.candidates[0].content.parts) {
                     if (part.inlineData?.data) {
                         base64Content = part.inlineData.data;
-                        break; // Exit the loop once we've found the image
+                        break;
                     }
                 }
             }
@@ -56,11 +55,46 @@ export const createMultimediaComponentFromPrompt = {
                 throw new Error(errorMessage);
             }
 
-            console.log("Image generated successfully. Creating multimedia component...");
+            console.log("Image generated successfully.");
+
+            // Now that an image exists, check for title uniqueness.
+            const escapedContainerId = locationId.replace(':', '_');
+            const existingTitles = new Set<string>();
+
+            try {
+                console.log(`Fetching existing component titles from folder ${locationId} to ensure uniqueness.`);
+                const response = await authenticatedAxios.get(`/items/${escapedContainerId}/items`, {
+                    params: {
+                        rloItemTypes: ['Component'],
+                        details: 'IdAndTitleOnly'
+                    }
+                });
+
+                if (response.status === 200 && response.data?.Items) {
+                    for (const item of response.data.Items) {
+                        if (item.Title) {
+                            existingTitles.add(item.Title.toLowerCase());
+                        }
+                    }
+                } else {
+                    console.warn(`Could not verify title uniqueness due to unexpected API response.`);
+                }
+            } catch (error) {
+                console.warn(`An error occurred while fetching items for uniqueness check. Proceeding with original title.`, error);
+            }
+            
+            let uniqueTitle = title;
+            let counter = 1;
+            while (existingTitles.has(uniqueTitle.toLowerCase())) {
+                uniqueTitle = `${title} (${counter})`;
+                console.log(`Title collision detected. Trying new title: "${uniqueTitle}"`);
+                counter++;
+            }
+            console.log(`Title "${uniqueTitle}" is available.`);
 
             const createComponentResult = await createMultimediaComponentFromBase64.execute({
                 base64Content,
-                title,
+                title: uniqueTitle,
                 fileName,
                 locationId,
                 schemaId,
