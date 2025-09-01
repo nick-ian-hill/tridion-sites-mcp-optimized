@@ -28,8 +28,8 @@ export const createMultimediaComponentFromPrompt = {
         try {
             console.log(`Generating image for prompt: "${prompt}"`);
             let base64Content: string | undefined;
-            //base64Content = 'R0lGODlhAQABAIAAAP8AADAAACwAAAAAAQABAAACAkQBADs=';
-            
+            //base64Content = 'R0lGODlhAQABAIAAAP8AADAAACwAAAAAAQABAAACAkQBADs=';           
+
             const ai = new GoogleGenAI({ vertexai: false, apiKey: GEMINI_API_KEY });
             const result = await ai.models.generateContent({
                 model: "gemini-2.5-flash-image-preview",
@@ -57,7 +57,6 @@ export const createMultimediaComponentFromPrompt = {
 
             console.log("Image generated successfully.");
 
-            // Now that an image exists, check for title uniqueness.
             const escapedContainerId = locationId.replace(':', '_');
             const existingTitles = new Set<string>();
 
@@ -70,14 +69,14 @@ export const createMultimediaComponentFromPrompt = {
                     }
                 });
 
-                if (response.status === 200 && response.data?.Items) {
-                    for (const item of response.data.Items) {
+                if (response.status === 200 && Array.isArray(response.data)) {
+                    for (const item of response.data) {
                         if (item.Title) {
                             existingTitles.add(item.Title.toLowerCase());
                         }
                     }
                 } else {
-                    console.warn(`Could not verify title uniqueness due to unexpected API response.`);
+                    console.warn(`Could not verify title uniqueness due to unexpected API response format.`);
                 }
             } catch (error) {
                 console.warn(`An error occurred while fetching items for uniqueness check. Proceeding with original title.`, error);
