@@ -24,32 +24,40 @@ export const createMultimediaComponentFromPrompt = {
     async execute(input: z.infer<typeof createMultimediaComponentFromPromptSchema>) {
         const { prompt, title, fileName, locationId, schemaId, metadata } = input;
 
-        const ai = new GoogleGenAI({vertexai: false, apiKey: GEMINI_API_KEY});
+        const ai = new GoogleGenAI({ vertexai: false, apiKey: GEMINI_API_KEY });
 
         try {
-            console.log(`Generating image for prompt: "${prompt}" via Gemini 2.5 Flash Image`);
+            console.log(`Generating image for prompt: "${prompt}"`);
 
-            /*const result = await ai.models.generateContent({
+            const result = await ai.models.generateContent({
                 model: "gemini-2.5-flash-image-preview",
-                contents: [{ role: "user", parts: [{ text: prompt }] }]
+                contents: prompt
             });
 
-            const base64Content = result?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+            let base64Content: string | undefined; // 'R0lGODlhAQABAIAAAP8AADAAACwAAAAAAQABAAACAkQBADs=';
+
+            // Find the image data by iterating through parts
+            if (result?.candidates?.[0]?.content?.parts) {
+                for (const part of result.candidates[0].content.parts) {
+                    if (part.inlineData?.data) {
+                        base64Content = part.inlineData.data;
+                        break; // Exit the loop once we've found the image
+                    }
+                }
+            }
 
             if (!base64Content) {
                 const rejectionReason = result?.promptFeedback?.blockReason;
                 const finishReason = result?.candidates?.[0]?.finishReason;
                 console.log('No image data received', rejectionReason, finishReason);
-                let errorMessage = "No image data received from the API. The response was malformed.";
+                let errorMessage = "No image data was found in the API response.";
                 if (rejectionReason) { errorMessage += ` Block Reason: ${rejectionReason}.`; }
                 if (finishReason && finishReason !== "STOP") { errorMessage += ` Finish Reason: ${finishReason}.`; }
                 throw new Error(errorMessage);
-            }*/
-
-            const base64Content = 'R0lGODlhAQABAIAAAP8AADAAACwAAAAAAQABAAACAkQBADs=';
+            }
 
             console.log("Image generated successfully. Creating multimedia component...");
-            
+
             const createComponentResult = await createMultimediaComponentFromBase64.execute({
                 base64Content,
                 title,
