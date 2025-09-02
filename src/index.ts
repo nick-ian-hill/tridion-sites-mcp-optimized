@@ -50,6 +50,7 @@ import { createMultimediaComponentFromUrl } from './tools/createMultimediaCompon
 import { getSchemaLinks } from './tools/getSchemaLinks.js';
 import { createMultimediaComponentFromBase64 } from './tools/createMultimediaComponentFromBase64.js';
 import { createMultimediaComponentFromPrompt } from './tools/createMultimediaComponentFromPrompt.js';
+import { createPage } from './tools/createPage.js';
 
 const server = new McpServer({
   name: "mcp-test-server",
@@ -76,6 +77,7 @@ const tools: any[] = [
   createMultimediaComponentFromPrompt,
   createMultimediaComponentFromBase64,
   createMultimediaComponentFromUrl,
+  createPage,
   createPublication,
   createRootStructureGroup,
   createSchema,

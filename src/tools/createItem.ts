@@ -12,16 +12,14 @@ import { reorderFieldsBySchema } from "../utils/fieldReordering.js";
 const createItemInputProperties = {
     itemType: z.enum([
         "Component", "Folder", "StructureGroup", "Keyword",
-        "Category", "Page", "Bundle", "SearchFolder"
+        "Category", "Bundle", "SearchFolder"
     ]).describe("The type of CMS item to create."),
     title: z.string().describe("The title for the new item."),
-    locationId: z.string().regex(/^tcm:\d+-\d+-\d+$/).describe("The TCM URI of the parent container (e.g., Folder, Structure Group, Category) where the new item will be created."),
-    schemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("Required for 'Component' and 'Page'. The TCM URI of the Schema to use for the item's content."),
+    locationId: z.string().regex(/^tcm:\d+-\d+-\d+$/).describe("The TCM URI of the parent container (e.g., Folder, Structure Group, Category) where the new item will be created. For a Structure Group, the container must be a structure group. The only exception is for a Structure Group in a Publication that does not yet have a Structure Group. In this case, the createRootStructureGroup tool should be used instead. For a Category, the container must be a Publication. For keywords, the container must be a Category. For other item types the container must be a Folder."),
+    schemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("Required for a 'Component'. The TCM URI of the Schema to use for the item's content."),
     metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("Optional. The TCM URI of the Metadata Schema for the item's metadata."),
     content: z.record(fieldValueSchema).optional().describe("A JSON object for the item's content fields. The tool will automatically order the fields to match the Schema definition."),
     metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields. The tool will automatically order the fields to match the Metadata Schema definition."),
-    fileName: z.string().optional().describe("Required for 'Page' type. The file name for the page, including the extension (e.g., 'about-us.html')."),
-    pageTemplateId: z.string().regex(/^tcm:\d+-\d+-128$/).optional().describe("Required for 'Page' type. The TCM URI of the Page Template to be associated with the Page."),
     isAbstract: z.boolean().optional().describe("Only for 'Keyword' type. Set to true to create an abstract Keyword. Defaults to false."),
     description: z.string().optional().describe("A description for the item. Applicable to Keyword, Category, and Bundle types."),
     key: z.string().optional().describe("A custom key for the Keyword. Only applicable to Keyword type."),
@@ -34,9 +32,6 @@ const createItemInputProperties = {
 
 // STEP 2: Create the final Zod schema and centralize validation logic.
 const createItemInputSchema = z.object(createItemInputProperties)
-    .refine(data => !(data.itemType === 'Page' && (!data.fileName || !data.pageTemplateId)), {
-        message: "To create a 'Page', both 'fileName' and 'pageTemplateId' parameters are required."
-    })
     .refine(data => !(data.itemType === 'Component' && !data.schemaId), {
         message: "To create a 'Component', the 'schemaId' parameter is required."
     })
@@ -68,9 +63,6 @@ Therefore, when creating a Component in the Folder with ID tcm:10-4112-2, the Sc
         if (args.metadataSchemaId) {
             args.metadataSchemaId = convertItemIdToContextPublication(args.metadataSchemaId, locationId);
         }
-        if (args.pageTemplateId) {
-            args.pageTemplateId = convertItemIdToContextPublication(args.pageTemplateId, locationId);
-        }
         if (args.parentKeywords) {
             args.parentKeywords = args.parentKeywords.map(kw => convertItemIdToContextPublication(kw, locationId));
         }
@@ -78,7 +70,7 @@ Therefore, when creating a Component in the Folder with ID tcm:10-4112-2, the Sc
             args.relatedKeywords = args.relatedKeywords.map(kw => convertItemIdToContextPublication(kw, locationId));
         }
 
-        let { itemType, title, schemaId, metadataSchemaId, content, metadata, fileName, pageTemplateId, isAbstract, description, key, parentKeywords, relatedKeywords, itemsInBundle, searchQuery, resultLimit } = args;
+        let { itemType, title, schemaId, metadataSchemaId, content, metadata, isAbstract, description, key, parentKeywords, relatedKeywords, itemsInBundle, searchQuery, resultLimit } = args;
 
         try {
             // Reorder content and metadata fields based on their respective schemas
@@ -113,10 +105,6 @@ Therefore, when creating a Component in the Folder with ID tcm:10-4112-2, the Sc
             if (metadata) payload.Metadata = metadata;
 
             // Type-specific properties
-            if (itemType === 'Page') {
-                payload.FileName = fileName;
-                payload.PageTemplate = { IdRef: pageTemplateId };
-            }
             if (itemType === 'Keyword') {
                 if (typeof isAbstract === 'boolean') payload.IsAbstract = isAbstract;
                 if (description) payload.Description = description;
