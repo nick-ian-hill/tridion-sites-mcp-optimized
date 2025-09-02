@@ -53,7 +53,7 @@ const createPageInputProperties = {
     metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the Metadata Schema for the Page's metadata."),
     metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the Page's metadata fields. The tool will automatically order the fields to match the Metadata Schema definition."),
     componentPresentations: z.array(componentPresentationInputSchema).optional().describe("An array of Component Presentations to be placed directly on the Page (not within any Region)."),
-    regions: z.record(regionInputSchema).optional().describe("A dictionary of Regions to be created on the Page. The dictionary key is the machine name of the Region (e.g., 'Header', 'MainContent').")
+    regions: z.record(regionInputSchema).optional().describe("A dictionary of Regions for the Page. The key is the machine name of the Region. Note: This parameter is mandatory if the selected Page Template defines regions. You must provide an entry for each required region, even if it's empty (e.g., `{\"Main\": {}}`).")
 };
 
 const createPageInputSchema = z.object(createPageInputProperties);
@@ -162,44 +162,46 @@ export const createPage = {
     input: createPageInputProperties,
     examples: [
         {
-            description: "Create a simple Page with a title and filename, but no dynamic content.",
+            description: "Create a simple Page with its required 'Main' region left empty. This is a common pattern, as many Page Templates require at least one region to be specified.",
             example: `const result = await tools.createPage({
     title: "Contact Us",
     locationId: "tcm:1-1-4",
     fileName: "contact.html",
-    pageTemplateId: "tcm:1-15-128"
+    pageTemplateId: "tcm:1-15-128",
+    regions: {
+        "Main": {}
+    }
 });`
         },
         {
-            description: "Create a Page with two Component Presentations placed directly on the page.",
+            description: "Create a Page with a Component Presentation placed directly on the page, and also include a required but empty 'Main' region.",
             example: `const result = await tools.createPage({
     title: "Homepage",
     locationId: "tcm:1-1-4",
     fileName: "index.html",
     pageTemplateId: "tcm:1-20-128",
     componentPresentations: [
-        { componentId: "tcm:1-101-16", componentTemplateId: "tcm:1-102-32" },
-        { componentId: "tcm:1-103-16", componentTemplateId: "tcm:1-104-32" }
-    ]
+        { componentId: "tcm:1-101-16", componentTemplateId: "tcm:1-102-32" }
+    ],
+    regions: {
+        "Main": {}
+    }
 });`
         },
         {
-            description: "Create a Page that has a 'Header' region and a 'Main' region, each containing Component Presentations.",
+            description: "Create a page with a CP directly on the page and another CP inside the 'Main' region. This demonstrates a mixed content model.",
             example: `const result = await tools.createPage({
-    title: "Article Page",
+    title: "Mixed Content Page",
     locationId: "tcm:1-1-4",
-    fileName: "article-1.html",
+    fileName: "mixed.html",
     pageTemplateId: "tcm:1-25-128",
+    componentPresentations: [
+        { componentId: "tcm:1-101-16", componentTemplateId: "tcm:1-102-32" } 
+    ],
     regions: {
-        "Header": {
-            componentPresentations: [
-                { componentId: "tcm:1-201-16", componentTemplateId: "tcm:1-202-32" }
-            ]
-        },
         "Main": {
             componentPresentations: [
-                { componentId: "tcm:1-203-16", componentTemplateId: "tcm:1-204-32" },
-                { componentId: "tcm:1-205-16", componentTemplateId: "tcm:1-206-32" }
+                { componentId: "tcm:1-203-16", componentTemplateId: "tcm:1-204-32" }
             ]
         }
     }
