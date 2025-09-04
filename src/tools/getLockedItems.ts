@@ -2,15 +2,6 @@ import { z } from "zod";
 import { authenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
-const lockTypeEnum = z.enum([
-    "None",
-    "CheckedOut",
-    "Permanent",
-    "NewItem",
-    "InWorkflow",
-    "Reserved"
-]);
-
 export const getLockedItems = {
     name: "getLockedItems",
     description: "Gets a list of locked items. By default, it returns items locked by the current user, but can be filtered by user and lock type.",
@@ -19,9 +10,13 @@ export const getLockedItems = {
             .describe("If true, items locked by any user are returned. Requires Publication Administration or Lock Management rights. This parameter is ignored if 'lockUserId' is specified."),
         lockUserId: z.string().regex(/^tcm:0-\d+-65552$/).optional()
             .describe("The TCM URI of a specific user (e.g., 'tcm:0-1-65552'). If specified, only items locked by this user are returned."),
-        lockFilter: z.array(lockTypeEnum).optional()
+        lockFilter: z.array(z.enum([
+            "None", "CheckedOut", "Permanent", "NewItem", "InWorkflow", "Reserved"
+        ])).optional()
             .describe("A bitmask to apply to the items' lock type. Must be used in combination with 'lockResult'."),
-        lockResult: z.array(lockTypeEnum).optional()
+        lockResult: z.array(z.enum([
+            "None", "CheckedOut", "Permanent", "NewItem", "InWorkflow", "Reserved"
+        ]))
             .describe("Constrains the returned items' lock type. Must be used in combination with 'lockFilter'."),
         maxResults: z.number().int().optional().default(500)
             .describe("Specifies the maximum number of results to return."),
