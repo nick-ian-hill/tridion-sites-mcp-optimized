@@ -5,9 +5,7 @@ import { convertItemIdToContextPublication } from "../utils/convertItemIdToConte
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 import { reorderFieldsBySchema } from "../utils/fieldReordering.js";
-import { processComponentPresentations, processRegions } from "../schemas/pageSchemas.js";
-
-// --- Main Tool Definition ---
+import { processComponentPresentations, processRegions } from "../utils/pageUtils.js";
 
 export const updatePage = {
     name: "updatePage",
