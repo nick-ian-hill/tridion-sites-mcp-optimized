@@ -54,6 +54,7 @@ import { createPage } from './tools/createPage.js';
 import { getDefaultModel } from './tools/getDefaultModel.js';
 import { getComponentTemplateLinks } from './tools/getComponentTemplateLinks.js';
 import { getIsComponentTemplateRequired } from './tools/getIsComponentTemplateRequired.js';
+import { updatePage } from './tools/updatePage.js';
 
 const server = new McpServer({
   name: "mcp-test-server",
@@ -96,6 +97,7 @@ const tools: any[] = [
   updateItemById,
   updateContentById,
   updateMetadataById,
+  updatePage,
   updatePublicationById,
 
   // Item Actions (Move, Copy, Delete)
