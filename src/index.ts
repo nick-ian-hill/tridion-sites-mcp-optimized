@@ -51,6 +51,7 @@ import { getSchemaLinks } from './tools/getSchemaLinks.js';
 import { createMultimediaComponentFromBase64 } from './tools/createMultimediaComponentFromBase64.js';
 import { createMultimediaComponentFromPrompt } from './tools/createMultimediaComponentFromPrompt.js';
 import { createPage } from './tools/createPage.js';
+import { getDefaultModel } from './tools/getDefaultModel.js';
 
 const server = new McpServer({
   name: "mcp-test-server",
@@ -65,6 +66,7 @@ const tools: any[] = [
   // Read Operations
   getBatchOperationStatus,
   getClassifiedItems,
+  getDefaultModel,
   getItemById,
   bulkReadItemsById,
   getItemHistory,

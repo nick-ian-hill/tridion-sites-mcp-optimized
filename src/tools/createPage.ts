@@ -7,7 +7,6 @@ import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 import { reorderFieldsBySchema } from "../utils/fieldReordering.js";
 import { linkSchema } from "../schemas/linkSchema.js";
 
-// --- Schemas for TypeScript Type Inference ---
 // These constants are defined for use in helper functions and type inference.
 // They are NOT used in the 'input' schema for the agent to avoid the parser limitation.
 
@@ -107,184 +106,191 @@ async function processRegions(
 
 export const createPage = {
     name: "createPage",
-    description: `Creates a new Page in the Content Management System (CMS). Supports nested regions and metadata. If the user doesn't explicitly ask to create an empty page, ask them whether they would like to add content (Component Presentations) to the page or a region.`,
+    description: `Creates a new Page in the Content Management System (CMS). A Page is a container for content that is structured by a Page Template.
+
+IMPORTANT: Before creating a Page, you should first use the getItem tool to inspect the schema of the pageTemplateId. This will reveal the names of the required regions, whether they are repeatable, and the schemas for their metadata. This information is crucial for correctly formatting the regions parameter.
+
+A Page can hold content in two ways:
+1.  componentPresentations: An array of Component-plus-Component-Template pairs placed directly on the page, outside of any specific region.
+2.  regions: A structured way to organize content. The regions parameter is a JSON string representing an array of region objects. Each region's RegionName must correspond to a region defined in the Page Template. Regions can be nested and can contain their own componentPresentations.
+
+If the user doesn't explicitly ask to create an empty page, you should ask if they would like to add content (Component Presentations) to the page or a region.
+
+Examples:
+
+Example 1: Create a simple Page with its required 'Main' region left empty.
+This is a common pattern, as many Page Templates require at least one region to be specified, even if it's empty.
+    const result = await tools.createPage({
+        title: "Contact Us",
+        locationId: "tcm:1-1-4",
+        fileName: "contact.html",
+        pageTemplateId: "tcm:1-15-128",
+        regions: JSON.stringify([
+            { "$type": "EmbeddedRegion", "RegionName": "Main" }
+        ])
+    });
+
+Example 2: Create a Page with a Component Presentation on the page and an empty 'Main' region.
+    const result = await tools.createPage({
+        title: "Homepage",
+        locationId: "tcm:1-1-4",
+        fileName: "index.html",
+        pageTemplateId: "tcm:1-20-128",
+        componentPresentations: JSON.stringify([
+            {
+                "$type": "ComponentPresentation",
+                "Component": { "$type": "Link", "IdRef": "tcm:1-101-16" },
+                "ComponentTemplate": { "$type": "Link", "IdRef": "tcm:1-102-32" }
+            }
+        ]),
+        regions: JSON.stringify([
+            { "$type": "EmbeddedRegion", "RegionName": "Main" }
+        ])
+    });
+
+Example 3: Create a page with content on the page and in a region.
+This demonstrates a mixed content model.
+    const result = await tools.createPage({
+        title: "Mixed Content Page",
+        locationId: "tcm:1-1-4",
+        fileName: "mixed.html",
+        pageTemplateId: "tcm:1-25-128",
+        componentPresentations: JSON.stringify([
+            {
+                "$type": "ComponentPresentation",
+                "Component": { "$type": "Link", "IdRef": "tcm:1-101-16" },
+                "ComponentTemplate": { "$type": "Link", "IdRef": "tcm:1-102-32" }
+            }
+        ]),
+        regions: JSON.stringify([
+            {
+                "$type": "EmbeddedRegion",
+                "RegionName": "Main",
+                "ComponentPresentations": [
+                    {
+                        "$type": "ComponentPresentation",
+                        "Component": { "$type": "Link", "IdRef": "tcm:1-203-16" },
+                        "ComponentTemplate": { "$type": "Link", "IdRef": "tcm:1-204-32" }
+                    }
+                ]
+            }
+        ])
+    });
+
+Example 4: Create a complex Page with page-level metadata and nested regions.
+This example shows a two-column layout within the main content area.
+    const result = await tools.createPage({
+        "title": "Landing Page with Columns",
+        "locationId": "tcm:1-1-4",
+        "fileName": "landing.html",
+        "pageTemplateId": "tcm:1-30-128",
+        "metadataSchemaId": "tcm:1-28-8",
+        "metadata": {
+            "seoTitle": "My Awesome Landing Page",
+            "seoDescription": "This page is full of great content."
+        },
+        "regions": JSON.stringify([
+            {
+                "$type": "EmbeddedRegion",
+                "RegionName": "MainContent",
+                "Regions": [
+                    {
+                        "$type": "EmbeddedRegion",
+                        "RegionName": "ColumnLeft",
+                        "ComponentPresentations": [
+                            {
+                                "$type": "ComponentPresentation",
+                                "Component": { "$type": "Link", "IdRef": "tcm:1-301-16" },
+                                "ComponentTemplate": { "$type": "Link", "IdRef": "tcm:1-302-32" }
+                            }
+                        ]
+                    },
+                    {
+                        "$type": "EmbeddedRegion",
+                        "RegionName": "ColumnRight",
+                        "ComponentPresentations": [
+                            {
+                                "$type": "ComponentPresentation",
+                                "Component": { "$type": "Link", "IdRef": "tcm:1-303-16" },
+                                "ComponentTemplate": { "$type": "Link", "IdRef": "tcm:1-304-32" }
+                            }
+                        ]
+                    }
+                ]
+            }
+        ])
+    });`,
     input: {
-        Title: z.string().nonempty().describe("The title for the new Page."),
-        LocationId: z.string().regex(/^tcm:\d+-\d+-4$/).describe("The TCM URI of the parent Structure Group where the new Page will be created."),
-        FileName: z.string().nonempty().regex(/^\S+$/, "File name cannot contain white space.").describe("The file name for the page (e.g., 'about-us.html'), which cannot contain spaces."),
-        PageTemplateId: z.string().regex(/^tcm:\d+-\d+-128$/).describe("The TCM URI of the Page Template to be associated with the Page."),
-        MetadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the Metadata Schema for the Page's metadata."),
-        Metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the Page's metadata fields, matching the Metadata Schema."),
-        ComponentPresentations: z.string().optional().describe("A JSON string representing an array of Component Presentation objects. Each object must have '$type', 'Component' (a Link object), and 'ComponentTemplate' (a Link object). Use JSON.stringify() in code to format this correctly."),
-        Regions: z.string().optional().describe("A JSON string representing an array of Region objects. Each object must have '$type' and 'RegionName', and can contain 'Metadata', 'ComponentPresentations', and nested 'Regions'. Use JSON.stringify() in code or see examples.")
+        title: z.string().nonempty().describe("The title for the new Page."),
+        locationId: z.string().regex(/^tcm:\d+-\d+-4$/).describe("The TCM URI of the parent Structure Group where the new Page will be created."),
+        fileName: z.string().nonempty().regex(/^\S+$/, "File name cannot contain white space.").describe("The file name for the page (e.g., 'about-us.html'), which cannot contain spaces."),
+        pageTemplateId: z.string().regex(/^tcm:\d+-\d+-128$/).describe("The TCM URI of the Page Template to be associated with the Page."),
+        metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the Metadata Schema for the Page's metadata. If the Page Template defines a Region Schema, and that schema defines metadata, the Region Schema will serve as the default Metadata Schema."),
+        metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the Page's metadata fields, matching the Metadata Schema."),
+        componentPresentations: z.string().optional().describe("A JSON string representing an array of Component Presentation objects. Each object must have '$type', 'Component' (a Link object), and 'ComponentTemplate' (a Link object). Use JSON.stringify() in code to format this correctly. If the user didn't indicate that they want to create an empty page, and none are provided, offer to include one or or more content items (Component Presentations)."),
+        regions: z.string().optional().describe("A JSON string representing an array of Region objects. Each object must have '$type' and 'RegionName', and can contain 'Metadata', 'ComponentPresentations', and nested 'Regions'. Use JSON.stringify() in code or see examples.  If the user didn't indicate that they want to create an empty page, and none are provided, offer to include one or or more content items (Component Presentations)")
     },
-    examples: [
-        {
-            description: "Create a simple Page with its required 'Main' region left empty. This is a common pattern, as many Page Templates require at least one region to be specified.",
-            example: `const result = await tools.createPage({
-    Title: "Contact Us",
-    LocationId: "tcm:1-1-4",
-    FileName: "contact.html",
-    PageTemplateId: "tcm:1-15-128",
-    Regions: JSON.stringify([
-        { "$type": "EmbeddedRegion", "RegionName": "Main" }
-    ])
-});`
-        },
-        {
-            description: "Create a Page with a Component Presentation placed directly on the page, and also include a required but empty 'Main' region.",
-            example: `const result = await tools.createPage({
-    Title: "Homepage",
-    LocationId: "tcm:1-1-4",
-    FileName: "index.html",
-    PageTemplateId: "tcm:1-20-128",
-    ComponentPresentations: JSON.stringify([
-        {
-            "$type": "ComponentPresentation",
-            "Component": { "$type": "Link", "IdRef": "tcm:1-101-16" },
-            "ComponentTemplate": { "$type": "Link", "IdRef": "tcm:1-102-32" }
-        }
-    ]),
-    Regions: JSON.stringify([
-        { "$type": "EmbeddedRegion", "RegionName": "Main" }
-    ])
-});`
-        },
-        {
-            description: "Create a page with a CP directly on the page and another CP inside the 'Main' region. This demonstrates a mixed content model.",
-            example: `const result = await tools.createPage({
-    Title: "Mixed Content Page",
-    LocationId: "tcm:1-1-4",
-    FileName: "mixed.html",
-    PageTemplateId: "tcm:1-25-128",
-    ComponentPresentations: JSON.stringify([
-        {
-            "$type": "ComponentPresentation",
-            "Component": { "$type": "Link", "IdRef": "tcm:1-101-16" },
-            "ComponentTemplate": { "$type": "Link", "IdRef": "tcm:1-102-32" }
-        }
-    ]),
-    Regions: JSON.stringify([
-        {
-            "$type": "EmbeddedRegion",
-            "RegionName": "Main",
-            "ComponentPresentations": [
-                {
-                    "$type": "ComponentPresentation",
-                    "Component": { "$type": "Link", "IdRef": "tcm:1-203-16" },
-                    "ComponentTemplate": { "$type": "Link", "IdRef": "tcm:1-204-32" }
-                }
-            ]
-        }
-    ])
-});`
-        },
-        {
-            description: "Create a complex Page with page-level metadata and nested regions (a two-column layout within the main content area).",
-            example: `const result = await tools.createPage({
-    "Title": "Landing Page with Columns",
-    "LocationId": "tcm:1-1-4",
-    "FileName": "landing.html",
-    "PageTemplateId": "tcm:1-30-128",
-    "MetadataSchemaId": "tcm:1-28-8",
-    "Metadata": {
-        "seoTitle": "My Awesome Landing Page",
-        "seoDescription": "This page is full of great content."
-    },
-    "Regions": JSON.stringify([
-        {
-            "$type": "EmbeddedRegion",
-            "RegionName": "MainContent",
-            "Regions": [
-                {
-                    "$type": "EmbeddedRegion",
-                    "RegionName": "ColumnLeft",
-                    "ComponentPresentations": [
-                        {
-                            "$type": "ComponentPresentation",
-                            "Component": { "$type": "Link", "IdRef": "tcm:1-301-16" },
-                            "ComponentTemplate": { "$type": "Link", "IdRef": "tcm:1-302-32" }
-                        }
-                    ]
-                },
-                {
-                    "$type": "EmbeddedRegion",
-                    "RegionName": "ColumnRight",
-                    "ComponentPresentations": [
-                        {
-                            "$type": "ComponentPresentation",
-                            "Component": { "$type": "Link", "IdRef": "tcm:1-303-16" },
-                            "ComponentTemplate": { "$type": "Link", "IdRef": "tcm:1-304-32" }
-                        }
-                    ]
-                }
-            ]
-        }
-    ])
-});`
-        }
-    ],
     execute: async (args: any) => {
         const {
-            Title, LocationId, FileName, PageTemplateId, MetadataSchemaId,
-            Metadata, ComponentPresentations, Regions
+            title, locationId, fileName, pageTemplateId, metadataSchemaId,
+            metadata, componentPresentations, regions
         } = args;
 
         try {
             // Parse string inputs into objects
             let parsedComponentPresentations;
-            if (ComponentPresentations) {
+            if (componentPresentations) {
                 try {
-                    parsedComponentPresentations = JSON.parse(ComponentPresentations);
+                    parsedComponentPresentations = JSON.parse(componentPresentations);
                 } catch (error) {
                     let errorMessage = String(error);
                     if (error instanceof Error) {
                         errorMessage = error.message;
                     }
-                    return { content: [{ type: "text", text: `Error: The 'ComponentPresentations' parameter is not a valid JSON string. Details: ${errorMessage}` }] };
+                    return { content: [{ type: "text", text: `Error: The 'componentPresentations' parameter is not a valid JSON string. Details: ${errorMessage}` }] };
                 }
             }
 
             let parsedRegions;
-            if (Regions) {
+            if (regions) {
                 try {
-                    parsedRegions = JSON.parse(Regions);
+                    parsedRegions = JSON.parse(regions);
                 } catch (error) {
                     let errorMessage = String(error);
                     if (error instanceof Error) {
                         errorMessage = error.message;
                     }
-                    return { content: [{ type: "text", text: `Error: The 'Regions' parameter is not a valid JSON string. Details: ${errorMessage}` }] };
+                    return { content: [{ type: "text", text: `Error: The 'regions' parameter is not a valid JSON string. Details: ${errorMessage}` }] };
                 }
             }
 
-            const contextualPageTemplateId = convertItemIdToContextPublication(PageTemplateId, LocationId);
-            const contextualMetadataSchemaId = MetadataSchemaId ? convertItemIdToContextPublication(MetadataSchemaId, LocationId) : undefined;
+            const contextualPageTemplateId = convertItemIdToContextPublication(pageTemplateId, locationId);
+            const contextualMetadataSchemaId = metadataSchemaId ? convertItemIdToContextPublication(metadataSchemaId, locationId) : undefined;
 
-            let processedMetadata = Metadata;
+            let processedMetadata = metadata;
             if (processedMetadata && contextualMetadataSchemaId) {
                 processedMetadata = await reorderFieldsBySchema(processedMetadata, contextualMetadataSchemaId, 'metadata');
             }
 
             const defaultModelResponse = await authenticatedAxios.get('/item/defaultModel/Page', {
-                params: { containerId: LocationId }
+                params: { containerId: locationId }
             });
             if (defaultModelResponse.status !== 200) {
                 return handleUnexpectedResponse(defaultModelResponse);
             }
             const payload = defaultModelResponse.data;
 
-            payload.Title = Title;
-            payload.FileName = FileName;
+            payload.Title = title;
+            payload.FileName = fileName;
             payload.PageTemplate = toLink(contextualPageTemplateId);
             if (contextualMetadataSchemaId) payload.MetadataSchema = toLink(contextualMetadataSchemaId);
             if (processedMetadata) payload.Metadata = processedMetadata;
 
-            payload.ComponentPresentations = processComponentPresentations(parsedComponentPresentations, LocationId);
-            payload.Regions = await processRegions(parsedRegions, LocationId, contextualPageTemplateId);
+            payload.ComponentPresentations = processComponentPresentations(parsedComponentPresentations, locationId);
+            payload.Regions = await processRegions(parsedRegions, locationId, contextualPageTemplateId);
 
             if (!payload.LocationInfo?.OrganizationalItem?.IdRef) {
-                payload.LocationInfo = { ...payload.LocationInfo, OrganizationalItem: toLink(LocationId) };
+                payload.LocationInfo = { ...payload.LocationInfo, OrganizationalItem: toLink(locationId) };
             }
 
             const createResponse = await authenticatedAxios.post('/items', payload);
