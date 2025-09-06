@@ -279,6 +279,11 @@ This example shows a two-column layout within the main content area.
             }
             const payload = defaultModelResponse.data;
 
+            // If agent provided no PT or regions, fall back to default model's regions.
+            if (!pageTemplateId && !regions && payload.Regions?.length > 0) {
+                parsedRegions = payload.Regions;
+            }
+
             // Determine the definitive Page Template and Metadata Schema to use
             const defaultPageTemplateId = payload.PageTemplate?.IdRef;
             const effectivePageTemplateId = pageTemplateId || defaultPageTemplateId;
