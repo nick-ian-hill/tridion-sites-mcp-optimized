@@ -53,6 +53,7 @@ import { createMultimediaComponentFromPrompt } from './tools/createMultimediaCom
 import { createPage } from './tools/createPage.js';
 import { getDefaultModel } from './tools/getDefaultModel.js';
 import { getComponentTemplateLinks } from './tools/getComponentTemplateLinks.js';
+import { getIsComponentTemplateRequired } from './tools/getIsComponentTemplateRequired.js';
 
 const server = new McpServer({
   name: "mcp-test-server",
@@ -69,6 +70,7 @@ const tools: any[] = [
   getClassifiedItems,
   getComponentTemplateLinks,
   getDefaultModel,
+  getIsComponentTemplateRequired,
   getItemById,
   bulkReadItemsById,
   getItemHistory,
