@@ -12,7 +12,7 @@ Important Constraints:
 - This tool only updates the metadata fields. It cannot update the item's Title or Content fields.
 
 To update content fields for a component, use the 'updateContentById' tool instead.
-To update other properties, use the 'updateItemById' tool.
+To update other properties, use the 'updateItemById', 'updatePage', or 'updatePublication' tool depending on the item type.
 If a versioned item is locked by another user, the operation will be aborted.`,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the item to update (e.g., 'tcm:5-1234-64')."),
