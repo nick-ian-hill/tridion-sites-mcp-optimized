@@ -66,6 +66,12 @@ export const updateMultimediaComponentFromPrompt = {
             console.log(`Successfully downloaded binary: ${originalImageBuffer.length} bytes, MIME type: ${originalMimeType}`);
 
             // --- Step 3: Pass the image and prompt to Gemini ---
+            let newImageBase64: string | undefined;
+            
+            // For debugging: Uncomment the line below and comment out the entire Gemini API block that follows.
+            // newImageBase64 = "R0lGODlhAQABAIAAAP8AADAAACwAAAAAAQABAAACAkQBADs=";
+
+            // --- Gemini API Block ---
             console.log(`Sending image and prompt to Gemini: "${prompt}"`);
             const ai = new GoogleGenAI({ vertexai: false, apiKey: GEMINI_API_KEY });
 
@@ -77,7 +83,6 @@ export const updateMultimediaComponentFromPrompt = {
                 ]
             });
             
-            let newImageBase64: string | undefined;
             if (result?.candidates?.[0]?.content?.parts) {
                 for (const part of result.candidates[0].content.parts) {
                     if (part.inlineData?.data) {
@@ -86,16 +91,13 @@ export const updateMultimediaComponentFromPrompt = {
                     }
                 }
             }
+            console.log("Successfully received updated image from Gemini.");
+            // --- End Gemini API Block ---
 
             if (!newImageBase64) {
-                const rejectionReason = result?.promptFeedback?.blockReason;
-                const finishReason = result?.candidates?.[0]?.finishReason;
-                let errorMessage = "AI model did not return an image.";
-                if (rejectionReason) { errorMessage += ` Block Reason: ${rejectionReason}.`; }
-                if (finishReason && finishReason !== "STOP") { errorMessage += ` Finish Reason: ${finishReason}.`; }
+                const errorMessage = "AI model did not return an image. This could be due to safety settings or other issues.";
                 throw new Error(errorMessage);
             }
-            console.log("Successfully received updated image from Gemini.");
 
             // --- Step 4: Upload the new binary to CMS ---
             const newImageBuffer = Buffer.from(newImageBase64, 'base64');
