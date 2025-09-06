@@ -13,8 +13,8 @@ const createPageInputProperties = {
     locationId: z.string().regex(/^tcm:\d+-\d+-4$/).describe("The TCM URI of the parent Structure Group where the new Page will be created."),
     fileName: z.string().nonempty().regex(/^\S+$/, "File name cannot contain white space.").describe("The file name for the page (e.g., 'about-us.html'), which cannot contain spaces."),
     pageTemplateId: z.string().regex(/^tcm:\d+-\d+-128$/).optional().describe("The TCM URI of the Page Template to be associated with the Page. If not provided, the page will use the Page Template defined by the Structure Group."),
-    metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the Metadata Schema for the Page's metadata. If the Page Template defines a Region Schema, and that schema defines metadata, the Region Schema will serve as the default Metadata Schema."),
-    metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the Page's metadata fields, matching the Metadata Schema."),
+    metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of a Schema from which to look up the Page's metadata fields. If the Page Template defines a Region Schema, then that Region Schema can be set as the value of the metadataSchemaId."),
+    metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the Page's metadata fields as defined by the schema with URI metadataSchemaId."),
     componentPresentations: z.string().optional().describe("A JSON string representing an array of Component Presentation objects. Each object must have '$type', 'Component' (a Link object), and 'ComponentTemplate' (a Link object). Use JSON.stringify() in code to format this correctly. If the user didn't indicate that they want to create an empty page, and none are provided, offer to include one or or more content items (Component Presentations)."),
     regions: z.string().optional().describe("A JSON string representing an array of Region objects. Each object must have '$type' and 'RegionName', and can contain 'Metadata', 'ComponentPresentations', and nested 'Regions'. Use JSON.stringify() in code or see examples.  If the user didn't indicate that they want to create an empty page, and none are provided, offer to include one or or more content items (Component Presentations). ")
 };
@@ -192,6 +192,11 @@ This example shows a two-column layout within the main content area.
             const effectivePageTemplateId = pageTemplateId || defaultPageTemplateId;
             let effectiveMetadataSchemaId = metadataSchemaId;
 
+            // If the agent explicitly provides a pageTemplateId, the inheritance is broken.
+            if (pageTemplateId) {
+                payload.IsPageTemplateInherited = false;
+            }
+
             // Use default model metadata schema ONLY if the agent didn't provide one AND
             // the effective page template is the one from the default model.
             if (!metadataSchemaId && payload.MetadataSchema?.IdRef && effectivePageTemplateId === defaultPageTemplateId) {
@@ -225,8 +230,8 @@ This example shows a two-column layout within the main content area.
                         }
 
                         if (regionSchema) {
-                            // If no metadata schema was provided, check if the Region Schema can act as one.
-                            if (!metadataSchemaId && regionSchema.MetadataFields && Object.keys(regionSchema.MetadataFields).length > 0) {
+                            // If no metadata schema was provided, the Region Schema can act as one.
+                            if (!metadataSchemaId) {
                                 effectiveMetadataSchemaId = regionSchema.Id;
                             }
 

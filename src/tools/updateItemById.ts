@@ -11,7 +11,7 @@ export const updateItemById = {
     name: "updateItemById",
     description: `Updates an existing Content Manager System (CMS) item.
 This tool can update various properties like title, description, and metadataSchemaId.
-For versioned items ('Component', 'Page', 'Schema'), check-out and check-in are handled automatically.
+For versioned items ('Component', 'Schema'), check-out and check-in are handled automatically.
 This tool can also update the field definitions of a Schema by providing the 'fields' or 'metadataFields' properties.
 To update an item's content or metadata values, use the 'updateContentById' or 'updateMetadataById' tools respectively.
 If a versioned item is locked by another user, the operation will be aborted.`,
@@ -19,12 +19,10 @@ If a versioned item is locked by another user, the operation will be aborted.`,
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the CMS item to update."),
         itemType: z.enum([
             "Component", "Folder", "StructureGroup", "Keyword",
-            "Category", "Page", "Schema", "Bundle", "SearchFolder"
+            "Category", "Schema", "Bundle", "SearchFolder"
         ]).describe("The type of the CMS item to update."),
         title: z.string().optional().describe("The new title for the item."),
         metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the Metadata Schema for the item's metadata."),
-        fileName: z.string().optional().describe("The new file name for the page. (Applicable to Page)"),
-        pageTemplateId: z.string().regex(/^tcm:\d+-\d+-128$/).optional().describe("The TCM URI of the Page Template. (Applicable to Page)"),
         isAbstract: z.boolean().optional().describe("Set to true to make a Keyword abstract. (Applicable to Keyword)"),
         description: z.string().optional().describe("A new description for the item."),
         key: z.string().optional().describe("A new custom key for the Keyword. (Applicable to Keyword)"),
@@ -39,7 +37,7 @@ If a versioned item is locked by another user, the operation will be aborted.`,
     execute: async (params: any) => {
         const { itemId, itemType, ...updates } = params;
         const restItemId = itemId.replace(':', '_');
-        const versionedItemTypes = ["Component", "Page", "Schema"];
+        const versionedItemTypes = ["Component", "Schema"];
         const isVersioned = versionedItemTypes.includes(itemType);
         let wasCheckedOutByTool = false;
 
@@ -77,10 +75,6 @@ If a versioned item is locked by another user, the operation will be aborted.`,
             if (updates.metadataSchemaId) itemToUpdate.MetadataSchema = toLink(updates.metadataSchemaId);
             if (updates.description) itemToUpdate.Description = updates.description;
 
-            if (itemType === 'Page') {
-                if (updates.fileName) itemToUpdate.FileName = updates.fileName;
-                if (updates.pageTemplateId) itemToUpdate.PageTemplate = toLink(updates.pageTemplateId);
-            }
             if (itemType === 'Keyword') {
                 if (updates.isAbstract !== undefined) itemToUpdate.IsAbstract = updates.isAbstract;
                 if (updates.key) itemToUpdate.Key = updates.key;

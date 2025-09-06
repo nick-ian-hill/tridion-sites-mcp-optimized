@@ -52,7 +52,8 @@ Example 3: Reorder Component Presentations in a specific Region.
         itemId: z.string().regex(/^tcm:\d+-\d+-64$/).describe("The unique ID (TCM URI) of the Page to update."),
         title: z.string().optional().describe("The new title for the Page."),
         fileName: z.string().regex(/^\S+$/, "File name cannot contain white space.").optional().describe("The new file name for the page (e.g., 'new-page.html'), which cannot contain spaces."),
-        metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the Metadata Schema for the Page's metadata. This can be used to change the metadata schema of the page."),
+        pageTemplateId: z.string().regex(/^tcm:\d+-\d+-128$/).optional().describe("The TCM URI of the Page Template to be associated with the Page. Replaces the existing Page Template."),
+        metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of a Schema from which to look up the Page's metadata fields. If the Page Template defines a Region Schema, then that Region Schema can be set as the value of the metadataSchemaId. Alternatively, any schema with purpose 'metadata' can be selected."),
         metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the Page's metadata fields, matching the Metadata Schema. Replaces existing metadata."),
         componentPresentations: z.string().optional().describe("A JSON string representing a complete array of Component Presentation objects to replace the existing ones on the page. Use JSON.stringify() to format this correctly."),
         regions: z.string().optional().describe("A JSON string representing a complete array of Region objects to replace the existing ones on the page. Use JSON.stringify() to format this correctly.")
@@ -92,6 +93,15 @@ Example 3: Reorder Component Presentations in a specific Region.
             // 2. Apply updates to the item object
             if (updates.title) itemToUpdate.Title = updates.title;
             if (updates.fileName) itemToUpdate.FileName = updates.fileName;
+
+            // If a new PT is provided, update it and set inheritance to false.
+            // This must be done before processing metadata, as the PT may define the metadata schema.
+            if (updates.pageTemplateId) {
+                const contextualPageTemplateId = convertItemIdToContextPublication(updates.pageTemplateId, itemId);
+                itemToUpdate.PageTemplate = toLink(contextualPageTemplateId);
+                itemToUpdate.IsPageTemplateInherited = false;
+            }
+
             if (updates.metadataSchemaId) {
                 const contextualMetadataSchemaId = convertItemIdToContextPublication(updates.metadataSchemaId, itemId);
                 itemToUpdate.MetadataSchema = toLink(contextualMetadataSchemaId);
