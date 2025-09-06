@@ -17,7 +17,7 @@ const schemaPurposeEnum = z.enum([
 
 export const getSchemaLinks = {
     name: "getSchemaLinks",
-    description: "Gets a list of all Schema links contained within a specified Publication, filtered by one or more purposes. This tool can be used when looking for candidate schemas for a new Component or Multimedia Component.",
+    description: "Gets a list of all Schema links contained within a specified Publication, filtered by one or more purposes. This tool should be used in preference to search when looking for candidate schemas/metadata schema for a new item (e.g., Component).",
     input: {
         publicationId: z.string().regex(/^tcm:0-\d+-1$/).describe("The TCM URI of the Publication to search within (e.g., 'tcm:0-5-1')."),
         schemaPurpose: z.array(schemaPurposeEnum).nonempty().describe("An array of one or more Schema purposes to filter the results.")
