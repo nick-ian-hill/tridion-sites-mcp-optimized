@@ -4,7 +4,12 @@ import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js
 
 export const unlocalizeItemById = {
     name: "unlocalizeItemById",
-    description: `Unlocalizes a local item, effectively deleting the local copy and re-establishing the inheritance from its primary item. The tool returns the shared parent item that is now being inherited.`,
+    description: `Unlocalizes a localized item, discarding any local changes and returing the item to a copy of its parent.
+
+This tool is only applicable to items that are localized (i.e., where BluePrintInfo.IsLocalized is true).
+It will return an error if the item is a primary item (BluePrintInfo.IsShared: false and BluePrintInfo.IsLocalized: false).
+The tool returns a confirmation that the item has been successfully unlocalized.
+`,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID (TCM URI) of the local item to unlocalize."),
         useDynamicVersion: z.boolean().optional().default(true).describe("Loads the latest saved version of the item if available."),
