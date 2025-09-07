@@ -56,6 +56,10 @@ import { getComponentTemplateLinks } from './tools/getComponentTemplateLinks.js'
 import { getIsComponentTemplateRequired } from './tools/getIsComponentTemplateRequired.js';
 import { updatePage } from './tools/updatePage.js';
 import { updateMultimediaComponentFromPrompt } from './tools/updateMultimediaComponentFromPrompt.js';
+import { readWordFileFromMultimediaComponent } from './tools/readWordFileFromMultimediaComponent.js';
+import { readExcelFileFromMultimediaComponent } from './tools/readExcelFileFromMultimediaComponent.js';
+import { readPowerPointFileFromMultimediaComponent } from './tools/readPowerPointFileFromMultimediaComponent.js';
+import { readPdfFileFromMultimediaComponent } from './tools/readPdfFileFromMultimediaComponent.js';
 
 const server = new McpServer({
   name: "mcp-test-server",
@@ -79,6 +83,10 @@ const tools: any[] = [
   getItemsInContainer,
   getLockedItems,
   getSchemaLinks,
+  readWordFileFromMultimediaComponent,
+  readExcelFileFromMultimediaComponent,
+  readPowerPointFileFromMultimediaComponent,
+  readPdfFileFromMultimediaComponent,
   
   // Create Operations
   createItem,
