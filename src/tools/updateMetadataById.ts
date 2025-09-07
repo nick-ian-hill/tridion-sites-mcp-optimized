@@ -13,17 +13,22 @@ Important Constraints:
 
 To update content fields for a component, use the 'updateContentById' tool instead.
 To update other properties, use the 'updateItemById', 'updatePage', or 'updatePublication' tool depending on the item type.
-If a versioned item is locked by another user, the operation will be aborted.`,
+If a versioned item is locked by another user, the operation will be aborted.
+
+Examples:
+
+Example 1: Updates the metadata fields with XML names 'Keywords' and 'Author' for a Component.
+    const result = await tools.updateMetadataById({
+        "itemId": "tcm:5-123",
+        "metadata": {
+            "Keywords": ["Update", "Tool", "Metadata"],
+            "Author": "Author Name"
+        }
+    });`,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the item to update (e.g., 'tcm:5-1234-64')."),
         metadata: z.record(fieldValueSchema).describe("A JSON object containing the item's metadata fields. The tool will automatically order the fields to match the Metadata Schema definition."),
     },
-    examples: [
-        {
-            input: { "itemId": "tcm:5-123", "metadata": { "Keywords": ["Update", "Tool", "Metadata"], "Author": "Author Name" }},
-            description: "Updates the metadata fields with XML names 'Keywords' and 'Author' for a Component."
-        }
-    ],
     execute: async ({ itemId, metadata }: { itemId: string, metadata: Record<string, any> }) => {
         let wasCheckedOutByTool = false;
         const restItemId = itemId.replace(':', '_');

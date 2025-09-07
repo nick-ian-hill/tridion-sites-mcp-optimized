@@ -4,7 +4,24 @@ import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js
 
 export const dependencyGraphForItem = {
     name: "dependencyGraphForItem",
-    description: `Returns items in the Content Management System that are either dependencies of (direction = uses) or dependent on (direction = UsedBy) the specified item.`,
+    description: `Returns items in the Content Management System that are either dependencies of (direction = uses) or dependent on (direction = UsedBy) the specified item.
+
+Examples:
+
+Example 1: Finds all items that are directly using the Schema with ID tcm:5-256-8, returning only their IDs and titles.
+    const result = await tools.dependencyGraphForItem({
+        itemId: "tcm:5-256-8",
+        direction: "UsedBy",
+        details: "IdAndTitleOnly"
+    });
+
+Example 2: Finds all Components and Component Templates that the Page tcm:5-310-64 depends on, including the Folders that contain them. This request returns linked Components in addition to Components directly added to the page.
+    const result = await tools.dependencyGraphForItem({
+        itemId: "tcm:5-310-64",
+        direction: "Uses",
+        rloItemTypes: ["Component", "ComponentTemplate"],
+        includeContainers: true
+    });`,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the item for which the dependency graph should be retrieved."),
         direction: z.enum(["Uses", "UsedBy"]).optional().default("Uses").describe("Specifies the direction of the dependencies. 'Uses' returns items this item depends on; 'UsedBy' returns items that depend on this item."),
@@ -29,26 +46,6 @@ export const dependencyGraphForItem = {
         resultLimit: z.number().int().optional().default(1000).describe("The maximum number of dependency nodes to return."),
         details: z.enum(["IdAndTitleOnly", "WithApplicableActions", "Contentless"]).optional().default("IdAndTitleOnly").describe("Specifies the level of detail for the items returned in the graph."),
     },
-    examples: [
-        {
-            input: {
-                itemId: "tcm:5-256-8",
-                direction: "UsedBy",
-                details: "IdAndTitleOnly"
-            },
-            description: "Finds all items that are directly using the Schema with ID tcm:5-256-8, returning only their IDs and titles."
-        },
-        {
-            // Example 2: More complex 'Uses' check
-            input: {
-                itemId: "tcm:5-310-64",
-                direction: "Uses",
-                rloItemTypes: ["Component", "ComponentTemplate"],
-                includeContainers: true
-            },
-            description: "Finds all Components and Component Templates that the Page tcm:5-310-64 depends on, including the Folders that contain them. This request returns linked Components in addition to Components directly added to the page."
-        }
-    ],
     execute: async ({ itemId, direction, contextRepositoryId, rloItemTypes, includeContainers, resultLimit, details }: any) => {
         try {
             // The API requires the colon in the TCM URI to be replaced with an underscore.

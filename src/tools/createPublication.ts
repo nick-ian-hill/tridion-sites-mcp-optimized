@@ -33,7 +33,24 @@ Business Rules for Effective BluePrints
 
 Practical Application
 - BluePrint hierarchies are ideal for managing multi-language websites, different brand channels, or various stages of a project (development, staging, live).
-- For multi-language sites, the BluePrint structure drives translations and dictates the translation flow. Content created at a corporate level can be shared down the hierarchy to country-specific Publications, where it can be localized, translated, and supplemented with local content.`,
+- For multi-language sites, the BluePrint structure drives translations and dictates the translation flow. Content created at a corporate level can be shared down the hierarchy to country-specific Publications, where it can be localized, translated, and supplemented with local content.
+
+Examples:
+
+Example 1: Creates a new child Publication with a title, a publication URL for web content, a specific URL for multimedia items, and sets its locale to US English.
+    const result = await tools.createPublication({
+        title: "My New Website Publication",
+        parentPublications: ['tcm:0-5-1'],
+        publicationUrl: "/my-new-site",
+        multimediaUrl: "/my-new-site/images",
+        locale: "en-US"
+    });
+
+Example 2: Creates a basic 'Content' Publication intended to be a parent in a BluePrint structure, from which other Publications can inherit content.
+    const result = await tools.createPublication({
+        title: "Corporate Master Content",
+        publicationType: "Content"
+    });`,
     input: {
         title: z.string().describe("The title for the new Publication."),
         parentPublications: z.array(z.string().regex(/^tcm:\d+-\d+-1$/)).optional().describe("An array of URIs for parent Publications. The parents must belong to the same BluePrint hierarchy. If no parent Publications are specified, a root Publication will be created. Given two parents, the parent with the lower index has the higher priority. This can be relevant when determining from which parent an item is inherited."),
@@ -46,25 +63,6 @@ Practical Application
         locale: z.string().optional().describe("The locale for the Publication (e.g., 'en-US', 'de-DE')."),
         publicationType: z.string().optional().describe("The type of the Publication (e.g., 'Web', 'Content'). Use the getPublicationTypes tool to see the available types.")
     },
-    examples: [
-        {
-            input: {
-                title: "My New Website Publication",
-                parentPublications: ['tcm:0-5-1'],
-                publicationUrl: "/my-new-site",
-                multimediaUrl: "/my-new-site/images",
-                locale: "en-US"
-            },
-            description: "Creates a new child Publication with a title, a publication URL for web content, a specific URL for multimedia items, and sets its locale to US English."
-        },
-        {
-            input: {
-                title: "Corporate Master Content",
-                publicationType: "Content"
-            },
-            description: "Creates a basic 'Content' Publication intended to be a parent in a BluePrint structure, from which other Publications can inherit content."
-        }
-    ],
     execute: async (args: any) => {
         const {
             title, parentPublications, publicationKey, publicationPath,

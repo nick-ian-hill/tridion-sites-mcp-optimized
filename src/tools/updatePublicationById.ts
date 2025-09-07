@@ -8,7 +8,23 @@ export const updatePublicationById = {
     description: `Updates an existing Publication. Publications are the main organizational units in the Content Management System, acting as containers for content and design items.
     Updating a Publication might be necessary to change its URL settings, adjust paths for multimedia, set a different locale, or reconfigure default templates.
     Publications are central to BluePrinting, where they can be parents (sharing content) or children (inheriting content).
-    This tool modifies the properties of a single, existing Publication.`,
+    This tool modifies the properties of a single, existing Publication.
+
+Examples:
+
+Example 1: Updates the title and publication URL for the Publication with ID tcm:0-1-1.
+    const result = await tools.updatePublicationById({
+        itemId: "tcm:0-1-1",
+        title: "Global Website - Updated",
+        publicationUrl: "/global-site"
+    });
+
+Example 2: Changes the locale to French (France) and sets a new default Page Template for the Publication with ID tcm:0-5-1.
+    const result = await tools.updatePublicationById({
+        itemId: "tcm:0-5-1",
+        locale: "fr-FR",
+        defaultPageTemplate: "tcm:5-123-128"
+    });`,
     input: {
         itemId: z.string().regex(/^tcm:\d+-\d+-1$/).describe("The unique ID of the Publication to update."),
         title: z.string().optional().describe("The new title for the Publication."),
@@ -30,24 +46,6 @@ export const updatePublicationById = {
         locale: z.string().optional().describe("The new locale for the Publication (e.g., 'en-US', 'de-DE')."),
         publicationType: z.string().optional().describe("The new type of the Publication (e.g., 'Web', 'Content'). Use the getPublicationTypes tool to see the available types.")
     },
-    examples: [
-        {
-            input: {
-                itemId: "tcm:0-1-1",
-                title: "Global Website - Updated",
-                publicationUrl: "/global-site"
-            },
-            description: "Updates the title and publication URL for the Publication with ID tcm:0-1-1."
-        },
-        {
-            input: {
-                itemId: "tcm:0-5-1",
-                locale: "fr-FR",
-                defaultPageTemplate: "tcm:5-123-128"
-            },
-            description: "Changes the locale to French (France) and sets a new default Page Template for the Publication with ID tcm:0-5-1."
-        }
-    ],
     execute: async (params: any) => {
         const { itemId, ...updates } = params;
         const restItemId = itemId.replace(':', '_');
