@@ -58,8 +58,9 @@ import { updatePage } from './tools/updatePage.js';
 import { updateMultimediaComponentFromPrompt } from './tools/updateMultimediaComponentFromPrompt.js';
 import { readWordFileFromMultimediaComponent } from './tools/readWordFileFromMultimediaComponent.js';
 import { readExcelFileFromMultimediaComponent } from './tools/readExcelFileFromMultimediaComponent.js';
-import { readPowerPointFileFromMultimediaComponent } from './tools/readPowerPointFileFromMultimediaComponent.js';
+import { readTextFromPowerPointMultimediaComponent } from './tools/readTextFromPowerPointMultimediaComponent.js';
 import { readPdfFileFromMultimediaComponent } from './tools/readPdfFileFromMultimediaComponent.js';
+import { splitPowerPointMultimediaComponentIntoTextAndImages } from './tools/splitPowerPointMultimediaComponentIntoTextAndImages.js';
 
 const server = new McpServer({
   name: "mcp-test-server",
@@ -85,7 +86,7 @@ const tools: any[] = [
   getSchemaLinks,
   readWordFileFromMultimediaComponent,
   readExcelFileFromMultimediaComponent,
-  readPowerPointFileFromMultimediaComponent,
+  readTextFromPowerPointMultimediaComponent,
   readPdfFileFromMultimediaComponent,
   
   // Create Operations
@@ -97,6 +98,7 @@ const tools: any[] = [
   createPublication,
   createRootStructureGroup,
   createSchema,
+  splitPowerPointMultimediaComponentIntoTextAndImages,
 
   // Classification
   batchClassify,
