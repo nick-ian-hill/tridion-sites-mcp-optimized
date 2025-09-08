@@ -6,7 +6,7 @@ import { toLinkArray } from "../utils/links.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
-import { reorderFieldsBySchema } from "../utils/fieldReordering.js";
+import { reorderFieldsBySchema, convertLinksRecursively } from "../utils/fieldReordering.js";
 
 // STEP 1: Define the properties for the tool's input as a standalone object.
 const createItemInputProperties = {
@@ -68,6 +68,13 @@ Therefore, when creating a Component in the Folder with ID tcm:10-4112-2, the Sc
         }
         if (args.relatedKeywords) {
             args.relatedKeywords = args.relatedKeywords.map(kw => convertItemIdToContextPublication(kw, locationId));
+        }
+        // Recursively convert links in content and metadata
+        if (args.content) {
+            convertLinksRecursively(args.content, locationId);
+        }
+        if (args.metadata) {
+            convertLinksRecursively(args.metadata, locationId);
         }
 
         let { itemType, title, schemaId, metadataSchemaId, content, metadata, isAbstract, description, key, parentKeywords, relatedKeywords, itemsInBundle, searchQuery, resultLimit } = args;

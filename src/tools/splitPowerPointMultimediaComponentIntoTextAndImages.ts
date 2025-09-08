@@ -5,7 +5,7 @@ import { authenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 import { createMultimediaComponentFromBase64 } from "./createMultimediaComponentFromBase64.js";
 
-// Helper function to extract text from parsed XML (from previous tool)
+// Helper function to extract text from parsed XML
 const extractTextFromXmlObject = (obj: any): string[] => {
     let texts: string[] = [];
     if (Array.isArray(obj)) {
@@ -29,18 +29,18 @@ const extractTextFromXmlObject = (obj: any): string[] => {
     return texts;
 };
 
-const extractContentFromPowerPointInputProperties = {
+const splitPowerPointMultimediaComponentIntoTextAndImagesInputProperties = {
     itemId: z.string().regex(/^tcm:\d+-\d+$/).describe("The TCM URI of the source PowerPoint multimedia component."),
     locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new image components will be created."),
 };
 
-const extractContentFromPowerPointSchema = z.object(extractContentFromPowerPointInputProperties);
+const splitPowerPointMultimediaComponentIntoTextAndImagesSchema = z.object(splitPowerPointMultimediaComponentIntoTextAndImagesInputProperties);
 
 export const splitPowerPointMultimediaComponentIntoTextAndImages = {
-    name: "extractContentFromPowerPoint",
-    description: "Extracts all text and images from a PowerPoint file. It uploads each image as a new multimedia component and returns the full text content along with a list of the new image components.",
-    input: extractContentFromPowerPointInputProperties,
-    async execute(input: z.infer<typeof extractContentFromPowerPointSchema>) {
+    name: "splitPowerPointMultimediaComponentIntoTextAndImages",
+    description: "Splits a PowerPoint multimedia component into its constituent parts. It extracts all text and creates new multimedia components for each image, returning a consolidated text summary of the results.",
+    input: splitPowerPointMultimediaComponentIntoTextAndImagesInputProperties,
+    async execute(input: z.infer<typeof splitPowerPointMultimediaComponentIntoTextAndImagesSchema>) {
         const { itemId, locationId } = input;
         const restItemId = itemId.replace(':', '_');
 
@@ -58,7 +58,6 @@ export const splitPowerPointMultimediaComponentIntoTextAndImages = {
 
             // Step 3: Process text and images in parallel
             
-            // Text extraction promise
             const textPromise = (async () => {
                 const slideFiles = zip.file(/ppt\/slides\/slide\d+\.xml/);
                 slideFiles.sort((a, b) => {
@@ -74,9 +73,8 @@ export const splitPowerPointMultimediaComponentIntoTextAndImages = {
                 return (await Promise.all(slideTextPromises)).join("\n\n");
             })();
 
-            // Image extraction and creation promise
             const imagesPromise = (async () => {
-                const imageFiles = zip.file(/ppt\/media\/image\d+\.\w+/);
+                const imageFiles = zip.file(/ppt\/media\/.+\.(png|jpeg|jpg|gif|svg)/i);
                 const createdImages: { originalFileName: string; newComponentId: string }[] = [];
 
                 for (const imageFile of imageFiles) {
@@ -91,7 +89,6 @@ export const splitPowerPointMultimediaComponentIntoTextAndImages = {
                         locationId,
                     });
                     
-                    // Extract the new component ID from the result text
                     const resultText = result.content[0].text || "";
                     const newIdMatch = resultText.match(/tcm:\d+-\d+/);
                     if (newIdMatch) {
@@ -107,17 +104,32 @@ export const splitPowerPointMultimediaComponentIntoTextAndImages = {
             // Await both promises
             const [textContent, extractedImages] = await Promise.all([textPromise, imagesPromise]);
 
+            // Step 4: Format the results into a single text string for the agent
+            let formattedResponseText = `Successfully split the PowerPoint component ${itemId}.\n\n`;
+
+            if (extractedImages.length > 0) {
+                formattedResponseText += `### Extracted Images\n`;
+                extractedImages.forEach(img => {
+                    formattedResponseText += `* Original Name: ${img.originalFileName}, Created Component: ${img.newComponentId}\n`;
+                });
+                formattedResponseText += `\n`;
+            } else {
+                formattedResponseText += `No images were found to extract.\n\n`;
+            }
+
+            if (textContent) {
+                formattedResponseText += `### Extracted Text\n${textContent}`;
+            }
+
             return {
                 content: [{
                     type: "text",
-                    text: `Successfully extracted content from ${itemId}.`
-                }],
-                extractedText: textContent,
-                extractedImages: extractedImages
+                    text: formattedResponseText.trim()
+                }]
             };
 
         } catch (error) {
-            return handleAxiosError(error, `Failed to extract content from PowerPoint component ${itemId}`);
+            return handleAxiosError(error, `Failed to split PowerPoint component ${itemId}`);
         }
     }
 };
