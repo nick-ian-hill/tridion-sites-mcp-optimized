@@ -35,7 +35,7 @@ IMPORTANT: Before creating a Page, you should first use the getItem tool to insp
 
 A Page can hold content in two ways:
 1.  componentPresentations: An array of Component-plus-Component-Template pairs placed directly on the page, outside of any specific region.
-2.  regions: A structured way to organize content. The regions parameter is a JSON string representing an array of region objects. Each region's RegionName must correspond to a region defined in the Page Template. Regions can be nested and can contain their own componentPresentations.
+2.  regions: A structured way to organize content. The regions parameter is a JSON string representing an array of region objects. Each region's RegionName must correspond to a region defined in the Page Template. Regions can be nested and can contain their own componentPresentations. The Component Presentations added to a region must comply with any Component Presentation Constraints (e.g., OccurrenceConstraint, TypeConstraint) defined in the region's schema.
 
 If the user doesn't explicitly ask to create an empty page, you should ask if they would like to add content (Component Presentations) to the page or a region.
 

@@ -13,7 +13,7 @@ export const updatePage = {
 This tool can modify various aspects of a Page, including its title, file name, metadata, Component Presentations, and Regions.
 Check-out and check-in are handled automatically. If the Page is locked by another user, the operation will be aborted.
 
-IMPORTANT: When updating 'componentPresentations' or 'regions', the entire existing set of CPs or regions on the page will be replaced by the new values provided. To reorder or remove an item, you must provide the complete, modified list.
+IMPORTANT: When updating 'componentPresentations' or 'regions', the entire existing set of CPs or regions on the page will be replaced by the new values provided. To reorder or remove an item, you must provide the complete, modified list. The content provided must adhere to any constraints defined in the Page Template's Region Schemas, such as limits on the number of items or allowed Component/Template types.
 
 Examples:
 

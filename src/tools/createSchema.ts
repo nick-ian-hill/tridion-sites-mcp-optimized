@@ -226,6 +226,30 @@ Example 7: Create a Schema with a multi-value Multimedia Link field. This allows
                 ]
             }
         }
+    });
+
+Example 8: Create a Region Schema with constraints on its Component Presentations. This region will allow up to 5 CPs that must use a specific Schema and Component Template.
+    const result = await tools.createSchema({
+        title: "Constrained Region Schema",
+        locationId: "tcm:5-2-2",
+        purpose: "Region",
+        rootElementName: "ConstrainedRegion",
+        description: "A Region that constrains what can be put inside it.",
+        regionDefinition: JSON.stringify({
+            "$type": "RegionDefinition",
+            "ComponentPresentationConstraints": [
+                {
+                    "$type": "OccurrenceConstraint",
+                    "MaxOccurs": 5,
+                    "MinOccurs": 0
+                },
+                {
+                    "$type": "TypeConstraint",
+                    "BasedOnSchema": { "$type": "Link", "IdRef": "tcm:5-103-8" },
+                    "BasedOnComponentTemplate": { "$type": "Link", "IdRef": "tcm:5-105-32" }
+                }
+            ]
+        })
     });`,
     input: {
         title: z.string().nonempty().describe("The title for the new Schema."),
@@ -244,7 +268,7 @@ Example 7: Create a Schema with a multi-value Multimedia Link field. This allows
         deleteBundleOnProcessFinished: z.boolean().optional().describe("If true, Bundles based on this Schema will be deleted when their workflow process finishes. Only applicable when 'purpose' is 'Bundle'."),
         isIndexable: z.boolean().optional().describe("Specifies whether Components based on this Schema will be indexed for searching."),
         isPublishable: z.boolean().optional().describe("Specifies whether Components based on this Schema can be resolved for data publishing."),
-        regionDefinition: z.string().optional().describe("The Region Definition for the Schema. Only applicable when 'purpose' is 'Region'.")
+        regionDefinition: z.string().optional().describe("A JSON string for the Region Definition. Only applicable when 'purpose' is 'Region'. This object can contain 'ComponentPresentationConstraints', which is an array of 'OccurrenceConstraint' and 'TypeConstraint' objects. 'OccurrenceConstraint' uses 'MinOccurs' and 'MaxOccurs' to limit the number of CPs. 'TypeConstraint' uses 'BasedOnSchema' and/or 'BasedOnComponentTemplate' (Link objects) to restrict the type of CPs allowed.")
     },
     execute: async (args: any) => {
         const {
@@ -268,6 +292,19 @@ Example 7: Create a Schema with a multi-value Multimedia Link field. This allows
             const processedFields = fields ? await processSchemaFieldDefinitions(fields, locationId) : undefined;
             const processedMetadataFields = metadataFields ? await processSchemaFieldDefinitions(metadataFields, locationId) : undefined;
 
+            let parsedRegionDefinition;
+            if (regionDefinition) {
+                if (purpose !== 'Region') {
+                    return { content: [{ type: "text", text: "'regionDefinition' can only be set when the Schema 'purpose' is 'Region'." }], errors: [] };
+                }
+                try {
+                    parsedRegionDefinition = JSON.parse(regionDefinition);
+                } catch (error) {
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    return { content: [{ type: "text", text: `Error: The 'regionDefinition' parameter is not a valid JSON string. Details: ${errorMessage}` }] };
+                }
+            }
+
             const defaultModelResponse = await authenticatedAxios.get('/item/defaultModel/Schema', {
                 params: { containerId: locationId }
             });
@@ -288,7 +325,7 @@ Example 7: Create a Schema with a multi-value Multimedia Link field. This allows
             if (typeof deleteBundleOnProcessFinished === 'boolean') payload.DeleteBundleOnProcessFinished = deleteBundleOnProcessFinished;
             if (typeof isIndexable === 'boolean') payload.IsIndexable = isIndexable;
             if (typeof isPublishable === 'boolean') payload.IsPublishable = isPublishable;
-            if (regionDefinition) payload.RegionDefinition = regionDefinition;
+            if (parsedRegionDefinition) payload.RegionDefinition = parsedRegionDefinition;
             if (!payload.LocationInfo?.OrganizationalItem?.IdRef) {
                 payload.LocationInfo = { ...payload.LocationInfo, OrganizationalItem: toLink(locationId) };
             }
