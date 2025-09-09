@@ -29,6 +29,31 @@ const extractTextFromXmlObject = (obj: any): string[] => {
     return texts;
 };
 
+// Helper function to find all attribute values recursively
+const findAttributeValues = (obj: any, attributeName: string): string[] => {
+    let values: string[] = [];
+    if (!obj || typeof obj !== 'object') {
+        return values;
+    }
+
+    if (Array.isArray(obj)) {
+        for (const item of obj) {
+            values = values.concat(findAttributeValues(item, attributeName));
+        }
+    } else {
+        if (obj['$'] && obj['$'][attributeName]) {
+            values.push(obj['$'][attributeName]);
+        }
+        for (const key in obj) {
+            if (key !== '$') {
+                values = values.concat(findAttributeValues(obj[key], attributeName));
+            }
+        }
+    }
+    return [...new Set(values)];
+};
+
+
 const splitPowerPointMultimediaComponentIntoTextAndImagesInputProperties = {
     itemId: z.string().regex(/^tcm:\d+-\d+$/).describe("The TCM URI of the source PowerPoint multimedia component."),
     locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new image components will be created."),
@@ -36,89 +61,132 @@ const splitPowerPointMultimediaComponentIntoTextAndImagesInputProperties = {
 
 const splitPowerPointMultimediaComponentIntoTextAndImagesSchema = z.object(splitPowerPointMultimediaComponentIntoTextAndImagesInputProperties);
 
+// Interface to define the shape of a relationship object from the .rels file
+interface Relationship {
+  $: {
+    Id: string;
+    Type: string;
+    Target: string;
+  };
+}
+
 export const splitPowerPointMultimediaComponentIntoTextAndImages = {
     name: "splitPowerPointMultimediaComponentIntoTextAndImages",
-    description: "Splits a PowerPoint multimedia component into its constituent parts. It extracts all text and creates new multimedia components for each image, returning a consolidated text summary of the results.",
+    description: "Splits a PowerPoint multimedia component into its constituent parts. It extracts all text and creates new multimedia components for each image, returning a consolidated text summary of the results with image-to-slide mappings.",
     input: splitPowerPointMultimediaComponentIntoTextAndImagesInputProperties,
     async execute(input: z.infer<typeof splitPowerPointMultimediaComponentIntoTextAndImagesSchema>) {
         const { itemId, locationId } = input;
         const restItemId = itemId.replace(':', '_');
 
         try {
-            // Step 1: Download the .pptx file
             const downloadResponse = await authenticatedAxios.get(`/items/${restItemId}/binary/download`, {
                 responseType: 'arraybuffer'
             });
             if (downloadResponse.status !== 200) return handleUnexpectedResponse(downloadResponse);
             const pptxFileBuffer = Buffer.from(downloadResponse.data);
             
-            // Step 2: Initialize parsers
             const zip = await JSZip.loadAsync(pptxFileBuffer);
-            const xmlParser = new XmlParser({ explicitArray: false });
+            const xmlParser = new XmlParser({ explicitArray: false, attrkey: '$' });
 
-            // Step 3: Process text and images in parallel
+            const slideFiles = zip.file(/ppt\/slides\/slide\d+\.xml/).sort((a, b) => {
+                const aNum = parseInt(a.name.match(/\d+/)?.[0] || '0', 10);
+                const bNum = parseInt(b.name.match(/\d+/)?.[0] || '0', 10);
+                return aNum - bNum;
+            });
+
+            const slideDataPromises = slideFiles.map(async (slideFile) => {
+                const slideNumber = parseInt(slideFile.name.match(/\d+/)?.[0] || '0', 10);
+                
+                const slideXml = await slideFile.async("string");
+                const parsedSlide = await xmlParser.parseStringPromise(slideXml);
+                const textContent = extractTextFromXmlObject(parsedSlide).join("\n");
+
+                const relsFilePath = `ppt/slides/_rels/${slideFile.name.split('/').pop()}.rels`;
+                const relsFile = zip.file(relsFilePath);
+                let imagePaths: string[] = [];
+
+                if (relsFile) {
+                    const relsXml = await relsFile.async("string");
+                    const parsedRels = await xmlParser.parseStringPromise(relsXml);
+                    
+                    const relsDataSource = parsedRels.Relationships.Relationship;
+                    // **FIXED HERE**: Add 'as Relationship[]' to cast the generic object from the parser
+                    const relationships = (Array.isArray(relsDataSource)
+                        ? relsDataSource
+                        : relsDataSource ? [relsDataSource] : []) as Relationship[];
+
+                    const imageRelsMap = relationships
+                        .filter((r: Relationship) => r?.$?.Type.endsWith('/image'))
+                        .reduce((acc, r: Relationship) => {
+                            if (r.$.Id && r.$.Target) {
+                                acc[r.$.Id] = r.$.Target;
+                            }
+                            return acc;
+                        }, {} as { [key: string]: string });
+
+                    const embedIds = findAttributeValues(parsedSlide, 'r:embed');
+                    embedIds.forEach(rId => {
+                        if (imageRelsMap[rId]) {
+                            const resolvedPath = `ppt/media/${imageRelsMap[rId].split('/').pop()}`;
+                            imagePaths.push(resolvedPath);
+                        }
+                    });
+                }
+                return { slideNumber, textContent, imagePaths };
+            });
+
+            const allSlidesData = await Promise.all(slideDataPromises);
             
-            const textPromise = (async () => {
-                const slideFiles = zip.file(/ppt\/slides\/slide\d+\.xml/);
-                slideFiles.sort((a, b) => {
-                    const aNum = parseInt(a.name.match(/\d+/)?.[0] || '0', 10);
-                    const bNum = parseInt(b.name.match(/\d+/)?.[0] || '0', 10);
-                    return aNum - bNum;
-                });
-                const slideTextPromises = slideFiles.map(async (file, i) => {
-                    const xml = await file.async("string");
-                    const parsed = await xmlParser.parseStringPromise(xml);
-                    return `--- Slide ${i + 1} ---\n${extractTextFromXmlObject(parsed).join("\n")}`;
-                });
-                return (await Promise.all(slideTextPromises)).join("\n\n");
-            })();
+            const uniqueImagePaths = [...new Set(allSlidesData.flatMap(s => s.imagePaths))];
+            const imagePathToComponentIdMap = new Map<string, string>();
 
-            const imagesPromise = (async () => {
-                const imageFiles = zip.file(/ppt\/media\/.+\.(png|jpeg|jpg|gif|svg)/i);
-                const createdImages: { originalFileName: string; newComponentId: string }[] = [];
+            if (uniqueImagePaths.length > 0) {
+                 const createdImagesPromises = uniqueImagePaths.map(async (imagePath) => {
+                    const imageFile = zip.file(imagePath);
+                    if (!imageFile) return null;
 
-                for (const imageFile of imageFiles) {
                     const base64Content = await imageFile.async("base64");
                     const fileName = imageFile.name.split('/').pop() || 'image.png';
                     const title = fileName.substring(0, fileName.lastIndexOf('.'));
 
                     const result = await createMultimediaComponentFromBase64.execute({
-                        base64Content,
-                        title,
-                        fileName,
-                        locationId,
+                        base64Content, title, fileName, locationId,
                     });
-                    
+
                     const resultText = result.content[0].text || "";
                     const newIdMatch = resultText.match(/tcm:\d+-\d+/);
                     if (newIdMatch) {
-                        createdImages.push({
-                            originalFileName: fileName,
-                            newComponentId: newIdMatch[0],
+                        return { imagePath, newComponentId: newIdMatch[0] };
+                    }
+                    return null;
+                });
+                
+                const createdImages = (await Promise.all(createdImagesPromises)).filter(Boolean) as { imagePath: string; newComponentId: string; }[];
+                createdImages.forEach(img => imagePathToComponentIdMap.set(img.imagePath, img.newComponentId));
+            }
+           
+            let formattedResponseText = `Successfully split the PowerPoint component ${itemId}.\n`;
+
+            if (allSlidesData.length === 0) {
+                 formattedResponseText += `No slides were found in the presentation.`;
+            } else {
+                 allSlidesData.forEach(slide => {
+                    formattedResponseText += `\n### Slide ${slide.slideNumber}\n`;
+                    if (slide.textContent.trim()) {
+                        formattedResponseText += `**Text:**\n${slide.textContent.trim()}\n`;
+                    } else {
+                        formattedResponseText += `No text content found on this slide.\n`;
+                    }
+
+                    if (slide.imagePaths.length > 0) {
+                        formattedResponseText += `**Images:**\n`;
+                        slide.imagePaths.forEach(path => {
+                            const componentId = imagePathToComponentIdMap.get(path);
+                            const originalName = path.split('/').pop();
+                            formattedResponseText += `* Original Name: ${originalName}, Created Component: ${componentId || 'N/A'}\n`;
                         });
                     }
-                }
-                return createdImages;
-            })();
-
-            // Await both promises
-            const [textContent, extractedImages] = await Promise.all([textPromise, imagesPromise]);
-
-            // Step 4: Format the results into a single text string for the agent
-            let formattedResponseText = `Successfully split the PowerPoint component ${itemId}.\n\n`;
-
-            if (extractedImages.length > 0) {
-                formattedResponseText += `### Extracted Images\n`;
-                extractedImages.forEach(img => {
-                    formattedResponseText += `* Original Name: ${img.originalFileName}, Created Component: ${img.newComponentId}\n`;
                 });
-                formattedResponseText += `\n`;
-            } else {
-                formattedResponseText += `No images were found to extract.\n\n`;
-            }
-
-            if (textContent) {
-                formattedResponseText += `### Extracted Text\n${textContent}`;
             }
 
             return {
