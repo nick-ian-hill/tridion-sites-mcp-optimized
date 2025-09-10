@@ -8,6 +8,36 @@ import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
 import { processSchemaFieldDefinitions } from "../utils/fieldReordering.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 
+// Define the properties for the tool's input as a standalone plain object.
+const updateItemByIdInputProperties = {
+    itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the CMS item to update."),
+    itemType: z.enum([
+        "Component", "Folder", "StructureGroup", "Keyword",
+        "Category", "Schema", "Bundle", "SearchFolder", "PageTemplate"
+    ]).describe("The type of the CMS item to update."),
+    title: z.string().optional().describe("The new title for the item."),
+    metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the Metadata Schema for the item's metadata."),
+    isAbstract: z.boolean().optional().describe("Set to true to make a Keyword abstract. (Applicable to Keyword)"),
+    description: z.string().optional().describe("A new description for the item."),
+    key: z.string().optional().describe("A new custom key for the Keyword. (Applicable to Keyword)"),
+    parentKeywords: z.array(z.string().regex(/^tcm:\d+-\d+-1024$/)).optional().describe("An array of parent Keyword URIs. Replaces existing parents. (Applicable to Keyword)"),
+    relatedKeywords: z.array(z.string().regex(/^tcm:\d+-\d+-1024$/)).optional().describe("An array of related Keyword URIs. Replaces existing relations. (Applicable to Keyword)"),
+    itemsInBundle: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)).optional().describe("An array of item URIs for the Bundle. Replaces existing items. (Applicable to Bundle)"),
+    searchQuery: SearchQueryValidation.optional().describe("A new search query model for the Search Folder."),
+    resultLimit: z.number().int().optional().describe("A new result limit for the Search Folder."),
+    fields: z.record(fieldDefinitionSchema).optional().describe("For Schema updates only. A dictionary of field definitions for the Schema's content. Replaces the existing fields."),
+    metadataFields: z.record(fieldDefinitionSchema).optional().describe("For Schema updates only. A dictionary of field definitions for the Schema's metadata. Replaces the existing metadata fields."),
+    fileExtension: z.string().optional().describe("A new file extension for the Page Template. (Applicable to PageTemplate)"),
+    pageSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("A new Page Schema URI for the Page Template. (Applicable to PageTemplate)"),
+    templateBuildingBlocks: z.array(z.string().regex(/^tcm:\d+-\d+-2048$/)).optional().describe("A new array of Template Building Block URIs. Replaces existing TBBs. (Applicable to PageTemplate)")
+};
+
+// Create the Zod schema from the properties object for validation and type inference.
+const updateItemByIdInputSchema = z.object(updateItemByIdInputProperties);
+
+// Infer the TypeScript type from the schema.
+type UpdateItemByIdInput = z.infer<typeof updateItemByIdInputSchema>;
+
 export const updateItemById = {
     name: "updateItemById",
     description: `Updates an existing Content Manager System (CMS) item.
@@ -16,29 +46,9 @@ For versioned items ('Component', 'Schema', 'PageTemplate'), check-out and check
 This tool can also update the field definitions of a Schema by providing the 'fields' or 'metadataFields' properties.
 To update an item's content or metadata values, use the 'updateContentById' or 'updateMetadataById' tools respectively.
 If a versioned item is locked by another user, the operation will be aborted.`,
-    input: {
-        itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the CMS item to update."),
-        itemType: z.enum([
-            "Component", "Folder", "StructureGroup", "Keyword",
-            "Category", "Schema", "Bundle", "SearchFolder", "PageTemplate"
-        ]).describe("The type of the CMS item to update."),
-        title: z.string().optional().describe("The new title for the item."),
-        metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the Metadata Schema for the item's metadata."),
-        isAbstract: z.boolean().optional().describe("Set to true to make a Keyword abstract. (Applicable to Keyword)"),
-        description: z.string().optional().describe("A new description for the item."),
-        key: z.string().optional().describe("A new custom key for the Keyword. (Applicable to Keyword)"),
-        parentKeywords: z.array(z.string().regex(/^tcm:\d+-\d+-1024$/)).optional().describe("An array of parent Keyword URIs. Replaces existing parents. (Applicable to Keyword)"),
-        relatedKeywords: z.array(z.string().regex(/^tcm:\d+-\d+-1024$/)).optional().describe("An array of related Keyword URIs. Replaces existing relations. (Applicable to Keyword)"),
-        itemsInBundle: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)).optional().describe("An array of item URIs for the Bundle. Replaces existing items. (Applicable to Bundle)"),
-        searchQuery: SearchQueryValidation.optional().describe("A new search query model for the Search Folder."),
-        resultLimit: z.number().int().optional().describe("A new result limit for the Search Folder."),
-        fields: z.record(fieldDefinitionSchema).optional().describe("For Schema updates only. A dictionary of field definitions for the Schema's content. Replaces the existing fields."),
-        metadataFields: z.record(fieldDefinitionSchema).optional().describe("For Schema updates only. A dictionary of field definitions for the Schema's metadata. Replaces the existing metadata fields."),
-        fileExtension: z.string().optional().describe("A new file extension for the Page Template. (Applicable to PageTemplate)"),
-        pageSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("A new Page Schema URI for the Page Template. (Applicable to PageTemplate)"),
-        templateBuildingBlocks: z.array(z.string().regex(/^tcm:\d+-\d+-2048$/)).optional().describe("A new array of Template Building Block URIs. Replaces existing TBBs. (Applicable to PageTemplate)")
-    },
-    execute: async (params: any) => {
+    // Use the plain properties object for the tool definition.
+    input: updateItemByIdInputProperties,
+    execute: async (params: UpdateItemByIdInput) => {
         const { itemId, itemType, ...updates } = params;
         const restItemId = itemId.replace(':', '_');
         const versionedItemTypes = ["Component", "Schema", "PageTemplate"];
@@ -46,6 +56,50 @@ If a versioned item is locked by another user, the operation will be aborted.`,
         let wasCheckedOutByTool = false;
 
         try {
+            // Convert all incoming URIs to the correct publication context of the item being updated.
+            if (updates.metadataSchemaId) {
+                updates.metadataSchemaId = convertItemIdToContextPublication(updates.metadataSchemaId, itemId);
+            }
+            if (updates.parentKeywords) {
+                updates.parentKeywords = updates.parentKeywords.map((kw: string) => convertItemIdToContextPublication(kw, itemId));
+            }
+            if (updates.relatedKeywords) {
+                updates.relatedKeywords = updates.relatedKeywords.map((kw: string) => convertItemIdToContextPublication(kw, itemId));
+            }
+            if (updates.itemsInBundle) {
+                updates.itemsInBundle = updates.itemsInBundle.map((item: string) => convertItemIdToContextPublication(item, itemId));
+            }
+            if (updates.pageSchemaId) {
+                updates.pageSchemaId = convertItemIdToContextPublication(updates.pageSchemaId, itemId);
+            }
+            if (updates.templateBuildingBlocks) {
+                updates.templateBuildingBlocks = updates.templateBuildingBlocks.map((tbbId: string) => convertItemIdToContextPublication(tbbId, itemId));
+            }
+            if (updates.searchQuery) {
+                const contextId = updates.searchQuery.SearchIn || itemId;
+
+                if (updates.searchQuery.SearchIn) {
+                    updates.searchQuery.SearchIn = convertItemIdToContextPublication(updates.searchQuery.SearchIn, itemId);
+                }
+                if (updates.searchQuery.BasedOnSchemas) {
+                    updates.searchQuery.BasedOnSchemas = updates.searchQuery.BasedOnSchemas.map(schemaFilter => ({
+                        ...schemaFilter,
+                        schemaUri: convertItemIdToContextPublication(schemaFilter.schemaUri, contextId)
+                    }));
+                }
+                if (updates.searchQuery.UsedKeywords) {
+                    updates.searchQuery.UsedKeywords = updates.searchQuery.UsedKeywords.map((keywordUri: string) =>
+                        convertItemIdToContextPublication(keywordUri, contextId)
+                    );
+                }
+                if (updates.searchQuery.ActivityDefinition) {
+                    updates.searchQuery.ActivityDefinition = convertItemIdToContextPublication(updates.searchQuery.ActivityDefinition, contextId);
+                }
+                if (updates.searchQuery.ProcessDefinition) {
+                    updates.searchQuery.ProcessDefinition = convertItemIdToContextPublication(updates.searchQuery.ProcessDefinition, contextId);
+                }
+            }
+
             const getItemResponse = await authenticatedAxios.get(`/items/${restItemId}`, {
                 params: { useDynamicVersion: true }
             });
@@ -108,12 +162,10 @@ If a versioned item is locked by another user, the operation will be aborted.`,
             if (itemType === 'PageTemplate') {
                 if (updates.fileExtension) itemToUpdate.FileExtension = updates.fileExtension;
                 if (updates.pageSchemaId) {
-                    const contextAwarePageSchemaId = convertItemIdToContextPublication(updates.pageSchemaId, itemId);
-                    itemToUpdate.PageSchema = toLink(contextAwarePageSchemaId);
+                    itemToUpdate.PageSchema = toLink(updates.pageSchemaId);
                 }
                 if (updates.templateBuildingBlocks) {
-                    const contextAwareTbbs = updates.templateBuildingBlocks.map((tbbId: string) => convertItemIdToContextPublication(tbbId, itemId));
-                    const tbbInvocations = contextAwareTbbs.map((tbbId: string) =>
+                    const tbbInvocations = updates.templateBuildingBlocks.map((tbbId: string) =>
                         `<TemplateInvocation><Template xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="${tbbId}" xlink:title="" /></TemplateInvocation>`
                     ).join('');
                     itemToUpdate.Content = `<CompoundTemplate xmlns="http://www.tridion.com/ContentManager/5.3/CompoundTemplate">${tbbInvocations}</CompoundTemplate>`;

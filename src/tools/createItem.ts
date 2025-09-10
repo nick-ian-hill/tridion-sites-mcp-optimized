@@ -81,6 +81,9 @@ Therefore, when creating a Component in the Folder with ID tcm:10-4112-2, the Sc
         if (args.relatedKeywords) {
             args.relatedKeywords = args.relatedKeywords.map(kw => convertItemIdToContextPublication(kw, locationId));
         }
+        if (args.itemsInBundle) {
+            args.itemsInBundle = args.itemsInBundle.map(item => convertItemIdToContextPublication(item, locationId));
+        }
         if (args.pageSchemaId) {
             args.pageSchemaId = convertItemIdToContextPublication(args.pageSchemaId, locationId);
         }
