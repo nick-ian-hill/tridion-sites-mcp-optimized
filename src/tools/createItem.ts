@@ -12,7 +12,7 @@ import { reorderFieldsBySchema, convertLinksRecursively } from "../utils/fieldRe
 const createItemInputProperties = {
     itemType: z.enum([
         "Component", "Folder", "StructureGroup", "Keyword",
-        "Category", "Bundle", "SearchFolder", "PageTemplate"
+        "Category", "Bundle", "SearchFolder", "PageTemplate", "ComponentTemplate"
     ]).describe("The type of CMS item to create."),
     title: z.string().describe("The title for the new item."),
     locationId: z.string().regex(/^tcm:\d+-\d+-\d+$/).describe("The TCM URI of the parent container (e.g., Folder, Structure Group, Category) where the new item will be created. For a Structure Group, the container must be a structure group. The only exception is for a Structure Group in a Publication that does not yet have a Structure Group. In this case, the createRootStructureGroup tool should be used instead. For a Category, the container must be a Publication. For keywords, the container must be a Category. For other item types the container must be a Folder."),
@@ -28,9 +28,17 @@ const createItemInputProperties = {
     itemsInBundle: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)).optional().describe("An array of TCM URIs for items in the Bundle. Only applicable to Bundle type."),
     searchQuery: SearchQueryValidation.optional().describe("A search query model. This is only applicable (and must be provided) when creating a 'SearchFolder'. For SearchFolder creation, its value MUST include the 'SearchIn' property."),
     resultLimit: z.number().int().default(100).describe("The maximum number of results to return. Only applicable to SearchFolder type"),
+    // Page Template specific
     fileExtension: z.string().optional().describe("The file extension for the new Page Template (e.g., 'html', 'aspx'). Required for 'PageTemplate' type."),
     pageSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the Page Schema to associate with the Page Template. Required for 'PageTemplate' type."),
-    templateBuildingBlocks: z.array(z.string().regex(/^tcm:\d+-\d+-2048$/)).optional().describe("An array of TCM URIs for the Template Building Blocks that make up this Page Template. Required for 'PageTemplate' type.")
+    // Page/Component Template specific
+    templateBuildingBlocks: z.array(z.string().regex(/^tcm:\d+-\d+-2048$/)).optional().describe("An array of TCM URIs for the Template Building Blocks. Required for 'PageTemplate' and 'ComponentTemplate' types."),
+    // Component Template specific
+    allowOnPage: z.boolean().optional().describe("For 'ComponentTemplate' type. Whether the Component Template may be used on a Page. Defaults to true."),
+    isRepositoryPublishable: z.boolean().optional().describe("For 'ComponentTemplate' type. Whether the template renders dynamic Component Presentations. Defaults to false."),
+    outputFormat: z.string().optional().describe("For 'ComponentTemplate' type. The format of the rendered Component Presentation (e.g., 'HTML Fragment'). Defaults to 'HTML Fragment'."),
+    priority: z.number().int().optional().describe("For 'ComponentTemplate' type. Priority used for resolving Component links. Defaults to 200."),
+    relatedSchemaIds: z.array(z.string().regex(/^tcm:\d+-\d+-8$/)).optional().describe("For 'ComponentTemplate' type. An array of Schema TCM URIs this template is linked to.")
 };
 
 // STEP 2: Create the final Zod schema and centralize validation logic.
@@ -47,8 +55,8 @@ const createItemInputSchema = z.object(createItemInputProperties)
     .refine(data => !(data.itemType === 'PageTemplate' && !data.pageSchemaId), {
         message: "To create a 'PageTemplate', the 'pageSchemaId' parameter is required."
     })
-    .refine(data => !(data.itemType === 'PageTemplate' && (!data.templateBuildingBlocks || data.templateBuildingBlocks.length === 0)), {
-        message: "To create a 'PageTemplate', the 'templateBuildingBlocks' parameter must be provided and not be empty."
+    .refine(data => !((data.itemType === 'PageTemplate' || data.itemType === 'ComponentTemplate') && (!data.templateBuildingBlocks || data.templateBuildingBlocks.length === 0)), {
+        message: "To create a 'PageTemplate' or 'ComponentTemplate', the 'templateBuildingBlocks' parameter must be provided and not be empty."
     });
 
 // STEP 3: Infer the TypeScript type directly from the schema.
@@ -90,6 +98,9 @@ Therefore, when creating a Component in the Folder with ID tcm:10-4112-2, the Sc
         if (args.templateBuildingBlocks) {
             args.templateBuildingBlocks = args.templateBuildingBlocks.map(tbb => convertItemIdToContextPublication(tbb, locationId));
         }
+        if (args.relatedSchemaIds) {
+            args.relatedSchemaIds = args.relatedSchemaIds.map(id => convertItemIdToContextPublication(id, locationId));
+        }
         // Recursively convert links in content and metadata
         if (args.content) {
             convertLinksRecursively(args.content, locationId);
@@ -98,7 +109,7 @@ Therefore, when creating a Component in the Folder with ID tcm:10-4112-2, the Sc
             convertLinksRecursively(args.metadata, locationId);
         }
 
-        let { itemType, title, schemaId, metadataSchemaId, content, metadata, isAbstract, description, key, parentKeywords, relatedKeywords, itemsInBundle, searchQuery, resultLimit, fileExtension, pageSchemaId, templateBuildingBlocks } = args;
+        let { itemType, title, schemaId, metadataSchemaId, content, metadata, isAbstract, description, key, parentKeywords, relatedKeywords, itemsInBundle, searchQuery, resultLimit, fileExtension, pageSchemaId, templateBuildingBlocks, allowOnPage, isRepositoryPublishable, outputFormat, priority, relatedSchemaIds } = args;
 
         try {
             // Reorder content and metadata fields based on their respective schemas
@@ -133,15 +144,24 @@ Therefore, when creating a Component in the Folder with ID tcm:10-4112-2, the Sc
             if (metadata) payload.Metadata = metadata;
 
             // Type-specific properties
-            if (itemType === 'PageTemplate') {
-                if (pageSchemaId) payload.PageSchema = { IdRef: pageSchemaId };
-                if (fileExtension) payload.FileExtension = fileExtension;
+            if (itemType === 'PageTemplate' || itemType === 'ComponentTemplate') {
                 if (templateBuildingBlocks) {
                     const tbbInvocations = templateBuildingBlocks.map(tbbId =>
                         `<TemplateInvocation><Template xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="${tbbId}" xlink:title="" /></TemplateInvocation>`
                     ).join('');
                     payload.Content = `<CompoundTemplate xmlns="http://www.tridion.com/ContentManager/5.3/CompoundTemplate">${tbbInvocations}</CompoundTemplate>`;
                 }
+            }
+            if (itemType === 'PageTemplate') {
+                if (pageSchemaId) payload.PageSchema = { IdRef: pageSchemaId };
+                if (fileExtension) payload.FileExtension = fileExtension;
+            }
+            if (itemType === 'ComponentTemplate') {
+                payload.AllowOnPage = allowOnPage ?? true;
+                payload.IsRepositoryPublishable = isRepositoryPublishable ?? false;
+                payload.OutputFormat = outputFormat ?? "HTML Fragment";
+                payload.Priority = priority ?? 200;
+                if (relatedSchemaIds) payload.RelatedSchemas = toLinkArray(relatedSchemaIds);
             }
             if (itemType === 'Keyword') {
                 if (typeof isAbstract === 'boolean') payload.IsAbstract = isAbstract;

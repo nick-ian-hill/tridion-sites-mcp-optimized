@@ -13,7 +13,7 @@ const updateItemByIdInputProperties = {
     itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the CMS item to update."),
     itemType: z.enum([
         "Component", "Folder", "StructureGroup", "Keyword",
-        "Category", "Schema", "Bundle", "SearchFolder", "PageTemplate"
+        "Category", "Schema", "Bundle", "SearchFolder", "PageTemplate", "ComponentTemplate"
     ]).describe("The type of the CMS item to update."),
     title: z.string().optional().describe("The new title for the item."),
     metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the Metadata Schema for the item's metadata."),
@@ -27,9 +27,17 @@ const updateItemByIdInputProperties = {
     resultLimit: z.number().int().optional().describe("A new result limit for the Search Folder."),
     fields: z.record(fieldDefinitionSchema).optional().describe("For Schema updates only. A dictionary of field definitions for the Schema's content. Replaces the existing fields."),
     metadataFields: z.record(fieldDefinitionSchema).optional().describe("For Schema updates only. A dictionary of field definitions for the Schema's metadata. Replaces the existing metadata fields."),
+    // Page Template specific
     fileExtension: z.string().optional().describe("A new file extension for the Page Template. (Applicable to PageTemplate)"),
     pageSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("A new Page Schema URI for the Page Template. (Applicable to PageTemplate)"),
-    templateBuildingBlocks: z.array(z.string().regex(/^tcm:\d+-\d+-2048$/)).optional().describe("A new array of Template Building Block URIs. Replaces existing TBBs. (Applicable to PageTemplate)")
+    // Page/Component Template specific
+    templateBuildingBlocks: z.array(z.string().regex(/^tcm:\d+-\d+-2048$/)).optional().describe("A new array of Template Building Block URIs. Replaces existing TBBs. (Applicable to PageTemplate/ComponentTemplate)"),
+    // Component Template specific
+    allowOnPage: z.boolean().optional().describe("For 'ComponentTemplate' type. Whether the Component Template may be used on a Page."),
+    isRepositoryPublishable: z.boolean().optional().describe("For 'ComponentTemplate' type. Whether the template renders dynamic Component Presentations."),
+    outputFormat: z.string().optional().describe("For 'ComponentTemplate' type. The format of the rendered Component Presentation (e.g., 'HTML Fragment')."),
+    priority: z.number().int().optional().describe("For 'ComponentTemplate' type. Priority used for resolving Component links."),
+    relatedSchemaIds: z.array(z.string().regex(/^tcm:\d+-\d+-8$/)).optional().describe("For 'ComponentTemplate' type. An array of Schema TCM URIs to link to this template. Replaces any existing links.")
 };
 
 // Create the Zod schema from the properties object for validation and type inference.
@@ -42,7 +50,7 @@ export const updateItemById = {
     name: "updateItemById",
     description: `Updates an existing Content Manager System (CMS) item.
 This tool can update various properties like title, description, and metadataSchemaId.
-For versioned items ('Component', 'Schema', 'PageTemplate'), check-out and check-in are handled automatically.
+For versioned items ('Component', 'Schema', 'PageTemplate', 'ComponentTemplate'), check-out and check-in are handled automatically.
 This tool can also update the field definitions of a Schema by providing the 'fields' or 'metadataFields' properties.
 To update an item's content or metadata values, use the 'updateContentById' or 'updateMetadataById' tools respectively.
 If a versioned item is locked by another user, the operation will be aborted.`,
@@ -51,7 +59,7 @@ If a versioned item is locked by another user, the operation will be aborted.`,
     execute: async (params: UpdateItemByIdInput) => {
         const { itemId, itemType, ...updates } = params;
         const restItemId = itemId.replace(':', '_');
-        const versionedItemTypes = ["Component", "Schema", "PageTemplate"];
+        const versionedItemTypes = ["Component", "Schema", "PageTemplate", "ComponentTemplate"];
         const isVersioned = versionedItemTypes.includes(itemType);
         let wasCheckedOutByTool = false;
 
@@ -74,6 +82,9 @@ If a versioned item is locked by another user, the operation will be aborted.`,
             }
             if (updates.templateBuildingBlocks) {
                 updates.templateBuildingBlocks = updates.templateBuildingBlocks.map((tbbId: string) => convertItemIdToContextPublication(tbbId, itemId));
+            }
+            if (updates.relatedSchemaIds) {
+                updates.relatedSchemaIds = updates.relatedSchemaIds.map((id: string) => convertItemIdToContextPublication(id, itemId));
             }
             if (updates.searchQuery) {
                 const contextId = updates.searchQuery.SearchIn || itemId;
@@ -159,17 +170,26 @@ If a versioned item is locked by another user, the operation will be aborted.`,
                     itemToUpdate.MetadataFields = { "$type": "FieldsDefinitionDictionary", ...processedMetadataFields };
                 }
             }
-            if (itemType === 'PageTemplate') {
-                if (updates.fileExtension) itemToUpdate.FileExtension = updates.fileExtension;
-                if (updates.pageSchemaId) {
-                    itemToUpdate.PageSchema = toLink(updates.pageSchemaId);
-                }
+            if (itemType === 'PageTemplate' || itemType === 'ComponentTemplate') {
                 if (updates.templateBuildingBlocks) {
                     const tbbInvocations = updates.templateBuildingBlocks.map((tbbId: string) =>
                         `<TemplateInvocation><Template xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="${tbbId}" xlink:title="" /></TemplateInvocation>`
                     ).join('');
                     itemToUpdate.Content = `<CompoundTemplate xmlns="http://www.tridion.com/ContentManager/5.3/CompoundTemplate">${tbbInvocations}</CompoundTemplate>`;
                 }
+            }
+            if (itemType === 'PageTemplate') {
+                if (updates.fileExtension) itemToUpdate.FileExtension = updates.fileExtension;
+                if (updates.pageSchemaId) {
+                    itemToUpdate.PageSchema = toLink(updates.pageSchemaId);
+                }
+            }
+            if (itemType === 'ComponentTemplate') {
+                if (updates.allowOnPage !== undefined) itemToUpdate.AllowOnPage = updates.allowOnPage;
+                if (updates.isRepositoryPublishable !== undefined) itemToUpdate.IsRepositoryPublishable = updates.isRepositoryPublishable;
+                if (updates.outputFormat) itemToUpdate.OutputFormat = updates.outputFormat;
+                if (updates.priority !== undefined) itemToUpdate.Priority = updates.priority;
+                if (updates.relatedSchemaIds) itemToUpdate.RelatedSchemas = toLinkArray(updates.relatedSchemaIds);
             }
 
             const updateResponse = await authenticatedAxios.put(`/items/${restItemId}`, itemToUpdate);
