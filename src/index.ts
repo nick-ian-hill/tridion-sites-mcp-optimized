@@ -61,6 +61,7 @@ import { readExcelFileFromMultimediaComponent } from './tools/readExcelFileFromM
 import { readTextFromPowerPointMultimediaComponent } from './tools/readTextFromPowerPointMultimediaComponent.js';
 import { readPdfFileFromMultimediaComponent } from './tools/readPdfFileFromMultimediaComponent.js';
 import { splitPowerPointMultimediaComponentIntoTextAndImages } from './tools/splitPowerPointMultimediaComponentIntoTextAndImages.js';
+import { readImageDetailsFromMultimediaComponent } from './tools/readImageDetailsFromMultimediaComponent.js';
 
 const server = new McpServer({
   name: "mcp-test-server",
@@ -88,6 +89,7 @@ const tools: any[] = [
   readExcelFileFromMultimediaComponent,
   readTextFromPowerPointMultimediaComponent,
   readPdfFileFromMultimediaComponent,
+  readImageDetailsFromMultimediaComponent,
   
   // Create Operations
   createItem,
