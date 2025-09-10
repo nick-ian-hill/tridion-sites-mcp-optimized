@@ -6,12 +6,13 @@ import { toLink, toLinkArray } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
 import { processSchemaFieldDefinitions } from "../utils/fieldReordering.js";
+import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 
 export const updateItemById = {
     name: "updateItemById",
     description: `Updates an existing Content Manager System (CMS) item.
 This tool can update various properties like title, description, and metadataSchemaId.
-For versioned items ('Component', 'Schema'), check-out and check-in are handled automatically.
+For versioned items ('Component', 'Schema', 'PageTemplate'), check-out and check-in are handled automatically.
 This tool can also update the field definitions of a Schema by providing the 'fields' or 'metadataFields' properties.
 To update an item's content or metadata values, use the 'updateContentById' or 'updateMetadataById' tools respectively.
 If a versioned item is locked by another user, the operation will be aborted.`,
@@ -19,7 +20,7 @@ If a versioned item is locked by another user, the operation will be aborted.`,
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the CMS item to update."),
         itemType: z.enum([
             "Component", "Folder", "StructureGroup", "Keyword",
-            "Category", "Schema", "Bundle", "SearchFolder"
+            "Category", "Schema", "Bundle", "SearchFolder", "PageTemplate"
         ]).describe("The type of the CMS item to update."),
         title: z.string().optional().describe("The new title for the item."),
         metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the Metadata Schema for the item's metadata."),
@@ -32,12 +33,15 @@ If a versioned item is locked by another user, the operation will be aborted.`,
         searchQuery: SearchQueryValidation.optional().describe("A new search query model for the Search Folder."),
         resultLimit: z.number().int().optional().describe("A new result limit for the Search Folder."),
         fields: z.record(fieldDefinitionSchema).optional().describe("For Schema updates only. A dictionary of field definitions for the Schema's content. Replaces the existing fields."),
-        metadataFields: z.record(fieldDefinitionSchema).optional().describe("For Schema updates only. A dictionary of field definitions for the Schema's metadata. Replaces the existing metadata fields.")
+        metadataFields: z.record(fieldDefinitionSchema).optional().describe("For Schema updates only. A dictionary of field definitions for the Schema's metadata. Replaces the existing metadata fields."),
+        fileExtension: z.string().optional().describe("A new file extension for the Page Template. (Applicable to PageTemplate)"),
+        pageSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("A new Page Schema URI for the Page Template. (Applicable to PageTemplate)"),
+        templateBuildingBlocks: z.array(z.string().regex(/^tcm:\d+-\d+-2048$/)).optional().describe("A new array of Template Building Block URIs. Replaces existing TBBs. (Applicable to PageTemplate)")
     },
     execute: async (params: any) => {
         const { itemId, itemType, ...updates } = params;
         const restItemId = itemId.replace(':', '_');
-        const versionedItemTypes = ["Component", "Schema"];
+        const versionedItemTypes = ["Component", "Schema", "PageTemplate"];
         const isVersioned = versionedItemTypes.includes(itemType);
         let wasCheckedOutByTool = false;
 
@@ -101,6 +105,20 @@ If a versioned item is locked by another user, the operation will be aborted.`,
                     itemToUpdate.MetadataFields = { "$type": "FieldsDefinitionDictionary", ...processedMetadataFields };
                 }
             }
+            if (itemType === 'PageTemplate') {
+                if (updates.fileExtension) itemToUpdate.FileExtension = updates.fileExtension;
+                if (updates.pageSchemaId) {
+                    const contextAwarePageSchemaId = convertItemIdToContextPublication(updates.pageSchemaId, itemId);
+                    itemToUpdate.PageSchema = toLink(contextAwarePageSchemaId);
+                }
+                if (updates.templateBuildingBlocks) {
+                    const contextAwareTbbs = updates.templateBuildingBlocks.map((tbbId: string) => convertItemIdToContextPublication(tbbId, itemId));
+                    const tbbInvocations = contextAwareTbbs.map((tbbId: string) =>
+                        `<TemplateInvocation><Template xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="${tbbId}" xlink:title="" /></TemplateInvocation>`
+                    ).join('');
+                    itemToUpdate.Content = `<CompoundTemplate xmlns="http://www.tridion.com/ContentManager/5.3/CompoundTemplate">${tbbInvocations}</CompoundTemplate>`;
+                }
+            }
 
             const updateResponse = await authenticatedAxios.put(`/items/${restItemId}`, itemToUpdate);
             if (updateResponse.status !== 200) {
@@ -114,7 +132,7 @@ If a versioned item is locked by another user, the operation will be aborted.`,
                     return handleUnexpectedResponse(checkInResponse);
                 }
             }
-            
+
             return {
                 content: [{ type: "text", text: `Successfully updated ${itemType} ${itemId}.\n\n${JSON.stringify(updatedItem, null, 2)}` }],
             };

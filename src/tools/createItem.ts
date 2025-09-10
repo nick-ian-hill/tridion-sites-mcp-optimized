@@ -12,7 +12,7 @@ import { reorderFieldsBySchema, convertLinksRecursively } from "../utils/fieldRe
 const createItemInputProperties = {
     itemType: z.enum([
         "Component", "Folder", "StructureGroup", "Keyword",
-        "Category", "Bundle", "SearchFolder"
+        "Category", "Bundle", "SearchFolder", "PageTemplate"
     ]).describe("The type of CMS item to create."),
     title: z.string().describe("The title for the new item."),
     locationId: z.string().regex(/^tcm:\d+-\d+-\d+$/).describe("The TCM URI of the parent container (e.g., Folder, Structure Group, Category) where the new item will be created. For a Structure Group, the container must be a structure group. The only exception is for a Structure Group in a Publication that does not yet have a Structure Group. In this case, the createRootStructureGroup tool should be used instead. For a Category, the container must be a Publication. For keywords, the container must be a Category. For other item types the container must be a Folder."),
@@ -27,7 +27,10 @@ const createItemInputProperties = {
     relatedKeywords: z.array(z.string().regex(/^(tcm:\d+-\d+-1024|ecl:[a-zA-Z0-9-]+)$/)).optional().describe("An array of URIs for related Keywords. Only applicable to Keyword type."),
     itemsInBundle: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)).optional().describe("An array of TCM URIs for items in the Bundle. Only applicable to Bundle type."),
     searchQuery: SearchQueryValidation.optional().describe("A search query model. This is only applicable (and must be provided) when creating a 'SearchFolder'. For SearchFolder creation, its value MUST include the 'SearchIn' property."),
-    resultLimit: z.number().int().default(100).describe("The maximum number of results to return. Only applicable to SearchFolder type")
+    resultLimit: z.number().int().default(100).describe("The maximum number of results to return. Only applicable to SearchFolder type"),
+    fileExtension: z.string().optional().describe("The file extension for the new Page Template (e.g., 'html', 'aspx'). Required for 'PageTemplate' type."),
+    pageSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the Page Schema to associate with the Page Template. Required for 'PageTemplate' type."),
+    templateBuildingBlocks: z.array(z.string().regex(/^tcm:\d+-\d+-2048$/)).optional().describe("An array of TCM URIs for the Template Building Blocks that make up this Page Template. Required for 'PageTemplate' type.")
 };
 
 // STEP 2: Create the final Zod schema and centralize validation logic.
@@ -37,6 +40,15 @@ const createItemInputSchema = z.object(createItemInputProperties)
     })
     .refine(data => !(data.itemType === 'SearchFolder' && !data.searchQuery), {
         message: "To create a 'SearchFolder', the 'searchQuery' parameter is required."
+    })
+    .refine(data => !(data.itemType === 'PageTemplate' && !data.fileExtension), {
+        message: "To create a 'PageTemplate', the 'fileExtension' parameter is required."
+    })
+    .refine(data => !(data.itemType === 'PageTemplate' && !data.pageSchemaId), {
+        message: "To create a 'PageTemplate', the 'pageSchemaId' parameter is required."
+    })
+    .refine(data => !(data.itemType === 'PageTemplate' && (!data.templateBuildingBlocks || data.templateBuildingBlocks.length === 0)), {
+        message: "To create a 'PageTemplate', the 'templateBuildingBlocks' parameter must be provided and not be empty."
     });
 
 // STEP 3: Infer the TypeScript type directly from the schema.
@@ -69,6 +81,12 @@ Therefore, when creating a Component in the Folder with ID tcm:10-4112-2, the Sc
         if (args.relatedKeywords) {
             args.relatedKeywords = args.relatedKeywords.map(kw => convertItemIdToContextPublication(kw, locationId));
         }
+        if (args.pageSchemaId) {
+            args.pageSchemaId = convertItemIdToContextPublication(args.pageSchemaId, locationId);
+        }
+        if (args.templateBuildingBlocks) {
+            args.templateBuildingBlocks = args.templateBuildingBlocks.map(tbb => convertItemIdToContextPublication(tbb, locationId));
+        }
         // Recursively convert links in content and metadata
         if (args.content) {
             convertLinksRecursively(args.content, locationId);
@@ -77,7 +95,7 @@ Therefore, when creating a Component in the Folder with ID tcm:10-4112-2, the Sc
             convertLinksRecursively(args.metadata, locationId);
         }
 
-        let { itemType, title, schemaId, metadataSchemaId, content, metadata, isAbstract, description, key, parentKeywords, relatedKeywords, itemsInBundle, searchQuery, resultLimit } = args;
+        let { itemType, title, schemaId, metadataSchemaId, content, metadata, isAbstract, description, key, parentKeywords, relatedKeywords, itemsInBundle, searchQuery, resultLimit, fileExtension, pageSchemaId, templateBuildingBlocks } = args;
 
         try {
             // Reorder content and metadata fields based on their respective schemas
@@ -87,12 +105,12 @@ Therefore, when creating a Component in the Folder with ID tcm:10-4112-2, the Sc
             if (metadata) {
                 if (metadataSchemaId && metadataSchemaId !== 'tcm:0-0-0') {
                     metadata = await reorderFieldsBySchema(metadata, metadataSchemaId, 'metadata');
-                } 
+                }
                 else if (schemaId) {
                     metadata = await reorderFieldsBySchema(metadata, schemaId, 'metadata');
                 }
             }
-            
+
             // 1. Get the default model for the item type and location
             const defaultModelResponse = await authenticatedAxios.get(`/item/defaultModel/${itemType}`, {
                 params: {
@@ -112,6 +130,16 @@ Therefore, when creating a Component in the Folder with ID tcm:10-4112-2, the Sc
             if (metadata) payload.Metadata = metadata;
 
             // Type-specific properties
+            if (itemType === 'PageTemplate') {
+                if (pageSchemaId) payload.PageSchema = { IdRef: pageSchemaId };
+                if (fileExtension) payload.FileExtension = fileExtension;
+                if (templateBuildingBlocks) {
+                    const tbbInvocations = templateBuildingBlocks.map(tbbId =>
+                        `<TemplateInvocation><Template xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="${tbbId}" xlink:title="" /></TemplateInvocation>`
+                    ).join('');
+                    payload.Content = `<CompoundTemplate xmlns="http://www.tridion.com/ContentManager/5.3/CompoundTemplate">${tbbInvocations}</CompoundTemplate>`;
+                }
+            }
             if (itemType === 'Keyword') {
                 if (typeof isAbstract === 'boolean') payload.IsAbstract = isAbstract;
                 if (description) payload.Description = description;
@@ -150,7 +178,7 @@ Therefore, when creating a Component in the Folder with ID tcm:10-4112-2, the Sc
                         searchQuery.ProcessDefinition = convertItemIdToContextPublication(searchQuery.ProcessDefinition, contextId);
                     }
                 }
-                
+
                 payload.Configuration = generateSearchFolderXmlConfiguration(searchQuery, resultLimit);
             }
             if (itemType === 'Bundle') {
