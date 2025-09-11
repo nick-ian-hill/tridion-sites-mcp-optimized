@@ -10,13 +10,33 @@ export const search = {
     description: `Performs a comprehensive search on the Content Manager System (CMS) for various item types based on a wide range of criteria.
   This tool is used to find items that match the specified query, such as full-text search strings, item titles, types, authors, lock status, and more.
   The return value will be an array of items that match the search criteria or an empty array if no items are found.
+  
+  For controlling result details, you can use a predefined 'details' level or the 'includeProperties' parameter for custom requests.
+  If you only need a list of items matching the query, "IdAndTitle" is the recommended and most reliable choice.
+  If you require specific details from the results (e.g., which user modified an item and/or the publication it belongs to), use the 'includeProperties' parameter. This is the recommended approach when you need specific information. Consider performing a search for a small number of items first to see which properties are available and then performing a wider search requesting just the properties you need. 
+  If (and only if) you do not know yet how the results will be analyzed, consider setting the 'details' level to "CoreDetails". This may fail if the search returns many items (resultLimit > 300).
+  Only select "AllDetails" if you absolutely need full details about the returned items. This request will likely fail with a large number of item (resultLimit > 150). 'AllDetails' adds the following properties to 'CoreDetails':
+  - AccessControlList
+  - ApplicableActions
+  - ApprovalStatus
+  - ContentSecurityDescriptor
+  - ExtensionProperties
+  - ListLinks
+  - SecurityDescriptor
+  - LoadInfo
+  
   This tool cannot modify, update, or delete any CMS items or files.`,
     input: {
         searchQuery: SearchQueryValidation.optional().describe("A search query model. If not provided, a default search for all items is performed."),
         resultLimit: z.number().int().default(100).optional().describe("The maximum number of results to return."),
-        details: z.enum(["IdAndTitleOnly", "WithApplicableActions", "Contentless"]).default("IdAndTitleOnly").optional().describe("Specifies the level of details in the returned items."),
+        details: z.enum(["IdAndTitle", "CoreDetails", "AllDetails"]).default("IdAndTitle").optional().describe(`Specifies a predefined level of detail for the returned items. For custom property selection, use 'includeProperties' instead.
+- "IdAndTitle": Returns only the ID and Title of each item. This is the most efficient option, and the best choice if you only need a list of items matching the query.
+- "CoreDetails": Returns the main properties of each item, excluding verbose security and link-related information.
+- "AllDetails": Returns all available properties for each item.`),
+        includeProperties: z.array(z.string()).optional().describe(`An array of property names to include in the response. This provides fine-grained control for specific queries.
+If this parameter is used, the 'details' parameter is ignored. 'Id', 'Title', and '$type' will always be included. Example: ["VersionInfo", "LocationInfo"]`),
     },
-    execute: async ({ searchQuery, resultLimit, details }: { searchQuery?: z.infer<typeof SearchQueryValidation>, resultLimit?: number, details?: "IdAndTitleOnly" | "WithApplicableActions" | "Contentless" }) => {
+    execute: async ({ searchQuery, resultLimit, details, includeProperties }: { searchQuery?: z.infer<typeof SearchQueryValidation>, resultLimit?: number, details?: "IdAndTitle" | "CoreDetails" | "AllDetails", includeProperties?: string[] }) => {
         try {
             if (searchQuery && searchQuery.SearchIn) {
                 const contextId = searchQuery.SearchIn;
@@ -94,13 +114,20 @@ export const search = {
                 )
             );
 
+            // Determine the correct details value for the API request
+            // If custom properties are requested, we must fetch the full object ('Contentless').
+            const hasCustomProperties = includeProperties && includeProperties.length > 0;
+            const apiDetails = hasCustomProperties || details === 'CoreDetails' || details === 'AllDetails'
+                ? 'Contentless'
+                : 'IdAndTitleOnly';
+
             type SearchParams = {
-                details: "IdAndTitleOnly" | "WithApplicableActions" | "Contentless";
+                details: "IdAndTitleOnly" | "Contentless";
                 resultLimit?: number;
             };
 
             const params: SearchParams = {
-                details: details || "IdAndTitleOnly",
+                details: apiDetails,
             };
 
             if (resultLimit !== undefined) {
@@ -116,11 +143,48 @@ export const search = {
             );
 
             if (response.status === 200) {
+                let responseData = response.data;
+
+                // Priority 1: Custom properties are requested
+                if (hasCustomProperties && Array.isArray(responseData)) {
+                    const baseProps = ['Id', 'Title', '$type'];
+                    const propsToInclude = new Set([...baseProps, ...includeProperties]);
+
+                    responseData = responseData.map(item => {
+                        const filteredItem: { [key: string]: any } = {};
+                        for (const key of propsToInclude) {
+                            if (key in item) {
+                                filteredItem[key] = item[key];
+                            }
+                        }
+                        return filteredItem;
+                    });
+                
+                // Priority 2: CoreDetails is requested (and no custom properties)
+                } else if (details === 'CoreDetails' && Array.isArray(responseData)) {
+                    const propertiesToExclude = new Set([
+                        'AccessControlList',
+                        'ApplicableActions',
+                        'ApprovalStatus',
+                        'ContentSecurityDescriptor',
+                        'ExtensionProperties',
+                        'ListLinks',
+                        'SecurityDescriptor',
+                        'LoadInfo'
+                    ]);
+
+                    responseData = responseData.map(item =>
+                        Object.fromEntries(
+                            Object.entries(item).filter(([key]) => !propertiesToExclude.has(key))
+                        )
+                    );
+                }
+
                 return {
                     content: [
                         {
                             type: "text",
-                            text: JSON.stringify(response.data, null, 2)
+                            text: JSON.stringify(responseData, null, 2)
                         }
                     ],
                 };
