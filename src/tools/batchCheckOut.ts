@@ -11,7 +11,7 @@ export const batchCheckOut = {
         setPermanentLock: z.boolean().optional().default(true)
             .describe("Set to true to apply a permanent lock to each item that requires an explicit check-in or undo check-out to release."),
     },
-    execute: async ({ itemIds, setPermanentLock }: { itemIds: string[]; setPermanentLock: boolean; }) => {
+    execute: async ({ itemIds, setPermanentLock = true }: { itemIds: string[]; setPermanentLock: boolean; }) => {
         try {
             const requestModel = {
                 Ids: itemIds,

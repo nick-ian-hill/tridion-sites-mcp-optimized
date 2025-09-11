@@ -15,7 +15,7 @@ IMPORTANT: Requesting a high level of detail for many items can be slow or cause
 - "AllDetails": Returns all available properties for each item. Only select "AllDetails" if you absolutely need full details about the returned items.`),
         includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response. If used, the 'details' parameter is ignored. 'Id', 'Title', and '$type' will always be included.`),
     },
-    execute: async ({ details, includeProperties }: { details?: "IdAndTitle" | "CoreDetails" | "AllDetails", includeProperties?: string[] }) => {
+    execute: async ({ details = "IdAndTitle", includeProperties }: { details?: "IdAndTitle" | "CoreDetails" | "AllDetails", includeProperties?: string[] }) => {
         try {
             const hasCustomProperties = includeProperties && includeProperties.length > 0;
             const apiDetails = hasCustomProperties || details === 'CoreDetails' || details === 'AllDetails'

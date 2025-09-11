@@ -13,7 +13,7 @@ export const batchCheckIn = {
         userComment: z.string().optional()
             .describe("An optional comment to describe the changes made. This comment will be applied to all items in the batch."),
     },
-    execute: async ({ itemIds, removePermanentLock, userComment }: { itemIds: string[]; removePermanentLock: boolean; userComment?: string }) => {
+    execute: async ({ itemIds, removePermanentLock = true, userComment }: { itemIds: string[]; removePermanentLock: boolean; userComment?: string }) => {
         try {
             const requestModel: { [key: string]: any } = {
                 Ids: itemIds,

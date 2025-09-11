@@ -9,7 +9,7 @@ export const undoCheckOutItem = {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID (TCM URI) of the checked-out versioned item. The version number should not be included."),
         removePermanentLock: z.boolean().optional().default(true).describe("Set to true to ensure the permanent lock is removed. This should typically be true."),
     },
-    execute: async ({ itemId, removePermanentLock }: { itemId: string; removePermanentLock: boolean }) => {
+    execute: async ({ itemId, removePermanentLock = true }: { itemId: string; removePermanentLock: boolean }) => {
         try {
             const escapedItemId = itemId.replace(':', '_');
             const requestModel = {

@@ -10,7 +10,7 @@ export const promoteItem = {
         destinationRepositoryId: z.string().regex(/^tcm:\d+-\d+-1$/).describe("The TCM URI of the parent Publication to promote the item to."),
         recursive: z.boolean().optional().default(false).describe("Specifies whether the operation should be performed recursively. If true, all linked items (recursively) are promoted too if they don't already exist in the destination Publication."),
     },
-    execute: async ({ itemId, destinationRepositoryId, recursive }: { itemId: string; destinationRepositoryId: string; recursive: boolean }) => {
+    execute: async ({ itemId, destinationRepositoryId, recursive = false }: { itemId: string; destinationRepositoryId: string; recursive: boolean }) => {
         try {
             const escapedItemId = itemId.replace(':', '_');
             const requestModel = {

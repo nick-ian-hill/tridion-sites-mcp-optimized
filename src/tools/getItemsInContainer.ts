@@ -18,7 +18,7 @@ IMPORTANT: Requesting details for many items can return a large amount of data. 
 - "AllDetails": Returns all available properties for each item. This is likely to fail if the container holds many items.`),
         includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response. If used, the 'details' parameter is ignored. 'Id', 'Title', and '$type' will always be included.`),
     },
-    execute: async ({ containerId, recursive, useDynamicVersion, itemTypes, details, includeProperties }: { 
+    execute: async ({ containerId, recursive = false, useDynamicVersion = false, itemTypes, details = "IdAndTitle", includeProperties }: { 
         containerId: string, 
         recursive?: boolean, 
         useDynamicVersion?: boolean, 

@@ -13,7 +13,7 @@ export const getClassifiedItems = {
         resolveDescendantKeywords: z.boolean().optional().default(false).describe("If true, items classified with descendant keywords of the specified keyword are also included in the results."),
         resultLimit: z.number().int().optional().default(100).describe("The maximum number of items to return. Specify a positive value, or -1 for no limit. Defaults to 100."),
     },
-    execute: async ({ keywordId, useDynamicVersion, itemTypes, resolveDescendantKeywords, resultLimit }: {
+    execute: async ({ keywordId, useDynamicVersion = false, itemTypes, resolveDescendantKeywords = false, resultLimit = 100 }: {
         keywordId: string,
         useDynamicVersion?: boolean,
         itemTypes?: string[],

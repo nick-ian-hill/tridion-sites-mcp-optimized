@@ -9,7 +9,7 @@ export const getComponentTemplateLinks = {
         schemaId: z.string().regex(/^tcm:\d+-\d+-8$/).describe("The TCM URI of the Schema."),
         onlyAllowedOnPage: z.boolean().optional().default(false).describe("If set to true, only (Dynamic) Component Templates which are Allowed On a Page are returned."),
     },
-    execute: async ({ schemaId, onlyAllowedOnPage }: {
+    execute: async ({ schemaId, onlyAllowedOnPage = false }: {
         schemaId: string,
         onlyAllowedOnPage?: boolean
     }) => {

@@ -109,7 +109,7 @@ Therefore, when creating a Component in the Folder with ID tcm:10-4112-2, the Sc
             convertLinksRecursively(args.metadata, locationId);
         }
 
-        let { itemType, title, schemaId, metadataSchemaId, content, metadata, isAbstract, description, key, parentKeywords, relatedKeywords, itemsInBundle, searchQuery, resultLimit, fileExtension, pageSchemaId, templateBuildingBlocks, allowOnPage, isRepositoryPublishable, outputFormat, priority, relatedSchemaIds } = args;
+        let { itemType, title, schemaId, metadataSchemaId, content, metadata, isAbstract, description, key, parentKeywords, relatedKeywords, itemsInBundle, searchQuery, resultLimit = 100, fileExtension, pageSchemaId, templateBuildingBlocks, allowOnPage, isRepositoryPublishable, outputFormat, priority, relatedSchemaIds } = args;
 
         try {
             // Reorder content and metadata fields based on their respective schemas

@@ -35,9 +35,9 @@ export const search = {
 - "CoreDetails": Returns the main properties of each item, excluding verbose security and link-related information.
 - "AllDetails": Returns all available properties for each item.`),
         includeProperties: z.array(z.string()).optional().describe(`An array of property names to include in the response. This provides fine-grained control for specific queries.
-If this parameter is used, the 'details' parameter is ignored. 'Id', 'Title', and '$type' will always be included. Example: ["VersionInfo", "LocationInfo"]`),
+If this parameter is used, the 'details' parameter is ignored. 'Id', 'Title', and '$type' will always be included. Example: ["BluePrintInfo", "LocationInfo", "VersionInfo"].`),
     },
-    execute: async ({ searchQuery, resultLimit = 100, details, includeProperties }: { searchQuery?: z.infer<typeof SearchQueryValidation>, resultLimit: number, details?: "IdAndTitle" | "CoreDetails" | "AllDetails", includeProperties?: string[] }) => {
+    execute: async ({ searchQuery, resultLimit = 100, details = "IdAndTitle", includeProperties }: { searchQuery?: z.infer<typeof SearchQueryValidation>, resultLimit: number, details?: "IdAndTitle" | "CoreDetails" | "AllDetails", includeProperties?: string[] }) => {
         try {
             if (searchQuery && searchQuery.SearchIn) {
                 const contextId = searchQuery.SearchIn;

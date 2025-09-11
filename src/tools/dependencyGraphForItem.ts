@@ -54,14 +54,14 @@ Example 2: Finds all Components and Component Templates that the Page tcm:5-310-
             "TargetGroup",
         ])).optional().describe("Filters the results to include only these types of repository-local objects."),
         includeContainers: z.boolean().optional().default(false).describe("If true and direction is 'Uses', the parent Folders or Structure Groups of the items in the graph are also returned (recursively)."),
-        resultLimit: z.number().int().optional().default(1000).describe("The maximum number of dependency nodes to return."),
+        resultLimit: z.number().int().optional().default(100).describe("The maximum number of dependency nodes to return."),
         details: z.enum(["IdAndTitle", "CoreDetails", "AllDetails"]).default("IdAndTitle").optional().describe(`Specifies a predefined level of detail for the returned items. For custom property selection, use 'includeProperties' instead.
 - "IdAndTitle": Returns only the ID and Title of each item. This is the recommended default.
 - "CoreDetails": Returns the main properties, excluding verbose security and link-related information. This may be slow or fail if the graph is large.
 - "AllDetails": Returns all available properties for each item. This is likely to fail on large graphs.`),
         includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response. If used, the 'details' parameter is ignored. 'Id', 'Title', and '$type' will always be included.`),
     },
-    execute: async ({ itemId, direction, contextRepositoryId, rloItemTypes, includeContainers, resultLimit, details, includeProperties }: any) => {
+    execute: async ({ itemId, direction = "Uses", contextRepositoryId, rloItemTypes, includeContainers = false, resultLimit = 100, details = "IdAndTitle", includeProperties }: any) => {
         try {
             const restItemId = itemId.replace(':', '_');
             

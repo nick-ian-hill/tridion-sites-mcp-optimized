@@ -11,7 +11,7 @@ export const batchUndoCheckOut = {
         removePermanentLock: z.boolean().optional().default(true)
             .describe("Set to true to ensure the permanent lock is removed from each item."),
     },
-    execute: async ({ itemIds, removePermanentLock }: { itemIds: string[]; removePermanentLock: boolean }) => {
+    execute: async ({ itemIds, removePermanentLock = true }: { itemIds: string[]; removePermanentLock: boolean }) => {
         try {
             const requestModel = {
                 Ids: itemIds,

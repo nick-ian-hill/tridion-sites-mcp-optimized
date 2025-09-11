@@ -15,7 +15,7 @@ export const getUsers = {
         searchMode: z.enum(["Contains", "StartsWith", "EndsWith", "ExactMatch"]).optional().default("Contains")
             .describe("Specifies how to match the account name when using the 'search' parameter."),
     },
-    execute: async ({ predefined, includeDisabled, search, searchMode }: {
+    execute: async ({ predefined, includeDisabled = false, search, searchMode = "Contains" }: {
         predefined?: boolean,
         includeDisabled?: boolean,
         search?: string,

@@ -55,13 +55,14 @@ export const getBluePrintHierarchy = {
 - "AllDetails": Returns all available properties for each item. Only select "AllDetails" if you absolutely need full details about the returned items.`),
         includeProperties: z.array(z.string()).optional().describe(`An array of property names to include in the response for custom, fine-grained control. If used, the 'details' parameter is ignored. 'Id', 'Title', and '$type' will always be included. This is ignored if outputFormat is 'JsonGraph' or 'Svg'.`),
     },
-    execute: async ({ itemId, outputFormat, details, includeProperties }: { itemId: string; outputFormat: "Raw" | "JsonGraph" | "Svg"; details?: "IdAndTitle" | "CoreDetails" | "AllDetails", includeProperties?: string[] }) => {
+    execute: async ({ itemId, outputFormat = "Raw", details = "IdAndTitle", includeProperties }: { itemId: string; outputFormat: "Raw" | "JsonGraph" | "Svg"; details?: "IdAndTitle" | "CoreDetails" | "AllDetails", includeProperties?: string[] }) => {
         try {
             const hasCustomProperties = includeProperties && includeProperties.length > 0;
-            let apiDetails = details === 'IdAndTitle' ? 'IdAndTitleOnly' : 'Contentless';
-            if (outputFormat === 'JsonGraph' || outputFormat === 'Svg') {
-                apiDetails = 'IdAndTitleOnly';
-            }
+            const isMinimalDetails =
+                (outputFormat === 'JsonGraph' || outputFormat === 'Svg') ||
+                (details === 'IdAndTitle' && !hasCustomProperties);
+
+            const apiDetails = isMinimalDetails ? 'IdAndTitleOnly' : 'Contentless';
 
             const escapedItemId = itemId.replace(':', '_');
             const response = await authenticatedAxios.get(`/items/${escapedItemId}/bluePrintHierarchy`, {
@@ -71,7 +72,7 @@ export const getBluePrintHierarchy = {
             if (response.status !== 200) {
                 return handleUnexpectedResponse(response);
             }
-            
+
             if (outputFormat === "Raw") {
                 const finalData = filterResponseData({ responseData: response.data, details, includeProperties });
                 return { content: [{ type: "text", text: JSON.stringify(finalData, null, 2) }] };

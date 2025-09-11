@@ -23,7 +23,7 @@ This tool cannot modify, update, or delete any CMS items or files.`,
         useDynamicVersion: z.boolean().default(false).describe("When true, loads the latest revisions for versioned items. Defaults to false."),
         loadFullItems: z.boolean().default(false).describe("When true, loads the full content and metadata for each item. Defaults to false."),
     },
-    execute: async ({ itemIds, useDynamicVersion, loadFullItems }: { itemIds: string[], useDynamicVersion: boolean, loadFullItems: boolean }) => {
+    execute: async ({ itemIds, useDynamicVersion = false, loadFullItems = false }: { itemIds: string[], useDynamicVersion: boolean, loadFullItems: boolean }) => {
         try {
             const response = await authenticatedAxios.get(`/items/bulkRead`, {
                 params: {

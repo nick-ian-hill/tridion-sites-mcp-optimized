@@ -21,7 +21,7 @@ export const getLockedItems = {
         maxResults: z.number().int().optional().default(500)
             .describe("Specifies the maximum number of results to return."),
     },
-    execute: async ({ forAllUsers, lockUserId, lockFilter, lockResult, maxResults }: {
+    execute: async ({ forAllUsers = false, lockUserId, lockFilter, lockResult, maxResults = 500 }: {
         forAllUsers?: boolean;
         lockUserId?: string;
         lockFilter?: Array<"None" | "CheckedOut" | "Permanent" | "NewItem" | "InWorkflow" | "Reserved">;

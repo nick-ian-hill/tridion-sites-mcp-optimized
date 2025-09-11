@@ -10,7 +10,7 @@ export const checkInItem = {
         removePermanentLock: z.boolean().optional().default(true).describe("Set to true to remove the permanent lock after check-in. If false, the item remains locked."),
         userComment: z.string().optional().describe("An optional comment to describe the changes made in this version."),
     },
-    execute: async ({ itemId, removePermanentLock, userComment }: { itemId: string; removePermanentLock: boolean; userComment?: string }) => {
+    execute: async ({ itemId, removePermanentLock = true, userComment }: { itemId: string; removePermanentLock: boolean; userComment?: string }) => {
         try {
             const escapedItemId = itemId.replace(':', '_');
             const requestModel: { [key: string]: any } = {
