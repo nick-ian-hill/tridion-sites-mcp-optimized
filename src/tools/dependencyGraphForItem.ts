@@ -1,10 +1,21 @@
 import { z } from "zod";
 import { authenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
+import { filterResponseData } from "../utils/responseFiltering.js";
 
 export const dependencyGraphForItem = {
     name: "dependencyGraphForItem",
     description: `Returns items in the Content Management System that are either dependencies of (direction = uses) or dependent on (direction = UsedBy) the specified item.
+IMPORTANT: Requesting details for many items can return a large amount of data. Use 'IdAndTitle' or the 'includeProperties' parameter for the most efficient and reliable results.
+Only select "AllDetails" if you absolutely need full details about the returned items. This request will likely fail with a large number of item (resultLimit > 150). 'AllDetails' adds the following properties to 'CoreDetails':
+  - AccessControlList
+  - ApplicableActions
+  - ApprovalStatus
+  - ContentSecurityDescriptor
+  - ExtensionProperties
+  - ListLinks
+  - SecurityDescriptor
+  - LoadInfo
 
 Examples:
 
@@ -25,7 +36,7 @@ Example 2: Finds all Components and Component Templates that the Page tcm:5-310-
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the item for which the dependency graph should be retrieved."),
         direction: z.enum(["Uses", "UsedBy"]).optional().default("Uses").describe("Specifies the direction of the dependencies. 'Uses' returns items this item depends on; 'UsedBy' returns items that depend on this item."),
-        contextRepositoryId: z.string().regex(/^tcm:0-\d+-1$/).optional().describe("The TCM URI of an ancestor Publication (a Publication higher in the BluePrint). If specified, the response will indicate whether the dependent items exist in this Publication."),
+        contextRepositoryId: z.string().regex(/^tcm:0-\d+-1$/).optional().describe("The TCM URI of an ancestor Publication. If specified, the response will indicate whether the dependent items exist in this Publication."),
         rloItemTypes: z.array(z.enum([
             "Component",
             "Page",
@@ -41,43 +52,38 @@ Example 2: Finds all Components and Component Templates that the Page tcm:5-310-
             "Category",
             "Keyword",
             "TargetGroup",
-        ])).optional().describe("Filters the results to include only these types of repository-local objects. Note that the Bundle and SearchFolder types are both instances of VirtualFoler."),
+        ])).optional().describe("Filters the results to include only these types of repository-local objects."),
         includeContainers: z.boolean().optional().default(false).describe("If true and direction is 'Uses', the parent Folders or Structure Groups of the items in the graph are also returned (recursively)."),
         resultLimit: z.number().int().optional().default(1000).describe("The maximum number of dependency nodes to return."),
-        details: z.enum(["IdAndTitleOnly", "WithApplicableActions", "Contentless"]).optional().default("IdAndTitleOnly").describe("Specifies the level of detail for the items returned in the graph."),
+        details: z.enum(["IdAndTitle", "CoreDetails", "AllDetails"]).default("IdAndTitle").optional().describe(`Specifies a predefined level of detail for the returned items. For custom property selection, use 'includeProperties' instead.
+- "IdAndTitle": Returns only the ID and Title of each item. This is the recommended default.
+- "CoreDetails": Returns the main properties, excluding verbose security and link-related information. This may be slow or fail if the graph is large.
+- "AllDetails": Returns all available properties for each item. This is likely to fail on large graphs.`),
+        includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response. If used, the 'details' parameter is ignored. 'Id', 'Title', and '$type' will always be included.`),
     },
-    execute: async ({ itemId, direction, contextRepositoryId, rloItemTypes, includeContainers, resultLimit, details }: any) => {
+    execute: async ({ itemId, direction, contextRepositoryId, rloItemTypes, includeContainers, resultLimit, details, includeProperties }: any) => {
         try {
-            // The API requires the colon in the TCM URI to be replaced with an underscore.
             const restItemId = itemId.replace(':', '_');
+            
+            const hasCustomProperties = includeProperties && includeProperties.length > 0;
+            const apiDetails = hasCustomProperties || details === 'CoreDetails' || details === 'AllDetails'
+                ? 'Contentless'
+                : 'IdAndTitleOnly';
 
-            // Assemble the query parameters for the API request.
-            const params = {
-                direction,
-                contextRepositoryId,
-                rloItemTypes,
-                includeContainers,
-                resultLimit,
-                details
-            };
-
-            // Remove any parameters that are undefined, so they are not sent in the request.
+            const params = { direction, contextRepositoryId, rloItemTypes, includeContainers, resultLimit, details: apiDetails };
             const cleanParams = Object.fromEntries(Object.entries(params).filter(([_, v]) => v !== undefined));
-
-            // Make the GET request to the dependencyGraph endpoint.
+            
             const response = await authenticatedAxios.get(`/items/${restItemId}/dependencyGraph`, {
                 params: cleanParams
             });
 
-            // A successful request will return a 200 OK status.
             if (response.status === 200) {
+                const finalData = filterResponseData({ responseData: response.data, details, includeProperties });
                 return {
-                    content: [
-                        {
-                            type: "text",
-                            text: JSON.stringify(response.data, null, 2)
-                        }
-                    ],
+                    content: [{
+                        type: "text",
+                        text: JSON.stringify(finalData, null, 2)
+                    }],
                 };
             } else {
                 return handleUnexpectedResponse(response);

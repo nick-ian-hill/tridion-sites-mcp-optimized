@@ -4,6 +4,7 @@ import { SearchQueryValidation } from "../schemas/searchSchema.js";
 import { toLink, toLinkArray } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
+import { filterResponseData } from "../utils/responseFiltering.js";
 
 export const search = {
     name: "search",
@@ -36,7 +37,7 @@ export const search = {
         includeProperties: z.array(z.string()).optional().describe(`An array of property names to include in the response. This provides fine-grained control for specific queries.
 If this parameter is used, the 'details' parameter is ignored. 'Id', 'Title', and '$type' will always be included. Example: ["VersionInfo", "LocationInfo"]`),
     },
-    execute: async ({ searchQuery, resultLimit, details, includeProperties }: { searchQuery?: z.infer<typeof SearchQueryValidation>, resultLimit?: number, details?: "IdAndTitle" | "CoreDetails" | "AllDetails", includeProperties?: string[] }) => {
+    execute: async ({ searchQuery, resultLimit = 100, details, includeProperties }: { searchQuery?: z.infer<typeof SearchQueryValidation>, resultLimit: number, details?: "IdAndTitle" | "CoreDetails" | "AllDetails", includeProperties?: string[] }) => {
         try {
             if (searchQuery && searchQuery.SearchIn) {
                 const contextId = searchQuery.SearchIn;
@@ -114,8 +115,6 @@ If this parameter is used, the 'details' parameter is ignored. 'Id', 'Title', an
                 )
             );
 
-            // Determine the correct details value for the API request
-            // If custom properties are requested, we must fetch the full object ('Contentless').
             const hasCustomProperties = includeProperties && includeProperties.length > 0;
             const apiDetails = hasCustomProperties || details === 'CoreDetails' || details === 'AllDetails'
                 ? 'Contentless'
@@ -143,48 +142,14 @@ If this parameter is used, the 'details' parameter is ignored. 'Id', 'Title', an
             );
 
             if (response.status === 200) {
-                let responseData = response.data;
-
-                // Priority 1: Custom properties are requested
-                if (hasCustomProperties && Array.isArray(responseData)) {
-                    const baseProps = ['Id', 'Title', '$type'];
-                    const propsToInclude = new Set([...baseProps, ...includeProperties]);
-
-                    responseData = responseData.map(item => {
-                        const filteredItem: { [key: string]: any } = {};
-                        for (const key of propsToInclude) {
-                            if (key in item) {
-                                filteredItem[key] = item[key];
-                            }
-                        }
-                        return filteredItem;
-                    });
-                
-                // Priority 2: CoreDetails is requested (and no custom properties)
-                } else if (details === 'CoreDetails' && Array.isArray(responseData)) {
-                    const propertiesToExclude = new Set([
-                        'AccessControlList',
-                        'ApplicableActions',
-                        'ApprovalStatus',
-                        'ContentSecurityDescriptor',
-                        'ExtensionProperties',
-                        'ListLinks',
-                        'SecurityDescriptor',
-                        'LoadInfo'
-                    ]);
-
-                    responseData = responseData.map(item =>
-                        Object.fromEntries(
-                            Object.entries(item).filter(([key]) => !propertiesToExclude.has(key))
-                        )
-                    );
-                }
+                // The verbose filtering logic is now replaced by a single call to the utility.
+                const finalData = filterResponseData({ responseData: response.data, details, includeProperties });
 
                 return {
                     content: [
                         {
                             type: "text",
-                            text: JSON.stringify(responseData, null, 2)
+                            text: JSON.stringify(finalData, null, 2)
                         }
                     ],
                 };

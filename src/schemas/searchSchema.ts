@@ -17,9 +17,9 @@ export const SearchQueryValidation = z.object({
   Title: z.string().optional().describe("A string to search for in item titles. This is treated as a phrase and does not support wildcards."),
   Description: z.string().optional().describe("A string to search for in the item's description field."),
   ItemTypes: z.array(z.enum([
-    "Folder", "Component", "Page", "Schema", "ComponentTemplate", "PageTemplate",
-    "Category", "Keyword", "User", "Group", "Publication", "TargetGroup",
-    "TemplateBuildingBlock", "SearchFolder", "StructureGroup",
+    "BusinessProcessType", "Category", "Component", "ComponentTemplate", "Folder",
+    "Keyword", "Page", "PageTemplate", "ProcessDefinition", "Publication", "Schema",
+    "StructureGroup", "TargetGroup", "TemplateBuildingBlock", "VirtualFolder"
   ])).optional().describe("An array of item types to limit the search results to."),
 
   // --- Location and Scope ---
