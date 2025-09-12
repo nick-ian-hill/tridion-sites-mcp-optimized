@@ -34,17 +34,17 @@ export const search = {
 - "IdAndTitle": Returns only the ID and Title of each item. This is the most efficient option, and the best choice if you only need a list of items matching the query.
 - "CoreDetails": Returns the main properties of each item, excluding verbose security and link-related information.
 - "AllDetails": Returns all available properties for each item.`),
-        includeProperties: z.array(z.string()).optional().describe(`An array of property names to include in the response for fine-grained control.
+        includeProperties: z.array(z.string()).optional().describe(`An array of property names to include in the response for fine-grained control. Supports dot notation for selecting nested properties (e.g., "VersionInfo.Creator").
 Using this parameter is much preferred over 'CoreDetails' if you know which property or properties are required in advance.
 If this parameter is used, the 'details' parameter is ignored. 'Id', 'Title', and '$type' are always included.
-Available properties include, but are not limited to:
+Available top-level properties include, but are not limited to:
 - "LocationInfo": Information about the item's location (e.g., Path, ContextRepository, OrganizationalItem).
 - "VersionInfo": Details about the item's Version, CreationDate, Creator, RevisionDate, Revisor, etc.
 - "LockInfo": The LockType and LockUser (the user who has the item checked out).
 - "BluePrintInfo": Information related to the item's BluePrinting context (e.g., IsShared, IsLocalized, OwningRepository).
 - "MetadataSchema": The Title and Id and the item's metadata schema.
 - "AccessControlList": Security information detailing user and group permissions.
-Example: ["VersionInfo", "BluePrintInfo"]`),
+Example: ["VersionInfo.Creator", "BluePrintInfo.OwningRepository", "LockInfo"]`),
     },
     execute: async ({ searchQuery, resultLimit = 100, details = "IdAndTitle", includeProperties }: { searchQuery?: z.infer<typeof SearchQueryValidation>, resultLimit: number, details?: "IdAndTitle" | "CoreDetails" | "AllDetails", includeProperties?: string[] }) => {
         try {
