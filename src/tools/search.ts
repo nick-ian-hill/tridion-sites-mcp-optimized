@@ -34,8 +34,17 @@ export const search = {
 - "IdAndTitle": Returns only the ID and Title of each item. This is the most efficient option, and the best choice if you only need a list of items matching the query.
 - "CoreDetails": Returns the main properties of each item, excluding verbose security and link-related information.
 - "AllDetails": Returns all available properties for each item.`),
-        includeProperties: z.array(z.string()).optional().describe(`An array of property names to include in the response. This provides fine-grained control for specific queries.
-If this parameter is used, the 'details' parameter is ignored. 'Id', 'Title', and '$type' will always be included. Example: ["BluePrintInfo", "LocationInfo", "VersionInfo"].`),
+        includeProperties: z.array(z.string()).optional().describe(`An array of property names to include in the response for fine-grained control.
+Using this parameter is much preferred over 'CoreDetails' if you know which property or properties are required in advance.
+If this parameter is used, the 'details' parameter is ignored. 'Id', 'Title', and '$type' are always included.
+Available properties include, but are not limited to:
+- "LocationInfo": Information about the item's location (e.g., Path, ContextRepository, OrganizationalItem).
+- "VersionInfo": Details about the item's Version, CreationDate, Creator, RevisionDate, Revisor, etc.
+- "LockInfo": The LockType and LockUser (the user who has the item checked out).
+- "BluePrintInfo": Information related to the item's BluePrinting context (e.g., IsShared, IsLocalized, OwningRepository).
+- "MetadataSchema": The Title and Id and the item's metadata schema.
+- "AccessControlList": Security information detailing user and group permissions.
+Example: ["VersionInfo", "BluePrintInfo"]`),
     },
     execute: async ({ searchQuery, resultLimit = 100, details = "IdAndTitle", includeProperties }: { searchQuery?: z.infer<typeof SearchQueryValidation>, resultLimit: number, details?: "IdAndTitle" | "CoreDetails" | "AllDetails", includeProperties?: string[] }) => {
         try {
@@ -142,7 +151,6 @@ If this parameter is used, the 'details' parameter is ignored. 'Id', 'Title', an
             );
 
             if (response.status === 200) {
-                // The verbose filtering logic is now replaced by a single call to the utility.
                 const finalData = filterResponseData({ responseData: response.data, details, includeProperties });
 
                 return {
