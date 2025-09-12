@@ -44,6 +44,17 @@ export const filterResponseData = ({ responseData, details, includeProperties }:
             }
             return filteredItem;
         };
+    } else if (details === 'IdAndTitle') {
+        const propsToInclude = new Set(['Id', 'Title', '$type']);
+        filterFn = (item: any) => {
+            const filteredItem: { [key: string]: any } = {};
+            for (const key of propsToInclude) {
+                if (key in item) {
+                    filteredItem[key] = item[key];
+                }
+            }
+            return filteredItem;
+        };
     } else if (details === 'CoreDetails') {
         const propertiesToExclude = new Set([
             'AccessControlList', 'ApplicableActions', 'ApprovalStatus', 'ContentSecurityDescriptor',
