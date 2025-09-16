@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { toLink } from "../utils/links.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
@@ -145,7 +145,14 @@ This example shows a two-column layout within the main content area.
     });`,
     input: createPageInputProperties,
 
-    execute: async (args: CreatePageInput) => {
+    execute: async (args: CreatePageInput,
+        context: any
+    ) => {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         const {
             title, locationId, fileName, pageTemplateId, metadataSchemaId,
             metadata, componentPresentations, regions
@@ -174,6 +181,7 @@ This example shows a two-column layout within the main content area.
             }
 
             // Fetch the default model to use as a base
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const defaultModelResponse = await authenticatedAxios.get('/item/defaultModel/Page', {
                 params: { containerId: locationId }
             });
@@ -271,14 +279,14 @@ This example shows a two-column layout within the main content area.
 
             let processedMetadata = metadata;
             if (processedMetadata && contextualMetadataSchemaId) {
-                processedMetadata = await reorderFieldsBySchema(processedMetadata, contextualMetadataSchemaId, 'metadata');
+                processedMetadata = await reorderFieldsBySchema(processedMetadata, contextualMetadataSchemaId, 'metadata', authenticatedAxios);
             }
             if (processedMetadata) payload.Metadata = processedMetadata;
 
             payload.ComponentPresentations = processComponentPresentations(parsedComponentPresentations, locationId);
 
             if (contextualPageTemplateId) {
-                payload.Regions = await processRegions(parsedRegions, locationId, contextualPageTemplateId);
+                payload.Regions = await processRegions(parsedRegions, locationId, contextualPageTemplateId, authenticatedAxios);
             } else if (parsedRegions && parsedRegions.length > 0) {
                 return { content: [{ type: "text", text: `Error: Regions were provided, but no Page Template could be determined.` }] };
             } else {

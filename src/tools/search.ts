@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { SearchQueryValidation } from "../schemas/searchSchema.js";
 import { toLink, toLinkArray } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
@@ -46,8 +46,14 @@ Available top-level properties include, but are not limited to:
 - "AccessControlList": Security information detailing user and group permissions.
 Example: ["VersionInfo.Creator", "BluePrintInfo.OwningRepository", "LockInfo"]`),
     },
-    execute: async ({ searchQuery, resultLimit = 100, details = "IdAndTitle", includeProperties }: { searchQuery?: z.infer<typeof SearchQueryValidation>, resultLimit: number, details?: "IdAndTitle" | "CoreDetails" | "AllDetails", includeProperties?: string[] }) => {
+    execute: async ({ searchQuery, resultLimit = 100, details = "IdAndTitle", includeProperties }: { searchQuery?: z.infer<typeof SearchQueryValidation>, resultLimit: number, details?: "IdAndTitle" | "CoreDetails" | "AllDetails", includeProperties?: string[] }, context: any) => {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         try {
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             if (searchQuery && searchQuery.SearchIn) {
                 const contextId = searchQuery.SearchIn;
 
@@ -75,7 +81,6 @@ Example: ["VersionInfo.Creator", "BluePrintInfo.OwningRepository", "LockInfo"]`)
 
             const searchRequestPayload = searchQuery ? [{
                 "$type": "SearchQuery",
-                // Simple properties
                 FullTextQuery: searchQuery.FullTextQuery,
                 Title: searchQuery.Title,
                 Description: searchQuery.Description,
@@ -90,14 +95,12 @@ Example: ["VersionInfo.Creator", "BluePrintInfo.OwningRepository", "LockInfo"]`)
                 IsTitleCaseSensitive: searchQuery.IsTitleCaseSensitive,
                 IsDescriptionCaseSensitive: searchQuery.IsDescriptionCaseSensitive,
                 LockType: searchQuery.LockType,
-                // Properties that need to be converted to Link objects
                 SearchIn: toLink(searchQuery.SearchIn),
                 Author: toLink(searchQuery.Author),
                 LockUser: toLink(searchQuery.LockUser),
                 FromRepository: toLink(searchQuery.FromRepository),
                 ActivityDefinition: toLink(searchQuery.ActivityDefinition),
                 ProcessDefinition: toLink(searchQuery.ProcessDefinition),
-                // Properties that need to be converted to arrays of Link objects
                 BasedOnSchemas: searchQuery.BasedOnSchemas?.map(s => {
                     const schemaFilterObject: any = {
                         Schema: {
@@ -152,7 +155,7 @@ Example: ["VersionInfo.Creator", "BluePrintInfo.OwningRepository", "LockInfo"]`)
 
             if (response.status === 200) {
                 const finalData = filterResponseData({ responseData: response.data, details, includeProperties });
-
+                console.log(JSON.stringify(finalData, null, 2));
                 return {
                     content: [
                         {

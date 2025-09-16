@@ -1,7 +1,7 @@
 import { z } from "zod";
 import ExcelJS from "exceljs";
-import { Buffer } from 'buffer'; // Explicitly import Buffer to resolve type conflicts
-import { authenticatedAxios } from "../lib/axios.js";
+import { Buffer } from 'buffer';
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 const readExcelFileFromMultimediaComponentInputProperties = {
@@ -15,12 +15,18 @@ export const readExcelFileFromMultimediaComponent = {
     description: `Reads the content of an Excel file (.xlsx) from a multimedia component and returns its data as a JSON string.
     This tool can be useful in cases where the user would like semi-structured content in the form of an Excel file to be mapped to new items in the CMS.`,
     input: readExcelFileFromMultimediaComponentInputProperties,
-    async execute(input: z.infer<typeof readExcelFileFromMultimediaComponentSchema>) {
+    async execute(input: z.infer<typeof readExcelFileFromMultimediaComponentSchema>, context: any) {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         const { itemId } = input;
         const restItemId = itemId.replace(':', '_');
 
         try {
-            // --- Step 1: Get Item metadata to verify type and filename ---
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
+
             console.log(`Fetching item details for ${itemId} to verify it's an Excel file.`);
             const getItemResponse = await authenticatedAxios.get(`/items/${restItemId}`);
             if (getItemResponse.status !== 200) return handleUnexpectedResponse(getItemResponse);
@@ -34,7 +40,6 @@ export const readExcelFileFromMultimediaComponent = {
                 throw new Error(`The file in component ${itemId} is not a .xlsx file. Filename: ${itemData.BinaryContent?.Filename}`);
             }
 
-            // --- Step 2: Download the binary content ---
             console.log(`Downloading binary content for Excel file: ${itemData.BinaryContent.Filename}`);
             const downloadResponse = await authenticatedAxios.get<ArrayBuffer>(
                 `/items/${restItemId}/binary/download`, 
@@ -47,7 +52,6 @@ export const readExcelFileFromMultimediaComponent = {
             const excelFileBuffer: Buffer = Buffer.from(downloadResponse.data);
             console.log(`Successfully downloaded ${excelFileBuffer.length} bytes.`);
 
-            // --- Step 3: Parse the .xlsx buffer into JSON using exceljs ---
             console.log("Parsing .xlsx content into JSON using exceljs...");
             const workbook = new ExcelJS.Workbook();
 
@@ -58,7 +62,7 @@ export const readExcelFileFromMultimediaComponent = {
             workbook.eachSheet((worksheet, _sheetId) => {
                 const sheetData: any[] = [];
                 const headerRow = worksheet.getRow(1);
-                if (!headerRow.values || headerRow.values.length === 0) return; // Skip empty sheets
+                if (!headerRow.values || headerRow.values.length === 0) return;
 
                 const headers: string[] = [];
                 headerRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {

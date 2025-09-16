@@ -1,12 +1,18 @@
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const getPublicationTypes = {
     name: "getPublicationTypes",
     description: "Retrieves a list of all available Publication Types (e.g., 'Web', 'Content', 'Mobile'). These types help categorize and manage Publications based on their intended purpose or channel.",
     input: {},
-    execute: async () => {
+    execute: async (_: {}, context: any) => {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         try {
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const response = await authenticatedAxios.get('/publicationTypes');
 
             if (response.status === 200) {

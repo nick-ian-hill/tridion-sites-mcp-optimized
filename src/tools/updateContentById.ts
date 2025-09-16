@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 import { reorderFieldsBySchema, convertLinksRecursively } from "../utils/fieldReordering.js";
@@ -31,9 +31,15 @@ Example 1: Updates the values of the content fields with XML names 'TitleField',
         itemId: z.string().regex(/^(tcm:\d+-\d+(-16)?)$/).describe("The unique ID of the component to update (e.g., 'tcm:5-123')."),
         content: z.record(fieldValueSchema).describe("A JSON object containing the Component's content fields. The tool will automatically order the fields to match the Schema definition."),
     },
-    execute: async ({ itemId, content }: { itemId: string, content: Record<string, any> }) => {
+    execute: async ({ itemId, content }: { itemId: string, content: Record<string, any> }, context: any) => {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         let wasCheckedOutByTool = false;
         const restItemId = itemId.replace(':', '_');
+        const authenticatedAxios = createAuthenticatedAxios(userSessionId);
 
         try {
             const getInitialItemResponse = await authenticatedAxios.get(`/items/${restItemId}`, { params: { useDynamicVersion: true } });
@@ -49,7 +55,7 @@ Example 1: Updates the values of the content fields with XML names 'TitleField',
 
             convertLinksRecursively(content, itemId);
             
-            const orderedContent = await reorderFieldsBySchema(content, schemaId, 'content');
+            const orderedContent = await reorderFieldsBySchema(content, schemaId, 'content', authenticatedAxios);
 
             const whoAmIResponse = await authenticatedAxios.get('/whoAmI');
             if (whoAmIResponse.status !== 200) return handleUnexpectedResponse(whoAmIResponse);

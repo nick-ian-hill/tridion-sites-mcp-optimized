@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { authenticatedAxios } from "../lib/axios.js";
 import { toLink } from "./links.js";
 import { convertItemIdToContextPublication } from "./convertItemIdToContextPublication.js";
 import { reorderFieldsBySchema } from "./fieldReordering.js";
 import { componentPresentationSchemaForTyping, RegionForTyping } from "../schemas/pageSchemas.js";
+import { AxiosInstance } from "axios";
 
 export function processComponentPresentations(
     cps: z.infer<typeof componentPresentationSchemaForTyping>[] | undefined,
@@ -20,7 +20,8 @@ export function processComponentPresentations(
 export async function processRegions(
     regions: RegionForTyping[] | undefined,
     contextId: string,
-    parentSchemaId: string
+    parentSchemaId: string,
+    axiosInstance: AxiosInstance
 ): Promise<any[]> {
     if (!regions) return [];
 
@@ -30,10 +31,10 @@ export async function processRegions(
         let regionSchemaIdRef: string | undefined;
 
         try {
-            const parentSchemaResponse = await authenticatedAxios.get(`/items/${parentSchemaId.replace(':', '_')}`);
+            const parentSchemaResponse = await axiosInstance.get(`/items/${parentSchemaId.replace(':', '_')}`);
             const parentSchema = parentSchemaResponse.data;
             const regionSchemaContainer = parentSchema.RegionSchema
-                ? (await authenticatedAxios.get(`/items/${parentSchema.RegionSchema.IdRef.replace(':', '_')}`)).data
+                ? (await axiosInstance.get(`/items/${parentSchema.RegionSchema.IdRef.replace(':', '_')}`)).data
                 : parentSchema;
             const regionDef = regionSchemaContainer.Regions?.find((r: any) => r.SchemaName === name);
             if (regionDef?.RegionSchema?.IdRef) {
@@ -44,12 +45,12 @@ export async function processRegions(
         }
 
         if (regionSchemaIdRef && processedMetadata) {
-            processedMetadata = await reorderFieldsBySchema(processedMetadata, regionSchemaIdRef, 'content');
+            processedMetadata = await reorderFieldsBySchema(processedMetadata, regionSchemaIdRef, 'content', axiosInstance);
         }
 
         let nestedRegions: any[] = [];
         if (regionSchemaIdRef && regionData.Regions) {
-            nestedRegions = await processRegions(regionData.Regions, contextId, regionSchemaIdRef);
+            nestedRegions = await processRegions(regionData.Regions, contextId, regionSchemaIdRef, axiosInstance);
         }
 
         const regionPayload: any = {

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { toLink, toLinkArray } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
@@ -46,16 +46,20 @@ Example 2: Changes the locale to French (France) and sets a new default Page Tem
         locale: z.string().optional().describe("The new locale for the Publication (e.g., 'en-US', 'de-DE')."),
         publicationType: z.string().optional().describe("The new type of the Publication (e.g., 'Web', 'Content'). Use the getPublicationTypes tool to see the available types.")
     },
-    execute: async (params: any) => {
+    execute: async (params: any, context: any) => {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         const { itemId, ...updates } = params;
         const restItemId = itemId.replace(':', '_');
 
         try {
-            // 1. Get the current Publication data
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const getItemResponse = await authenticatedAxios.get(`/items/${restItemId}`);
             const itemToUpdate = getItemResponse.data;
 
-            // 2. Apply updates to the item object
             if (updates.title) itemToUpdate.Title = updates.title;
             if (updates.publicationPath) itemToUpdate.PublicationPath = updates.publicationPath;
             if (updates.publicationUrl) itemToUpdate.PublicationUrl = updates.publicationUrl;
@@ -68,7 +72,6 @@ Example 2: Changes the locale to French (France) and sets a new default Page Tem
                 itemToUpdate.ShareProcessAssociations = updates.shareProcessAssociations;
             }
 
-            // Handle Link properties
             if (updates.defaultPageTemplate) itemToUpdate.DefaultPageTemplate = toLink(updates.defaultPageTemplate);
             if (updates.defaultComponentTemplate) itemToUpdate.DefaultComponentTemplate = toLink(updates.defaultComponentTemplate);
             if (updates.defaultTemplateBuildingBlock) itemToUpdate.DefaultTemplateBuildingBlock = toLink(updates.defaultTemplateBuildingBlock);
@@ -80,7 +83,6 @@ Example 2: Changes the locale to French (France) and sets a new default Page Tem
             if (updates.templateBundleProcess) itemToUpdate.TemplateBundleProcess = toLink(updates.templateBundleProcess);
             if (updates.parentPublications) itemToUpdate.ParentPublications = toLinkArray(updates.parentPublications);
 
-            // 3. Send the PUT request to update the item
             const updateResponse = await authenticatedAxios.put(`/items/${restItemId}`, itemToUpdate);
 
             if (updateResponse.status === 200) {

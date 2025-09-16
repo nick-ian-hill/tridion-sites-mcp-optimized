@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { toLinkArray } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
@@ -63,7 +63,14 @@ Example 2: Creates a basic 'Content' Publication intended to be a parent in a Bl
         locale: z.string().optional().describe("The locale for the Publication (e.g., 'en-US', 'de-DE')."),
         publicationType: z.string().optional().describe("The type of the Publication (e.g., 'Web', 'Content'). Use the getPublicationTypes tool to see the available types.")
     },
-    execute: async (args: any) => {
+    execute: async (args: any,
+        context: any
+    ) => {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         const {
             title, parentPublications, publicationKey, publicationPath,
             publicationUrl, multimediaPath, multimediaUrl, locale, publicationType
@@ -71,6 +78,7 @@ Example 2: Creates a basic 'Content' Publication intended to be a parent in a Bl
 
         try {
             // 1. Get the default model for a Publication
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const defaultModelResponse = await authenticatedAxios.get('/item/defaultModel/Publication');
 
             if (defaultModelResponse.status !== 200) {

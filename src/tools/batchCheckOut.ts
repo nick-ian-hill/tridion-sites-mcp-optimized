@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const batchCheckOut = {
@@ -11,10 +11,18 @@ export const batchCheckOut = {
         setPermanentLock: z.boolean().optional().default(true)
             .describe("Set to true to apply a permanent lock to each item that requires an explicit check-in or undo check-out to release."),
     },
-    execute: async ({ itemIds, setPermanentLock = true }: { itemIds: string[]; setPermanentLock: boolean; }) => {
+    execute: async ({ itemIds, setPermanentLock = true }: { itemIds: string[]; setPermanentLock: boolean; },
+        context: any
+    ) => {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         try {
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const requestModel = {
-                Ids: itemIds,
+                ItemIds: itemIds,
                 SetPermanentLock: setPermanentLock
             };
             

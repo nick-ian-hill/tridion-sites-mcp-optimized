@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const getItemHistory = {
@@ -9,16 +9,19 @@ export const getItemHistory = {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)
             .describe("The unique ID of the versioned item. The ID should not contain a version number (e.g., 'tcm:5-256-8')."),
     },
-    execute: async ({ itemId }: { itemId: string }) => {
+    execute: async ({ itemId }: { itemId: string }, context: any) => {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         try {
-            // The API requires the colon in the TCM URI to be replaced with an underscore for the path parameter.
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const restItemId = itemId.replace(':', '_');
             const endpoint = `/items/${restItemId}/history`;
 
-            // Make the GET request to the history endpoint.
             const response = await authenticatedAxios.get(endpoint);
 
-            // A successful request will return a 200 OK status.
             if (response.status === 200) {
                 return {
                     content: [{

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const batchDeleteItemsById = {
@@ -9,10 +9,17 @@ export const batchDeleteItemsById = {
         itemIds: z.array(z.string().regex(/^tcm:\d+-\d+(-\d+)?(-v\d+)?$/))
             .describe("An array of unique IDs (TCM URIs) for the items to be deleted. To delete specific versions, include the version number in the URI (e.g., 'tcm:5-263-64-v3')."),
     },
-    execute: async ({ itemIds }: { itemIds: string[] }) => {
+    execute: async ({ itemIds }: { itemIds: string[] },
+        context: any
+    ) => {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         try {
-            // The API expects the item IDs in a request body with an 'Ids' property.
-            const requestModel = { Ids: itemIds };
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
+            const requestModel = { ItemIds: itemIds };
             const response = await authenticatedAxios.post('/batch/delete', requestModel);
 
             // A 202 status code indicates the batch process was accepted and started.

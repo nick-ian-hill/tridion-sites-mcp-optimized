@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { SearchQueryValidation } from "../schemas/searchSchema.js";
 import { generateSearchFolderXmlConfiguration } from "../utils/generateSearchFolderXml.js";
 import { toLinkArray } from "../utils/links.js";
@@ -75,7 +75,14 @@ For Publications, the second number identifies the Publication (e.g., tcm:0-5-1 
 Therefore, when creating a Component in the Folder with ID tcm:10-4112-2, the Schema must have an ID in the form tcm:10-###-8.`,
     input: createItemInputProperties,
 
-    execute: async (args: CreateItemInput) => {
+    execute: async (args: CreateItemInput,
+        context: any
+    ) => {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         const { locationId } = args;
         if (args.schemaId) {
             args.schemaId = convertItemIdToContextPublication(args.schemaId, locationId);
@@ -112,16 +119,18 @@ Therefore, when creating a Component in the Folder with ID tcm:10-4112-2, the Sc
         let { itemType, title, schemaId, metadataSchemaId, content, metadata, isAbstract, description, key, parentKeywords, relatedKeywords, itemsInBundle, searchQuery, resultLimit = 100, fileExtension, pageSchemaId, templateBuildingBlocks, allowOnPage, isRepositoryPublishable, outputFormat, priority, relatedSchemaIds } = args;
 
         try {
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
+
             // Reorder content and metadata fields based on their respective schemas
             if (content && schemaId) {
-                content = await reorderFieldsBySchema(content, schemaId, 'content');
+                content = await reorderFieldsBySchema(content, schemaId, 'content', authenticatedAxios);
             }
             if (metadata) {
                 if (metadataSchemaId && metadataSchemaId !== 'tcm:0-0-0') {
-                    metadata = await reorderFieldsBySchema(metadata, metadataSchemaId, 'metadata');
+                    metadata = await reorderFieldsBySchema(metadata, metadataSchemaId, 'metadata', authenticatedAxios);
                 }
                 else if (schemaId) {
-                    metadata = await reorderFieldsBySchema(metadata, schemaId, 'metadata');
+                    metadata = await reorderFieldsBySchema(metadata, schemaId, 'metadata', authenticatedAxios);
                 }
             }
 

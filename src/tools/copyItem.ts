@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const copyItem = {
@@ -14,8 +14,16 @@ export const copyItem = {
         itemId: z.string().regex(/^tcm:\d+-\d+(-\d+)?$/).describe("The TCM URI of the item to be copied."),
         destinationId: z.string().regex(/^tcm:\d+-\d+-(2|4)$/).describe("The TCM URI of the destination Folder or Structure Group.")
     },
-    execute: async ({ itemId, destinationId }: { itemId: string, destinationId: string }) => {
+    execute: async ({ itemId, destinationId }: { itemId: string, destinationId: string },
+        context: any
+    ) => {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         try {
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const escapedItemId = itemId.replace(':', '_');
             const escapedDestinationId = destinationId.replace(':', '_');
 

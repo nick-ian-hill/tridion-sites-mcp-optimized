@@ -3,7 +3,7 @@ import { createMultimediaComponentFromBase64 } from "./createMultimediaComponent
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 import { handleAxiosError } from "../lib/errorUtils.js";
 import { GoogleGenAI } from "@google/genai";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 
@@ -22,7 +22,14 @@ export const createMultimediaComponentFromPrompt = {
     name: "createMultimediaComponentFromPrompt",
     description: "Generates an image from a text prompt using the Gemini API and creates a new multimedia component from the generated image.",
     input: createMultimediaComponentFromPromptInputProperties,
-    async execute(input: z.infer<typeof createMultimediaComponentFromPromptSchema>) {
+    async execute(input: z.infer<typeof createMultimediaComponentFromPromptSchema>,
+        context: any
+    ) {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         const { prompt, title, fileName, locationId, schemaId, metadata } = input;
 
         try {
@@ -62,6 +69,7 @@ export const createMultimediaComponentFromPrompt = {
 
             try {
                 console.log(`Fetching existing component titles from folder ${locationId} to ensure uniqueness.`);
+                const authenticatedAxios = createAuthenticatedAxios(userSessionId);
                 const response = await authenticatedAxios.get(`/items/${escapedContainerId}/items`, {
                     params: {
                         rloItemTypes: ['Component'],
@@ -98,7 +106,7 @@ export const createMultimediaComponentFromPrompt = {
                 locationId,
                 schemaId,
                 metadata
-            });
+            }, context);
 
             return createComponentResult;
 

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const bulkReadItemsById = {
@@ -23,8 +23,16 @@ This tool cannot modify, update, or delete any CMS items or files.`,
         useDynamicVersion: z.boolean().default(false).describe("When true, loads the latest revisions for versioned items. Defaults to false."),
         loadFullItems: z.boolean().default(false).describe("When true, loads the full content and metadata for each item. Defaults to false."),
     },
-    execute: async ({ itemIds, useDynamicVersion = false, loadFullItems = false }: { itemIds: string[], useDynamicVersion: boolean, loadFullItems: boolean }) => {
+    execute: async ({ itemIds, useDynamicVersion = false, loadFullItems = false }: { itemIds: string[], useDynamicVersion: boolean, loadFullItems: boolean },
+        context: any
+    ) => {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         try {
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const response = await authenticatedAxios.get(`/items/bulkRead`, {
                 params: {
                     itemIds: itemIds,

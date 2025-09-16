@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { toLink, toLinkArray } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 import { xmlNameSchema } from "../schemas/xmlNameSchema.js";
@@ -270,7 +270,12 @@ Example 8: Create a Region Schema with constraints on its Component Presentation
         isPublishable: z.boolean().optional().describe("Specifies whether Components based on this Schema can be resolved for data publishing."),
         regionDefinition: z.string().optional().describe("A JSON string for the Region Definition. Only applicable when 'purpose' is 'Region'. This object can contain 'ComponentPresentationConstraints', which is an array of 'OccurrenceConstraint' and 'TypeConstraint' objects. 'OccurrenceConstraint' uses 'MinOccurs' and 'MaxOccurs' to limit the number of CPs. 'TypeConstraint' uses 'BasedOnSchema' and/or 'BasedOnComponentTemplate' (Link objects) to restrict the type of CPs allowed.")
     },
-    execute: async (args: any) => {
+    execute: async (args: any, context: any) => {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         const {
             title, locationId, purpose, rootElementName, description,
             fields, metadataFields, allowedMultimediaTypes, bundleProcessId,
@@ -289,8 +294,9 @@ Example 8: Create a Region Schema with constraints on its Component Presentation
         }
 
         try {
-            const processedFields = fields ? await processSchemaFieldDefinitions(fields, locationId) : undefined;
-            const processedMetadataFields = metadataFields ? await processSchemaFieldDefinitions(metadataFields, locationId) : undefined;
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
+            const processedFields = fields ? await processSchemaFieldDefinitions(fields, locationId, authenticatedAxios) : undefined;
+            const processedMetadataFields = metadataFields ? await processSchemaFieldDefinitions(metadataFields, locationId, authenticatedAxios) : undefined;
 
             let parsedRegionDefinition;
             if (regionDefinition) {

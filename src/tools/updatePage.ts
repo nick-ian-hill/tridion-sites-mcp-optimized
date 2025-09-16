@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { toLink } from "../utils/links.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
@@ -58,13 +58,18 @@ Example 3: Reorder Component Presentations in a specific Region.
         componentPresentations: z.string().optional().describe("A JSON string representing a complete array of Component Presentation objects to replace the existing ones on the page. Use JSON.stringify() to format this correctly."),
         regions: z.string().optional().describe("A JSON string representing a complete array of Region objects to replace the existing ones on the page. Use JSON.stringify() to format this correctly.")
     },
-    execute: async (params: any) => {
+    execute: async (params: any, context: any) => {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         const { itemId, ...updates } = params;
         const restItemId = itemId.replace(':', '_');
         let wasCheckedOutByTool = false;
+        const authenticatedAxios = createAuthenticatedAxios(userSessionId);
 
         try {
-            // 1. Get current item and check lock status
             const getItemResponse = await authenticatedAxios.get(`/items/${restItemId}`, { params: { useDynamicVersion: true } });
             if (getItemResponse.status !== 200) {
                 return handleUnexpectedResponse(getItemResponse);
@@ -90,12 +95,9 @@ Example 3: Reorder Component Presentations in a specific Region.
                 wasCheckedOutByTool = true;
             }
 
-            // 2. Apply updates to the item object
             if (updates.title) itemToUpdate.Title = updates.title;
             if (updates.fileName) itemToUpdate.FileName = updates.fileName;
 
-            // If a new PT is provided, update it and set inheritance to false.
-            // This must be done before processing metadata, as the PT may define the metadata schema.
             if (updates.pageTemplateId) {
                 const contextualPageTemplateId = convertItemIdToContextPublication(updates.pageTemplateId, itemId);
                 itemToUpdate.PageTemplate = toLink(contextualPageTemplateId);
@@ -110,7 +112,6 @@ Example 3: Reorder Component Presentations in a specific Region.
             if (updates.metadata) {
                 let schemaIdForMetadata = itemToUpdate.MetadataSchema?.IdRef;
                 if (!schemaIdForMetadata) {
-                     // Fallback to Page Template's Region Schema if metadata schema is not on page
                     const ptResponse = await authenticatedAxios.get(`/items/${itemToUpdate.PageTemplate.IdRef.replace(':', '_')}`);
                     if (ptResponse.data?.PageSchema?.IdRef) {
                         schemaIdForMetadata = ptResponse.data.PageSchema.IdRef;
@@ -119,7 +120,7 @@ Example 3: Reorder Component Presentations in a specific Region.
                  if (!schemaIdForMetadata) {
                     throw new Error(`Could not determine a Metadata Schema for Page ${itemId}. Please specify a 'metadataSchemaId'.`);
                 }
-                const orderedMetadata = await reorderFieldsBySchema(updates.metadata, schemaIdForMetadata, 'metadata');
+                const orderedMetadata = await reorderFieldsBySchema(updates.metadata, schemaIdForMetadata, 'metadata', authenticatedAxios);
                 itemToUpdate.Metadata = orderedMetadata;
             }
 
@@ -140,21 +141,19 @@ Example 3: Reorder Component Presentations in a specific Region.
                     if (!pageTemplateId) {
                         throw new Error(`Could not determine the Page Template for Page ${itemId} to process regions.`);
                     }
-                    itemToUpdate.Regions = await processRegions(parsedRegions, itemId, pageTemplateId);
+                    itemToUpdate.Regions = await processRegions(parsedRegions, itemId, pageTemplateId, authenticatedAxios);
                 } catch (error) {
                     const errorMessage = error instanceof Error ? error.message : String(error);
                     throw new Error(`The 'regions' parameter is not a valid JSON string. Details: ${errorMessage}`);
                 }
             }
 
-            // 3. Send the update request
             const updateResponse = await authenticatedAxios.put(`/items/${restItemId}`, itemToUpdate);
             if (updateResponse.status !== 200) {
                 return handleUnexpectedResponse(updateResponse);
             }
             const updatedItem = updateResponse.data;
 
-            // 4. Check in the item
             if (wasCheckedOutByTool) {
                 const checkInResponse = await authenticatedAxios.post(`/items/${restItemId}/checkIn`, { "$type": "CheckInRequest", "RemovePermanentLock": true });
                 if (checkInResponse.status !== 200) {
@@ -167,7 +166,6 @@ Example 3: Reorder Component Presentations in a specific Region.
             };
 
         } catch (error) {
-            // 5. Undo checkout on failure
             if (wasCheckedOutByTool) {
                 try {
                     await authenticatedAxios.post(`/items/${restItemId}/undoCheckOut`);

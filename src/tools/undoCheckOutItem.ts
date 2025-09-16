@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const undoCheckOutItem = {
@@ -9,8 +9,14 @@ export const undoCheckOutItem = {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID (TCM URI) of the checked-out versioned item. The version number should not be included."),
         removePermanentLock: z.boolean().optional().default(true).describe("Set to true to ensure the permanent lock is removed. This should typically be true."),
     },
-    execute: async ({ itemId, removePermanentLock = true }: { itemId: string; removePermanentLock: boolean }) => {
+    execute: async ({ itemId, removePermanentLock = true }: { itemId: string; removePermanentLock: boolean }, context: any) => {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         try {
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const escapedItemId = itemId.replace(':', '_');
             const requestModel = {
                 "$type": "UndoCheckOutRequest",

@@ -1,8 +1,7 @@
 import { z } from "zod";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
-// Define the allowed SchemaPurpose values based on the spec, excluding "UnknownByClient".
 const schemaPurposeEnum = z.enum([
     "Component",
     "Multimedia",
@@ -22,14 +21,19 @@ export const getSchemaLinks = {
         publicationId: z.string().regex(/^tcm:0-\d+-1$/).describe("The TCM URI of the Publication to search within (e.g., 'tcm:0-5-1')."),
         schemaPurpose: z.array(schemaPurposeEnum).nonempty().describe("An array of one or more Schema purposes to filter the results.")
     },
-    execute: async ({ publicationId, schemaPurpose }: { publicationId: string, schemaPurpose: string[] }) => {
+    execute: async ({ publicationId, schemaPurpose }: { publicationId: string, schemaPurpose: string[] }, context: any) => {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         try {
-            // The API requires the colon in the ID to be replaced with an underscore for the path parameter.
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const escapedPublicationId = publicationId.replace(':', '_');
 
             const response = await authenticatedAxios.get(`/items/${escapedPublicationId}/schemaLinks`, {
                 params: {
-                    schemaPurpose // Axios handles serializing the array into multiple query parameters.
+                    schemaPurpose
                 }
             });
 

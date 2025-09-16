@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const batchCheckIn = {
@@ -13,10 +13,18 @@ export const batchCheckIn = {
         userComment: z.string().optional()
             .describe("An optional comment to describe the changes made. This comment will be applied to all items in the batch."),
     },
-    execute: async ({ itemIds, removePermanentLock = true, userComment }: { itemIds: string[]; removePermanentLock: boolean; userComment?: string }) => {
+    execute: async ({ itemIds, removePermanentLock = true, userComment }: { itemIds: string[]; removePermanentLock: boolean; userComment?: string },
+        context: any
+    ) => {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         try {
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const requestModel: { [key: string]: any } = {
-                Ids: itemIds,
+                ItemIds: itemIds,
                 RemovePermanentLock: removePermanentLock
             };
 

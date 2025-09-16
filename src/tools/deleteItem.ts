@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const deleteItem = {
@@ -8,8 +8,15 @@ export const deleteItem = {
     input: {
         itemId: z.string().regex(/^tcm:\d+-\d+(-\d+)?(-v\d+)?$/).describe("The unique ID (TCM URI) of the item to delete. To delete a specific version, include the version number in the URI (e.g., 'tcm:5-263-64-v3')."),
     },
-    execute: async ({ itemId }: { itemId: string }) => {
+    execute: async ({ itemId }: { itemId: string }, context: any) => {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         try {
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
+
             const escapedItemId = itemId.replace(':', '_');
             const response = await authenticatedAxios.delete(`/items/${escapedItemId}`);
 

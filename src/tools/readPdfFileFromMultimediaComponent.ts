@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { PdfReader } from "pdfreader";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 const readPdfFileFromMultimediaComponentInputProperties = {
@@ -14,12 +14,18 @@ export const readPdfFileFromMultimediaComponent = {
     description: `Reads the text content of a PDF file (.pdf) from a multimedia component and returns it as a string.
     This tool can be useful in cases where the user would like to import the contents of a PDF file into the CMS.`,
     input: readPdfFileFromMultimediaComponentInputProperties,
-    async execute(input: z.infer<typeof readPdfFileFromMultimediaComponentSchema>) {
+    async execute(input: z.infer<typeof readPdfFileFromMultimediaComponentSchema>, context: any) {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         const { itemId } = input;
         const restItemId = itemId.replace(':', '_');
 
         try {
-            // --- Step 1: Get Item metadata to verify type and filename ---
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
+
             console.log(`Fetching item details for ${itemId} to verify it's a PDF file.`);
             const getItemResponse = await authenticatedAxios.get(`/items/${restItemId}`);
             if (getItemResponse.status !== 200) return handleUnexpectedResponse(getItemResponse);
@@ -33,7 +39,6 @@ export const readPdfFileFromMultimediaComponent = {
                  throw new Error(`The file in component ${itemId} is not a .pdf file. Filename: ${itemData.BinaryContent?.Filename}`);
             }
 
-            // --- Step 2: Download the binary content ---
             console.log(`Downloading binary content for PDF file: ${itemData.BinaryContent.Filename}`);
             const downloadResponse = await authenticatedAxios.get(`/items/${restItemId}/binary/download`, {
                 responseType: 'arraybuffer'
@@ -43,7 +48,6 @@ export const readPdfFileFromMultimediaComponent = {
             const pdfFileBuffer = Buffer.from(downloadResponse.data);
             console.log(`Successfully downloaded ${pdfFileBuffer.length} bytes.`);
 
-            // --- Step 3: Parse the .pdf buffer into text using pdfreader ---
             console.log("Parsing .pdf content into text using pdfreader...");
             const textContent = await new Promise<string>((resolve, reject) => {
                 let content = "";
@@ -51,10 +55,8 @@ export const readPdfFileFromMultimediaComponent = {
                     if (err) {
                         reject(err);
                     } else if (!item) {
-                        // End of file
                         resolve(content);
                     } else if (item.text) {
-                        // Append text item, ensuring a space for readability
                         content += item.text + " ";
                     }
                 });

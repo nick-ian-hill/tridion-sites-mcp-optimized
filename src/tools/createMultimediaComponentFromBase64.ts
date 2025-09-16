@@ -1,6 +1,6 @@
 import { z } from "zod";
 import FormData from "form-data";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 
@@ -19,7 +19,14 @@ export const createMultimediaComponentFromBase64 = {
     name: "createMultimediaComponentFromBase64",
     description: "Creates a new multimedia component by uploading a file from a base64 encoded string. If the parent Folder has a mandatory schema, it will be used automatically, so there is no need to provide a schemaId in this case.",
     input: createMultimediaComponentFromBase64InputProperties,
-    async execute(input: z.infer<typeof createMultimediaComponentFromBase64Schema>) {
+    async execute(input: z.infer<typeof createMultimediaComponentFromBase64Schema>,
+        context: any
+    ) {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         const { base64Content, title, fileName, locationId, schemaId, metadata } = input;
         
         try {
@@ -31,6 +38,7 @@ export const createMultimediaComponentFromBase64 = {
             formData.append('file', fileBuffer, fileName);
 
             console.log("Uploading binary data to CMS temporary storage...");
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const uploadResponse = await authenticatedAxios.post('/binary/upload', formData, {
                 headers: formData.getHeaders()
             });

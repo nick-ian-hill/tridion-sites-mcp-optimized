@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 
@@ -24,7 +24,14 @@ export const createMultimediaComponentFromUrl = {
     name: "createMultimediaComponentFromUrl",
     description: "Creates a new multimedia component by uploading a file from a public URL. If the parent Folder has a mandatory schema, it will be used automatically, so there is no need to provide a schemaId.",
     input: createMultimediaComponentFromUrlInputProperties,
-    async execute(input: z.infer<typeof createMultimediaComponentFromUrlSchema>) {
+    async execute(input: z.infer<typeof createMultimediaComponentFromUrlSchema>,
+        context: any
+    ) {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         const { mediaUrl, title, fileName, locationId, schemaId, metadata } = input;
         
         const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
@@ -74,6 +81,7 @@ export const createMultimediaComponentFromUrl = {
             formData.append('file', fileBuffer, fileName);
 
             console.log("Uploading binary data to CMS temporary storage...");
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const uploadResponse = await authenticatedAxios.post('/binary/upload', formData, {
                 headers: formData.getHeaders()
             });

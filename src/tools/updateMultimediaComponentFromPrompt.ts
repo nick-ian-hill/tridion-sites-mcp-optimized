@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { GoogleGenAI } from "@google/genai";
 import FormData from "form-data";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
@@ -17,13 +17,18 @@ export const updateMultimediaComponentFromPrompt = {
     name: "updateMultimediaComponentFromPrompt",
     description: "Updates an existing multimedia component's image based on a text prompt. It checks out the component, downloads the binary, sends it to an AI for modification, and uploads the new version.",
     input: updateMultimediaComponentFromPromptInputProperties,
-    async execute(input: z.infer<typeof updateMultimediaComponentFromPromptSchema>) {
+    async execute(input: z.infer<typeof updateMultimediaComponentFromPromptSchema>, context: any) {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         const { itemId, prompt } = input;
         const restItemId = itemId.replace(':', '_');
         let wasCheckedOutByTool = false;
+        const authenticatedAxios = createAuthenticatedAxios(userSessionId);
 
         try {
-            // --- Step 1: Get Item and Perform Check-out ---
             console.log(`Fetching item details for ${itemId}`);
             const getInitialItemResponse = await authenticatedAxios.get(`/items/${restItemId}`, { params: { useDynamicVersion: true } });
             if (getInitialItemResponse.status !== 200) return handleUnexpectedResponse(getInitialItemResponse);
@@ -54,7 +59,6 @@ export const updateMultimediaComponentFromPrompt = {
                 wasCheckedOutByTool = true;
             }
 
-            // --- Step 2: Download the original binary content ---
             console.log(`Downloading binary content for ${itemId}`);
             const downloadResponse = await authenticatedAxios.get(`/items/${restItemId}/binary/download`, {
                 responseType: 'arraybuffer'
@@ -65,9 +69,8 @@ export const updateMultimediaComponentFromPrompt = {
             const originalMimeType = downloadResponse.headers['content-type'] || 'image/jpeg';
             console.log(`Successfully downloaded binary: ${originalImageBuffer.length} bytes, MIME type: ${originalMimeType}`);
 
-            // --- Step 3: Pass the image and prompt to Gemini ---
             let newImageBase64: string | undefined;
-            
+
             // For debugging: Uncomment the line below and comment out the entire Gemini API block that follows.
             // newImageBase64 = "R0lGODlhAQABAIAAAP8AADAAACwAAAAAAQABAAACAkQBADs=";
 
@@ -99,7 +102,6 @@ export const updateMultimediaComponentFromPrompt = {
                 throw new Error(errorMessage);
             }
 
-            // --- Step 4: Upload the new binary to CMS ---
             const newImageBuffer = Buffer.from(newImageBase64, 'base64');
             const formData = new FormData();
             formData.append('file', newImageBuffer, itemToUpdate.BinaryContent.Filename);
@@ -113,14 +115,12 @@ export const updateMultimediaComponentFromPrompt = {
             const cmsTempFileId = uploadResponse.data.TempFileId;
             console.log(`New binary uploaded. CMS Temporary File ID: ${cmsTempFileId}`);
 
-            // --- Step 5: Update the component to use the new binary ---
             itemToUpdate.BinaryContent.UploadFromFile = cmsTempFileId;
 
             console.log(`Updating component ${itemId} with new binary.`);
             const updateResponse = await authenticatedAxios.put(`/items/${restItemId}`, itemToUpdate);
             if (updateResponse.status !== 200) return handleUnexpectedResponse(updateResponse);
 
-            // --- Step 6: Check-in the component ---
             console.log(`Checking in component ${itemId}.`);
             const checkInResponse = await authenticatedAxios.post(`/items/${restItemId}/checkIn`, { "$type": "CheckInRequest", "RemovePermanentLock": true });
             if (checkInResponse.status !== 200) return handleUnexpectedResponse(checkInResponse);
@@ -130,7 +130,6 @@ export const updateMultimediaComponentFromPrompt = {
             };
 
         } catch (error) {
-            // --- Cleanup: Undo checkout on failure ---
             if (wasCheckedOutByTool) {
                 try {
                     console.log(`An error occurred. Undoing checkout for ${itemId}.`);

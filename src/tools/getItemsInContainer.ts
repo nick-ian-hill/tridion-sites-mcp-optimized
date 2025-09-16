@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 import { filterResponseData } from "../utils/responseFiltering.js";
 
@@ -25,8 +25,14 @@ IMPORTANT: Requesting details for many items can return a large amount of data. 
         itemTypes?: string[], 
         details?: "IdAndTitle" | "CoreDetails" | "AllDetails",
         includeProperties?: string[]
-    }) => {
+    }, context: any) => {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         try {
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const escapedContainerId = containerId.replace(':', '_');
 
             const hasCustomProperties = includeProperties && includeProperties.length > 0;

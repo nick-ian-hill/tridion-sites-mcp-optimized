@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { SearchQueryValidation } from "../schemas/searchSchema.js";
 import { generateSearchFolderXmlConfiguration } from "../utils/generateSearchFolderXml.js";
 import { toLink, toLinkArray } from "../utils/links.js";
@@ -8,7 +8,6 @@ import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
 import { processSchemaFieldDefinitions } from "../utils/fieldReordering.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 
-// Define the properties for the tool's input as a standalone plain object.
 const updateItemByIdInputProperties = {
     itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the CMS item to update."),
     itemType: z.enum([
@@ -27,12 +26,9 @@ const updateItemByIdInputProperties = {
     resultLimit: z.number().int().optional().describe("A new result limit for the Search Folder."),
     fields: z.record(fieldDefinitionSchema).optional().describe("For Schema updates only. A dictionary of field definitions for the Schema's content. Replaces the existing fields."),
     metadataFields: z.record(fieldDefinitionSchema).optional().describe("For Schema updates only. A dictionary of field definitions for the Schema's metadata. Replaces the existing metadata fields."),
-    // Page Template specific
     fileExtension: z.string().optional().describe("A new file extension for the Page Template. (Applicable to PageTemplate)"),
     pageSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("A new Page Schema URI for the Page Template. (Applicable to PageTemplate)"),
-    // Page/Component Template specific
     templateBuildingBlocks: z.array(z.string().regex(/^tcm:\d+-\d+-2048$/)).optional().describe("A new array of Template Building Block URIs. Replaces existing TBBs. (Applicable to PageTemplate/ComponentTemplate)"),
-    // Component Template specific
     allowOnPage: z.boolean().optional().describe("For 'ComponentTemplate' type. Whether the Component Template may be used on a Page."),
     isRepositoryPublishable: z.boolean().optional().describe("For 'ComponentTemplate' type. Whether the template renders dynamic Component Presentations."),
     outputFormat: z.string().optional().describe("For 'ComponentTemplate' type. The format of the rendered Component Presentation (e.g., 'HTML Fragment')."),
@@ -40,10 +36,8 @@ const updateItemByIdInputProperties = {
     relatedSchemaIds: z.array(z.string().regex(/^tcm:\d+-\d+-8$/)).optional().describe("For 'ComponentTemplate' type. An array of Schema TCM URIs to link to this template. Replaces any existing links.")
 };
 
-// Create the Zod schema from the properties object for validation and type inference.
 const updateItemByIdInputSchema = z.object(updateItemByIdInputProperties);
 
-// Infer the TypeScript type from the schema.
 type UpdateItemByIdInput = z.infer<typeof updateItemByIdInputSchema>;
 
 export const updateItemById = {
@@ -51,20 +45,25 @@ export const updateItemById = {
     description: `Updates an existing Content Manager System (CMS) item.
 This tool can update various properties like title, description, and metadataSchemaId.
 For versioned items ('Component', 'Schema', 'PageTemplate', 'ComponentTemplate'), check-out and check-in are handled automatically.
+In particular, if an item is not checked out, it will be checked back in after updating.
+If the item is already checked out to the current user, it will remain checked out to that user after the update. If a versioned item is locked by another user, the operation will be aborted.
 This tool can also update the field definitions of a Schema by providing the 'fields' or 'metadataFields' properties.
-To update an item's content or metadata values, use the 'updateContentById' or 'updateMetadataById' tools respectively.
-If a versioned item is locked by another user, the operation will be aborted.`,
-    // Use the plain properties object for the tool definition.
+To update an item's content or metadata values, use the 'updateContentById' or 'updateMetadataById' tools respectively.`,
     input: updateItemByIdInputProperties,
-    execute: async (params: UpdateItemByIdInput) => {
+    execute: async (params: UpdateItemByIdInput, context: any) => {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         const { itemId, itemType, ...updates } = params;
         const restItemId = itemId.replace(':', '_');
         const versionedItemTypes = ["Component", "Schema", "PageTemplate", "ComponentTemplate"];
         const isVersioned = versionedItemTypes.includes(itemType);
         let wasCheckedOutByTool = false;
+        const authenticatedAxios = createAuthenticatedAxios(userSessionId);
 
         try {
-            // Convert all incoming URIs to the correct publication context of the item being updated.
             if (updates.metadataSchemaId) {
                 updates.metadataSchemaId = convertItemIdToContextPublication(updates.metadataSchemaId, itemId);
             }
@@ -162,11 +161,11 @@ If a versioned item is locked by another user, the operation will be aborted.`,
                     throw new Error(`Could not determine location for Schema ${itemId} to process field definitions.`);
                 }
                 if (updates.fields) {
-                    const processedFields = await processSchemaFieldDefinitions(updates.fields, schemaLocationId);
+                    const processedFields = await processSchemaFieldDefinitions(updates.fields, schemaLocationId, authenticatedAxios);
                     itemToUpdate.Fields = { "$type": "FieldsDefinitionDictionary", ...processedFields };
                 }
                 if (updates.metadataFields) {
-                    const processedMetadataFields = await processSchemaFieldDefinitions(updates.metadataFields, schemaLocationId);
+                    const processedMetadataFields = await processSchemaFieldDefinitions(updates.metadataFields, schemaLocationId, authenticatedAxios);
                     itemToUpdate.MetadataFields = { "$type": "FieldsDefinitionDictionary", ...processedMetadataFields };
                 }
             }

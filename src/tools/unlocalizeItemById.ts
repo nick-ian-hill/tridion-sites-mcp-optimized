@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const unlocalizeItemById = {
@@ -14,8 +14,14 @@ The tool returns a confirmation that the item has been successfully unlocalized.
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID (TCM URI) of the local item to unlocalize."),
         useDynamicVersion: z.boolean().optional().default(true).describe("Loads the latest saved version of the item if available."),
     },
-    execute: async ({ itemId, useDynamicVersion = true }: { itemId: string, useDynamicVersion: boolean }) => {
+    execute: async ({ itemId, useDynamicVersion = true }: { itemId: string, useDynamicVersion: boolean }, context: any) => {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         try {
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const escapedItemId = itemId.replace(':', '_');
             const response = await authenticatedAxios.post(`/items/${escapedItemId}/unlocalize`, null, {
                 params: {

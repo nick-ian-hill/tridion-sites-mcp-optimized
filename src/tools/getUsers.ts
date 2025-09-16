@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const getUsers = {
@@ -20,8 +20,14 @@ export const getUsers = {
         includeDisabled?: boolean,
         search?: string,
         searchMode?: "Contains" | "StartsWith" | "EndsWith" | "ExactMatch"
-    }) => {
+    }, context: any) => {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         try {
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const response = await authenticatedAxios.get('/users', {
                 params: {
                     predefined,

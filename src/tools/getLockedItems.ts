@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const getLockedItems = {
@@ -27,9 +27,14 @@ export const getLockedItems = {
         lockFilter?: Array<"None" | "CheckedOut" | "Permanent" | "NewItem" | "InWorkflow" | "Reserved">;
         lockResult?: Array<"None" | "CheckedOut" | "Permanent" | "NewItem" | "InWorkflow" | "Reserved">;
         maxResults?: number;
-    }) => {
+    }, context: any) => {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         try {
-            // Assemble the query parameters for the API request.
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const params = {
                 forAllUsers,
                 lockUserId,
@@ -38,15 +43,12 @@ export const getLockedItems = {
                 maxResults,
             };
 
-            // Remove any parameters that are undefined, so they are not sent in the request.
             const cleanParams = Object.fromEntries(Object.entries(params).filter(([_, v]) => v !== undefined));
 
-            // Make the GET request to the lockedItems endpoint.
             const response = await authenticatedAxios.get('/lockedItems', {
                 params: cleanParams
             });
 
-            // A successful request will return a 200 OK status.
             if (response.status === 200) {
                 return {
                     content: [{

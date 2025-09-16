@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 
@@ -36,11 +36,19 @@ Example 2: Creates a root Structure Group with a title and applies metadata to i
         metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of a Metadata Schema to apply to the root Structure Group."),
         metadata: z.record(fieldValueSchema).optional().describe("A JSON object containing the values for the metadata fields, structured according to the Metadata Schema.")
     },
-    execute: async (args: { title: string; publicationId: string; metadataSchemaId?: string; metadata?: Record<string, any> }) => {
+    execute: async (args: { title: string; publicationId: string; metadataSchemaId?: string; metadata?: Record<string, any>
+     },
+    context: any) => {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         const { title, publicationId, metadataSchemaId, metadata } = args;
 
         try {
             // 1. Get the default model for a Structure Group, using the Publication as the container.
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const defaultModelResponse = await authenticatedAxios.get('/item/defaultModel/StructureGroup', {
                 params: { containerId: publicationId }
             });

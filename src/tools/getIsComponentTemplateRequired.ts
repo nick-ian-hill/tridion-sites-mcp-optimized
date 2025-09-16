@@ -1,4 +1,4 @@
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const getIsComponentTemplateRequired = {
@@ -9,15 +9,20 @@ In the template-based model, a Component Template must be combined with a Compon
 
 The result of this tool is crucial for using the createPage tool correctly. If this tool returns true, it indicates a template-based model, and the 'componentPresentations' parameter of the createPage tool must contain objects with both a 'Component' and a 'ComponentTemplate'. If it returns false, it indicates a templateless or hybrib model where Component Presentations are optional.`,
     input: {},
-    execute: async () => {
+    execute: async (_: {}, context: any) => {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         try {
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const response = await authenticatedAxios.get('/system/capabilities');
 
             if (response.status === 200) {
                 const capabilities = response.data;
                 const enabledFeatures = capabilities.EnabledFeatures || [];
                 
-                // If "DisableDataPipeline" is enabled, a Component Template is mandatory.
                 const isRequired = enabledFeatures.includes("DisableDataPipeline");
                 
                 const message = isRequired

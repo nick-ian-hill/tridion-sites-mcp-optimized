@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 import { reorderFieldsBySchema, convertLinksRecursively } from "../utils/fieldReordering.js";
@@ -29,9 +29,15 @@ Example 1: Updates the metadata fields with XML names 'Keywords' and 'Author' fo
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the item to update (e.g., 'tcm:5-1234-64')."),
         metadata: z.record(fieldValueSchema).describe("A JSON object containing the item's metadata fields. The tool will automatically order the fields to match the Metadata Schema definition."),
     },
-    execute: async ({ itemId, metadata }: { itemId: string, metadata: Record<string, any> }) => {
+    execute: async ({ itemId, metadata }: { itemId: string, metadata: Record<string, any> }, context: any) => {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         let wasCheckedOutByTool = false;
         const restItemId = itemId.replace(':', '_');
+        const authenticatedAxios = createAuthenticatedAxios(userSessionId);
 
         try {
             const getItemResponse = await authenticatedAxios.get(`/items/${restItemId}`, { params: { useDynamicVersion: true } });
@@ -53,7 +59,7 @@ Example 1: Updates the metadata fields with XML names 'Keywords' and 'Author' fo
             
             convertLinksRecursively(metadata, itemId);
 
-            const orderedMetadata = await reorderFieldsBySchema(metadata, schemaIdForMetadata, 'metadata');
+            const orderedMetadata = await reorderFieldsBySchema(metadata, schemaIdForMetadata, 'metadata', authenticatedAxios);
 
             let itemToUpdate;
             const isVersioned = !!item?.VersionInfo?.Version;

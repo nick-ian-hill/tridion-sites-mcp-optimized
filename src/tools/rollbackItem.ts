@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const rollbackItem = {
@@ -11,28 +11,28 @@ export const rollbackItem = {
         comment: z.string().optional()
             .describe("An optional comment or reason for the rollback. This will be stored in the new version's history."),
     },
-    execute: async ({ itemId, comment }: { itemId: string, comment?: string }) => {
+    execute: async ({ itemId, comment }: { itemId: string, comment?: string }, context: any) => {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         try {
-            // The API requires the colon in the TCM URI to be replaced with an underscore for the path parameter.
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const restItemId = itemId.replace(':', '_');
             const endpoint = `/items/${restItemId}/rollback`;
 
-            // The API requires a 'RollBackRequest' model in the body.
-            // We'll construct a payload, using the provided comment for the 'InstructionalText' field.
             const payload = {
                 "$type": "RollBackRequest",
                 "InstructionalText": comment
             };
 
-            // Filter out InstructionalText if no comment is provided to send a clean payload.
             const cleanPayload = Object.fromEntries(
                 Object.entries(payload).filter(([_, value]) => value !== undefined)
             );
 
-            // Make the POST request to the rollback endpoint.
             const response = await authenticatedAxios.post(endpoint, cleanPayload);
 
-            // A successful request will return a 200 OK status.
             if (response.status === 200) {
                 return {
                     content: [{

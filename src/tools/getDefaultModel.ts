@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const getDefaultModel = {
@@ -11,33 +11,41 @@ export const getDefaultModel = {
     For a StuctureGroup or Page, the container must be a StructureGroup. The exception is a root StructureGroup, for which the container is a Publication.
     A Publication can have multiple Categories, but only a single root StructureGroup.`,
     input: {
-        modelType: z.enum([
-            "Bundle",
-            "SearchFolder",
-            "Schema",
-            "Page",
-            "PageTemplate",
-            "Component",
-            "ComponentTemplate",
-            "Folder",
-            "Keyword",
-            "StructureGroup",
-            "TemplateBuildingBlock",
-            "Publication",
-            "Category",
-            "Group",
-            "ProcessDefinition",
-            "BusinessProcessType",
-            "MultimediaType",
-            "TargetType",
-            "User",
-            "TargetGroup",
-            "ApprovalStatus"
-        ]).describe("The type of data model to retrieve."),
-        containerId: z.string().regex(/^tcm:\d+-\d+-(?:1|2|4|512)$/).optional().describe("The TCM URI of the organizational item (e.g., Folder, Publication) to use as a container. A container ID is required for most item types except Publication, TargetType, MultimediaType, User, Group, and ApprovalStatus.")
-    },
-    execute: async ({ modelType, containerId }: { modelType: string, containerId?: string }) => {
+    modelType: z.enum([
+        "Bundle",
+        "SearchFolder",
+        "Schema",
+        "Page",
+        "PageTemplate",
+        "Component",
+        "ComponentTemplate",
+        "Folder",
+        "Keyword",
+        "StructureGroup",
+        "TemplateBuildingBlock",
+        "Publication",
+        "Category",
+        "Group",
+        "ProcessDefinition",
+        "BusinessProcessType",
+        "MultimediaType",
+        "TargetType",
+        "User",
+        "TargetGroup",
+        "ApprovalStatus"
+    ]).describe("The type of data model to retrieve."),
+    containerId: z.string().regex(/^tcm:\d+-\d+-(?:1|2|4|512)$/).optional().describe("The TCM URI of the organizational item (e.g., Folder, Publication) to use as a container. A container ID is required for most item types except Publication, TargetType, MultimediaType, User, Group, and ApprovalStatus.")
+},
+    execute: async ({ modelType, containerId }: { modelType: string, containerId?: string },
+        context: any
+    ) => {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         try {
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId); 
             const endpoint = `/item/defaultModel/${modelType}`;
             const params: { containerId?: string } = {};
 
@@ -52,7 +60,7 @@ export const getDefaultModel = {
                     content: [{
                         type: "text",
                         text: JSON.stringify(response.data, null, 2)
-                    }],
+                    }]
                 };
             } else {
                 return handleUnexpectedResponse(response);

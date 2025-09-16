@@ -1,12 +1,10 @@
 import { z } from "zod";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
-// Retrieve the API key from environment variables.
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 
-// Define the schema for the tool's input properties.
 const readImageDetailsFromMultimediaComponentInputProperties = {
     itemId: z.string().regex(/^tcm:\d+-\d+$/).describe("The TCM URI of the multimedia component containing the image file (e.g., 'tcm:5-123')."),
     prompt: z.string().describe("The text prompt for the vision model. For example: 'Describe the image in detail.', 'What text is visible in this image?', 'Is there a cat in this picture?'"),
@@ -14,11 +12,6 @@ const readImageDetailsFromMultimediaComponentInputProperties = {
 
 const readImageDetailsFromMultimediaComponentSchema = z.object(readImageDetailsFromMultimediaComponentInputProperties);
 
-/**
- * Determines the MIME type of an image file based on its extension.
- * @param filename - The name of the file.
- * @returns The corresponding MIME type as a string, or null if unsupported.
- */
 const getMimeType = (filename: string): string | null => {
     const lowercased = filename.toLowerCase();
     if (lowercased.endsWith('.png')) return 'image/png';
@@ -33,7 +26,12 @@ export const readImageDetailsFromMultimediaComponent = {
     description: `Analyzes an image from a multimedia component using a generative AI vision model based on a provided text prompt. 
     It can be used to describe images, extract text (OCR), identify objects, and answer questions about the visual content.`,
     input: readImageDetailsFromMultimediaComponentInputProperties,
-    async execute(input: z.infer<typeof readImageDetailsFromMultimediaComponentSchema>) {
+    async execute(input: z.infer<typeof readImageDetailsFromMultimediaComponentSchema>, context: any) {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         const { itemId, prompt } = input;
         const restItemId = itemId.replace(':', '_');
 
@@ -42,7 +40,8 @@ export const readImageDetailsFromMultimediaComponent = {
         }
 
         try {
-            // --- Step 1: Get Item metadata to verify it's a valid image component ---
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
+
             console.log(`Fetching item details for ${itemId} to verify it's an image.`);
             const getItemResponse = await authenticatedAxios.get(`/items/${restItemId}`);
             if (getItemResponse.status !== 200) {
@@ -65,7 +64,6 @@ export const readImageDetailsFromMultimediaComponent = {
             }
             console.log(`Identified file '${filename}' with MIME type '${mimeType}'.`);
 
-            // --- Step 2: Download the binary content ---
             console.log(`Downloading binary content for image: ${filename}`);
             const downloadResponse = await authenticatedAxios.get<ArrayBuffer>(
                 `/items/${restItemId}/binary/download`, 
@@ -79,7 +77,7 @@ export const readImageDetailsFromMultimediaComponent = {
             const imageBuffer = Buffer.from(downloadResponse.data);
             const base64Content = imageBuffer.toString('base64');
             console.log(`Successfully downloaded and encoded ${imageBuffer.length} bytes.`);
-
+            
             // --- Step 3: Call the Gemini Vision API ---
             // For available models see: https://ai.google.dev/gemini-api/docs/models
             console.log(`Sending prompt and image to Gemini 2.5 Flash Image model...`);

@@ -1,11 +1,9 @@
 import { z } from "zod";
 import JSZip from "jszip";
 import { Parser as XmlParser } from "xml2js";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
-// A more robust helper function to recursively find all text within a parsed XML object.
-// It handles both objects and arrays to prevent missing text.
 const extractTextFromXmlObject = (obj: any): string[] => {
     let texts: string[] = [];
     if (Array.isArray(obj)) {
@@ -36,16 +34,22 @@ const readPowerPointFileFromMultimediaComponentInputProperties = {
 const readPowerPointFileFromMultimediaComponentSchema = z.object(readPowerPointFileFromMultimediaComponentInputProperties);
 
 export const readTextFromPowerPointMultimediaComponent = {
-    name: "readPowerPointFileFromMultimediaComponent",
+    name: "readTextFromPowerPointMultimediaComponent",
     description: `Reads the text content of a PowerPoint file (.pptx) from a multimedia component and returns it as a string.
     This tool extracts text from all slides.`,
     input: readPowerPointFileFromMultimediaComponentInputProperties,
-    async execute(input: z.infer<typeof readPowerPointFileFromMultimediaComponentSchema>) {
+    async execute(input: z.infer<typeof readPowerPointFileFromMultimediaComponentSchema>, context: any) {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         const { itemId } = input;
         const restItemId = itemId.replace(':', '_');
 
         try {
-            // Step 1: Get Item metadata
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
+
             const getItemResponse = await authenticatedAxios.get(`/items/${restItemId}`);
             if (getItemResponse.status !== 200) return handleUnexpectedResponse(getItemResponse);
             const itemData = getItemResponse.data;
@@ -54,14 +58,12 @@ export const readTextFromPowerPointMultimediaComponent = {
                 throw new Error(`Item ${itemId} is not a valid .pptx multimedia component.`);
             }
 
-            // Step 2: Download the binary content
             const downloadResponse = await authenticatedAxios.get(`/items/${restItemId}/binary/download`, {
                 responseType: 'arraybuffer'
             });
             if (downloadResponse.status !== 200) return handleUnexpectedResponse(downloadResponse);
             const pptxFileBuffer = Buffer.from(downloadResponse.data);
             
-            // Step 3: Parse the .pptx buffer
             console.log("Parsing .pptx content using JSZip...");
             const zip = await JSZip.loadAsync(pptxFileBuffer);
             const xmlParser = new XmlParser({ explicitArray: false });
@@ -79,7 +81,6 @@ export const readTextFromPowerPointMultimediaComponent = {
                 return aNum - bNum;
             });
             
-            // Use Promise.all to parse slides in parallel for better performance
             const allSlidesTextPromises = slideFiles.map(async (slideFile, index) => {
                 console.log(`Processing slide ${index + 1}: ${slideFile.name}`);
                 const slideXml = await slideFile.async("string");

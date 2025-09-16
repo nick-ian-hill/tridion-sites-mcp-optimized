@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const getKeywordsForCategory = {
@@ -13,8 +13,14 @@ export const getKeywordsForCategory = {
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the category (e.g., 'tcm:5-123-512')."),
     },
-    execute: async ({ itemId }: { itemId: string }) => {
+    execute: async ({ itemId }: { itemId: string }, context: any) => {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         try {
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const restItemId = itemId.replace(':', '_');
             const endpoint = `/items/${restItemId}/keywords`;
             const response = await authenticatedAxios.get(endpoint);

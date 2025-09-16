@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
 export const batchUnclassify = {
@@ -11,9 +11,16 @@ export const batchUnclassify = {
         keywordIds: z.array(z.string().regex(/^(tcm:\d+-\d+-1024|ecl:[a-zA-Z0-9-]+)$/))
             .describe("An array of unique IDs (TCM URIs) for the Keywords to remove from the items."),
     },
-    execute: async ({ itemIds, keywordIds }: { itemIds: string[], keywordIds: string[] }) => {
+    execute: async ({ itemIds, keywordIds }: { itemIds: string[], keywordIds: string[] },
+        context: any
+    ) => {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         try {
-            // The API expects a request body with ItemIds and KeywordIds properties.
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const requestModel = { 
                 ItemIds: itemIds, 
                 KeywordIds: keywordIds 

@@ -1,11 +1,10 @@
 import { z } from "zod";
 import JSZip from "jszip";
 import { Parser as XmlParser } from "xml2js";
-import { authenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 import { createMultimediaComponentFromBase64 } from "./createMultimediaComponentFromBase64.js";
 
-// Helper function to extract text from parsed XML
 const extractTextFromXmlObject = (obj: any): string[] => {
     let texts: string[] = [];
     if (Array.isArray(obj)) {
@@ -29,7 +28,6 @@ const extractTextFromXmlObject = (obj: any): string[] => {
     return texts;
 };
 
-// Helper function to find all attribute values recursively
 const findAttributeValues = (obj: any, attributeName: string): string[] => {
     let values: string[] = [];
     if (!obj || typeof obj !== 'object') {
@@ -61,7 +59,6 @@ const splitPowerPointMultimediaComponentIntoTextAndImagesInputProperties = {
 
 const splitPowerPointMultimediaComponentIntoTextAndImagesSchema = z.object(splitPowerPointMultimediaComponentIntoTextAndImagesInputProperties);
 
-// Interface to define the shape of a relationship object from the .rels file
 interface Relationship {
   $: {
     Id: string;
@@ -74,11 +71,17 @@ export const splitPowerPointMultimediaComponentIntoTextAndImages = {
     name: "splitPowerPointMultimediaComponentIntoTextAndImages",
     description: "Splits a PowerPoint multimedia component into its constituent parts. It extracts all text and creates new multimedia components for each image, returning a consolidated text summary of the results with image-to-slide mappings.",
     input: splitPowerPointMultimediaComponentIntoTextAndImagesInputProperties,
-    async execute(input: z.infer<typeof splitPowerPointMultimediaComponentIntoTextAndImagesSchema>) {
+    async execute(input: z.infer<typeof splitPowerPointMultimediaComponentIntoTextAndImagesSchema>, context: any) {
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
+
         const { itemId, locationId } = input;
         const restItemId = itemId.replace(':', '_');
 
         try {
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const downloadResponse = await authenticatedAxios.get(`/items/${restItemId}/binary/download`, {
                 responseType: 'arraybuffer'
             });
@@ -110,7 +113,6 @@ export const splitPowerPointMultimediaComponentIntoTextAndImages = {
                     const parsedRels = await xmlParser.parseStringPromise(relsXml);
                     
                     const relsDataSource = parsedRels.Relationships.Relationship;
-                    // **FIXED HERE**: Add 'as Relationship[]' to cast the generic object from the parser
                     const relationships = (Array.isArray(relsDataSource)
                         ? relsDataSource
                         : relsDataSource ? [relsDataSource] : []) as Relationship[];
@@ -151,7 +153,7 @@ export const splitPowerPointMultimediaComponentIntoTextAndImages = {
 
                     const result = await createMultimediaComponentFromBase64.execute({
                         base64Content, title, fileName, locationId,
-                    });
+                    }, context);
 
                     const resultText = result.content[0].text || "";
                     const newIdMatch = resultText.match(/tcm:\d+-\d+/);
