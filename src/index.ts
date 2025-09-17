@@ -1,9 +1,6 @@
 import http from 'node:http';
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { z } from "zod";
-import { zodToJsonSchema } from "zod-to-json-schema";
 
 // --- Global Error Handlers ---
 process.on('unhandledRejection', (reason, promise) => {
@@ -78,6 +75,10 @@ import { splitPowerPointMultimediaComponentIntoTextAndImages } from './tools/spl
 import { readImageDetailsFromMultimediaComponent } from './tools/readImageDetailsFromMultimediaComponent.js';
 import { getUsers } from './tools/getUsers.js';
 
+// --- New Agent Handler Import ---
+// Updated path to reflect the new directory structure
+import { handleAgentChat } from './agent/agent.js';
+
 // --- Main Tools Array ---
 const tools: any[] = [
     // General & System
@@ -150,22 +151,6 @@ const tools: any[] = [
     dependencyGraphForItem,
 ];
 
-// --- Setup for Gemini Agent (for UI Panel) ---
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-
-const geminiFormattedTools = tools.map(tool => {
-    const toolSchema = z.object(tool.input);
-    const jsonSchema: any = zodToJsonSchema(toolSchema, { target: "openApi3", $refStrategy: "none" });
-    if (jsonSchema.additionalProperties) delete jsonSchema.additionalProperties;
-    return { name: tool.name, description: tool.description, parameters: jsonSchema };
-});
-
-const geminiAgent = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash-latest",
-    tools: [{ functionDeclarations: geminiFormattedTools }],
-});
-
 // --- Setup for MCP Server (for VS Code Client) ---
 const mcpServer = new McpServer({ name: "tridion-sites-mcp-server", version: "1.0.0" });
 const mcpTransport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
@@ -193,62 +178,14 @@ const httpServer = http.createServer((req, res) => {
     // --- ROUTING LOGIC ---
     // A) Route for the UI's Gemini Agent
     if (req.url === '/agent/chat' && req.method === 'POST') {
-        // ✅ API Key check is now inside this specific route
         if (req.headers['x-api-key'] !== MCP_API_KEY) {
             res.writeHead(401, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Unauthorized: Missing or invalid API Key' }));
             return;
         }
-
-        let body = '';
-        req.on('data', chunk => { body += chunk.toString(); });
-        req.on('end', async () => {
-            try {
-                if (!GEMINI_API_KEY) throw new Error("Server is not configured with a GEMINI_API_KEY.");
-                const { prompt } = JSON.parse(body);
-                
-                // Your mock response for debugging is preserved here
-                const mockResult = {
-                    response: {
-                        functionCalls: () => [{
-                            name: 'getDefaultModel',
-                            args: { modelType: 'Folder', containerId: 'tcm:5-1-2' }
-                        }],
-                        text: () => '', // Not used when a tool is called, but good to have.
-                    }
-                };
-
-                // const chat = geminiAgent.startChat();
-                // const result = await chat.sendMessage(prompt);
-                const result = mockResult;
-                const response = result.response;
-                const toolCalls = response.functionCalls();
-
-                let agentResponse;
-                if (toolCalls && toolCalls.length > 0) {
-                    const call = toolCalls[0];
-                    const toolToExecute = tools.find(t => t.name === call.name);
-
-                    if (toolToExecute) {
-                        const agentContext = { request: req };
-                        agentResponse = await toolToExecute.execute(call.args, agentContext);
-                    } else {
-                        throw new Error(`Agent requested unknown tool: ${call.name}`);
-                    }
-                } else {
-                    agentResponse = { content: [{ type: 'text', text: response.text() }] };
-                }
-
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify(agentResponse));
-            } catch (e) {
-                const error = e instanceof Error ? e : new Error(String(e));
-                console.error("Agent Error:", error);
-                res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: `Agent Error: ${error.message}` }));
-            }
-        });
-        return;
+        // Delegate all agent logic to the new handler
+        handleAgentChat(req, res, tools);
+        return; // End execution here for this route
     }
 
     // B) Fallback Route for the VS Code MCP Client (no API key check)
