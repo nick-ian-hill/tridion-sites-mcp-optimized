@@ -9,7 +9,7 @@ export const getItemsInContainer = {
 IMPORTANT: Requesting details for many items can return a large amount of data. Use 'IdAndTitle' or the 'includeProperties' parameter for the most efficient and reliable results, especially when using the 'recursive' option.`,
     input: {
         containerId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The TCM URI or ECL URI of the container item."),
-        recursive: z.boolean().optional().default(false).describe("If true, items in nested containers are also returned recursively. This is not applicable for External Containers. Typically this value would be set to true when searching for a Page Template or other dependency anywhere in a Publication."),
+        recursive: z.boolean().optional().default(false).describe("Set to `true` to include items from all nested sub-containers. Use this for broad searches (e.g., 'find all images in the current Publication'), not for simply listing the contents of a single folder (e.g., 'what's in the 2025 folder?')."),
         useDynamicVersion: z.boolean().optional().default(false).describe("If true, loads the latest saved version (dynamic version) for any versioned items returned."),
         itemTypes: z.array(z.string()).optional().describe("An array of item types to filter the results, e.g., ['Component', 'Page', 'Folder']. If omitted, all item types are returned."),
         details: z.enum(["IdAndTitle", "CoreDetails", "AllDetails"]).default("IdAndTitle").optional().describe(`Specifies a predefined level of detail for the returned items. For custom property selection, use 'includeProperties' instead.
