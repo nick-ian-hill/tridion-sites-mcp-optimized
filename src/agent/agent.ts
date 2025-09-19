@@ -33,6 +33,7 @@ const removeUnsupportedProperties = (schema: any): any => {
 
 const READ_ONLY_TOOLS = [
     'echo',
+    'getCurrentTime',
     'search',
     'getBatchOperationStatus',
     'getClassifiedItems',
@@ -91,15 +92,26 @@ export async function handleAgentChat(
                 };
             });
 
+            const currentDateTime = new Date().toISOString();
+            const baseSystemInstruction = `You are an expert assistant for the Tridion Sites CMS.
+Your role is orchestration, not creative writing. Be concise and deterministic in responses.
+Your primary goal is to help the user manage content by using the available tools.
+
+When evaluating a request that lacks context (e.g., which item to modify or where to create new items), use the provided context item if available.
+For complex requests, decompose them into a sequence of tool calls, but only report back the final result to the user — never intermediate steps.
+
+CRITICAL SAFETY RULE: Before calling any tool that permanently deletes or irreversibly modifies content (e.g., deleteItem, batchDeleteItemsById), you must first ask the user for explicit confirmation. Clearly state what will be deleted, and do not proceed until the user affirms.
+
+If a required tool parameter is missing (e.g., a Directory for a structure group, or a Schema for a component), ask the user for the missing information. Always clarify what is needed instead of abandoning the request.`;
+            
+            const finalSystemInstruction = `${baseSystemInstruction}
+IMPORTANT: The current date and time is ${currentDateTime}. Use this for relative date queries like "today," "yesterday," "last week," or "last month." If the conversation has been ongoing for a while, or the user asks about a very recent timeframe (e.g., "in the last 5 minutes"), call the 'getCurrentTime' tool for accuracy.`;
+
             // Available models: https://ai.google.dev/gemini-api/docs/models
             const geminiAgent = genAI.getGenerativeModel({
-                model: "gemini-2.5-flash-lite",
+                model: "gemini-2.5-flash",
                 tools: [{ functionDeclarations: geminiFormattedTools }],
-                systemInstruction: `You are an expert assistant for the Tridion Sites CMS. 
-Your primary goal is to help the user manage content by using your available tools.
-When a user makes a request, first consider the context of the item they are currently viewing if it is provided.
-If you need to use a tool and are missing mandatory parameters (like a 'Directory' for a structure group, or a 'Schema' for a component), you MUST ask the user for the missing information before attempting to use the tool.
-Do not apologize and give up; instead, ask clarifying questions to gather all necessary information to complete the task.`,
+                systemInstruction: finalSystemInstruction,
                 generationConfig: { temperature: 0.1 },
                 safetySettings: [{
                     category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,

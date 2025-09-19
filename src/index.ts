@@ -29,6 +29,7 @@ import { deleteItem } from "./tools/deleteItem.js";
 import { demoteItem } from "./tools/demoteItem.js";
 import { dependencyGraphForItem } from "./tools/dependencyGraphForItem.js";
 import { echo } from "./tools/echo.js";
+import { getCurrentTime } from './tools/getCurrentTime.js';
 import { getBluePrintHierarchy } from "./tools/getBluePrintHierarchy.js";
 import { getCategories } from "./tools/getCategories.js";
 import { getItemById } from "./tools/getItemById.js";
@@ -74,15 +75,13 @@ import { readPdfFileFromMultimediaComponent } from './tools/readPdfFileFromMulti
 import { splitPowerPointMultimediaComponentIntoTextAndImages } from './tools/splitPowerPointMultimediaComponentIntoTextAndImages.js';
 import { readImageDetailsFromMultimediaComponent } from './tools/readImageDetailsFromMultimediaComponent.js';
 import { getUsers } from './tools/getUsers.js';
-
-// --- New Agent Handler Import ---
-// Updated path to reflect the new directory structure
 import { handleAgentChat } from './agent/agent.js';
 
 // --- Main Tools Array ---
 const tools: any[] = [
     // General & System
     echo,
+    getCurrentTime,
     search,
     // Read Operations
     getBatchOperationStatus,
