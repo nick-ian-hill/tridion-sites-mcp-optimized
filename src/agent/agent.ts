@@ -31,6 +31,34 @@ const removeUnsupportedProperties = (schema: any): any => {
     return schema;
 };
 
+const READ_ONLY_TOOLS = [
+    'echo',
+    'search',
+    'getBatchOperationStatus',
+    'getClassifiedItems',
+    'getComponentTemplateLinks',
+    'getDefaultModel',
+    'getIsComponentTemplateRequired',
+    'getItemById',
+    'bulkReadItemsById',
+    'getItemHistory',
+    'getItemsInContainer',
+    'getLockedItems',
+    'getSchemaLinks',
+    'getUsers',
+    'readWordFileFromMultimediaComponent',
+    'readExcelFileFromMultimediaComponent',
+    'readTextFromPowerPointMultimediaComponent',
+    'readPdfFileFromMultimediaComponent',
+    'readImageDetailsFromMultimediaComponent',
+    'getBluePrintHierarchy',
+    'getPublications',
+    'getPublicationTypes',
+    'getCategories',
+    'getKeywordsForCategory',
+    'dependencyGraphForItem'
+];
+
 export async function handleAgentChat(
     req: http.IncomingMessage,
     res: http.ServerResponse,
@@ -90,6 +118,7 @@ Do not apologize and give up; instead, ask clarifying questions to gather all ne
 
             let result = await chat.sendMessage(promptToSend);
             let agentResponseText = '';
+            let shouldInvalidateContext = false;
 
             const MAX_TURNS = 10;
             for (let turn = 0; turn < MAX_TURNS; turn++) {
@@ -99,6 +128,14 @@ Do not apologize and give up; instead, ask clarifying questions to gather all ne
                 if (!toolCalls || toolCalls.length === 0) {
                     agentResponseText = response.text();
                     break;
+                }
+
+                // Check if the context ID was used in a relevant parameter.
+                if (context?.itemId && !shouldInvalidateContext) {
+                    const hasWriteOperation = toolCalls.some(call => !READ_ONLY_TOOLS.includes(call.name));
+                    if (hasWriteOperation) {
+                        shouldInvalidateContext = true;
+                    }
                 }
 
                 console.log(`[AGENT] Turn ${turn + 1}: Executing ${toolCalls.length} tool(s)...`);
@@ -137,7 +174,10 @@ Do not apologize and give up; instead, ask clarifying questions to gather all ne
             chatSessions.set(conversationId, updatedHistory);
 
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ content: [{ type: 'text', text: agentResponseText }] }));
+            res.end(JSON.stringify({ 
+                content: [{ type: 'text', text: agentResponseText }],
+                shouldInvalidateContext: shouldInvalidateContext
+            }));
 
         } catch (e) {
             const error = e instanceof Error ? e : new Error(String(e));
