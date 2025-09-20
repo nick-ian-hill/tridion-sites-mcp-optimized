@@ -3,8 +3,6 @@ import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold, FunctionDeclarati
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
-const chatSessions = new Map<string, any[]>();
-
 const removeUnsupportedProperties = (schema: any): any => {
     if (!schema || typeof schema !== 'object') {
         return schema;
@@ -74,7 +72,7 @@ export async function handleAgentChat(
                 throw new Error("Server is not configured with a GEMINI_API_KEY.");
             }
 
-            const { prompt, conversationId, context } = JSON.parse(body);
+            const { prompt, conversationId, context, history = [] } = JSON.parse(body);
             if (!prompt || !conversationId) {
                 throw new Error("Request body must include 'prompt' and 'conversationId'.");
             }
@@ -119,7 +117,6 @@ IMPORTANT: The current date and time is ${currentDateTime}. Use this for relativ
                 }]
             });
             
-            const history = chatSessions.get(conversationId) || [];
             const chat = geminiAgent.startChat({ history });
 
             let promptToSend = prompt;
@@ -183,12 +180,12 @@ IMPORTANT: The current date and time is ${currentDateTime}. Use this for relativ
             }
 
             const updatedHistory = await chat.getHistory();
-            chatSessions.set(conversationId, updatedHistory);
 
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ 
                 content: [{ type: 'text', text: agentResponseText }],
-                shouldInvalidateContext: shouldInvalidateContext
+                shouldInvalidateContext: shouldInvalidateContext,
+                history: updatedHistory
             }));
 
         } catch (e) {
