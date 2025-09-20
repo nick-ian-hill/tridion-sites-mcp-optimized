@@ -74,6 +74,7 @@ import { readTextFromPowerPointMultimediaComponent } from './tools/readTextFromP
 import { readPdfFileFromMultimediaComponent } from './tools/readPdfFileFromMultimediaComponent.js';
 import { splitPowerPointMultimediaComponentIntoTextAndImages } from './tools/splitPowerPointMultimediaComponentIntoTextAndImages.js';
 import { readImageDetailsFromMultimediaComponent } from './tools/readImageDetailsFromMultimediaComponent.js';
+import { generateContentFromPrompt } from './tools/generateContentFromPrompt.js';
 import { getUsers } from './tools/getUsers.js';
 import { handleAgentChat } from './agent/agent.js';
 
@@ -82,6 +83,7 @@ const tools: any[] = [
     // General & System
     echo,
     getCurrentTime,
+    generateContentFromPrompt,
     search,
     // Read Operations
     getBatchOperationStatus,
