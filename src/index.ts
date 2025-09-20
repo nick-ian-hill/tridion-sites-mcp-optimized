@@ -75,11 +75,16 @@ import { readPdfFileFromMultimediaComponent } from './tools/readPdfFileFromMulti
 import { splitPowerPointMultimediaComponentIntoTextAndImages } from './tools/splitPowerPointMultimediaComponentIntoTextAndImages.js';
 import { readImageDetailsFromMultimediaComponent } from './tools/readImageDetailsFromMultimediaComponent.js';
 import { generateContentFromPrompt } from './tools/generateContentFromPrompt.js';
+import { requestNavigation } from './tools/requestNavigation.js';
+import { requestOpenInEditor } from './tools/requestOpenInEditor.js';
 import { getUsers } from './tools/getUsers.js';
 import { handleAgentChat } from './agent/agent.js';
 
 // --- Main Tools Array ---
 const tools: any[] = [
+    // UI Navigation
+    requestNavigation,
+    requestOpenInEditor,
     // General & System
     echo,
     getCurrentTime,

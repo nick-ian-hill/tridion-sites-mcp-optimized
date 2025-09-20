@@ -11,10 +11,10 @@ const removeUnsupportedProperties = (schema: any): any => {
     if (Array.isArray(schema)) {
         return schema.map(item => removeUnsupportedProperties(item));
     }
-    
+
     delete schema.$schema;
     delete schema.additionalProperties;
-    
+
     if (schema.type && Array.isArray(schema.type)) {
         const primaryType = schema.type.find((t: string) => t !== 'null');
         if (primaryType) {
@@ -32,6 +32,9 @@ const removeUnsupportedProperties = (schema: any): any => {
 const READ_ONLY_TOOLS = [
     'echo',
     'getCurrentTime',
+    'requestNavigation',
+    'requestOpenInEditor',
+    'generateContentFromPrompt',
     'search',
     'getBatchOperationStatus',
     'getClassifiedItems',
@@ -76,13 +79,13 @@ export async function handleAgentChat(
             if (!prompt || !conversationId) {
                 throw new Error("Request body must include 'prompt' and 'conversationId'.");
             }
-            
+
             const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
             const geminiFormattedTools = tools.map(tool => {
                 const zodSchema = z.object(tool.input);
                 let jsonSchema = zodToJsonSchema(zodSchema);
                 jsonSchema = removeUnsupportedProperties(jsonSchema);
-                
+
                 return {
                     name: tool.name,
                     description: tool.description,
@@ -97,10 +100,15 @@ Your role is orchestration, not creative writing. Be concise and deterministic i
 When evaluating a request that lacks context (e.g., which item to modify or where to create new items), use the provided context item if available.
 For complex requests, decompose them into a sequence of tool calls, but only report back the final result to the user — never intermediate steps.
 
+UI ACTION RULES:
+- If you create an item in a location that is different from the user's current context, you SHOULD call the 'requestNavigation' tool immediately after to take the user to the new item.
+- After creating or updating an item, you MAY ask the user if they'd like to open it in the editor. If they agree, you MUST call the 'requestOpenInEditor' tool.
+- When you call a UI action tool like 'requestNavigation' or 'requestOpenInEditor', that is your final step. Do not add a confirmation message like "Navigating..." or "Opening..."; the user interface will provide that feedback.
+
 CRITICAL SAFETY RULE: Before calling any tool that permanently deletes or irreversibly modifies content (e.g., deleteItem, batchDeleteItemsById), you must first ask the user for explicit confirmation. Clearly state what will be deleted, and do not proceed until the user affirms.
 
 If a required tool parameter is missing (e.g., a Directory for a structure group, or a Schema for a component), ask the user for the missing information. Always clarify what is needed instead of abandoning the request.`;
-            
+
             const finalSystemInstruction = `${baseSystemInstruction}
 IMPORTANT: The current date and time is ${currentDateTime}. Use this for relative date queries like "today," "yesterday," "last week," or "last month." If the conversation has been ongoing for a while, or the user asks about a very recent timeframe (e.g., "in the last 5 minutes"), call the 'getCurrentTime' tool for accuracy.`;
 
@@ -115,7 +123,7 @@ IMPORTANT: The current date and time is ${currentDateTime}. Use this for relativ
                     threshold: HarmBlockThreshold.BLOCK_NONE
                 }]
             });
-            
+
             const chat = geminiAgent.startChat({ history });
 
             let promptToSend = prompt;
@@ -127,6 +135,7 @@ IMPORTANT: The current date and time is ${currentDateTime}. Use this for relativ
             let result = await chat.sendMessage(promptToSend);
             let agentResponseText = '';
             let shouldInvalidateContext = false;
+            let uiAction = null;
 
             const MAX_TURNS = 10;
             for (let turn = 0; turn < MAX_TURNS; turn++) {
@@ -153,24 +162,32 @@ IMPORTANT: The current date and time is ${currentDateTime}. Use this for relativ
                     if (!toolToExecute) {
                         return { functionResponse: { name: call.name, response: { error: `Tool '${call.name}' not found.` } } };
                     }
-                    
+
                     try {
                         const agentContext = { request: req };
                         const toolResult = await toolToExecute.execute(call.args, agentContext);
                         let parsedResponse;
                         try {
-                           parsedResponse = JSON.parse(toolResult.content[0].text);
+                            parsedResponse = JSON.parse(toolResult.content[0].text);
                         } catch (e) {
-                           parsedResponse = { result: toolResult.content[0].text };
+                            parsedResponse = { result: toolResult.content[0].text };
                         }
                         return { functionResponse: { name: call.name, response: parsedResponse } };
-                    } catch(e) {
+                    } catch (e) {
                         const error = e instanceof Error ? e : new Error(String(e));
                         return { functionResponse: { name: call.name, response: { error: `Execution failed: ${error.message}` } } };
                     }
                 });
 
                 const toolResponses = await Promise.all(toolExecutionPromises);
+
+                for (const response of toolResponses) {
+                    const responseObject = response.functionResponse.response;
+                    if (responseObject && responseObject.isUiAction) {
+                        uiAction = responseObject.action;
+                    }
+                }
+
                 result = await chat.sendMessage(JSON.stringify(toolResponses));
             }
 
@@ -181,10 +198,11 @@ IMPORTANT: The current date and time is ${currentDateTime}. Use this for relativ
             const updatedHistory = await chat.getHistory();
 
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ 
+            res.end(JSON.stringify({
                 content: [{ type: 'text', text: agentResponseText }],
                 shouldInvalidateContext: shouldInvalidateContext,
-                history: updatedHistory
+                history: updatedHistory,
+                action: uiAction
             }));
 
         } catch (e) {
