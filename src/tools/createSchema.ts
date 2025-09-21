@@ -258,7 +258,7 @@ Example 8: Create a Region Schema with constraints on its Component Presentation
             "Component", "Multimedia", "Embedded",
             "Metadata", "Bundle", "Region"
         ]).describe("The purpose of the Schema, which determines where it can be used."),
-        rootElementName: xmlNameSchema.describe("The name of the root element for the XML structure defined by the Schema. When using two or more embeddable schemas in a schema (via embedded schema fields), this value needs to be unique between the embeddable schemas."),
+        rootElementName: xmlNameSchema.optional().describe("The name of the root element for the XML structure defined by the Schema. Only applies to component and embeddable schemas. When using two or more embeddable schemas in a schema (via embedded schema fields), this value needs to be unique between the embeddable schemas."),
         description: z.string().nonempty().describe("An mandatory description of the Schema."),
         fields: z.record(fieldDefinitionSchema).optional().describe("A dictionary of field definitions for the Schema's content. The keys of the dictionary are the machine names of the fields."),
         metadataFields: z.record(fieldDefinitionSchema).optional().describe("A dictionary of field definitions for the Schema's metadata. The keys of the dictionary are the machine names of the fields."),
