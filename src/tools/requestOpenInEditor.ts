@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const requestOpenInEditor = {
     name: "requestOpenInEditor",
-    description: "Requests that the user interface open a specific item in its editor view. You should first ask the user if they want to open the item. Only call this tool if they respond affirmatively.",
+    description: "Opens a specific item in its editor view. Only use this tool when the user explicitly asks to 'open' or 'edit' an item.",
     input: {
         itemId: z.string().regex(/^tcm:\d+-\d+(-\d+)?$/).describe("The TCM URI of the item to open."),
     },

@@ -24,7 +24,7 @@ const getMimeType = (filename: string): string | null => {
 export const readImageDetailsFromMultimediaComponent = {
     name: "readImageDetailsFromMultimediaComponent",
     description: `Analyzes an image from a multimedia component using a generative AI vision model based on a provided text prompt. 
-    It can be used to describe images, extract text (OCR), identify objects, and answer questions about the visual content.`,
+    It can be used to describe images, extract text (OCR), identify objects, generate alt text, and answer questions about the visual content.`,
     input: readImageDetailsFromMultimediaComponentInputProperties,
     async execute(input: z.infer<typeof readImageDetailsFromMultimediaComponentSchema>, context: any) {
         const req = context?.request;

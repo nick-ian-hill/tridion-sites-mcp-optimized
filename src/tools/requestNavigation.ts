@@ -2,17 +2,18 @@ import { z } from "zod";
 
 export const requestNavigation = {
     name: "requestNavigation",
-    description: "Requests that the user interface navigate to a specific item's location. This should be the primary action to perform immediately after successfully creating any new item.",
+    description: "Navigates the user's view to a specific item. Only use this tool when the user explicitly asks to 'navigate to', 'select', 'browse into' an item, or words to that effect.",
     input: {
         itemId: z.string().regex(/^tcm:\d+-\d+(-\d+)?$/).describe("The TCM URI of the item to navigate to."),
+        navigateInto: z.boolean().optional().default(false).describe("Set to true to navigate INTO a container item (like a Folder or Structure Group) instead of selecting it."),
     },
-    execute: async ({ itemId }: { itemId: string }) => {
+    execute: async ({ itemId, navigateInto = false }: { itemId: string; navigateInto?: boolean }) => {
         return {
             content: [{
                 type: "text",
                 text: JSON.stringify({
                     isUiAction: true,
-                    action: { type: 'navigate', payload: { itemId } }
+                    action: { type: 'navigate', payload: { itemId, navigateInto } }
                 })
             }],
         };

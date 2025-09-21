@@ -16,7 +16,7 @@ const createItemInputProperties = {
     ]).describe("The type of CMS item to create."),
     title: z.string().describe("The title for the new item."),
     locationId: z.string().regex(/^tcm:\d+-\d+-\d+$/).describe("The TCM URI of the parent container (e.g., Folder, Structure Group, Category) where the new item will be created. For a Structure Group, the container must be a structure group. The only exception is for a Structure Group in a Publication that does not yet have a Structure Group. In this case, the createRootStructureGroup tool should be used instead. For a Category, the container must be a Publication. For keywords, the container must be a Category. For other item types the container must be a Folder."),
-    schemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("Required for a 'Component'. The TCM URI of the Schema to use for the item's content."),
+    schemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("Required for a 'Component'. Not used for any other item types. The TCM URI of the Schema to use for the item's content."),
     metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("Optional. The TCM URI of the Metadata Schema for the item's metadata."),
     content: z.record(fieldValueSchema).optional().describe("A JSON object for the item's content fields. The tool will automatically order the fields to match the Schema definition."),
     metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields. The tool will automatically order the fields to match the Metadata Schema definition."),

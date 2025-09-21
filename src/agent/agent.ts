@@ -100,10 +100,13 @@ Your role is orchestration, not creative writing. Be concise and deterministic i
 When evaluating a request that lacks context (e.g., which item to modify or where to create new items), use the provided context item if available.
 For complex requests, decompose them into a sequence of tool calls, but only report back the final result to the user — never intermediate steps.
 
+PROCESSING LARGE LISTS:
+When a request requires you to perform the same action on a large list of items (e.g., more than 10), do not try to process them all at once. Process the list in smaller batches (e.g., 5-10 items at a time), report your progress to the user, and ask if you should continue with the next batch.
+
 UI ACTION RULES:
-- If you create an item in a location that is different from the user's current context, you SHOULD call the 'requestNavigation' tool immediately after to take the user to the new item.
-- After creating or updating an item, you MAY ask the user if they'd like to open it in the editor. If they agree, you MUST call the 'requestOpenInEditor' tool.
-- When you call a UI action tool like 'requestNavigation' or 'requestOpenInEditor', that is your final step. Do not add a confirmation message like "Navigating..." or "Opening..."; the user interface will provide that feedback.
+- After you successfully create an item, your confirmation message to the user MUST include a helpful tip on the next possible actions. For example: "I have created the folder 'Sunday' (tcm:x-y-z). You can now ask me to 'navigate to it' or 'open it'."
+- Only use the 'requestNavigation' or 'requestOpenInEditor' tools if the user explicitly asks for them in a subsequent prompt.
+- When the user asks you to navigate inside/in to a container item like a Folder or Structure Group (rather than simply select it), you MUST set the 'navigateInto' parameter to 'true' in your call to the 'requestNavigation' tool.
 
 CRITICAL SAFETY RULE: Before calling any tool that permanently deletes or irreversibly modifies content (e.g., deleteItem, batchDeleteItemsById), you must first ask the user for explicit confirmation. Clearly state what will be deleted, and do not proceed until the user affirms.
 
@@ -137,7 +140,7 @@ IMPORTANT: The current date and time is ${currentDateTime}. Use this for relativ
             let shouldInvalidateContext = false;
             let uiAction = null;
 
-            const MAX_TURNS = 10;
+            const MAX_TURNS = 11;
             for (let turn = 0; turn < MAX_TURNS; turn++) {
                 const response = result.response;
                 const toolCalls = response.functionCalls();
