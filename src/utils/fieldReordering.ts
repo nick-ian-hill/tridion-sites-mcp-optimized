@@ -119,7 +119,22 @@ export async function processSchemaFieldDefinitions(fieldDefinitions: Record<str
     const processedFields = JSON.parse(JSON.stringify(fieldDefinitions));
 
     for (const fieldName in processedFields) {
-        const fieldDef = processedFields[fieldName];
+        let fieldDef = processedFields[fieldName];
+
+        // FIX 1: Correct the malformed "'$type'" key name from the agent's output.
+        if (fieldDef && typeof fieldDef === 'object' && fieldDef.hasOwnProperty("'$type'")) {
+            fieldDef['$type'] = fieldDef["'$type'"];
+            delete fieldDef["'$type'"];
+        }
+
+        // FIX 2: Ensure the now-correct '$type' key is the first property in the object.
+        if (fieldDef && typeof fieldDef === 'object' && fieldDef['$type']) {
+            const { '$type': type, ...rest } = fieldDef;
+            fieldDef = { '$type': type, ...rest };
+        }
+    
+        processedFields[fieldName] = fieldDef;
+
         convertLinksRecursively(fieldDef, contextId);
 
         if (fieldDef.$type === "EmbeddedSchemaFieldDefinition" && fieldDef.EmbeddedSchema?.IdRef) {
