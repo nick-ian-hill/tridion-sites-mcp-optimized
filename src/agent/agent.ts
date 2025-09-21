@@ -117,7 +117,7 @@ IMPORTANT: The current date and time is ${currentDateTime}. Use this for relativ
 
             // Available models: https://ai.google.dev/gemini-api/docs/models
             const geminiAgent = genAI.getGenerativeModel({
-                model: "gemini-2.5-flash",
+                model: "gemini-2.5-pro",
                 tools: [{ functionDeclarations: geminiFormattedTools }],
                 systemInstruction: finalSystemInstruction,
                 generationConfig: { temperature: 0.1 },
@@ -130,9 +130,8 @@ IMPORTANT: The current date and time is ${currentDateTime}. Use this for relativ
             const chat = geminiAgent.startChat({ history });
 
             let promptToSend = prompt;
-            if (history.length === 0 && context?.itemId) {
-                promptToSend = `The user is currently in the context of item ID '${context.itemId}'. Their first request is: "${prompt}"`;
-                console.log(`[AGENT] New conversation started with context: ${context.itemId}`);
+            if (context?.itemId) {
+                promptToSend = `The user is currently in the context of item ID '${context.itemId}'. Their request is: "${prompt}"`;
             }
 
             let result = await chat.sendMessage(promptToSend);
