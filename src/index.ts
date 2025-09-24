@@ -68,12 +68,13 @@ import { getComponentTemplateLinks } from './tools/getComponentTemplateLinks.js'
 import { getIsComponentTemplateRequired } from './tools/getIsComponentTemplateRequired.js';
 import { updatePage } from './tools/updatePage.js';
 import { updateMultimediaComponentFromPrompt } from './tools/updateMultimediaComponentFromPrompt.js';
-import { readWordFileFromMultimediaComponent } from './tools/readWordFileFromMultimediaComponent.js';
 import { readExcelFileFromMultimediaComponent } from './tools/readExcelFileFromMultimediaComponent.js';
 import { readTextFromPowerPointMultimediaComponent } from './tools/readTextFromPowerPointMultimediaComponent.js';
 import { readPdfFileFromMultimediaComponent } from './tools/readPdfFileFromMultimediaComponent.js';
 import { splitPowerPointMultimediaComponentIntoTextAndImages } from './tools/splitPowerPointMultimediaComponentIntoTextAndImages.js';
 import { readImageDetailsFromMultimediaComponent } from './tools/readImageDetailsFromMultimediaComponent.js';
+import { readTextFromWordMultimediaComponent } from './tools/readTextFromWordMultimediaComponent.js';
+import { splitWordMultimediaComponentIntoTextAndImages } from './tools/splitWordMultimediaComponentIntoTextAndImages.js';
 import { generateContentFromPrompt } from './tools/generateContentFromPrompt.js';
 import { requestNavigation } from './tools/requestNavigation.js';
 import { requestOpenInEditor } from './tools/requestOpenInEditor.js';
@@ -103,7 +104,7 @@ const tools: any[] = [
     getLockedItems,
     getSchemaLinks,
     getUsers,
-    readWordFileFromMultimediaComponent,
+    readTextFromWordMultimediaComponent,
     readExcelFileFromMultimediaComponent,
     readTextFromPowerPointMultimediaComponent,
     readPdfFileFromMultimediaComponent,
@@ -118,6 +119,7 @@ const tools: any[] = [
     createRootStructureGroup,
     createSchema,
     splitPowerPointMultimediaComponentIntoTextAndImages,
+    splitWordMultimediaComponentIntoTextAndImages,
     // Classification
     batchClassify,
     batchUnclassify,

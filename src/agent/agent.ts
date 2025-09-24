@@ -117,7 +117,7 @@ IMPORTANT: The current date and time is ${currentDateTime}. Use this for relativ
 
             // Available models: https://ai.google.dev/gemini-api/docs/models
             const geminiAgent = genAI.getGenerativeModel({
-                model: "gemini-2.5-pro",
+                model: "gemini-2.5-flash",
                 tools: [{ functionDeclarations: geminiFormattedTools }],
                 systemInstruction: finalSystemInstruction,
                 generationConfig: { temperature: 0.1 },
