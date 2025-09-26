@@ -11,12 +11,16 @@ export const search = {
     description: `Performs a comprehensive search on the Content Manager System (CMS) for various item types based on a wide range of criteria.
   This tool is used to find items that match the specified query, such as full-text search strings, item titles, types, authors, lock status, and more.
   The return value will be an array of items that match the search criteria or an empty array if no items are found.
+
+  Strategy for Efficient Searching
+  To avoid excessive token usage, follow this strategy when choosing how much detail to request:
+
+  1.  Always prefer 'includeProperties' for specific details. If you need any information beyond an item's ID and Title (e.g., who created it, where it is located), use the 'includeProperties' parameter. This is the most token-efficient method. A good practice is to first run a narrow search to identify available properties, then run your full search requesting only the ones you need.
+  2.  Default to 'details: "IdAndTitle"' for lists. If the goal is simply to find items or get a count, this is the safest and fastest option.
+  3.  Use 'details: "CoreDetails"' with extreme caution. Only use this if you cannot determine the required properties in advance. This option has high token usage and may fail if the search returns many items (over 300).
+  4.  Avoid 'details: "AllDetails"'. This option should almost never be used as it will likely fail or exhaust the context window.
   
-  For controlling result details, you can use a predefined 'details' level or the 'includeProperties' parameter for custom requests.
-  If you only need a list of items matching the query, "IdAndTitle" is the recommended and most reliable choice.
-  If you require specific details from the results (e.g., which user modified an item and/or the publication it belongs to), use the 'includeProperties' parameter. This is the recommended approach when you need specific information. Consider performing a search for a small number of items first to see which properties are available and then performing a wider search requesting just the properties you need. 
-  If (and only if) you do not know yet how the results will be analyzed, consider setting the 'details' level to "CoreDetails". This may fail if the search returns many items (resultLimit > 300).
-  Only select "AllDetails" if you absolutely need full details about the returned items. This request will likely fail with a large number of item (resultLimit > 150). 'AllDetails' adds the following properties to 'CoreDetails':
+  'AllDetails' adds the following properties to 'CoreDetails':
   - AccessControlList
   - ApplicableActions
   - ApprovalStatus
@@ -24,9 +28,7 @@ export const search = {
   - ExtensionProperties
   - ListLinks
   - SecurityDescriptor
-  - LoadInfo
-  
-  This tool cannot modify, update, or delete any CMS items or files.`,
+  - LoadInfo`,
     input: {
         searchQuery: SearchQueryValidation.optional().describe("A search query model. If not provided, a default search for all items is performed."),
         resultLimit: z.number().int().default(100).optional().describe("The maximum number of results to return."),
@@ -34,16 +36,15 @@ export const search = {
 - "IdAndTitle": Returns only the ID and Title of each item. This is the most efficient option, and the best choice if you only need a list of items matching the query.
 - "CoreDetails": Returns the main properties of each item, excluding verbose security and link-related information.
 - "AllDetails": Returns all available properties for each item.`),
-        includeProperties: z.array(z.string()).optional().describe(`An array of property names to include in the response for fine-grained control. Supports dot notation for selecting nested properties (e.g., "VersionInfo.Creator").
-Using this parameter is much preferred over 'CoreDetails' if you know which property or properties are required in advance.
+        includeProperties: z.array(z.string()).optional().describe(`The strongly preferred method for retrieving specific details to minimize token usage. Provide an array of property names to include in the response, using dot notation for nested properties (e.g., "VersionInfo.Creator").
 If this parameter is used, the 'details' parameter is ignored. 'Id', 'Title', and '$type' are always included.
+
 Available top-level properties include, but are not limited to:
 - "LocationInfo": Information about the item's location (e.g., Path, ContextRepository, OrganizationalItem).
 - "VersionInfo": Details about the item's Version, CreationDate, Creator, RevisionDate, Revisor, etc.
 - "LockInfo": The LockType and LockUser (the user who has the item checked out).
 - "BluePrintInfo": Information related to the item's BluePrinting context (e.g., IsShared, IsLocalized, OwningRepository).
-- "MetadataSchema": The Title and Id and the item's metadata schema.
-- "AccessControlList": Security information detailing user and group permissions.
+- "MetadataSchema": The Title and Id of the item's metadata schema.
 Example: ["VersionInfo.Creator", "BluePrintInfo.OwningRepository", "LockInfo"]`),
     },
     execute: async ({ searchQuery, resultLimit = 100, details = "IdAndTitle", includeProperties }: { searchQuery?: z.infer<typeof SearchQueryValidation>, resultLimit: number, details?: "IdAndTitle" | "CoreDetails" | "AllDetails", includeProperties?: string[] }, context: any) => {

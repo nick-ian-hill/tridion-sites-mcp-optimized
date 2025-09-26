@@ -42,13 +42,62 @@ type UpdateItemByIdInput = z.infer<typeof updateItemByIdInputSchema>;
 
 export const updateItemById = {
     name: "updateItemById",
-    description: `Updates an existing Content Manager System (CMS) item.
-This tool can update various properties like title, description, and metadataSchemaId.
-For versioned items ('Component', 'Schema', 'PageTemplate', 'ComponentTemplate'), check-out and check-in are handled automatically.
-In particular, if an item is not checked out, it will be checked back in after updating.
-If the item is already checked out to the current user, it will remain checked out to that user after the update. If a versioned item is locked by another user, the operation will be aborted.
-This tool can also update the field definitions of a Schema by providing the 'fields' or 'metadataFields' properties.
-To update an item's content or metadata values, use the 'updateContentById' or 'updateMetadataById' tools respectively.`,
+    description: `Updates the properties and definition of an existing Content Management System (CMS) item.
+
+This tool modifies the definition of an item itself (e.g., its title, its Schema fields, its linked templates). 
+To update the content of a Component or the metadata values of any item, use the 'updateContentById' or 'updateMetadataById' tools respectively.
+
+Example use cases by item type:
+- All types: update 'title', 'description', and 'metadataSchemaId'.
+- Schema: update the content and metadata field definitions using the 'fields' and 'metadataFields' properties.
+- Keyword: update 'isAbstract', 'key', 'parentKeywords', and 'relatedKeywords'.
+- Bundle: update the list of 'itemsInBundle'.
+- PageTemplate/ComponentTemplate: update the associated 'templateBuildingBlocks' and other template-specific properties.
+
+When updating collection properties like 'fields', 'metadataFields', 'itemsInBundle', or 'relatedSchemaIds', the entire existing collection is replaced by the new value provided.
+For versioned items (Component, Schema, PageTemplate, ComponentTemplate), check-out and check-in are handled automatically.
+
+IMPORTANT: 
+- If a versioned item is locked by another user, the operation will be aborted.
+- Shared items ('BluePrintInfo.IsShared' is true) cannot be updated. To modify inherited properties, such as a Schema's fields, you must update the parent item in the BluePrint chain ('PrimaryBluePrintParentItem').
+
+Example 1: Update a Schema to make a mandatory field optional.
+This example modifies the 'News Article' Schema (tcm:2-104-8) to make the 'articleBody' embedded field optional by changing its 'MinOccurs' property from 1 to 0. Note that the entire 'fields' object must be provided, including the unchanged fields.
+
+    const result = await tools.updateItemById({
+        itemId: "tcm:2-104-8",
+        itemType: "Schema",
+        fields: {
+            "headline": {
+                "$type": "SingleLineTextFieldDefinition",
+                "Name": "headline",
+                "Description": "Headline",
+                "MinOccurs": 1,
+                "MaxOccurs": 1,
+                "IsLocalizable": true
+            },
+            "image": {
+                "$type": "MultimediaLinkFieldDefinition",
+                "Name": "image",
+                "Description": "Image",
+                "MinOccurs": 0,
+                "MaxOccurs": 1,
+                "IsLocalizable": true,
+                "AllowedTargetSchemas": [
+                    { "IdRef": "tcm:2-66-8" }
+                ]
+            },
+            "articleBody": {
+                "$type": "EmbeddedSchemaFieldDefinition",
+                "Name": "articleBody",
+                "Description": "Article Body",
+                "MinOccurs": 0, // Changed from 1 to 0
+                "MaxOccurs": -1,
+                "IsLocalizable": true,
+                "EmbeddedSchema": { "IdRef": "tcm:2-102-8" }
+            }
+        }
+    });`,
     input: updateItemByIdInputProperties,
     execute: async (params: UpdateItemByIdInput, context: any) => {
         const req = context?.request;

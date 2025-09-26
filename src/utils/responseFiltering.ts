@@ -5,6 +5,15 @@ export interface FilterOptions {
 }
 
 /**
+ * Defines the shape of a recursive dependency graph node.
+ */
+interface DependencyGraphNode {
+    Item?: any;
+    Dependencies?: DependencyGraphNode[];
+    [key: string]: any; // Allows for other properties like $type, HasMore, etc.
+}
+
+/**
  * Retrieves a nested property from an object using a dot-notation path.
  * @param obj The object to query.
  * @param path The dot-notation path to the property.
@@ -36,7 +45,6 @@ const setNestedProperty = (obj: any, path: string, value: any): void => {
     current[keys[0]] = value;
 };
 
-
 /**
  * Applies a filtering function to an array of items.
  * @param items The array of items to filter.
@@ -51,11 +59,28 @@ const applyFilterToArray = (items: any[], filterFn: (item: any) => any): any[] =
 };
 
 /**
- * Filters API response data based on the desired level of detail or a custom list of properties.
- * This utility handles responses that are a direct array of items, or objects containing an 'items' or 'Items' array.
- * @param options The filter options including the response data, details level, and custom properties.
- * @returns The filtered response data.
+ * Recursively applies a filter function to a DependencyGraphNode and its children.
+ * @param node The DependencyGraphNode to filter.
+ * @param filterFn The function to apply to the Item property of each node.
+ * @returns The new, filtered DependencyGraphNode.
  */
+const filterDependencyGraphNode = (node: DependencyGraphNode, filterFn: (item: any) => any): DependencyGraphNode => {
+    if (!node || typeof node !== 'object') return node;
+
+    const filteredNode: DependencyGraphNode = { ...node };
+
+    if (node.Item) {
+        filteredNode.Item = filterFn(node.Item);
+    }
+
+    // With the interface, TypeScript now knows 'dep' is a DependencyGraphNode, fixing the error.
+    if (node.Dependencies && Array.isArray(node.Dependencies)) {
+        filteredNode.Dependencies = node.Dependencies.map(dep => filterDependencyGraphNode(dep, filterFn));
+    }
+
+    return filteredNode;
+};
+
 export const filterResponseData = ({ responseData, details, includeProperties }: FilterOptions): any => {
     if (!responseData) {
         return responseData;
@@ -64,20 +89,16 @@ export const filterResponseData = ({ responseData, details, includeProperties }:
     const hasCustomProperties = includeProperties && includeProperties.length > 0;
     let filterFn: ((item: any) => any) | null = null;
 
-    // 1. Determine which filter function to use, if any.
     if (hasCustomProperties) {
         const baseProps = ['Id', 'Title', '$type'];
         filterFn = (item: any) => {
+            if (typeof item !== 'object' || item === null) return item;
             const filteredItem: { [key: string]: any } = {};
-            
-            // Add base properties
             for (const key of baseProps) {
                 if (key in item) {
                     filteredItem[key] = item[key];
                 }
             }
-
-            // Add requested nested/toplevel properties
             for (const path of includeProperties!) {
                 const value = getNestedProperty(item, path);
                 if (value !== undefined) {
@@ -89,11 +110,10 @@ export const filterResponseData = ({ responseData, details, includeProperties }:
     } else if (details === 'IdAndTitle') {
         const propsToInclude = new Set(['Id', 'Title', '$type']);
         filterFn = (item: any) => {
+            if (typeof item !== 'object' || item === null) return item;
             const filteredItem: { [key: string]: any } = {};
             for (const key of propsToInclude) {
-                if (key in item) {
-                    filteredItem[key] = item[key];
-                }
+                if (key in item) filteredItem[key] = item[key];
             }
             return filteredItem;
         };
@@ -102,24 +122,40 @@ export const filterResponseData = ({ responseData, details, includeProperties }:
             'AccessControlList', 'ApplicableActions', 'ApprovalStatus', 'ContentSecurityDescriptor',
             'ExtensionProperties', 'ListLinks', 'SecurityDescriptor', 'LoadInfo'
         ]);
-        filterFn = (item: any) => Object.fromEntries(
-            Object.entries(item).filter(([key]) => !propertiesToExclude.has(key))
-        );
+        filterFn = (item: any) => {
+            if (typeof item !== 'object' || item === null) return item;
+            return Object.fromEntries(
+                Object.entries(item).filter(([key]) => !propertiesToExclude.has(key))
+            );
+        };
     }
 
-    // 2. If a filter function was selected, apply it to the appropriate data shape.
-    if (filterFn) {
-        if (Array.isArray(responseData)) {
-            return applyFilterToArray(responseData, filterFn);
-        }
-        if (responseData.items && Array.isArray(responseData.items)) {
-            return { ...responseData, items: applyFilterToArray(responseData.items, filterFn) };
-        }
-        if (responseData.Items && Array.isArray(responseData.Items)) {
-            return { ...responseData, Items: applyFilterToArray(responseData.Items, filterFn) };
-        }
+    if (!filterFn) return responseData;
+    
+    // Handle recursive DependencyGraphNode structure (from some dependencyGraph calls)
+    if (responseData.$type === 'DependencyGraphNode' && responseData.Item && responseData.Dependencies) {
+        return filterDependencyGraphNode(responseData, filterFn);
     }
 
-    // 3. If no filtering was needed, return the original data.
+    if (Array.isArray(responseData)) {
+        return applyFilterToArray(responseData, filterFn);
+    }
+    if (responseData.items && Array.isArray(responseData.items)) {
+        return { ...responseData, items: applyFilterToArray(responseData.items, filterFn) };
+    }
+    if (responseData.Items && Array.isArray(responseData.Items)) {
+        return { ...responseData, Items: applyFilterToArray(responseData.Items, filterFn) };
+    }
+    
+    if (typeof responseData === 'object' && responseData !== null) {
+        const filteredDictionary: { [key: string]: any } = {};
+        for (const key in responseData) {
+            if (Object.prototype.hasOwnProperty.call(responseData, key)) {
+                filteredDictionary[key] = filterFn(responseData[key]);
+            }
+        }
+        return filteredDictionary;
+    }
+
     return responseData;
 };

@@ -19,20 +19,94 @@ Only select "AllDetails" if you absolutely need full details about the returned 
 
 Examples:
 
-Example 1: Finds all items that are directly using the Schema with ID tcm:5-256-8, returning only their IDs and titles.
+Example 1: Finds all items that are directly using a Schema, returning only their IDs and titles.
     const result = await tools.dependencyGraphForItem({
         itemId: "tcm:5-256-8",
         direction: "UsedBy",
-        details: "IdAndTitleOnly"
+        details: "IdAndTitle"
     });
 
-Example 2: Finds all Components and Component Templates that the Page tcm:5-310-64 depends on, including the Folders that contain them. This request returns linked Components in addition to Components directly added to the page.
+Example 2: Finds all Components used by a Page, returning the base properties plus 'VersionInfo.RevisionDate' for each item in the dependency tree.
     const result = await tools.dependencyGraphForItem({
-        itemId: "tcm:5-310-64",
+        itemId: "tcm:5-314-64",
         direction: "Uses",
-        rloItemTypes: ["Component", "ComponentTemplate"],
-        includeContainers: true
-    });`,
+        rloItemTypes: ["Component"],
+        includeProperties: ["VersionInfo.RevisionDate"]
+    });
+
+Expected JSON Output for Example 2:
+{
+  "$type": "DependencyGraphNode",
+  "Dependencies": [
+    {
+      "$type": "DependencyGraphNode",
+      "Dependencies": [
+        {
+          "$type": "DependencyGraphNode",
+          "Dependencies": [],
+          "HasMore": false,
+          "Item": {
+            "Id": "tcm:5-292",
+            "Title": "blueprint",
+            "$type": "Component",
+            "VersionInfo": {
+              "RevisionDate": "2025-09-26T09:12:50.293Z"
+            }
+          }
+        }
+      ],
+      "HasMore": false,
+      "Item": {
+        "Id": "tcm:5-307",
+        "Title": "All Articles Intro",
+        "$type": "Component",
+        "VersionInfo": {
+          "RevisionDate": "2025-09-26T09:12:54.043Z"
+        }
+      }
+    },
+    {
+      "$type": "DependencyGraphNode",
+      "Dependencies": [
+        {
+          "$type": "DependencyGraphNode",
+          "Dependencies": [],
+          "HasMore": false,
+          "Item": {
+            "Id": "tcm:5-304",
+            "Title": "calculator",
+            "$type": "Component",
+            "VersionInfo": {
+              "RevisionDate": "2025-09-26T09:12:53.303Z"
+            }
+          }
+        }
+      ],
+      "HasMore": false,
+      "Item": {
+        "Id": "tcm:5-305",
+        "Title": "Articles Intro",
+        "$type": "Component",
+        "VersionInfo": {
+          "RevisionDate": "2025-09-26T09:12:53.593Z"
+        }
+      }
+    },
+    {
+      "$type": "DependencyGraphNode",
+      "Dependencies": [],
+      "HasMore": false,
+      "Item": {
+        "Id": "tcm:5-280",
+        "Title": "Company News Media Manager Video",
+        "$type": "Component",
+        "VersionInfo": {
+          "RevisionDate": "2025-09-26T09:12:47.003Z"
+        }
+      }
+    }
+}
+`,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the item for which the dependency graph should be retrieved."),
         direction: z.enum(["Uses", "UsedBy"]).optional().default("Uses").describe("Specifies the direction of the dependencies. 'Uses' returns items this item depends on; 'UsedBy' returns items that depend on this item."),
@@ -55,11 +129,8 @@ Example 2: Finds all Components and Component Templates that the Page tcm:5-310-
         ])).optional().describe("Filters the results to include only these types of repository-local objects."),
         includeContainers: z.boolean().optional().default(false).describe("If true and direction is 'Uses', the parent Folders or Structure Groups of the items in the graph are also returned (recursively)."),
         resultLimit: z.number().int().optional().default(100).describe("The maximum number of dependency nodes to return."),
-        details: z.enum(["IdAndTitle", "CoreDetails", "AllDetails"]).default("IdAndTitle").optional().describe(`Specifies a predefined level of detail for the returned items. For custom property selection, use 'includeProperties' instead.
-- "IdAndTitle": Returns only the ID and Title of each item. This is the recommended default.
-- "CoreDetails": Returns the main properties, excluding verbose security and link-related information. This may be slow or fail if the graph is large.
-- "AllDetails": Returns all available properties for each item. This is likely to fail on large graphs.`),
-        includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response. If used, the 'details' parameter is ignored. 'Id', 'Title', and '$type' will always be included.`),
+        details: z.enum(["IdAndTitle", "CoreDetails", "AllDetails"]).default("IdAndTitle").optional().describe(`Specifies a predefined level of detail for the returned items. For custom property selection, use 'includeProperties' instead.`),
+        includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response. If used, the 'details' parameter is ignored. The base properties 'Id', 'Title', and '$type' will always be included.`),
     },
     execute: async ({ itemId, direction = "Uses", contextRepositoryId, rloItemTypes, includeContainers = false, resultLimit = 100, details = "IdAndTitle", includeProperties }: any, context: any) => {
         const req = context?.request;
