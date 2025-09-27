@@ -52,8 +52,6 @@ import { getItemHistory } from './tools/getItemHistory.js';
 import { rollbackItem } from './tools/rollbackItem.js';
 import { getClassifiedItems } from './tools/getClassifiedItems.js';
 import { batchDeleteItemsById } from './tools/batchDeleteItemsById.js';
-import { batchClassify } from './tools/batchClassify.js';
-import { batchUnclassify } from './tools/batchUnclassify.js';
 import { batchCheckOut } from './tools/batchCheckOut.js';
 import { batchCheckIn } from './tools/batchCheckIn.js';
 import { batchUndoCheckOut } from './tools/batchUndoCheckOut.js';
@@ -76,6 +74,8 @@ import { readImageDetailsFromMultimediaComponent } from './tools/readImageDetail
 import { readTextFromWordMultimediaComponent } from './tools/readTextFromWordMultimediaComponent.js';
 import { splitWordMultimediaComponentIntoTextAndImages } from './tools/splitWordMultimediaComponentIntoTextAndImages.js';
 import { generateContentFromPrompt } from './tools/generateContentFromPrompt.js';
+import { batchClassification } from './tools/batchClassification.js';
+import { classify } from './tools/classify.js';
 import { requestNavigation } from './tools/requestNavigation.js';
 import { requestOpenInEditor } from './tools/requestOpenInEditor.js';
 import { getUsers } from './tools/getUsers.js';
@@ -121,8 +121,8 @@ const tools: any[] = [
     splitPowerPointMultimediaComponentIntoTextAndImages,
     splitWordMultimediaComponentIntoTextAndImages,
     // Classification
-    batchClassify,
-    batchUnclassify,
+    classify,
+    batchClassification,
     // Update Operations
     updateItemById,
     updateContentById,
