@@ -9,7 +9,7 @@ import { processSchemaFieldDefinitions } from "../utils/fieldReordering.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 import { filterResponseData } from "../utils/responseFiltering.js";
 
-const updateItemByIdInputProperties = {
+const updateItemPropertiesInputProperties = {
     itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the CMS item to update."),
     itemType: z.enum([
         "Component", "Folder", "StructureGroup", "Keyword",
@@ -38,11 +38,11 @@ const updateItemByIdInputProperties = {
     includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response. If this parameter is omitted, the full item object will be returned. 'Id', 'Title', and '$type' will always be included when this parameter is used.`)
 };
 
-const updateItemByIdInputSchema = z.object(updateItemByIdInputProperties);
+const updateItemByIdInputSchema = z.object(updateItemPropertiesInputProperties);
 
 type UpdateItemByIdInput = z.infer<typeof updateItemByIdInputSchema>;
 
-export const updateItemById = {
+export const updateItemProperties = {
     name: "updateItemById",
     description: `Updates the properties and definition of an existing Content Management System (CMS) item.
 
@@ -66,7 +66,7 @@ IMPORTANT:
 Example 1: Update a Schema to make a mandatory field optional.
 This example modifies the 'News Article' Schema (tcm:2-104-8) to make the 'articleBody' embedded field optional by changing its 'MinOccurs' property from 1 to 0. Note that the entire 'fields' object must be provided, including the unchanged fields.
 
-    const result = await tools.updateItemById({
+    const result = await tools.updateItemProperties({
         itemId: "tcm:2-104-8",
         itemType: "Schema",
         fields: {
@@ -100,7 +100,7 @@ This example modifies the 'News Article' Schema (tcm:2-104-8) to make the 'artic
             }
         }
     });`,
-    input: updateItemByIdInputProperties,
+    input: updateItemPropertiesInputProperties,
     execute: async (params: UpdateItemByIdInput, context: any) => {
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';

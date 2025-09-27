@@ -44,7 +44,7 @@ import { search } from "./tools/search.js";
 import { unlocalizeItemById } from "./tools/unlocalizeItemById.js";
 import { undoCheckOutItem } from "./tools/undoCheckOutItem.js";
 import { updateContentById } from "./tools/updateContentById.js";
-import { updateItemById } from "./tools/updateItemById.js";
+import { updateItemProperties } from "./tools/updateItemProperties.js";
 import { updatePublicationById } from "./tools/updatePublicationById.js";
 import { updateMetadataById } from './tools/updateMetadataById.js';
 import { getLockedItems } from './tools/getLockedItems.js';
@@ -124,7 +124,7 @@ const tools: any[] = [
     classify,
     batchClassification,
     // Update Operations
-    updateItemById,
+    updateItemProperties,
     updateContentById,
     updateMetadataById,
     updateMultimediaComponentFromPrompt,
