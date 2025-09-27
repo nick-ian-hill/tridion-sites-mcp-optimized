@@ -15,9 +15,9 @@ process.on('uncaughtException', (err, origin) => {
 });
 
 // --- Tool Imports ---
-import { batchLocalizeItemsById } from "./tools/batchLocalizeItemsById.js";
-import { batchUnlocalizeItemsById } from "./tools/batchUnlocalizeItemsById.js";
-import { bulkReadItemsById } from "./tools/bulkReadItemsById.js";
+import { batchLocalizeItems } from "./tools/batchLocalizeItems.js";
+import { batchUnlocalizeItems } from "./tools/batchUnlocalizeItems.js";
+import { bulkReadItems } from "./tools/bulkReadItems.js";
 import { checkInItem } from "./tools/checkInItem.js";
 import { checkOutItem } from "./tools/checkOutItem.js";
 import { copyItem } from "./tools/copyItem.js";
@@ -32,26 +32,26 @@ import { echo } from "./tools/echo.js";
 import { getCurrentTime } from './tools/getCurrentTime.js';
 import { getBluePrintHierarchy } from "./tools/getBluePrintHierarchy.js";
 import { getCategories } from "./tools/getCategories.js";
-import { getItemById } from "./tools/getItemById.js";
+import { getItem } from "./tools/getItem.js";
 import { getItemsInContainer } from "./tools/getItemsInContainer.js";
 import { getKeywordsForCategory } from "./tools/getKeywordsForCategory.js";
 import { getPublications } from "./tools/getPublications.js";
 import { getPublicationTypes } from "./tools/getPublicationTypes.js";
-import { localizeItemById } from "./tools/localizeItemById.js";
+import { localizeItem } from "./tools/localizeItem.js";
 import { moveItem } from "./tools/moveItem.js";
 import { promoteItem } from "./tools/promoteItem.js";
 import { search } from "./tools/search.js";
-import { unlocalizeItemById } from "./tools/unlocalizeItemById.js";
+import { unlocalizeItem } from "./tools/unlocalizeItem.js";
 import { undoCheckOutItem } from "./tools/undoCheckOutItem.js";
-import { updateContentById } from "./tools/updateContentById.js";
+import { updateContent } from "./tools/updateContent.js";
 import { updateItemProperties } from "./tools/updateItemProperties.js";
-import { updatePublicationById } from "./tools/updatePublicationById.js";
-import { updateMetadataById } from './tools/updateMetadataById.js';
+import { updatePublication } from "./tools/updatePublication.js";
+import { updateMetadata } from './tools/updateMetadata.js';
 import { getLockedItems } from './tools/getLockedItems.js';
 import { getItemHistory } from './tools/getItemHistory.js';
 import { rollbackItem } from './tools/rollbackItem.js';
 import { getClassifiedItems } from './tools/getClassifiedItems.js';
-import { batchDeleteItemsById } from './tools/batchDeleteItemsById.js';
+import { batchDeleteItems } from './tools/batchDeleteItems.js';
 import { batchCheckOut } from './tools/batchCheckOut.js';
 import { batchCheckIn } from './tools/batchCheckIn.js';
 import { batchUndoCheckOut } from './tools/batchUndoCheckOut.js';
@@ -98,8 +98,8 @@ const tools: any[] = [
     getComponentTemplateLinks,
     getDefaultModel,
     getIsComponentTemplateRequired,
-    getItemById,
-    bulkReadItemsById,
+    getItem,
+    bulkReadItems,
     getItemHistory,
     getItemsInContainer,
     getLockedItems,
@@ -126,25 +126,25 @@ const tools: any[] = [
     batchClassification,
     // Update Operations
     updateItemProperties,
-    updateContentById,
-    updateMetadataById,
+    updateContent,
+    updateMetadata,
     updateMultimediaComponentFromPrompt,
     updatePage,
-    updatePublicationById,
+    updatePublication,
     updateSchemaFieldProperties,
     // Item Actions (Move, Copy, Delete)
     moveItem,
     copyItem,
     deleteItem,
-    batchDeleteItemsById,
+    batchDeleteItems,
     // BluePrinting & Localization
     getBluePrintHierarchy,
-    localizeItemById,
-    unlocalizeItemById,
+    localizeItem,
+    unlocalizeItem,
     promoteItem,
     demoteItem,
-    batchLocalizeItemsById,
-    batchUnlocalizeItemsById,
+    batchLocalizeItems,
+    batchUnlocalizeItems,
     // Versioning
     batchCheckOut,
     batchCheckIn,

@@ -3,10 +3,10 @@ import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 import { filterResponseData } from "../utils/responseFiltering.js";
 
-export const bulkReadItemsById = {
-    name: "bulkReadItemsById",
+export const bulkReadItems = {
+    name: "bulkReadItems",
     description: `Retrieves read-only details for an array of Content Manager System (CMS) items using their IDs.
-This tool is more efficient than calling getItemById for each item individually.
+This tool is more efficient than calling getItem for each item individually.
 The returned data is an 'IdentifiableObjectDictionary' type, which maps each item ID to its details.
 To control the amount of data returned, use the 'includeProperties' parameter for granular control, which is the most efficient method.
 The 'useDynamicVersion' parameter can be set to true to load the latest saved data for versioned items.
@@ -21,7 +21,7 @@ ID formats for versioned items:
 Example: Retrieve a specific nested property for multiple items.
 This example gets the revision date for two Components. The output includes the base 'Id', 'Title', and '$type' properties, plus a 'VersionInfo' object containing only the requested 'RevisionDate'.
 
-    const result = await tools.bulkReadItemsById({
+    const result = await tools.bulkReadItems({
         itemIds: ["tcm:5-320", "tcm:5-175"],
         includeProperties: ["VersionInfo.RevisionDate"]
     });

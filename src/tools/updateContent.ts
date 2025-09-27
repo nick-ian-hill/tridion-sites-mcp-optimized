@@ -4,22 +4,22 @@ import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 import { reorderFieldsBySchema, convertLinksRecursively } from "../utils/fieldReordering.js";
 
-export const updateContentById = {
-    name: "updateContentById",
+export const updateContent = {
+    name: "updateContent",
     description: `Updates the content fields for an item of type 'Component' in the Content Management System.
 
 Important Constraints:
 - This tool is only for Components. It cannot update other item types.
 - This tool only updates the content fields and cannot be used to update other properties like Title or Metadata.
 
-To update metadata, use the 'updateMetadataById' tool.
-To update other properties, use the 'updateItemById' tool.
+To update metadata, use the 'updateMetadata' tool.
+To update other properties, use the 'updateItem' tool.
 If the component is locked by another user, the operation will be aborted.
 
 Examples:
 
 Example 1: Updates the values of the content fields with XML names 'TitleField', 'Abstract', and 'Tags'.
-    const result = await tools.updateContentById({
+    const result = await tools.updateContent({
         "itemId": "tcm:5-123",
         "content": {
             "TitleField": "Component Title",

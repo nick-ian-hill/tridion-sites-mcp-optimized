@@ -41,8 +41,8 @@ const READ_ONLY_TOOLS = [
     'getComponentTemplateLinks',
     'getDefaultModel',
     'getIsComponentTemplateRequired',
-    'getItemById',
-    'bulkReadItemsById',
+    'getItem',
+    'bulkReadItems',
     'getItemHistory',
     'getItemsInContainer',
     'getLockedItems',
@@ -108,7 +108,7 @@ UI ACTION RULES:
 - Only use the 'requestNavigation' or 'requestOpenInEditor' tools if the user explicitly asks for them in a subsequent prompt.
 - When the user asks you to navigate inside/in to a container item like a Folder or Structure Group (rather than simply select it), you MUST set the 'navigateInto' parameter to 'true' in your call to the 'requestNavigation' tool.
 
-CRITICAL SAFETY RULE: Before calling any tool that permanently deletes or irreversibly modifies content (e.g., deleteItem, batchDeleteItemsById), you must first ask the user for explicit confirmation. Clearly state what will be deleted, and do not proceed until the user affirms.
+CRITICAL SAFETY RULE: Before calling any tool that permanently deletes or irreversibly modifies content (e.g., deleteItem, batchDeleteItems), you must first ask the user for explicit confirmation. Clearly state what will be deleted, and do not proceed until the user affirms.
 
 If a required tool parameter is missing (e.g., a Directory for a structure group, or a Schema for a component), ask the user for the missing information. Always clarify what is needed instead of abandoning the request.`;
 

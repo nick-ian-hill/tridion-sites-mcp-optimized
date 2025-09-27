@@ -3,8 +3,8 @@ import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 import { filterResponseData } from "../utils/responseFiltering.js";
 
-export const getItemById = {
-    name: "getItemById",
+export const getItem = {
+    name: "getItem",
     description: `Retrieves read-only details for a single Content Manager System (CMS) item using its unique ID.
 For versioned item types (Components, Component Templates, Pages, Page Templates, Template Building Blocks and Schemas), set useDynamicVersion to true to get the most recent saved data, including any revisions made since the last major version.
 The returned details typically include item type ($type), title (Title), content fields (Content), and metadata fields (Metadata).

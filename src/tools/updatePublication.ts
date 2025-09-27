@@ -3,8 +3,8 @@ import { createAuthenticatedAxios } from "../lib/axios.js";
 import { toLink, toLinkArray } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
-export const updatePublicationById = {
-    name: "updatePublicationById",
+export const updatePublication = {
+    name: "updatePublication",
     description: `Updates an existing Publication. Publications are the main organizational units in the Content Management System, acting as containers for content and design items.
     Updating a Publication might be necessary to change its URL settings, adjust paths for multimedia, set a different locale, or reconfigure default templates.
     Publications are central to BluePrinting, where they can be parents (sharing content) or children (inheriting content).
@@ -13,14 +13,14 @@ export const updatePublicationById = {
 Examples:
 
 Example 1: Updates the title and publication URL for the Publication with ID tcm:0-1-1.
-    const result = await tools.updatePublicationById({
+    const result = await tools.updatePublication({
         itemId: "tcm:0-1-1",
         title: "Global Website - Updated",
         publicationUrl: "/global-site"
     });
 
 Example 2: Changes the locale to French (France) and sets a new default Page Template for the Publication with ID tcm:0-5-1.
-    const result = await tools.updatePublicationById({
+    const result = await tools.updatePublication({
         itemId: "tcm:0-5-1",
         locale: "fr-FR",
         defaultPageTemplate: "tcm:5-123-128"

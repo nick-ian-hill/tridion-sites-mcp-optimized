@@ -2,8 +2,8 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
-export const localizeItemById = {
-    name: "localizeItemById",
+export const localizeItem = {
+    name: "localizeItem",
     description: `Localizes a shared item in the BluePrint, creating a local copy that can be edited independently of its parent item.
 
 This tool is only applicable to items that are shared (i.e., where BluePrintInfo.IsShared is true).

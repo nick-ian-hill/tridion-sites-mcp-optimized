@@ -2,8 +2,8 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
-export const batchDeleteItemsById = {
-    name: "batchDeleteItemsById",
+export const batchDeleteItems = {
+    name: "batchDeleteItems",
     description: `Starts an asynchronous process to permanently delete a batch of items from the Content Manager. This is more efficient than deleting items individually. If an item cannot be deleted (e.g., it is used by another item), it will be skipped, but the batch process will continue. The initial response includes a batch ID that can be used to monitor the status of the operation.`,
     input: {
         itemIds: z.array(z.string().regex(/^tcm:\d+-\d+(-\d+)?(-v\d+)?$/))

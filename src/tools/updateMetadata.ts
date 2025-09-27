@@ -4,21 +4,21 @@ import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 import { reorderFieldsBySchema, convertLinksRecursively } from "../utils/fieldReordering.js";
 
-export const updateMetadataById = {
-    name: "updateMetadataById",
+export const updateMetadata = {
+    name: "updateMetadata",
     description: `Updates the metadata fields for a specific item in the Content Management System.
 
 Important Constraints:
 - This tool only updates the metadata fields. It cannot update the item's Title or Content fields.
 
-To update content fields for a component, use the 'updateContentById' tool instead.
-To update other properties, use the 'updateItemById', 'updatePage', or 'updatePublication' tool depending on the item type.
+To update content fields for a component, use the 'updateContent' tool instead.
+To update other properties, use the 'updateItem', 'updatePage', or 'updatePublication' tool depending on the item type.
 If a versioned item is locked by another user, the operation will be aborted.
 
 Examples:
 
 Example 1: Updates the metadata fields with XML names 'Keywords' and 'Author' for a Component.
-    const result = await tools.updateMetadataById({
+    const result = await tools.updateMetadata({
         "itemId": "tcm:5-123",
         "metadata": {
             "Keywords": ["Update", "Tool", "Metadata"],

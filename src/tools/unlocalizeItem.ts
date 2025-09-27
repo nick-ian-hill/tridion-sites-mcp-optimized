@@ -2,8 +2,8 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../lib/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
 
-export const unlocalizeItemById = {
-    name: "unlocalizeItemById",
+export const unlocalizeItem = {
+    name: "unlocalizeItem",
     description: `Unlocalizes a localized item, discarding any local changes and returing the item to a copy of its parent.
 
 This tool is only applicable to items that are localized (i.e., where BluePrintInfo.IsLocalized is true).
