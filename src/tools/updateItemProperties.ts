@@ -4,8 +4,8 @@ import { SearchQueryValidation } from "../schemas/searchSchema.js";
 import { generateSearchFolderXmlConfiguration } from "../utils/generateSearchFolderXml.js";
 import { toLink, toLinkArray } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
-import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
-import { processSchemaFieldDefinitions } from "../utils/fieldReordering.js";
+import { fieldDefinitionSchema, fieldValueSchema } from "../schemas/fieldValueSchema.js";
+import { processSchemaFieldDefinitions, reorderFieldsBySchema } from "../utils/fieldReordering.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 import { filterResponseData } from "../utils/responseFiltering.js";
 
@@ -16,7 +16,8 @@ const updateItemPropertiesInputProperties = {
         "Category", "Schema", "Bundle", "SearchFolder", "PageTemplate", "ComponentTemplate"
     ]).describe("The type of the CMS item to update."),
     title: z.string().optional().describe("The new title for the item."),
-    metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the Metadata Schema for the item's metadata."),
+    metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the Metadata Schema for the item's metadata. Replaces the existing schema."),
+    metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields. May be required in the case of mandatory fields when changing the metadata schema. Replaces existing metadata."),
     isAbstract: z.boolean().optional().describe("Set to true to make a Keyword abstract. (Applicable to Keyword)"),
     description: z.string().optional().describe("A new description for the item."),
     key: z.string().optional().describe("A new custom key for the Keyword. (Applicable to Keyword)"),
@@ -35,22 +36,23 @@ const updateItemPropertiesInputProperties = {
     outputFormat: z.string().optional().describe("For 'ComponentTemplate' type. The format of the rendered Component Presentation (e.g., 'HTML Fragment')."),
     priority: z.number().int().optional().describe("For 'ComponentTemplate' type. Priority used for resolving Component links."),
     relatedSchemaIds: z.array(z.string().regex(/^tcm:\d+-\d+-8$/)).optional().describe("For 'ComponentTemplate' type. An array of Schema TCM URIs to link to this template. Replaces any existing links."),
-    includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response. If this parameter is omitted, the full item object will be returned. 'Id', 'Title', and '$type' will always be included when this parameter is used.`)
+    includeProperties: z.array(z.string()).optional().describe(`An array of property names to include in the response object. If omitted, the full object is returned. 'Id', 'Title', and '$type' are always included when this is used.`)
 };
 
-const updateItemByIdInputSchema = z.object(updateItemPropertiesInputProperties);
+const updateItemPropertiesSchema = z.object(updateItemPropertiesInputProperties);
 
-type UpdateItemByIdInput = z.infer<typeof updateItemByIdInputSchema>;
+type UpdateItemPropertiesInput = z.infer<typeof updateItemPropertiesSchema>;
 
 export const updateItemProperties = {
-    name: "updateItemById",
-    description: `Updates the properties and definition of an existing Content Management System (CMS) item.
+    name: "updateItemProperties",
+    description: `Updates the core properties and structural definition of an existing Content Management System (CMS) item.
 
 This tool modifies the definition of an item itself (e.g., its title, its Schema fields, its linked templates). 
-To update the content of a Component or the metadata values of any item, use the 'updateContentById' or 'updateMetadataById' tools respectively.
+To update only the content of a Component, use the 'updateContent' tool.
+To update only the metadata values of any item, use the 'updateMetadata' tool.
 
 Example use cases by item type:
-- All types: update 'title', 'description', and 'metadataSchemaId'.
+- All types: update 'title', 'description', and 'metadataSchemaId'. The 'metadata' can also be provided at the same time.
 - Schema: update the content and metadata field definitions using the 'fields' and 'metadataFields' properties.
 - Keyword: update 'isAbstract', 'key', 'parentKeywords', and 'relatedKeywords'.
 - Bundle: update the list of 'itemsInBundle'.
@@ -60,7 +62,6 @@ When updating collection properties like 'fields', 'metadataFields', 'itemsInBun
 For versioned items (Component, Schema, PageTemplate, ComponentTemplate), check-out and check-in are handled automatically.
 
 IMPORTANT: 
-- If a versioned item is locked by another user, the operation will be aborted.
 - Shared items ('BluePrintInfo.IsShared' is true) cannot be updated. To modify inherited properties, such as a Schema's fields, you must update the parent item in the BluePrint chain ('PrimaryBluePrintParentItem').
 
 Example 1: Update a Schema to make a mandatory field optional.
@@ -99,9 +100,21 @@ This example modifies the 'News Article' Schema (tcm:2-104-8) to make the 'artic
                 "EmbeddedSchema": { "IdRef": "tcm:2-102-8" }
             }
         }
-    });`,
+    });
+
+Example 2: Change the Metadata Schema of a Folder and provide the metadata for the new schema. This can be neccesary when the new schema has mandatory fields.
+    const result = await tools.updateItemProperties({
+        itemId: "tcm:5-123-2",
+        itemType: "Folder",
+        metadataSchemaId: "tcm:5-321-8",
+        metadata: {
+            "folderType": "Campaign",
+            "campaignYear": 2025
+        }
+    });
+`,
     input: updateItemPropertiesInputProperties,
-    execute: async (params: UpdateItemByIdInput, context: any) => {
+    execute: async (params: UpdateItemPropertiesInput, context: any) => {
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -179,7 +192,7 @@ This example modifies the 'News Article' Schema (tcm:2-104-8) to make the 'artic
                 const checkedOutUser = itemToUpdate?.VersionInfo?.CheckOutUser?.IdRef;
 
                 if (isCheckedOut && checkedOutUser !== agentId) {
-                    return { content: [{ type: "text", text: `Item ${itemId} is already checked out by another user with ID ${checkedOutUser}.` }], errors: [] };
+                    return { content: [{ type: "text", text: `Item ${itemId} is already checked out by another user.` }] };
                 }
 
                 if (!isCheckedOut) {
@@ -191,8 +204,17 @@ This example modifies the 'News Article' Schema (tcm:2-104-8) to make the 'artic
             }
 
             if (updates.title) itemToUpdate.Title = updates.title;
-            if (updates.metadataSchemaId) itemToUpdate.MetadataSchema = toLink(updates.metadataSchemaId);
             if (updates.description) itemToUpdate.Description = updates.description;
+
+            if (updates.metadataSchemaId) {
+                itemToUpdate.MetadataSchema = toLink(updates.metadataSchemaId);
+            }
+            if (updates.metadata) {
+                const schemaIdForMetadata = updates.metadataSchemaId || itemToUpdate.MetadataSchema?.IdRef;
+                if (!schemaIdForMetadata || schemaIdForMetadata === 'tcm:0-0-0') throw new Error(`Could not determine a valid Schema for metadata. Please specify a 'metadataSchemaId'.`);
+                const orderedMetadata = await reorderFieldsBySchema(updates.metadata, schemaIdForMetadata, 'metadata', authenticatedAxios);
+                itemToUpdate.Metadata = orderedMetadata;
+            }
 
             if (itemType === 'Keyword') {
                 if (updates.isAbstract !== undefined) itemToUpdate.IsAbstract = updates.isAbstract;
@@ -254,7 +276,7 @@ This example modifies the 'News Article' Schema (tcm:2-104-8) to make the 'artic
                     return handleUnexpectedResponse(checkInResponse);
                 }
             }
-            
+
             const finalData = filterResponseData({ responseData: updatedItem, includeProperties });
 
             return {

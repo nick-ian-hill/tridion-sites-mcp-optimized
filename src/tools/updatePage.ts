@@ -47,14 +47,24 @@ Example 3: Reorder Component Presentations in a specific Region.
             }
         ])
     });
+
+Example 4: Change the Metadata Schema and provide metadata for the new fields. Specifying metadata values with this tool is necessary when the new metadata schema has mandatory fields.
+    const result = await tools.updatePage({
+        itemId: "tcm:1-123-64",
+        metadataSchemaId: "tcm:1-987-8",
+        metadata: {
+            "pageType": "Landing Page",
+            "campaignCode": "Q4-2025"
+        }
+    });
 `,
     input: {
         itemId: z.string().regex(/^tcm:\d+-\d+-64$/).describe("The unique ID (TCM URI) of the Page to update."),
         title: z.string().optional().describe("The new title for the Page."),
         fileName: z.string().regex(/^\S+$/, "File name cannot contain white space.").optional().describe("The new file name for the page (e.g., 'new-page.html'), which cannot contain spaces."),
         pageTemplateId: z.string().regex(/^tcm:\d+-\d+-128$/).optional().describe("The TCM URI of the Page Template to be associated with the Page. Replaces the existing Page Template."),
-        metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of a Schema from which to look up the Page's metadata fields. If the Page Template defines a Region Schema, then that Region Schema can be set as the value of the metadataSchemaId. Alternatively, any schema with purpose 'metadata' can be selected."),
-        metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the Page's metadata fields, matching the Metadata Schema. Replaces existing metadata."),
+        metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of a Schema for the Page's metadata. Replaces the existing schema. If the Page Template defines a Region Schema, then that Region Schema can be set as the value of the metadataSchemaId. Alternatively, any schema with purpose 'metadata' can be selected."),
+        metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the Page's metadata fields. Can be provided alongside 'metadataSchemaId'. Replaces existing metadata."),
         componentPresentations: z.string().optional().describe("A JSON string representing a complete array of Component Presentation objects to replace the existing ones on the page. Use JSON.stringify() to format this correctly."),
         regions: z.string().optional().describe("A JSON string representing a complete array of Region objects to replace the existing ones on the page. Use JSON.stringify() to format this correctly.")
     },
@@ -117,7 +127,7 @@ Example 3: Reorder Component Presentations in a specific Region.
                         schemaIdForMetadata = ptResponse.data.PageSchema.IdRef;
                     }
                 }
-                 if (!schemaIdForMetadata) {
+                if (!schemaIdForMetadata) {
                     throw new Error(`Could not determine a Metadata Schema for Page ${itemId}. Please specify a 'metadataSchemaId'.`);
                 }
                 const orderedMetadata = await reorderFieldsBySchema(updates.metadata, schemaIdForMetadata, 'metadata', authenticatedAxios);
@@ -125,7 +135,7 @@ Example 3: Reorder Component Presentations in a specific Region.
             }
 
             if (updates.componentPresentations) {
-                 try {
+                try {
                     const parsedCPs = JSON.parse(updates.componentPresentations);
                     itemToUpdate.ComponentPresentations = processComponentPresentations(parsedCPs, itemId);
                 } catch (error) {
@@ -133,7 +143,7 @@ Example 3: Reorder Component Presentations in a specific Region.
                     throw new Error(`The 'componentPresentations' parameter is not a valid JSON string. Details: ${errorMessage}`);
                 }
             }
-            
+
             if (updates.regions) {
                 try {
                     const parsedRegions = JSON.parse(updates.regions);
@@ -160,7 +170,7 @@ Example 3: Reorder Component Presentations in a specific Region.
                     return handleUnexpectedResponse(checkInResponse);
                 }
             }
-            
+
             return {
                 content: [{ type: "text", text: `Successfully updated Page ${itemId}.\n\n${JSON.stringify(updatedItem, null, 2)}` }],
             };

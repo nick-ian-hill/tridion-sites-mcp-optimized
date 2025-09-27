@@ -76,6 +76,7 @@ import { splitWordMultimediaComponentIntoTextAndImages } from './tools/splitWord
 import { generateContentFromPrompt } from './tools/generateContentFromPrompt.js';
 import { batchClassification } from './tools/batchClassification.js';
 import { classify } from './tools/classify.js';
+import { updateSchemaFieldProperties } from './tools/updateSchemaFieldProperties.js';
 import { requestNavigation } from './tools/requestNavigation.js';
 import { requestOpenInEditor } from './tools/requestOpenInEditor.js';
 import { getUsers } from './tools/getUsers.js';
@@ -130,6 +131,7 @@ const tools: any[] = [
     updateMultimediaComponentFromPrompt,
     updatePage,
     updatePublicationById,
+    updateSchemaFieldProperties,
     // Item Actions (Move, Copy, Delete)
     moveItem,
     copyItem,
