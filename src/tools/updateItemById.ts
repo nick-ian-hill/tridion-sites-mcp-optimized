@@ -7,6 +7,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js
 import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
 import { processSchemaFieldDefinitions } from "../utils/fieldReordering.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
+import { filterResponseData } from "../utils/responseFiltering.js";
 
 const updateItemByIdInputProperties = {
     itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the CMS item to update."),
@@ -33,7 +34,8 @@ const updateItemByIdInputProperties = {
     isRepositoryPublishable: z.boolean().optional().describe("For 'ComponentTemplate' type. Whether the template renders dynamic Component Presentations."),
     outputFormat: z.string().optional().describe("For 'ComponentTemplate' type. The format of the rendered Component Presentation (e.g., 'HTML Fragment')."),
     priority: z.number().int().optional().describe("For 'ComponentTemplate' type. Priority used for resolving Component links."),
-    relatedSchemaIds: z.array(z.string().regex(/^tcm:\d+-\d+-8$/)).optional().describe("For 'ComponentTemplate' type. An array of Schema TCM URIs to link to this template. Replaces any existing links.")
+    relatedSchemaIds: z.array(z.string().regex(/^tcm:\d+-\d+-8$/)).optional().describe("For 'ComponentTemplate' type. An array of Schema TCM URIs to link to this template. Replaces any existing links."),
+    includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response. If this parameter is omitted, the full item object will be returned. 'Id', 'Title', and '$type' will always be included when this parameter is used.`)
 };
 
 const updateItemByIdInputSchema = z.object(updateItemByIdInputProperties);
@@ -105,7 +107,7 @@ This example modifies the 'News Article' Schema (tcm:2-104-8) to make the 'artic
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
         const userSessionId = match ? match[1] : null;
 
-        const { itemId, itemType, ...updates } = params;
+        const { itemId, itemType, includeProperties, ...updates } = params;
         const restItemId = itemId.replace(':', '_');
         const versionedItemTypes = ["Component", "Schema", "PageTemplate", "ComponentTemplate"];
         const isVersioned = versionedItemTypes.includes(itemType);
@@ -252,9 +254,11 @@ This example modifies the 'News Article' Schema (tcm:2-104-8) to make the 'artic
                     return handleUnexpectedResponse(checkInResponse);
                 }
             }
+            
+            const finalData = filterResponseData({ responseData: updatedItem, includeProperties });
 
             return {
-                content: [{ type: "text", text: `Successfully updated ${itemType} ${itemId}.\n\n${JSON.stringify(updatedItem, null, 2)}` }],
+                content: [{ type: "text", text: `Successfully updated ${itemType} ${itemId}.\n\n${JSON.stringify(finalData, null, 2)}` }],
             };
 
         } catch (error) {
