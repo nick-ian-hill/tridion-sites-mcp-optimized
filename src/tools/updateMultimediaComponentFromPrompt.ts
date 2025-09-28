@@ -109,10 +109,12 @@ export const updateMultimediaComponentFromPrompt = {
             const updateResponse = await authenticatedAxios.put(`/items/${restItemId}`, itemToUpdate);
             if (updateResponse.status !== 200) return handleUnexpectedResponse(updateResponse);
 
-            console.log(`Checking in component ${itemId}.`);
-            const checkInResult = await checkInItem(itemId, authenticatedAxios);
-            if (!('status' in checkInResult && checkInResult.status === 200)) {
-                return checkInResult;
+            if (wasCheckedOutByTool) {
+                console.log(`Checking in component ${itemId}.`);
+                const checkInResult = await checkInItem(itemId, authenticatedAxios);
+                if (!('status' in checkInResult && checkInResult.status === 200)) {
+                    return checkInResult;
+                }
             }
             
             return {

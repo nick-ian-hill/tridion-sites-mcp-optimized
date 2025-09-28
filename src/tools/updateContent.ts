@@ -71,14 +71,17 @@ Example 1: Updates the values of the content fields with XML names 'TitleField',
                 return handleUnexpectedResponse(updateResponse);
             }
 
-            const checkInResult = await checkInItem(itemId, authenticatedAxios);
-            if ('status' in checkInResult && checkInResult.status === 200) {
-                return {
-                    content: [{ type: "text", text: `Successfully updated and checked in component ${itemId}.` }],
-                };
-            } else {
-                return checkInResult;
+            if (wasCheckedOutByTool) {
+                const checkInResult = await checkInItem(itemId, authenticatedAxios);
+                if (!('status' in checkInResult && checkInResult.status === 200)) {
+                    return checkInResult;
+                }
             }
+
+            return {
+                content: [{ type: "text", text: `Successfully updated component ${itemId}.` }],
+            };
+            
         } catch (error) {
             if (wasCheckedOutByTool) {
                 await undoCheckoutItem(itemId, authenticatedAxios);
