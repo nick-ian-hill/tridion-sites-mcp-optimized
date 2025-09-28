@@ -7,8 +7,21 @@ export const deleteItem = {
     description: `Permanently deletes an item from the Content Manager. You can delete all versions of an item by providing its base URI, or delete a specific version by including the version number in the URI. The operation may fail if the item is currently used by other items in the system.`,
     input: {
         itemId: z.string().regex(/^tcm:\d+-\d+(-\d+)?(-v\d+)?$/).describe("The unique ID (TCM URI) of the item to delete. To delete a specific version, include the version number in the URI (e.g., 'tcm:5-263-64-v3')."),
+        confirmed: z.boolean().optional().describe("Confirmation to proceed with the deletion."),
     },
-    execute: async ({ itemId }: { itemId: string }, context: any) => {
+    execute: async ({ itemId, confirmed }: { itemId: string; confirmed?: boolean }, context: any) => {
+        if (!confirmed) {
+            return {
+                elicit: {
+                    input: "confirmed",
+                    content: [{
+                        type: "text",
+                        text: `Are you sure you want to permanently delete the item ${itemId}? This action cannot be undone.`
+                    }],
+                }
+            };
+        }
+
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);

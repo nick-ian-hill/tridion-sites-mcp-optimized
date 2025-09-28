@@ -13,8 +13,21 @@ The tool returns a confirmation that the item has been successfully unlocalized.
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID (TCM URI) of the local item to unlocalize."),
         useDynamicVersion: z.boolean().optional().default(true).describe("Loads the latest saved version of the item if available."),
+        confirmed: z.boolean().optional().describe("Confirmation to proceed with unlocalizing the item, which will discard local changes."),
     },
-    execute: async ({ itemId, useDynamicVersion = true }: { itemId: string, useDynamicVersion: boolean }, context: any) => {
+    execute: async ({ itemId, useDynamicVersion = true, confirmed }: { itemId: string; useDynamicVersion: boolean; confirmed?: boolean }, context: any) => {
+        if (!confirmed) {
+            return {
+                elicit: {
+                    input: "confirmed",
+                    content: [{
+                        type: "text",
+                        text: `Are you sure you want to unlocalize the item ${itemId}? This action will discard all local changes and cannot be undone.`
+                    }],
+                }
+            };
+        }
+
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);

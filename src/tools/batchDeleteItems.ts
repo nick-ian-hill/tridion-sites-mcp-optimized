@@ -8,10 +8,23 @@ export const batchDeleteItems = {
     input: {
         itemIds: z.array(z.string().regex(/^tcm:\d+-\d+(-\d+)?(-v\d+)?$/))
             .describe("An array of unique IDs (TCM URIs) for the items to be deleted. To delete specific versions, include the version number in the URI (e.g., 'tcm:5-263-64-v3')."),
+        confirmed: z.boolean().optional().describe("Confirmation to proceed with the batch deletion."),
     },
-    execute: async ({ itemIds }: { itemIds: string[] },
+    execute: async ({ itemIds, confirmed }: { itemIds: string[]; confirmed?: boolean },
         context: any
     ) => {
+        if (!confirmed) {
+            return {
+                elicit: {
+                    input: "confirmed",
+                    content: [{
+                        type: "text",
+                        text: `Are you sure you want to permanently delete these ${itemIds.length} items? This action cannot be undone.`
+                    }],
+                }
+            };
+        }
+        
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
