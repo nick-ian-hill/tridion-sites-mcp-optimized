@@ -1,13 +1,14 @@
 import { z } from "zod";
-import { createAuthenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../utils/axios.js";
 import { SearchQueryValidation } from "../schemas/searchSchema.js";
 import { generateSearchFolderXmlConfiguration } from "../utils/generateSearchFolderXml.js";
 import { toLink, toLinkArray } from "../utils/links.js";
-import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
+import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldDefinitionSchema, fieldValueSchema } from "../schemas/fieldValueSchema.js";
 import { processSchemaFieldDefinitions, reorderFieldsBySchema } from "../utils/fieldReordering.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 import { filterResponseData } from "../utils/responseFiltering.js";
+import { handleCheckout, checkInItem, undoCheckoutItem } from "../utils/versioningUtils.js";
 
 const updateItemPropertiesInputProperties = {
     itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the CMS item to update."),
@@ -183,24 +184,12 @@ Example 2: Change the Metadata Schema of a Folder and provide the metadata for t
             let itemToUpdate = getItemResponse.data;
 
             if (isVersioned) {
-                const whoAmIResponse = await authenticatedAxios.get('/whoAmI');
-                if (whoAmIResponse.status !== 200) return handleUnexpectedResponse(whoAmIResponse);
-                const agentId = whoAmIResponse.data?.User?.Id;
-                if (!agentId) throw new Error("Could not retrieve agent's user ID.");
-
-                const isCheckedOut = itemToUpdate?.LockInfo?.LockType?.includes('CheckedOut');
-                const checkedOutUser = itemToUpdate?.VersionInfo?.CheckOutUser?.IdRef;
-
-                if (isCheckedOut && checkedOutUser !== agentId) {
-                    return { content: [{ type: "text", text: `Item ${itemId} is already checked out by another user.` }] };
+                const versioningResult = await handleCheckout(itemId, itemToUpdate, authenticatedAxios);
+                if (versioningResult.error) {
+                    return { content: [{ type: "text", text: versioningResult.error }] };
                 }
-
-                if (!isCheckedOut) {
-                    const checkOutResponse = await authenticatedAxios.post(`/items/${restItemId}/checkOut`, { "$type": "CheckOutRequest", "SetPermanentLock": true });
-                    if (checkOutResponse.status !== 200) return handleUnexpectedResponse(checkOutResponse);
-                    itemToUpdate = checkOutResponse.data;
-                    wasCheckedOutByTool = true;
-                }
+                itemToUpdate = versioningResult.item;
+                wasCheckedOutByTool = versioningResult.wasCheckedOutByTool;
             }
 
             if (updates.title) itemToUpdate.Title = updates.title;
@@ -271,9 +260,9 @@ Example 2: Change the Metadata Schema of a Folder and provide the metadata for t
             const updatedItem = updateResponse.data;
 
             if (isVersioned && wasCheckedOutByTool) {
-                const checkInResponse = await authenticatedAxios.post(`/items/${restItemId}/checkIn`, { "$type": "CheckInRequest", "RemovePermanentLock": true });
-                if (checkInResponse.status !== 200) {
-                    return handleUnexpectedResponse(checkInResponse);
+                const checkInResult = await checkInItem(itemId, authenticatedAxios);
+                if (!('status' in checkInResult && checkInResult.status === 200)) {
+                    return checkInResult;
                 }
             }
 
@@ -285,11 +274,7 @@ Example 2: Change the Metadata Schema of a Folder and provide the metadata for t
 
         } catch (error) {
             if (isVersioned && wasCheckedOutByTool) {
-                try {
-                    await authenticatedAxios.post(`/items/${restItemId}/undoCheckOut`);
-                } catch (undoError) {
-                    console.error(`Failed to undo checkout for item ${itemId}: ${String(undoError)}`);
-                }
+                await undoCheckoutItem(itemId, authenticatedAxios);
             }
             return handleAxiosError(error, `Failed to update ${itemType} ${itemId}`);
         }

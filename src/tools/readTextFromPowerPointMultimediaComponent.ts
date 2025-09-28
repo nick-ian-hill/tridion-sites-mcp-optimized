@@ -1,8 +1,8 @@
 import { z } from "zod";
 import JSZip from "jszip";
 import { Parser as XmlParser } from "xml2js";
-import { createAuthenticatedAxios } from "../lib/axios.js";
-import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
+import { createAuthenticatedAxios } from "../utils/axios.js";
+import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 
 const extractTextFromXmlObject = (obj: any): string[] => {
     let texts: string[] = [];

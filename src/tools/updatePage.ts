@@ -1,11 +1,12 @@
 import { z } from "zod";
-import { createAuthenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../utils/axios.js";
 import { toLink } from "../utils/links.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
-import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
+import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 import { reorderFieldsBySchema } from "../utils/fieldReordering.js";
 import { processComponentPresentations, processRegions } from "../utils/pageUtils.js";
+import { handleCheckout, checkInItem, undoCheckoutItem } from "../utils/versioningUtils.js";
 
 export const updatePage = {
     name: "updatePage",
@@ -84,26 +85,15 @@ Example 4: Change the Metadata Schema and provide metadata for the new fields. S
             if (getItemResponse.status !== 200) {
                 return handleUnexpectedResponse(getItemResponse);
             }
-            let itemToUpdate = getItemResponse.data;
+            const initialItem = getItemResponse.data;
 
-            const whoAmIResponse = await authenticatedAxios.get('/whoAmI');
-            if (whoAmIResponse.status !== 200) return handleUnexpectedResponse(whoAmIResponse);
-            const agentId = whoAmIResponse.data?.User?.Id;
-            if (!agentId) throw new Error("Could not retrieve agent's user ID.");
-
-            const isCheckedOut = itemToUpdate?.LockInfo?.LockType?.includes('CheckedOut');
-            const checkedOutUser = itemToUpdate?.VersionInfo?.CheckOutUser?.IdRef;
-
-            if (isCheckedOut && checkedOutUser !== agentId) {
-                return { content: [{ type: "text", text: `Page ${itemId} is already checked out by another user with ID ${checkedOutUser}.` }] };
+            const versioningResult = await handleCheckout(itemId, initialItem, authenticatedAxios);
+            if (versioningResult.error) {
+                return { content: [{ type: "text", text: versioningResult.error }] };
             }
+            let itemToUpdate = versioningResult.item;
+            wasCheckedOutByTool = versioningResult.wasCheckedOutByTool;
 
-            if (!isCheckedOut) {
-                const checkOutResponse = await authenticatedAxios.post(`/items/${restItemId}/checkOut`, { "$type": "CheckOutRequest", "SetPermanentLock": true });
-                if (checkOutResponse.status !== 200) return handleUnexpectedResponse(checkOutResponse);
-                itemToUpdate = checkOutResponse.data;
-                wasCheckedOutByTool = true;
-            }
 
             if (updates.title) itemToUpdate.Title = updates.title;
             if (updates.fileName) itemToUpdate.FileName = updates.fileName;
@@ -165,9 +155,9 @@ Example 4: Change the Metadata Schema and provide metadata for the new fields. S
             const updatedItem = updateResponse.data;
 
             if (wasCheckedOutByTool) {
-                const checkInResponse = await authenticatedAxios.post(`/items/${restItemId}/checkIn`, { "$type": "CheckInRequest", "RemovePermanentLock": true });
-                if (checkInResponse.status !== 200) {
-                    return handleUnexpectedResponse(checkInResponse);
+                const checkInResult = await checkInItem(itemId, authenticatedAxios);
+                if (!('status' in checkInResult && checkInResult.status === 200)) {
+                    return checkInResult;
                 }
             }
 
@@ -177,11 +167,7 @@ Example 4: Change the Metadata Schema and provide metadata for the new fields. S
 
         } catch (error) {
             if (wasCheckedOutByTool) {
-                try {
-                    await authenticatedAxios.post(`/items/${restItemId}/undoCheckOut`);
-                } catch (undoError) {
-                    console.error(`Failed to undo checkout for item ${itemId}: ${String(undoError)}`);
-                }
+                await undoCheckoutItem(itemId, authenticatedAxios);
             }
             return handleAxiosError(error, `Failed to update Page ${itemId}`);
         }

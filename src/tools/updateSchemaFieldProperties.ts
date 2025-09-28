@@ -1,7 +1,8 @@
 import { z } from "zod";
-import { createAuthenticatedAxios } from "../lib/axios.js";
-import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
+import { createAuthenticatedAxios } from "../utils/axios.js";
+import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { processSchemaFieldDefinitions } from "../utils/fieldReordering.js";
+import { handleCheckout, checkInItem, undoCheckoutItem } from "../utils/versioningUtils.js";
 
 const fieldUpdateSchema = z.object({
     fieldName: z.string().describe("The XML name of the field to modify (e.g., 'articleBody')."),
@@ -94,22 +95,14 @@ Example 1: Make the 'articleBody' field optional and change the description of t
         try {
             const getItemResponse = await authenticatedAxios.get(`/items/${restItemId}`, { params: { useDynamicVersion: true } });
             if (getItemResponse.status !== 200) return handleUnexpectedResponse(getItemResponse);
-            let itemToUpdate = getItemResponse.data;
+            const initialItem = getItemResponse.data;
 
-            const whoAmIResponse = await authenticatedAxios.get('/whoAmI');
-            if (whoAmIResponse.status !== 200) return handleUnexpectedResponse(whoAmIResponse);
-            const agentId = whoAmIResponse.data?.User?.Id;
-            if (!agentId) throw new Error("Could not retrieve agent's user ID.");
-
-            const isCheckedOut = itemToUpdate?.LockInfo?.LockType?.includes('CheckedOut');
-            const checkedOutUser = itemToUpdate?.VersionInfo?.CheckOutUser?.IdRef;
-            if (isCheckedOut && checkedOutUser !== agentId) return { content: [{ type: "text", text: `Schema ${schemaId} is already checked out by another user.` }] };
-            if (!isCheckedOut) {
-                const checkOutResponse = await authenticatedAxios.post(`/items/${restItemId}/checkOut`, { "$type": "CheckOutRequest", "SetPermanentLock": true });
-                if (checkOutResponse.status !== 200) return handleUnexpectedResponse(checkOutResponse);
-                itemToUpdate = checkOutResponse.data;
-                wasCheckedOutByTool = true;
+            const versioningResult = await handleCheckout(schemaId, initialItem, authenticatedAxios);
+            if (versioningResult.error) {
+                return { content: [{ type: "text", text: versioningResult.error }] };
             }
+            let itemToUpdate = versioningResult.item;
+            wasCheckedOutByTool = versioningResult.wasCheckedOutByTool;
 
             for (const update of fieldUpdates) {
                 const { fieldName, fieldLocation, propertyToUpdate, newValue } = update;
@@ -146,8 +139,10 @@ Example 1: Make the 'articleBody' field optional and change the description of t
 
             // Handle check-in
             if (wasCheckedOutByTool) {
-                const checkInResponse = await authenticatedAxios.post(`/items/${restItemId}/checkIn`, { "$type": "CheckInRequest", "RemovePermanentLock": true });
-                if (checkInResponse.status !== 200) return handleUnexpectedResponse(checkInResponse);
+                const checkInResult = await checkInItem(schemaId, authenticatedAxios);
+                if (!('status' in checkInResult && checkInResult.status === 200)) {
+                    return checkInResult;
+                }
             }
 
             return {
@@ -156,8 +151,7 @@ Example 1: Make the 'articleBody' field optional and change the description of t
 
         } catch (error) {
             if (wasCheckedOutByTool) {
-                try { await authenticatedAxios.post(`/items/${restItemId}/undoCheckOut`); } 
-                catch (undoError) { console.error(`Failed to undo checkout for Schema ${schemaId}: ${String(undoError)}`); }
+                await undoCheckoutItem(schemaId, authenticatedAxios);
             }
             return handleAxiosError(error, `Failed to update fields for Schema ${schemaId}`);
         }

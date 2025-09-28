@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { createAuthenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../utils/axios.js";
 import { toLinkArray } from "../utils/links.js";
-import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
+import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 
 export const createPublication = {
     name: "createPublication",

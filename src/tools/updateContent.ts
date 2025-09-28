@@ -1,8 +1,9 @@
 import { z } from "zod";
-import { createAuthenticatedAxios } from "../lib/axios.js";
-import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
+import { createAuthenticatedAxios } from "../utils/axios.js";
+import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 import { reorderFieldsBySchema, convertLinksRecursively } from "../utils/fieldReordering.js";
+import { handleCheckout, checkInItem, undoCheckoutItem } from "../utils/versioningUtils.js";
 
 export const updateContent = {
     name: "updateContent",
@@ -53,32 +54,15 @@ Example 1: Updates the values of the content fields with XML names 'TitleField',
                 return handleAxiosError(new Error(`Component ${itemId} does not have an associated Schema.`), "Failed to update component");
             }
 
-            convertLinksRecursively(content, itemId);
-            
-            const orderedContent = await reorderFieldsBySchema(content, schemaId, 'content', authenticatedAxios);
-
-            const whoAmIResponse = await authenticatedAxios.get('/whoAmI');
-            if (whoAmIResponse.status !== 200) return handleUnexpectedResponse(whoAmIResponse);
-            const agentId = whoAmIResponse.data?.User?.Id;
-            if (!agentId) return handleAxiosError(new Error("Could not retrieve agent's user ID."), "Failed to update component");
-
-            const isCheckedOut = initialItem?.LockInfo?.LockType?.includes('CheckedOut');
-            const checkedOutUser = initialItem?.VersionInfo?.CheckOutUser?.IdRef;
-            let itemToUpdate;
-
-            if (isCheckedOut && checkedOutUser !== agentId) {
-                return {
-                    content: [{ type: "text", text: `Item ${itemId} is already checked out by another user with ID ${checkedOutUser}.` }],
-                    errors: [],
-                };
-            } else if (!isCheckedOut) {
-                const checkOutResponse = await authenticatedAxios.post(`/items/${restItemId}/checkOut`, { "$type": "CheckOutRequest", "SetPermanentLock": true });
-                if (checkOutResponse.status !== 200) return handleUnexpectedResponse(checkOutResponse);
-                itemToUpdate = checkOutResponse.data;
-                wasCheckedOutByTool = true;
-            } else {
-                itemToUpdate = initialItem;
+            const versioningResult = await handleCheckout(itemId, initialItem, authenticatedAxios);
+            if (versioningResult.error) {
+                return { content: [{ type: "text", text: versioningResult.error }] };
             }
+            let itemToUpdate = versioningResult.item;
+            wasCheckedOutByTool = versioningResult.wasCheckedOutByTool;
+            
+            convertLinksRecursively(content, itemId);
+            const orderedContent = await reorderFieldsBySchema(content, schemaId, 'content', authenticatedAxios);
 
             itemToUpdate.Content = orderedContent;
 
@@ -87,21 +71,17 @@ Example 1: Updates the values of the content fields with XML names 'TitleField',
                 return handleUnexpectedResponse(updateResponse);
             }
 
-            const checkInResponse = await authenticatedAxios.post(`/items/${restItemId}/checkIn`, { "$type": "CheckInRequest", "RemovePermanentLock": true });
-            if (checkInResponse.status === 200) {
+            const checkInResult = await checkInItem(itemId, authenticatedAxios);
+            if ('status' in checkInResult && checkInResult.status === 200) {
                 return {
                     content: [{ type: "text", text: `Successfully updated and checked in component ${itemId}.` }],
                 };
             } else {
-                return handleUnexpectedResponse(checkInResponse);
+                return checkInResult;
             }
         } catch (error) {
             if (wasCheckedOutByTool) {
-                try {
-                    await authenticatedAxios.post(`/items/${restItemId}/undoCheckOut`);
-                } catch (undoError) {
-                    console.error(`Failed to undo checkout for item ${itemId}: ${String(undoError)}`);
-                }
+                await undoCheckoutItem(itemId, authenticatedAxios);
             }
             return handleAxiosError(error, "Failed to update component");
         }

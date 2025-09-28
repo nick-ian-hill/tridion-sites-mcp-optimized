@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { createAuthenticatedAxios } from "../lib/axios.js";
-import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
+import { createAuthenticatedAxios } from "../utils/axios.js";
+import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 

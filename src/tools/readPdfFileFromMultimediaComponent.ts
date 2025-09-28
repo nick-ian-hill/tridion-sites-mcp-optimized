@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { PdfReader } from "pdfreader";
-import { createAuthenticatedAxios } from "../lib/axios.js";
-import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
+import { createAuthenticatedAxios } from "../utils/axios.js";
+import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 
 const readPdfFileFromMultimediaComponentInputProperties = {
     itemId: z.string().regex(/^tcm:\d+-\d+$/).describe("The TCM URI of the multimedia component containing the PDF (.pdf) file (e.g., 'tcm:5-125')."),

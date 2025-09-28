@@ -3,7 +3,7 @@ import axios, { InternalAxiosRequestConfig } from "axios";
 // This is the single, correct URL for the Tridion backend API.
 const CMS_BASE_API_URL = "http://10.100.92.199:81/ui/api/v3.0";
 
-const DEBUG_USER_SESSION_ID = "CfDJ8MFdR0UUsZtPi5oTnQ5q67LFIr4vBh0x84NpApN3hNrYLmIWr1SAQR6beda5VCnKCgvAYfkggXmx0E3xqbiB2EsKvtEoudSMhxvx1kj2SUAM_YdGQ-tUgaUe-_Ve17p-qA3Qu8BupGBYV_lh7ig1MmGMXdTM19FiJNdaMR470bhz9KZChIc4c0sG8am2mS3bNLzbipZP0kcai7yugYKi9yT0F2AEl-q6zHt4PoTnzZexoXZihTEoTKveHmPBtcFuiK9y65_w_fFvEOcHeq5CxdfUO4zINRtajMmk0x2w7llbRlHNa2sfmFXbGWHlxWnkXFkda8HKy194pX2oPBDliiY";
+const DEBUG_USER_SESSION_ID = "CfDJ8PzgcQaZmn1NsXkfq43IXJXLyTyVFWtQV6TlOQaunKWgCdzwXzsyyjSU9zkxDT7IbKFkFWnnEP0xlStXzCYSiJat65YlYP0dvrn36O-P58LXirswr5LbG7aV87fFo9HI-T54x9RGV5QmmIR6acqMuIQjecsRpQe3Q1LPpM7ykR8znlm-zHrh58aDJXvNf8nJWMaovk1Nm7O-2uy-gEnTGSewHP5GmYD04vCbUQ0EmBo2FoDyNKcEXXkHhIEZo4eqvMhp-N9LDpwwZ9wPpfTVtgXJ0rYSsZA8C2e9Y6HN1ZHzpC5BjhhATx6raFjd_WatRAAnw4kepe0RK-URvAEPLlY";
 
 export const createAuthenticatedAxios = (userSessionId?: string | null, referer?: string) => {
     const sessionId = userSessionId || DEBUG_USER_SESSION_ID;

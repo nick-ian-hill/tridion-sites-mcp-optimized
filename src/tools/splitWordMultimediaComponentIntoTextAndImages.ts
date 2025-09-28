@@ -1,7 +1,7 @@
 import { z } from "zod";
 import mammoth from "mammoth";
-import { createAuthenticatedAxios } from "../lib/axios.js";
-import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
+import { createAuthenticatedAxios } from "../utils/axios.js";
+import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { createMultimediaComponentFromBase64 } from "./createMultimediaComponentFromBase64.js";
 
 const splitWordMultimediaComponentIntoTextAndImagesInputProperties = {

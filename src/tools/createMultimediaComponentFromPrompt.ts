@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { createMultimediaComponentFromBase64 } from "./createMultimediaComponentFromBase64.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
-import { handleAxiosError } from "../lib/errorUtils.js";
+import { handleAxiosError } from "../utils/errorUtils.js";
 import { GoogleGenAI } from "@google/genai";
-import { createAuthenticatedAxios } from "../lib/axios.js";
+import { createAuthenticatedAxios } from "../utils/axios.js";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 

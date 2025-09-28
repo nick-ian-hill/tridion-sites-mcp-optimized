@@ -1,8 +1,9 @@
 import { z } from "zod";
-import { createAuthenticatedAxios } from "../lib/axios.js";
-import { handleAxiosError, handleUnexpectedResponse } from "../lib/errorUtils.js";
+import { createAuthenticatedAxios } from "../utils/axios.js";
+import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 import { reorderFieldsBySchema, convertLinksRecursively } from "../utils/fieldReordering.js";
+import { handleCheckout, checkInItem, undoCheckoutItem } from "../utils/versioningUtils.js";
 
 export const updateMetadata = {
     name: "updateMetadata",
@@ -44,6 +45,9 @@ Example 1: Updates the metadata fields with XML names 'Keywords' and 'Author' fo
             if (getItemResponse.status !== 200) return handleUnexpectedResponse(getItemResponse);
             
             const item = getItemResponse.data;
+            let itemToUpdate = item;
+            const isVersioned = !!item?.VersionInfo?.Version;
+            
             let schemaIdForMetadata: string | undefined;
 
             if (item.MetadataSchema?.IdRef && item.MetadataSchema.IdRef !== 'tcm:0-0-0') {
@@ -57,39 +61,18 @@ Example 1: Updates the metadata fields with XML names 'Keywords' and 'Author' fo
                 return handleAxiosError(new Error(`Could not determine a valid Schema for the metadata fields of item ${itemId}.`), "Failed to update item metadata");
             }
             
-            convertLinksRecursively(metadata, itemId);
-
-            const orderedMetadata = await reorderFieldsBySchema(metadata, schemaIdForMetadata, 'metadata', authenticatedAxios);
-
-            let itemToUpdate;
-            const isVersioned = !!item?.VersionInfo?.Version;
-
             if (isVersioned) {
-                const whoAmIResponse = await authenticatedAxios.get('/whoAmI');
-                if (whoAmIResponse.status !== 200) return handleUnexpectedResponse(whoAmIResponse);
-                const agentId = whoAmIResponse.data?.User?.Id;
-                if (!agentId) return handleAxiosError(new Error("Could not retrieve agent's user ID."), "Failed to update item metadata");
-
-                const isCheckedOut = item?.LockInfo?.LockType?.includes('CheckedOut');
-                const checkedOutUser = item?.VersionInfo?.CheckOutUser?.IdRef;
-                
-                if (isCheckedOut && checkedOutUser !== agentId) {
-                    return {
-                        content: [{ type: "text", text: `Item ${itemId} is already checked out by another user with ID ${checkedOutUser}.` }],
-                        errors: [],
-                    };
-                } else if (!isCheckedOut) {
-                    const checkOutResponse = await authenticatedAxios.post(`/items/${restItemId}/checkOut`, { "$type": "CheckOutRequest", "SetPermanentLock": true });
-                    if (checkOutResponse.status !== 200) return handleUnexpectedResponse(checkOutResponse);
-                    itemToUpdate = checkOutResponse.data;
-                    wasCheckedOutByTool = true;
-                } else {
-                    itemToUpdate = item;
+                const versioningResult = await handleCheckout(itemId, item, authenticatedAxios);
+                if (versioningResult.error) {
+                    return { content: [{ type: "text", text: versioningResult.error }] };
                 }
-            } else {
-                itemToUpdate = item;
+                itemToUpdate = versioningResult.item;
+                wasCheckedOutByTool = versioningResult.wasCheckedOutByTool;
             }
 
+            convertLinksRecursively(metadata, itemId);
+            const orderedMetadata = await reorderFieldsBySchema(metadata, schemaIdForMetadata, 'metadata', authenticatedAxios);
+            
             itemToUpdate.Metadata = orderedMetadata;
 
             const updateResponse = await authenticatedAxios.put(`/items/${restItemId}`, itemToUpdate);
@@ -98,8 +81,10 @@ Example 1: Updates the metadata fields with XML names 'Keywords' and 'Author' fo
             }
 
             if (wasCheckedOutByTool) {
-                const checkInResponse = await authenticatedAxios.post(`/items/${restItemId}/checkIn`, { "$type": "CheckInRequest", "RemovePermanentLock": true });
-                if (checkInResponse.status !== 200) return handleUnexpectedResponse(checkInResponse);
+                const checkInResult = await checkInItem(itemId, authenticatedAxios);
+                if (!('status' in checkInResult && checkInResult.status === 200)) {
+                    return checkInResult;
+                }
             }
 
             return {
@@ -107,11 +92,7 @@ Example 1: Updates the metadata fields with XML names 'Keywords' and 'Author' fo
             };
         } catch (error) {
             if (wasCheckedOutByTool) {
-                try {
-                    await authenticatedAxios.post(`/items/${restItemId}/undoCheckOut`);
-                } catch (undoError) {
-                    console.error(`Failed to undo checkout for item ${itemId}: ${String(undoError)}`);
-                }
+                await undoCheckoutItem(itemId, authenticatedAxios);
             }
             return handleAxiosError(error, "Failed to update item metadata");
         }
