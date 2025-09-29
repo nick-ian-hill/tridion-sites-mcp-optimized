@@ -12,7 +12,7 @@ export const updatePage = {
     name: "updatePage",
     description: `Updates an existing Page in the Content Management System (CMS).
 This tool can modify various aspects of a Page, including its title, file name, metadata, Component Presentations, and Regions.
-Check-out and check-in are handled automatically. If the Page is locked by another user, the operation will be aborted.
+Versioning is handled automatically. If the item is not checked out, it will be checked out, updated, and then checked back in. If the item is already checked out by you, it will remain checked out after the update. The operation will be aborted if the item is checked out by another user.
 
 IMPORTANT: When updating 'componentPresentations' or 'regions', the entire existing set of CPs or regions on the page will be replaced by the new values provided. To reorder or remove an item, you must provide the complete, modified list. The content provided must adhere to any constraints defined in the Page Template's Region Schemas, such as limits on the number of items or allowed Component/Template types.
 

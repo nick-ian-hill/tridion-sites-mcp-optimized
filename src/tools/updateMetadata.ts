@@ -7,14 +7,13 @@ import { handleCheckout, checkInItem, undoCheckoutItem } from "../utils/versioni
 
 export const updateMetadata = {
     name: "updateMetadata",
-    description: `Updates the metadata fields for a specific item in the Content Management System.
+    description: `Updates the metadata fields for a specific item in the Content Management System. Versioning is handled automatically. If the item is not checked out, it will be checked out, updated, and then checked back in. If the item is already checked out by you, it will remain checked out after the update. The operation will be aborted if the item is checked out by another user.
 
 Important Constraints:
 - This tool only updates the metadata fields. It cannot update the item's Title or Content fields.
 
 To update content fields for a component, use the 'updateContent' tool instead.
 To update other properties, use the 'updateItemProperties', 'updatePage', or 'updatePublication' tool depending on the item type.
-If a versioned item is locked by another user, the operation will be aborted.
 
 Examples:
 

@@ -7,7 +7,7 @@ import { handleCheckout, checkInItem, undoCheckoutItem } from "../utils/versioni
 
 export const updateContent = {
     name: "updateContent",
-    description: `Updates the content fields for an item of type 'Component' in the Content Management System.
+    description: `Updates the content fields for an item of type 'Component' in the Content Management System. Versioning is handled automatically. If the item is not checked out, it will be checked out, updated, and then checked back in. If the item is already checked out by you, it will remain checked out after the update. The operation will be aborted if the item is checked out by another user.
 
 Important Constraints:
 - This tool is only for Components. It cannot update other item types.
@@ -15,7 +15,6 @@ Important Constraints:
 
 To update metadata, use the 'updateMetadata' tool.
 To update other properties, use the 'updateItemProperties' tool.
-If the component is locked by another user, the operation will be aborted.
 
 Examples:
 

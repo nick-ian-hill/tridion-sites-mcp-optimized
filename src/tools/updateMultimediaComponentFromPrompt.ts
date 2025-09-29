@@ -16,7 +16,7 @@ const updateMultimediaComponentFromPromptSchema = z.object(updateMultimediaCompo
 
 export const updateMultimediaComponentFromPrompt = {
     name: "updateMultimediaComponentFromPrompt",
-    description: "Updates an existing multimedia component's image based on a text prompt. It checks out the component, downloads the binary, sends it to an AI for modification, and uploads the new version.",
+    description: "Updates an existing multimedia component's image based on a text prompt. It downloads the binary, sends it to an AI for modification, and uploads the new version. Versioning is handled automatically. If the item is not checked out, it will be checked out, updated, and then checked back in. If the item is already checked out by you, it will remain checked out after the update. The operation will be aborted if the item is checked out by another user.",
     input: updateMultimediaComponentFromPromptInputProperties,
     async execute(input: z.infer<typeof updateMultimediaComponentFromPromptSchema>, context: any) {
         const req = context?.request;

@@ -41,7 +41,7 @@ export const updateSchemaFieldProperties = {
     name: "updateSchemaFieldProperties",
     description: `Updates specific properties of one or more fields within a given Schema. This is more efficient than replacing the entire fields collection.
     
-Check-out and check-in of the Schema are handled automatically.
+Versioning is handled automatically. If the item is not checked out, it will be checked out, updated, and then checked back in. If the item is already checked out by you, it will remain checked out after the update. The operation will be aborted if the item is checked out by another user.
 
 Example 1: Make the 'articleBody' field optional and change the description of the 'headline' field in a single operation.
     const result = await tools.updateSchemaFieldProperties({
