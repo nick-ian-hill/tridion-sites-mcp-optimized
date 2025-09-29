@@ -4,15 +4,18 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 export const moveItem = {
     name: "moveItem",
-    description: `Moves the specified item to a new location.
-    It is only possible to move an item if its 'BlueprintInfo.IsLocalized' and 'BlueprintInfo.IsShared' properties are both 'false'.
-    The 'BlueprintInfo.IsLocalized' and 'BlueprintInfo.IsShared' properties of the destination item must be 'false'.
-    Moving will fail if the destination container already contains an item with the same title.
+    description: `Moves the specified item to a new location. This is different from the 'copyItem' tool, which creates a duplicate and leaves the original in place.
+    IMPORTANT: Moving has strict conditions related to BluePrinting. 
+    In particular, it is only possible to move 'primary' items – items for which 'BlueprintInfo.IsLocalized' and 'BlueprintInfo.IsShared' properties are both 'false'.
+    The destination container also needs to be a primary item.
+    Use the 'getItem' tool to inspect the 'BlueprintInfo' properties of both the item to be moved and the destination.
+    Moving will also fail if the destination container already contains an item of the same type with the same title.
+
     Items for which the 'LocationInfo/OrganizationalItem/IdRef' property references a Folder can only be moved to a Folder.
     Items for which the 'LocationInfo/OrganizationalItem/IdRef' property references a StructureGroup can only be moved to a StructureGroup.
-    Only items for which the 'LocationInfo/OrganizationalItem/IdRef' property refences a Folder or StructureGroup can be moved.`,
+    Items for which the 'LocationInfo/OrganizationalItem/IdRef' property references a Category can be moved to either another Keyword (in the same Category) or the Category.`,
     input: {
-        itemId: z.string().regex(/^tcm:\d+-\d+(-\d+)?$/).describe("The TCM URI of the item to be moved."),
+        itemId: z.string().regex(/^tcm:\d+-\d+(-\d+)?$/).describe("The TCM URI of the item to be moved. Use 'search' or 'getItemsInContainer' to find the item's ID."),
         destinationId: z.string().regex(/^tcm:\d+-\d+-[24]$/).describe("The TCM URI of the destination Folder or Structure Group.")
     },
     execute: async ({ itemId, destinationId }: { itemId: string, destinationId: string }, context: any) => {

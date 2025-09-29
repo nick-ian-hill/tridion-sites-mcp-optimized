@@ -53,7 +53,7 @@ const findAttributeValues = (obj: any, attributeName: string): string[] => {
 
 
 const splitPowerPointMultimediaComponentIntoTextAndImagesInputProperties = {
-    itemId: z.string().regex(/^tcm:\d+-\d+$/).describe("The TCM URI of the source PowerPoint multimedia component."),
+    itemId: z.string().regex(/^tcm:\d+-\d+$/).describe("The TCM URI of the source PowerPoint multimedia component. Use 'search' or 'getItemsInContainer' to find it."),
     locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new image components will be created."),
 };
 

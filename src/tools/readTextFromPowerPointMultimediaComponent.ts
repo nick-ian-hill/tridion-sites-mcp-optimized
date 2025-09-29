@@ -35,8 +35,9 @@ const readPowerPointFileFromMultimediaComponentSchema = z.object(readPowerPointF
 
 export const readTextFromPowerPointMultimediaComponent = {
     name: "readTextFromPowerPointMultimediaComponent",
-    description: `Reads the text content of a PowerPoint file (.pptx) from a multimedia component and returns it as a string.
-    This tool extracts text from all slides.`,
+    description: `Reads the text content of a PowerPoint file (.pptx) from a multimedia component and returns it as a string, organized by slide.
+    The extracted text from each slide can then be used to create new content items in the CMS using the 'createItem' tool.
+    For a more advanced function that also extracts images, use 'splitPowerPointMultimediaComponentIntoTextAndImages'.`,
     input: readPowerPointFileFromMultimediaComponentInputProperties,
     async execute(input: z.infer<typeof readPowerPointFileFromMultimediaComponentSchema>, context: any) {
         const req = context?.request;

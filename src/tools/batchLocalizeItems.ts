@@ -4,9 +4,10 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 export const batchLocalizeItems = {
     name: "batchLocalizeItems",
-    description: `Starts an asynchronous process to localize a batch of shared items, creating local copies that can be edited. This is more efficient than localizing items one by one. The initial response includes a batch ID that can be used to monitor the status of the operation.`,
+    description: `Starts an asynchronous process to localize a batch of shared items, creating local copies that can be edited. This is more efficient than localizing items one by one using the 'localizeItem' tool. The initial response includes a batch ID that can be used to monitor the status of the operation with the 'getBatchOperationStatus' tool.
+To find items that are shared and can be localized, use the 'search' tool with the 'BlueprintStatus' parameter set to 'Shared'.`,
     input: {
-        itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)).describe("An array of unique IDs (TCM URIs) for the shared items to be localized."),
+        itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)).describe("An array of unique IDs (TCM URIs) for the shared items to be localized. Use the 'search' tool to find items with a 'BlueprintStatus' of 'Shared'."),
     },
     execute: async ({ itemIds }: { itemIds: string[] },
         context: any

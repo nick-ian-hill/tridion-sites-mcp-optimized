@@ -60,10 +60,11 @@ Example use cases by item type:
 - PageTemplate/ComponentTemplate: update the associated 'templateBuildingBlocks' and other template-specific properties.
 
 When updating collection properties like 'fields', 'metadataFields', 'itemsInBundle', or 'relatedSchemaIds', the entire existing collection is replaced by the new value provided.
-For versioned items (Component, Schema, PageTemplate, ComponentTemplate), check-out and check-in are handled automatically.
 
 IMPORTANT: 
 - Shared items ('BluePrintInfo.IsShared' is true) cannot be updated. To modify inherited properties, such as a Schema's fields, you must update the parent item in the BluePrint chain ('PrimaryBluePrintParentItem').
+- For versioned items (Component, Schema, PageTemplate, ComponentTemplate), items that are not checked out will be automatically checked back in after updating. Items that are checked out before updating will remain checked out.
+- If allowed, use the 'checkInItem' tool before calling 'updateItemProperties' to update an item currently checked out to a different user.
 
 Example 1: Update a Schema to make a mandatory field optional.
 This example modifies the 'News Article' Schema (tcm:2-104-8) to make the 'articleBody' embedded field optional by changing its 'MinOccurs' property from 1 to 0. Note that the entire 'fields' object must be provided, including the unchanged fields.

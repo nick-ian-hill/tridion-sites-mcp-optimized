@@ -4,7 +4,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 export const batchCheckIn = {
     name: "batchCheckIn",
-    description: `Starts an asynchronous process to check in a batch of versioned items. This saves the current changes for each item as a new version and removes the locks, making them available for other users to edit. This operation is more efficient than performing checkIn on each item separately. The initial response includes a batch ID that can be used to monitor the status of the operation.`,
+    description: `Starts an asynchronous process to check in a batch of versioned items. This saves the current changes for each item as a new version and removes the locks, making them available for other users to edit. This operation is more efficient than performing 'checkInItem' on each item separately. The initial response includes a batch ID that can be used to monitor the status of the operation with the 'getBatchOperationStatus' tool.`,
     input: {
         itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/))
             .describe("An array of unique IDs (TCM URIs) for the versioned items to check in."),

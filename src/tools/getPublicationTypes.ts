@@ -3,7 +3,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 export const getPublicationTypes = {
     name: "getPublicationTypes",
-    description: "Retrieves a list of all available Publication Types (e.g., 'Web', 'Content', 'Mobile'). These types help categorize and manage Publications based on their intended purpose or channel.",
+    description: "Retrieves a list of all available Publication Types (e.g., 'Web', 'Content'). These types help categorize and manage Publications based on their intended purpose or channel. Type name can be used in the 'publicationType' parameter of the 'createPublication' and 'updatePublication' tools.",
     input: {},
     execute: async (_: {}, context: any) => {
         const req = context?.request;

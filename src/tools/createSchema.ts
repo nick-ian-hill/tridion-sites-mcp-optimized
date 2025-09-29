@@ -14,6 +14,8 @@ A Schema is defined by its content fields (in the 'fields' property) and metadat
   - The KEY is the field's machine name (a valid XML name without spaces, e.g., "articleTitle").
   - The VALUE is a Field Definition object that specifies the field's type and properties.
 
+When creating fields that link to other items (e.g., ComponentLinkFieldDefinition, EmbeddedSchemaFieldDefinition), you will need the TCM URIs of the allowed target schemas. Use the 'getSchemaLinks' tool to find suitable schemas within the target Publication.
+
 Each Field Definition object MUST include a '$type' property to identify its type from the list below. Other common properties include:
   - Name: The machine name of the field (must match the key in the dictionary).
   - Description: A human-readable description of the field's purpose. This is mandatory.
@@ -253,7 +255,7 @@ Example 8: Create a Region Schema with constraints on its Component Presentation
     });`,
     input: {
         title: z.string().nonempty().describe("The title for the new Schema."),
-        locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new Schema will be created."),
+        locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new Schema will be created. Use 'search' or 'getItemsInContainer' to find a Folder."),
         purpose: z.enum([
             "Component", "Multimedia", "Embedded",
             "Metadata", "Bundle", "Region"

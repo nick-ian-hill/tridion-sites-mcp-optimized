@@ -4,7 +4,7 @@ import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 
 const readPdfFileFromMultimediaComponentInputProperties = {
-    itemId: z.string().regex(/^tcm:\d+-\d+$/).describe("The TCM URI of the multimedia component containing the PDF (.pdf) file (e.g., 'tcm:5-125')."),
+    itemId: z.string().regex(/^tcm:\d+-\d+$/).describe("The TCM URI of the multimedia component containing the PDF (.pdf) file (e.g., 'tcm:5-125'). Use 'search' or 'getItemsInContainer' to find it."),
 };
 
 const readPdfFileFromMultimediaComponentSchema = z.object(readPdfFileFromMultimediaComponentInputProperties);
@@ -12,7 +12,8 @@ const readPdfFileFromMultimediaComponentSchema = z.object(readPdfFileFromMultime
 export const readPdfFileFromMultimediaComponent = {
     name: "readPdfFileFromMultimediaComponent",
     description: `Reads the text content of a PDF file (.pdf) from a multimedia component and returns it as a string.
-    This tool can be useful in cases where the user would like to import the contents of a PDF file into the CMS.`,
+    This tool can be useful in cases where the user would like to import the contents of a PDF file into the CMS.
+    The extracted text can be used as the value for a content field in a call to 'createItem' or 'updateContent'.`,
     input: readPdfFileFromMultimediaComponentInputProperties,
     async execute(input: z.infer<typeof readPdfFileFromMultimediaComponentSchema>, context: any) {
         const req = context?.request;

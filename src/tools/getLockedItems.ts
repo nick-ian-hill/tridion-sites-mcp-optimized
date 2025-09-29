@@ -4,7 +4,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 export const getLockedItems = {
     name: "getLockedItems",
-    description: "Gets a list of locked items. By default, it returns items locked by the current user, but can be filtered by user and lock type.",
+    description: "Gets a list of locked (e.g., checked-out) items. This is useful for administrative review or to understand the state of items before attempting (batch) operations. The 'LockUser' ID returned can be used as input for the 'search' tool to find all items locked by a specific user.",
     input: {
         forAllUsers: z.boolean().optional().default(false)
             .describe("If true, items locked by any user are returned. Requires Publication Administration or Lock Management rights. This parameter is ignored if 'lockUserId' is specified."),

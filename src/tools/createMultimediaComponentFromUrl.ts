@@ -13,8 +13,8 @@ const createMultimediaComponentFromUrlInputProperties = {
     mediaUrl: z.string().url().describe("The public URL of the file that will be used for the multimedia component. Must be a fully qualified URL including http:// or https://."),
     title: z.string().describe("The title for the new multimedia component."),
     fileName: z.string().describe("The desired file name for the multimedia component in the CMS (e.g., 'product-image.jpg')."),
-    locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new component will be created."),
-    schemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the Multimedia Schema to use. If not provided, a default will be determined automatically."),
+    locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new component will be created. Use 'search' or 'getItemsInContainer' to find a suitable Folder."),
+    schemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the Multimedia Schema to use. If not provided, a default will be determined automatically. Use 'getSchemaLinks' with purpose 'Multimedia' to find available schemas."),
     metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields.")
 };
 
@@ -22,7 +22,7 @@ const createMultimediaComponentFromUrlSchema = z.object(createMultimediaComponen
 
 export const createMultimediaComponentFromUrl = {
     name: "createMultimediaComponentFromUrl",
-    description: "Creates a new multimedia component by uploading a file from a public URL. If the parent Folder has a mandatory schema, it will be used automatically, so there is no need to provide a schemaId.",
+    description: "Creates a new multimedia component by uploading a file from a public URL. If the parent Folder has a mandatory schema, it will be used automatically, so there is no need to provide a schemaId. This is one of three ways to create a multimedia component, with the others being 'createMultimediaComponentFromBase64' and 'createMultimediaComponentFromPrompt'.",
     input: createMultimediaComponentFromUrlInputProperties,
     async execute(input: z.infer<typeof createMultimediaComponentFromUrlSchema>,
         context: any

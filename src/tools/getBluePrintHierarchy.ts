@@ -45,15 +45,16 @@ const convertGraphToDot = (nodes: any[], edges: any[]): string => {
 export const getBluePrintHierarchy = {
     name: "getBluePrintHierarchy",
     description: `Retrieves the BluePrint hierarchy for a specified Content Manager item. The hierarchy shows the parent and child relationships for the item within the BluePrint, which is fundamental for content inheritance and reuse.
-    IMPORTANT: Requesting a high level of detail for many items can be slow or cause the request to fail. For the most efficient and reliable results, prefer using 'details: "IdAndTitle"' or the 'includeProperties' parameter to request only the specific data you need.`,
+This tool should be used before performing BluePrinting operations like 'localizeItem', 'unlocalizeItem', 'promoteItem', or 'demoteItem' to understand the context and identify valid parent/child Publications.
+IMPORTANT: Requesting a high level of detail for many items can be slow. Prefer 'details: "IdAndTitle"' or 'includeProperties' for efficiency.`,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The TCM URI of the item for which to retrieve the BluePrint hierarchy."),
         outputFormat: z.enum(["Raw", "JsonGraph", "Svg"]).optional().default("Raw").describe("Specifies the output format. 'Raw' returns the API JSON. 'JsonGraph' formats the data for graph processing. 'Svg' generates and returns an SVG image of the hierarchy."),
-        details: z.enum(["IdAndTitle", "CoreDetails", "AllDetails"]).default("IdAndTitle").optional().describe(`Specifies a predefined level of detail for the returned items. For custom property selection, use 'includeProperties' instead. This is ignored if outputFormat is 'JsonGraph' or 'Svg'.
+        details: z.enum(["IdAndTitle", "CoreDetails", "AllDetails"]).default("IdAndTitle").optional().describe(`Specifies a predefined level of detail. This is ignored if outputFormat is 'JsonGraph' or 'Svg'.
 - "IdAndTitle": Returns only the ID and Title of each item.
 - "CoreDetails": Returns the main properties, excluding verbose security and link-related information.
 - "AllDetails": Returns all available properties for each item. Only select "AllDetails" if you absolutely need full details about the returned items.`),
-        includeProperties: z.array(z.string()).optional().describe(`An array of property names to include in the response for custom, fine-grained control. If used, the 'details' parameter is ignored. 'Id', 'Title', and '$type' will always be included. This is ignored if outputFormat is 'JsonGraph' or 'Svg'.`),
+        includeProperties: z.array(z.string()).optional().describe(`An array of property names to include in the response for custom control. If used, 'details' is ignored. This is ignored if outputFormat is 'JsonGraph' or 'Svg'. Prefer this option to avoid returning unnecessary data and limit token usage.`),
     },
     execute: async ({ itemId, outputFormat = "Raw", details = "IdAndTitle", includeProperties }: { itemId: string; outputFormat: "Raw" | "JsonGraph" | "Svg"; details?: "IdAndTitle" | "CoreDetails" | "AllDetails", includeProperties?: string[] }, context: any) => {
         const req = context?.request;

@@ -4,9 +4,10 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 export const batchUnlocalizeItems = {
     name: "batchUnlocalizeItems",
-    description: `Starts an asynchronous process to unlocalize a batch of local items, re-establishing inheritance from their parent items. This is more efficient than unlocalizing items one by one. The initial response includes a batch ID that can be used to monitor the status of the operation.`,
+    description: `Starts an asynchronous process to unlocalize a batch of local items, re-establishing inheritance from their parent items. This is more efficient than unlocalizing items one by one using the 'unlocalizeItem' tool. The initial response includes a batch ID that can be used to monitor the status of the operation with the 'getBatchOperationStatus' tool.
+To find items that are localized and can be unlocalized, use the 'search' tool with the 'BlueprintStatus' parameter set to 'Localized'.`,
     input: {
-        itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)).describe("An array of unique IDs (TCM URIs) for the local items to be unlocalized."),
+        itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)).describe("An array of unique IDs (TCM URIs) for the local items to be unlocalized. Use the 'search' tool to find items with a 'BlueprintStatus' of 'Localized'."),
         confirmed: z.boolean().optional().describe("Confirmation to proceed with batch unlocalization, which will discard local changes."),
     },
     execute: async ({ itemIds, confirmed }: { itemIds: string[]; confirmed?: boolean },

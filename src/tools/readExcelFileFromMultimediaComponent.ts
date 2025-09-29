@@ -5,7 +5,7 @@ import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 
 const readExcelFileFromMultimediaComponentInputProperties = {
-    itemId: z.string().regex(/^tcm:\d+-\d+$/).describe("The TCM URI of the multimedia component containing the Excel (.xlsx) file (e.g., 'tcm:5-124')."),
+    itemId: z.string().regex(/^tcm:\d+-\d+$/).describe("The TCM URI of the multimedia component containing the Excel (.xlsx) file (e.g., 'tcm:5-124'). Use 'search' or 'getItemsInContainer' to find it."),
 };
 
 const readExcelFileFromMultimediaComponentSchema = z.object(readExcelFileFromMultimediaComponentInputProperties);
@@ -13,7 +13,7 @@ const readExcelFileFromMultimediaComponentSchema = z.object(readExcelFileFromMul
 export const readExcelFileFromMultimediaComponent = {
     name: "readExcelFileFromMultimediaComponent",
     description: `Reads the content of an Excel file (.xlsx) from a multimedia component and returns its data as a JSON string.
-    This tool can be useful in cases where the user would like semi-structured content in the form of an Excel file to be mapped to new items in the CMS.`,
+    This is useful for extracting structured data from an Excel sheet to be used for creating one or more new CMS items. FOr example, the JSON output can be looped through, with each object used to populate the content for a 'createItem' tool call.`,
     input: readExcelFileFromMultimediaComponentInputProperties,
     async execute(input: z.infer<typeof readExcelFileFromMultimediaComponentSchema>, context: any) {
         const req = context?.request;

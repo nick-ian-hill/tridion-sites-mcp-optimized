@@ -5,7 +5,8 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 
 export const generateContentFromPrompt = {
     name: "generateContentFromPrompt",
-    description: `The only tool for generating creative, marketing-oriented, or suggestive text. This tool uses a special configuration optimized for creativity (higher temperature). Use this for all requests for webpage copy, product descriptions, blog posts, or marketing ideas. Do not generate creative content directly.`,
+    description: `The only tool for generating creative, marketing-oriented, or suggestive text. This tool uses a special configuration optimized for creativity. Use this for all requests for webpage copy, product descriptions, blog posts, or marketing ideas.
+The generated text can then be used as input for other tools, such as the 'content' parameter in 'createItem' or 'updateContent', or to populate metadata fields with 'updateMetadata'.`,
     input: {
         prompt: z.string().describe("A detailed prompt describing the content to be generated, including the desired topic, tone, style, and approximate length."),
         creativityLevel: z.enum(["low", "medium", "high"]).optional().default("medium").describe("Controls the creativity of the response. 'low' is for more factual, predictable text. 'medium' offers a good balance. 'high' is for more imaginative and unexpected content."),

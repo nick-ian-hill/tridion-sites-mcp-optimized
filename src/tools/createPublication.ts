@@ -53,7 +53,7 @@ Example 2: Creates a basic 'Content' Publication intended to be a parent in a Bl
     });`,
     input: {
         title: z.string().describe("The title for the new Publication."),
-        parentPublications: z.array(z.string().regex(/^tcm:\d+-\d+-1$/)).optional().describe("An array of URIs for parent Publications. The parents must belong to the same BluePrint hierarchy. If no parent Publications are specified, a root Publication will be created. Given two parents, the parent with the lower index has the higher priority. This can be relevant when determining from which parent an item is inherited."),
+        parentPublications: z.array(z.string().regex(/^tcm:\d+-\d+-1$/)).optional().describe("An array of URIs for parent Publications. Use the 'getPublications' tool to find available publications. The parents must belong to the same BluePrint hierarchy. If no parent Publications are specified, a root Publication will be created."),
         publicationKey: z.string().optional().describe("Optional unique key. Only provide this if the key must be different from the title. If omitted, the title is used as the key."),
         //publicationPath: z.string().optional().describe("The publication path, which forms the base of the publish path for Structure Groups and Pages within this Publication."),
         //publicationUrl: z.string().optional().describe("The server-relative URL for the Publication. This will be prefixed to the URLs of published Pages."),
@@ -61,7 +61,7 @@ Example 2: Creates a basic 'Content' Publication intended to be a parent in a Bl
         //multimediaUrl: z.string().optional().describe("The URL that corresponds to the Multimedia Path, used to construct links to published multimedia."),
 
         locale: z.string().optional().describe("The locale for the Publication (e.g., 'en-US', 'de-DE')."),
-        publicationType: z.string().optional().describe("The type of the Publication (e.g., 'Web', 'Content'). Use the getPublicationTypes tool to see the available types.")
+        publicationType: z.string().optional().describe("The type of the Publication (e.g., 'Web', 'Content'). Use the 'getPublicationTypes' tool to see the available types.")
     },
     execute: async (args: any,
         context: any

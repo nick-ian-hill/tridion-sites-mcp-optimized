@@ -2,23 +2,19 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 
-// 1. Define input properties as a plain object.
 const getComponentTemplateLinksInputProperties = {
-    schemaId: z.string().regex(/^tcm:\d+-\d+-8$/).describe("The TCM URI of the Schema."),
+    schemaId: z.string().regex(/^tcm:\d+-\d+-8$/).describe("The TCM URI of the Schema. Use 'getSchemaLinks' or 'search' to find a Schema ID."),
     onlyAllowedOnPage: z.boolean().optional().default(false).describe("If set to true, only (Dynamic) Component Templates which are Allowed On a Page are returned."),
 };
 
-// 2. Create the Zod schema from the properties object for type safety.
 const getComponentTemplateLinksSchema = z.object(getComponentTemplateLinksInputProperties);
 
 export const getComponentTemplateLinks = {
     name: "getComponentTemplateLinks",
-    description: "Gets a list of all Component Template links that can render Components based on the specified Schema.",
+    description: "Gets a list of all Component Template links that can render Components based on the specified Schema. This is useful when constructing the 'componentPresentations' parameter for the 'createPage' or 'updatePage' tools, as it helps identify which Component Templates are compatible with a given Component (Schema) type.",
 
-    // 3. Export the PLAIN object for VS Code tooling.
     input: getComponentTemplateLinksInputProperties,
 
-    // 4. Use z.infer for the execute function's input type.
     execute: async (input: z.infer<typeof getComponentTemplateLinksSchema>, context: any) => {
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';

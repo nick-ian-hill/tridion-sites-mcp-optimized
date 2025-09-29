@@ -4,8 +4,8 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 export const getDefaultModel = {
     name: "getDefaultModel",
-    description: `Retrieves the default data model for a specified item type. This model can then be used as a template for creating a new item of that type.
-    For the top-level (root) StructureGroup, and for a Category, the containerId should be the URI of the Publication.
+    description: `Retrieves the default data model for a specified item type. This model serves as a template that can be modified and then used as the payload for a creation tool, such as 'createItem', 'createSchema', or 'createPage'. This is the recommended first step when programmatically creating a new item.
+        For the top-level (root) StructureGroup, and for a Category, the containerId should be the URI of the Publication.
     For a Keyword, the container must be a Category).
     For a Component, MultimediaComponent, Bundle, SearchFolder, or Folder, the container must be a Folder.
     For a StuctureGroup or Page, the container must be a StructureGroup. The exception is a root StructureGroup, for which the container is a Publication.
@@ -34,7 +34,7 @@ export const getDefaultModel = {
         "TargetGroup",
         "ApprovalStatus"
     ]).describe("The type of data model to retrieve."),
-    containerId: z.string().regex(/^tcm:\d+-\d+-(?:1|2|4|512)$/).optional().describe("The TCM URI of the organizational item (e.g., Folder, Publication) to use as a container. A container ID is required for most item types except Publication, TargetType, MultimediaType, User, Group, and ApprovalStatus.")
+    containerId: z.string().regex(/^tcm:\d+-\d+-(?:1|2|4|512)$/).optional().describe("The TCM URI of the organizational item (e.g., Folder, Publication) to use as a container. Use tools like 'getPublications', 'getItemsInContainer', or 'getCategories' to find a suitable container ID. A container ID is required for most item types.")
 },
     execute: async ({ modelType, containerId }: { modelType: string, containerId?: string },
         context: any

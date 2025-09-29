@@ -5,9 +5,9 @@ import { filterResponseData } from "../utils/responseFiltering.js";
 
 export const getPublications = {
     name: "getPublications",
-    description: `Retrieves a list of all Publications in the Content Management System.
+    description: `Retrieves a list of all Publications. This is a primary discovery tool, as a Publication ID is often required by other tools like 'getCategories', 'getSchemaLinks', 'createRootStructureGroup', or to scope a query with the 'search' tool.
 Since the Title property of a Publication must be unique, this tool can be used to lookup the TCM URI of a Publication when only the Title is known.
-IMPORTANT: Requesting a high level of detail for many items can be slow or cause the request to fail. For the most efficient and reliable results, prefer using 'details: "IdAndTitle"' or the 'includeProperties' parameter to request only the specific data you need.`,
+IMPORTANT: Requesting a high level of detail can be slow and token heavy. Prefer 'details: "IdAndTitle"' or 'includeProperties'.`,
     input: {
         details: z.enum(["IdAndTitle", "CoreDetails", "AllDetails"]).default("IdAndTitle").optional().describe(`Specifies a predefined level of detail for the returned publications. For custom property selection, use 'includeProperties' instead.
 - "IdAndTitle": Returns only the ID and Title of each item. This is the recommended default.

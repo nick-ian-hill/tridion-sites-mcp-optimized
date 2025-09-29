@@ -6,7 +6,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 
 const readImageDetailsFromMultimediaComponentInputProperties = {
-    itemId: z.string().regex(/^tcm:\d+-\d+$/).describe("The TCM URI of the multimedia component containing the image file (e.g., 'tcm:5-123')."),
+    itemId: z.string().regex(/^tcm:\d+-\d+$/).describe("The TCM URI of the multimedia component containing the image file (e.g., 'tcm:5-123'). Use 'search' or 'getItemsInContainer' to find it."),
     prompt: z.string().describe("The text prompt for the vision model. For example: 'Describe the image in detail.', 'What text is visible in this image?', 'Is there a cat in this picture?'"),
 };
 

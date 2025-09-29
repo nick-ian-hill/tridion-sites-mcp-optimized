@@ -4,10 +4,11 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 export const demoteItem = {
     name: "demoteItem",
-    description: `Demotes a shared item down the BluePrint hierarchy to a child Publication. This action breaks the inheritance from a parent by creating a localized copy of the item in the selected child Publication. The operation will fail if the item is not shared from the specified Publication.`,
+    description: `Demotes a shared item down the BluePrint hierarchy to a child Publication. This action breaks the inheritance from a parent by creating a localized copy of the item in the selected child Publication. This is the opposite of the 'promoteItem' tool.
+Before using, it's recommended to understand the item's position in the hierarchy using the 'getBluePrintHierarchy' tool and to check its 'BluePrintInfo' with the 'getItem' tool. The operation will fail if the item is not shared from the specified Publication.`,
     input: {
         itemId: z.string().regex(/^tcm:\d+-\d+(-\d+)?$/).describe("The unique ID (TCM URI) of the shared item to demote."),
-        destinationRepositoryId: z.string().regex(/^tcm:\d+-\d+-1$/).describe("The TCM URI of the child Publication to demote the item to."),
+        destinationRepositoryId: z.string().regex(/^tcm:\d+-\d+-1$/).describe("The TCM URI of the child Publication to demote the item to. Use 'getBluePrintHierarchy' to identify a valid child Publication."),
         recursive: z.boolean().optional().default(false).describe("Specifies whether the operation should be performed recursively. If true when demoting an Organizational Item, all nested items are demoted as well."),
     },
     execute: async ({ itemId, destinationRepositoryId, recursive = false }: { itemId: string; destinationRepositoryId: string; recursive: boolean }, context: any) => {
@@ -23,6 +24,7 @@ export const demoteItem = {
                 DestinationRepositoryId: destinationRepositoryId,
                 Instruction: {
                     "$type": "OperationInstruction",
+                    Mode: "FailOnError",
                     Recursive: recursive
                 }
             };

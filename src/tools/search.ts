@@ -11,6 +11,7 @@ export const search = {
     description: `Performs a comprehensive search on the Content Manager System (CMS) for various item types based on a wide range of criteria.
   This tool is used to find items that match the specified query, such as full-text search strings, item titles, types, authors, lock status, and more.
   The return value will be an array of items that match the search criteria or an empty array if no items are found.
+  For browsing a known folder structure, 'getItemsInContainer' is an alternative.
 
   Strategy for Efficient Searching
   To avoid excessive token usage, follow this strategy when choosing how much detail to request:

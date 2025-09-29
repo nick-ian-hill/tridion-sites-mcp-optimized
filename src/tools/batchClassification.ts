@@ -5,20 +5,20 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 const batchClassificationInputProperties = {
     itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/))
         .min(1, "At least one item ID must be provided.")
-        .describe("An array of unique IDs (TCM URIs) for the items to modify."),
+        .describe("An array of unique IDs (TCM URIs) for the items to modify. Use 'search' or 'getItemsInContainer' to find items."),
     keywordIdsToAdd: z.array(z.string().regex(/^(tcm:\d+-\d+-1024|ecl:[a-zA-Z0-9-]+)$/))
         .optional()
-        .describe("An array of unique IDs (TCM URIs) for Keywords to apply to the items."),
+        .describe("An array of unique IDs (TCM URIs) for Keywords to apply to the items. Use 'getCategories' and 'getKeywordsForCategory' to find available keywords."),
     keywordIdsToRemove: z.array(z.string().regex(/^(tcm:\d+-\d+-1024|ecl:[a-zA-Z0-9-]+)$/))
         .optional()
-        .describe("An array of unique IDs (TCM URIs) for Keywords to remove from the items."),
+        .describe("An array of unique IDs (TCM URIs) for Keywords to remove from the items. Use 'bulkReadItems' in combination with the 'includeProperties' property (or set the 'loadFullItems' property to true) to find the currently used keywords for each item."),
 };
 
 const batchClassificationSchema = z.object(batchClassificationInputProperties);
 
 export const batchClassification = {
     name: "batchClassification",
-    description: `Starts an asynchronous process to classify, unclassify, or reclassify a batch of items. This single tool can add and/or remove specified keywords for all items in the batch, making it more efficient than individual operations. The initial response includes a batch ID for monitoring the process status.`,
+    description: `Starts an asynchronous process to classify, unclassify, or reclassify a batch of items. This single tool can add and/or remove specified keywords for all items in the batch, making it more efficient than individual operations with the 'classify' tool. The initial response includes a batch ID for monitoring the process status with the 'getBatchOperationStatus' tool.`,
     
     input: batchClassificationInputProperties,
 

@@ -4,7 +4,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 export const getUsers = {
     name: "getUsers",
-    description: "Gets a list of Users, with options to filter the results.",
+    description: "Gets a list of Users, with options to filter the results. The user IDs returned by this tool can be used as input for other tools, such as the 'lockUserId' parameter in 'getLockedItems' or the 'Author' and 'LockUser' parameters in the 'search' tool.",
     input: {
         predefined: z.boolean().optional()
             .describe("If specified, return only non-predefined users (false) or predefined users (true). If omitted, both are returned."),

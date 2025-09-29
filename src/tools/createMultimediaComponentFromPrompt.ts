@@ -11,8 +11,8 @@ const createMultimediaComponentFromPromptInputProperties = {
     prompt: z.string().describe("The text prompt to generate an image from."),
     title: z.string().describe("The title for the new multimedia component."),
     fileName: z.string().describe("The desired file name for the multimedia component in the CMS (e.g., 'generated-image.jpg')."),
-    locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new component will be created."),
-    schemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the Multimedia Schema to use. If not provided, a default will be determined automatically."),
+    locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new component will be created. Use 'search' or 'getItemsInContainer' to find a suitable Folder."),
+    schemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the Multimedia Schema to use. If not provided, a default will be determined automatically. Use 'getSchemaLinks' with purpose 'Multimedia' to find available schemas."),
     metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields.")
 };
 
@@ -20,7 +20,7 @@ const createMultimediaComponentFromPromptSchema = z.object(createMultimediaCompo
 
 export const createMultimediaComponentFromPrompt = {
     name: "createMultimediaComponentFromPrompt",
-    description: "Generates an image from a text prompt using the Gemini API and creates a new multimedia component from the generated image.",
+    description: "Generates an image from a text prompt using the Gemini API and creates a new multimedia component from it. This is one of three ways to create a multimedia component, with the others being 'createMultimediaComponentFromBase64' and 'createMultimediaComponentFromUrl'.",
     input: createMultimediaComponentFromPromptInputProperties,
     async execute(input: z.infer<typeof createMultimediaComponentFromPromptSchema>,
         context: any

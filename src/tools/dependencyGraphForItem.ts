@@ -5,7 +5,8 @@ import { filterResponseData } from "../utils/responseFiltering.js";
 
 export const dependencyGraphForItem = {
     name: "dependencyGraphForItem",
-    description: `Returns items in the Content Management System that are either dependencies of (direction = uses) or dependent on (direction = UsedBy) the specified item.
+    description: `Returns items in the Content Management System that are either dependencies of (direction = 'Uses') or dependent on (direction = 'UsedBy') the specified item.
+This tool is essential for impact analysis, such as checking what will be affected by a change, or for checking an item's usages with direction 'UsedBy' before attempting deletion with 'deleteItem' or 'batchDeleteItems'.
 IMPORTANT: Requesting details for many items can return a large amount of data. Use 'IdAndTitle' or the 'includeProperties' parameter for the most efficient and reliable results.
 Only select "AllDetails" if you absolutely need full details about the returned items. This request will likely fail with a large number of item (resultLimit > 150). 'AllDetails' adds the following properties to 'CoreDetails':
   - AccessControlList

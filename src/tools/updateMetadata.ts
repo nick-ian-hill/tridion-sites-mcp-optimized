@@ -13,7 +13,7 @@ Important Constraints:
 - This tool only updates the metadata fields. It cannot update the item's Title or Content fields.
 
 To update content fields for a component, use the 'updateContent' tool instead.
-To update other properties, use the 'updateItem', 'updatePage', or 'updatePublication' tool depending on the item type.
+To update other properties, use the 'updateItemProperties', 'updatePage', or 'updatePublication' tool depending on the item type.
 If a versioned item is locked by another user, the operation will be aborted.
 
 Examples:

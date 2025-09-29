@@ -4,15 +4,14 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 export const copyItem = {
     name: "copyItem",
-    description: `Copies the specified item to a new location.
-    It is only possible to copy an item to a destination where the 'BlueprintInfo.IsLocalized' and 'BlueprintInfo.IsShared' properties are both 'false'.
+    description: `Copies the specified item to a new location. This is different from the 'moveItem' tool, which relocates the original item.
+    It is only possible to copy an item to a destination where the 'BlueprintInfo.IsLocalized' and 'BlueprintInfo.IsShared' properties are both 'false'. You can check these properties using the 'getItem' tool.
     The title of the copied item must be unique in the destination container.
-    Items for which the 'LocationInfo/OrganizationalItem/IdRef' property references a Folder can only be copied to a Folder.
-    Items for which the 'LocationInfo/OrganizationalItem/IdRef' property references a StructureGroup can only be copied to a StructureGroup.
-    Only items for which the 'LocationInfo/OrganizationalItem/IdRef' property refences a Folder or StructureGroup can be copied.`,
+    Items can only be copied to containers of the same type (Folder to Folder, StructureGroup to StructureGroup).
+    The ID of the container is given by the 'LocationInfo/OrganizationalItem/IdRef' property.`,
     input: {
-        itemId: z.string().regex(/^tcm:\d+-\d+(-\d+)?$/).describe("The TCM URI of the item to be copied."),
-        destinationId: z.string().regex(/^tcm:\d+-\d+-(2|4)$/).describe("The TCM URI of the destination Folder or Structure Group.")
+        itemId: z.string().regex(/^tcm:\d+-\d+(-\d+)?$/).describe("The TCM URI of the item to be copied. Use 'search' or 'getItemsInContainer' to find the item's ID."),
+        destinationId: z.string().regex(/^tcm:\d+-\d+-(2|4)$/).describe("The TCM URI of the destination Folder or Structure Group. Use 'search' or 'getItemsInContainer' to find a destination.")
     },
     execute: async ({ itemId, destinationId }: { itemId: string, destinationId: string },
         context: any

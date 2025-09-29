@@ -7,11 +7,9 @@ export const createRootStructureGroup = {
     name: "createRootStructureGroup",
     description: `Creates a root Structure Group for the specified Publication.
     This is only required for a root Publication – a Publication that has no parent Publications – when the root Publication is used for constructing a BluePrint hierarchy.
-    Children of the root Publication will automatically inherit the root Structure Group and its content
-    A BluePrint hierarchy enables content reuse via inheritance.
-    To modify a shared (i.e., inherited) item in a child Publication, it first needs to be 'localized in the child Publication.
-    After localization, changes to a field value in the primary item will not impact the value in the localized item, unless the field is set to 'non-localizable' in the Schema.
-
+    Children of the root Publication will automatically inherit the root Structure Group and its content.
+    A BluePrint hierarchy enables content reuse via inheritance. To create a child publication, use the 'createPublication' tool.
+    
 Examples:
 
 Example 1: Creates a simple root Structure Group named 'Website Root' in the Publication with ID tcm:0-10-1.
@@ -32,7 +30,7 @@ Example 2: Creates a root Structure Group with a title and applies metadata to i
     });`,
     input: {
         title: z.string().describe("The title for the new root Structure Group."),
-        publicationId: z.string().regex(/^tcm:0-\d+-1$/).describe("The TCM URI of the root Publication that will contain this Structure Group."),
+        publicationId: z.string().regex(/^tcm:0-\d+-1$/).describe("The TCM URI of the root Publication that will contain this Structure Group. Use 'getPublications' to find the ID of a Publication."),
         metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of a Metadata Schema to apply to the root Structure Group."),
         metadata: z.record(fieldValueSchema).optional().describe("A JSON object containing the values for the metadata fields, structured according to the Metadata Schema.")
     },

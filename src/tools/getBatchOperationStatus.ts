@@ -2,22 +2,18 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 
-// 1. Define input properties as a plain object.
 const getBatchOperationStatusInputProperties = {
     batchId: z.string().regex(/^tcm:0-\d+-66048$/).describe("The unique ID of the batch operation item (e.g., 'tcm:0-123-66048')."),
 };
 
-// 2. Create the Zod schema from the properties object for type safety.
 const getBatchOperationStatusSchema = z.object(getBatchOperationStatusInputProperties);
 
 export const getBatchOperationStatus = {
     name: "getBatchOperationStatus",
-    description: "Retrieves the current status of an asynchronous batch operation using its unique batch ID. Provides a summary of the progress and the status for each individual item in the batch.",
+    description: `Retrieves the current status of an asynchronous batch operation using its unique batch ID. A batch ID is returned by tools such as 'batchCheckIn', 'batchCheckOut', 'batchClassification', 'batchDeleteItems', 'batchLocalizeItems', 'batchUndoCheckOut', and 'batchUnlocalizeItems'. This tool provides a summary of the progress and the status for each individual item in the batch.`,
 
-    // 3. Export the PLAIN object for VS Code tooling.
     input: getBatchOperationStatusInputProperties,
 
-    // 4. Use z.infer for the execute function's input type.
     execute: async (input: z.infer<typeof getBatchOperationStatusSchema>, context: any) => {
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';

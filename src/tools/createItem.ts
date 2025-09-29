@@ -8,40 +8,35 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 import { reorderFieldsBySchema, convertLinksRecursively } from "../utils/fieldReordering.js";
 
-// STEP 1: Define the properties for the tool's input as a standalone object.
 const createItemInputProperties = {
     itemType: z.enum([
         "Component", "Folder", "StructureGroup", "Keyword",
         "Category", "Bundle", "SearchFolder", "PageTemplate", "ComponentTemplate"
     ]).describe("The type of CMS item to create."),
     title: z.string().describe("The title for the new item."),
-    locationId: z.string().regex(/^tcm:\d+-\d+-\d+$/).describe("The TCM URI of the parent container (e.g., Folder, Structure Group, Category) where the new item will be created. For a Structure Group, the container must be a structure group. The only exception is for a Structure Group in a Publication that does not yet have a Structure Group. In this case, the createRootStructureGroup tool should be used instead. For a Category, the container must be a Publication. For keywords, the container must be a Category. For other item types the container must be a Folder."),
-    schemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("Required for a 'Component'. Not used for any other item types. The TCM URI of the Schema to use for the item's content."),
-    metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("Optional. The TCM URI of the Metadata Schema for the item's metadata."),
+    locationId: z.string().regex(/^tcm:\d+-\d+-\d+$/).describe("The TCM URI of the parent container. Use 'search' or 'getItemsInContainer' to find a suitable container. For 'Keyword', the container must be a Category (use 'getCategories'). For 'Category', the container is a Publication (use 'getPublications')."),
+    schemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("Required for 'Component'. The TCM URI of the Schema. Use 'getSchemaLinks' to find available Schemas in the target Publication."),
+    metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("Optional. The TCM URI of the Metadata Schema. Use 'getSchemaLinks' to find available Schemas."),
     content: z.record(fieldValueSchema).optional().describe("A JSON object for the item's content fields. The tool will automatically order the fields to match the Schema definition."),
-    metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields. The tool will automatically order the fields to match the Metadata Schema definition."),
-    isAbstract: z.boolean().optional().describe("Only for 'Keyword' type. Set to true to create an abstract Keyword. Defaults to false."),
+    metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields. The tool will automatically order the fields to match the Schema definition."),
+    isAbstract: z.boolean().optional().describe("Only for 'Keyword' type. Set to true to create an abstract Keyword."),
     description: z.string().optional().describe("A description for the item. Applicable to Keyword, Category, Bundle, and Search Folder types."),
-    key: z.string().optional().describe("A custom key for the Keyword. Only applicable to Keyword type."),
-    parentKeywords: z.array(z.string().regex(/^(tcm:\d+-\d+-1024|ecl:[a-zA-Z0-9-]+)$/)).optional().describe("An array of URIs for parent Keywords. Only applicable to Keyword type."),
-    relatedKeywords: z.array(z.string().regex(/^(tcm:\d+-\d+-1024|ecl:[a-zA-Z0-9-]+)$/)).optional().describe("An array of URIs for related Keywords. Only applicable to Keyword type."),
-    itemsInBundle: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)).optional().describe("An array of TCM URIs for items in the Bundle. Only applicable to Bundle type."),
-    searchQuery: SearchQueryValidation.optional().describe("A search query model. This is only applicable (and must be provided) when creating a 'SearchFolder'. For SearchFolder creation, its value MUST include the 'SearchIn' property."),
+    key: z.string().optional().describe("A custom key for the Keyword."),
+    parentKeywords: z.array(z.string().regex(/^(tcm:\d+-\d+-1024|ecl:[a-zA-Z0-9-]+)$/)).optional().describe("An array of URIs for parent Keywords. Use 'getKeywordsForCategory' to find potential parent keywords."),
+    relatedKeywords: z.array(z.string().regex(/^(tcm:\d+-\d+-1024|ecl:[a-zA-Z0-9-]+)$/)).optional().describe("An array of URIs for related Keywords. Use 'getKeywordsForCategory' to find keywords."),
+    itemsInBundle: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)).optional().describe("An array of TCM URIs for items in the Bundle. Use 'search' to find items to add."),
+    searchQuery: SearchQueryValidation.optional().describe("A search query model. Required when creating a 'SearchFolder'. Must include the 'SearchIn' property."),
     resultLimit: z.number().int().default(100).describe("The maximum number of results to return. Only applicable to SearchFolder type"),
-    // Page Template specific
-    fileExtension: z.string().optional().describe("The file extension for the new Page Template (e.g., 'html', 'aspx'). Required for 'PageTemplate' type."),
-    pageSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the Page Schema to associate with the Page Template. Required for 'PageTemplate' type."),
-    // Page/Component Template specific
-    templateBuildingBlocks: z.array(z.string().regex(/^tcm:\d+-\d+-2048$/)).optional().describe("An array of TCM URIs for the Template Building Blocks. Required for 'PageTemplate' and 'ComponentTemplate' types."),
-    // Component Template specific
-    allowOnPage: z.boolean().optional().describe("For 'ComponentTemplate' type. Whether the Component Template may be used on a Page. Defaults to true."),
+    fileExtension: z.string().optional().describe("Required for 'PageTemplate' type. The file extension (e.g., 'html')."),
+    pageSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("Required for 'PageTemplate' type. The TCM URI of the Page Schema (also known as a Region Schema). Use 'getSchemaLinks' with purpose 'Region' to find available schemas."),
+    templateBuildingBlocks: z.array(z.string().regex(/^tcm:\d+-\d+-2048$/)).optional().describe("Required for 'PageTemplate' and 'ComponentTemplate' types. An array of TCM URIs for Template Building Blocks. Use 'search' with itemType 'TemplateBuildingBlock' to find available TBBs."),
+    allowOnPage: z.boolean().optional().describe("For 'ComponentTemplate' type. Defaults to true."),
     isRepositoryPublishable: z.boolean().optional().describe("For 'ComponentTemplate' type. Whether the template renders dynamic Component Presentations. Defaults to false."),
-    outputFormat: z.string().optional().describe("For 'ComponentTemplate' type. The format of the rendered Component Presentation (e.g., 'HTML Fragment'). Defaults to 'HTML Fragment'."),
-    priority: z.number().int().optional().describe("For 'ComponentTemplate' type. Priority used for resolving Component links. Defaults to 200."),
-    relatedSchemaIds: z.array(z.string().regex(/^tcm:\d+-\d+-8$/)).optional().describe("For 'ComponentTemplate' type. An array of Schema TCM URIs this template is linked to.")
+    outputFormat: z.string().optional().describe("For 'ComponentTemplate' type. Defaults to 'HTML Fragment'."),
+    priority: z.number().int().optional().describe("For 'ComponentTemplate' type. Defaults to 200."),
+    relatedSchemaIds: z.array(z.string().regex(/^tcm:\d+-\d+-8$/)).optional().describe("For 'ComponentTemplate' type. An array of Schema TCM URIs this template is linked to. Use 'getSchemaLinks' to find schemas.")
 };
 
-// STEP 2: Create the final Zod schema and centralize validation logic.
 const createItemInputSchema = z.object(createItemInputProperties)
     .refine(data => !(data.itemType === 'Component' && !data.schemaId), {
         message: "To create a 'Component', the 'schemaId' parameter is required."
@@ -59,17 +54,13 @@ const createItemInputSchema = z.object(createItemInputProperties)
         message: "To create a 'PageTemplate' or 'ComponentTemplate', the 'templateBuildingBlocks' parameter must be provided and not be empty."
     });
 
-// STEP 3: Infer the TypeScript type directly from the schema.
 type CreateItemInput = z.infer<typeof createItemInputSchema>;
 
-// STEP 4: Define the final tool object.
 export const createItem = {
     name: "createItem",
-    description: `Creates a new Content Management System (CMS) item of a specified type.  
-The tool automatically handles different item types and their specific properties.  
-The item types that can be created with this tool must have a container item (Folder, Structure Group, Category, or Publication) corresponding to the locationId property.  
-For a Category, the container is the Publication.  
-Any references (e.g., Links) to other items—such as a metadata Schema, parent Keywords, or Component links—must refer to items in the same Publication as the container item.  
+    description: `Creates a new Content Management System (CMS) item of a specified type. This is a general-purpose creation tool. For more specific creation tasks, consider using 'createPage', 'createPublication', 'createSchema', or 'createMultimediaComponentFromUrl'.
+The tool automatically handles different item types and their specific properties. The created item will be placed in the container (Folder, Structure Group, Category, or Publication) specified by 'locationId'. Any references to other items (e.g., a Schema, parent Keywords) must be in the same Publication as the container item.
+For a Category, the container is the Publication.   
 For items other than Publications, the first number in the ID identifies the Publication (e.g., for both tcm:5-127 and tcm:5-2002-2, the Publication is 5).  
 For Publications, the second number identifies the Publication (e.g., tcm:0-5-1 represents Publication 5).  
 Therefore, when creating a Component in the Folder with ID tcm:10-4112-2, the Schema must have an ID in the form tcm:10-###-8.`,

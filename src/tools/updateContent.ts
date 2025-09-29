@@ -14,7 +14,7 @@ Important Constraints:
 - This tool only updates the content fields and cannot be used to update other properties like Title or Metadata.
 
 To update metadata, use the 'updateMetadata' tool.
-To update other properties, use the 'updateItem' tool.
+To update other properties, use the 'updateItemProperties' tool.
 If the component is locked by another user, the operation will be aborted.
 
 Examples:

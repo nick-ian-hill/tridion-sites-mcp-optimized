@@ -4,7 +4,8 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 export const batchDeleteItems = {
     name: "batchDeleteItems",
-    description: `Starts an asynchronous process to permanently delete a batch of items from the Content Manager. This is more efficient than deleting items individually. If an item cannot be deleted (e.g., it is used by another item), it will be skipped, but the batch process will continue. The initial response includes a batch ID that can be used to monitor the status of the operation.`,
+    description: `Starts an asynchronous process to permanently delete a batch of items from the Content Manager. This is more efficient than deleting items individually using the 'deleteItem' tool. The initial response includes a batch ID that can be used to monitor the status of the operation with the 'getBatchOperationStatus' tool.
+To prevent failures, it's highly recommended to first check if an item is used by other items using the 'dependencyGraphForItem' tool with direction 'UsedBy'. An item that is in use cannot be deleted.`,
     input: {
         itemIds: z.array(z.string().regex(/^tcm:\d+-\d+(-\d+)?(-v\d+)?$/))
             .describe("An array of unique IDs (TCM URIs) for the items to be deleted. To delete specific versions, include the version number in the URI (e.g., 'tcm:5-263-64-v3')."),

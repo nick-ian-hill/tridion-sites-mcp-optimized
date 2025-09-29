@@ -4,14 +4,14 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 export const getCategories = {
     name: "getCategories",
-    description: `Retrieves the list of categories for the specified publication.
+    description: `Retrieves the list of categories for a specified publication. This is the first step in finding available keywords. After getting a category's ID from this tool, use 'getKeywordsForCategory' to see the keywords within it.
     A category represents a set of keywords, possibly hierarchically structured.
     Keyword hierarchies arise when one or more keywords has one or more parent keywords.
     Parent keywords are defined in the child keyword.
     Parent keywords must belong to the same category as the child keyword.
     Circular references are not permitted.`,
     input: {
-        itemId: z.string().regex(/^tcm:0-[1-9]\d*-1$/).describe("The unique ID of a Publication (e.g., 'tcm:0-5-1')."),
+        itemId: z.string().regex(/^tcm:0-[1-9]\d*-1$/).describe("The unique ID of a Publication (e.g., 'tcm:0-5-1'). Use 'getPublications' to find a Publication ID."),
     },
     execute: async ({ itemId }: { itemId: string }, context: any) => {
         const req = context?.request;

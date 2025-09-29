@@ -5,10 +5,13 @@ import { filterResponseData } from "../utils/responseFiltering.js";
 
 export const getItem = {
     name: "getItem",
-    description: `Retrieves read-only details for a single Content Manager System (CMS) item using its unique ID.
-For versioned item types (Components, Component Templates, Pages, Page Templates, Template Building Blocks and Schemas), set useDynamicVersion to true to get the most recent saved data, including any revisions made since the last major version.
-The returned details typically include item type ($type), title (Title), content fields (Content), and metadata fields (Metadata).
-This tool cannot modify, update, or delete any CMS items or files.`,
+    description: `Retrieves read-only details for a single Content Manager System (CMS) item. This is a foundational tool used to gather information before performing other actions.
+Common uses include:
+- Inspecting a Schema or Page Template's structure before using 'createItem' or 'createPage'.
+- Checking an item's 'LockInfo' before attempting to update it with tools like 'updateContent' or 'updateMetadata'.
+- Checking an item's 'BluePrintInfo' before using BluePrinting tools like 'localizeItem' or 'promoteItem'.
+For retrieving multiple items, the 'bulkReadItems' tool is more efficient.
+For versioned item types (Components, Component Templates, Pages, Page Templates, Template Building Blocks and Schemas), set useDynamicVersion to true to get the most recent saved data, including any revisions made since the last major version.`,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the item."),
         useDynamicVersion: z.boolean().optional().default(false).describe("Set to true for versioned items to get the most recent saved data, including minor revisions since the last major version."),

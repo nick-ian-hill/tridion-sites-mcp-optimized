@@ -7,35 +7,30 @@ import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 import { reorderFieldsBySchema } from "../utils/fieldReordering.js";
 import { processComponentPresentations, processRegions } from "../utils/pageUtils.js";
 
-// STEP 1: Define the properties for the tool's input as a standalone object.
 const createPageInputProperties = {
     title: z.string().nonempty().describe("The title for the new Page."),
-    locationId: z.string().regex(/^tcm:\d+-\d+-4$/).describe("The TCM URI of the parent Structure Group where the new Page will be created."),
+    locationId: z.string().regex(/^tcm:\d+-\d+-4$/).describe("The TCM URI of the parent Structure Group where the new Page will be created. Use 'search' or 'getItemsInContainer' to find a Structure Group."),
     fileName: z.string().nonempty().regex(/^\S+$/, "File name cannot contain white space.").describe("The file name for the page (e.g., 'about-us.html'), which cannot contain spaces."),
-    pageTemplateId: z.string().regex(/^tcm:\d+-\d+-128$/).optional().describe("The TCM URI of the Page Template to be associated with the Page. If not provided, the page will use the Page Template defined by the Structure Group."),
-    metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of a Schema from which to look up the Page's metadata fields. If the Page Template defines a Region Schema, then that Region Schema can be set as the value of the metadataSchemaId."),
+    pageTemplateId: z.string().regex(/^tcm:\d+-\d+-128$/).optional().describe("The TCM URI of the Page Template to be associated with the Page. Use 'search' or 'getItemsInContainer' to find available templates. If not provided, the page will use the Page Template defined by the parent Structure Group."),
+    metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of a Schema for the Page's metadata. Use 'getSchemaLinks' to find available schemas. If the Page Template defines a Region Schema, that Region Schema can be used here."),
     metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the Page's metadata fields as defined by the schema with URI metadataSchemaId."),
-    componentPresentations: z.string().optional().describe("A JSON string representing an array of Component Presentation objects. Each object must have '$type', 'Component' (a Link object), and 'ComponentTemplate' (a Link object). Use JSON.stringify() in code to format this correctly. If the user didn't indicate that they want to create an empty page, and none are provided, offer to include one or or more content items (Component Presentations)."),
-    regions: z.string().optional().describe("A JSON string representing an array of Region objects. Each object must have '$type' and 'RegionName', and can contain 'Metadata', 'ComponentPresentations', and nested 'Regions'. Use JSON.stringify() in code or see examples.  If the user didn't indicate that they want to create an empty page, and none are provided, offer to include one or or more content items (Component Presentations). ")
+    componentPresentations: z.string().optional().describe("A JSON string representing an array of Component Presentation objects. Each object must have '$type', 'Component', and 'ComponentTemplate'. Use the 'search' tool to find available Components and Component Templates. Use the 'getIsComponentTemplateRequired' tool to check if a Component Template is mandatory."),
+    regions: z.string().optional().describe("A JSON string representing an array of Region objects. The RegionName for each region must match a region defined in the Page Template. To discover the correct region names and structure, first use the 'getItem' tool to inspect the 'pageTemplateId'.")
 };
 
-// STEP 2: Create the final Zod schema for validation.
 const createPageInputSchema = z.object(createPageInputProperties);
 
-// STEP 3: Infer the TypeScript type directly from the schema.
 type CreatePageInput = z.infer<typeof createPageInputSchema>;
 
-
-// STEP 4: Define the final tool object.
 export const createPage = {
     name: "createPage",
     description: `Creates a new Page in the Content Management System (CMS). A Page is a container for content that is structured by a Page Template.
 
-IMPORTANT: Before creating a Page, you should first use the getItem tool to inspect the schema of the pageTemplateId. This will reveal the names of the required regions, whether they are repeatable, and the schemas for their metadata. This information is crucial for correctly formatting the regions parameter.
+IMPORTANT: Before creating a Page with regions, you MUST first use the 'getItem' tool to inspect the 'pageTemplateId'. This will reveal the required region names, whether they are repeatable, and the schemas for their metadata, which is crucial for correctly formatting the 'regions' parameter.
 
 A Page can hold content in two ways:
-1.  componentPresentations: An array of Component-plus-Component-Template pairs placed directly on the page, outside of any specific region.
-2.  regions: A structured way to organize content. The regions parameter is a JSON string representing an array of region objects. Each region's RegionName must correspond to a region defined in the Page Template. Regions can be nested and can contain their own componentPresentations. The Component Presentations added to a region must comply with any Component Presentation Constraints (e.g., OccurrenceConstraint, TypeConstraint) defined in the region's schema.
+1.  componentPresentations: An array of Component-plus-Component-Template pairs. Use the 'getIsComponentTemplateRequired' tool to determine if the 'ComponentTemplate' is mandatory.
+2.  regions: A structured way to organize content, defined by the Page Template. The Component Presentations added to a region must comply with any constraints defined in the region's schema.
 
 If the user doesn't explicitly ask to create an empty page, you should ask if they would like to add content (Component Presentations) to the page or a region.
 
