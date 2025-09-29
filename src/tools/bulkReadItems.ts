@@ -69,13 +69,16 @@ Expected JSON Output:
             const hasCustomProperties = includeProperties && includeProperties.length > 0;
             const finalLoadFullItems = hasCustomProperties || loadFullItems;
 
-            const response = await authenticatedAxios.get(`/items/bulkRead`, {
-                params: {
-                    itemIds: itemIds,
-                    useDynamicVersion: useDynamicVersion,
-                    loadFullItems: finalLoadFullItems,
+            const response = await authenticatedAxios.post(
+                `/items/bulkRead`,
+                itemIds,
+                {
+                    params: {
+                        useDynamicVersion: useDynamicVersion,
+                        loadFullItems: finalLoadFullItems,
+                    }
                 }
-            });
+            );
 
             if (response.status === 200) {
                 const finalData = filterResponseData({ responseData: response.data, includeProperties });
