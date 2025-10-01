@@ -8,8 +8,8 @@ export const localizeItem = {
 
 This tool is only applicable to items that are shared. This can be determined by calling the 'getItem' tool and inspecting the 'BluePrintInfo.IsShared' property.
 
-Shared items are essentially identical copies of a parent item, and will be updated whenever the parent item changes.
-Localizing a shared item makes many properties and content/metadata field values independent of the parent item.
+Shared items are essentially identical copies of a parent item and cannot be edited directly. However, a shared item will change whenever the parent item changes.
+To edit a shared item, it first needs to be localized. Localizing a shared item makes many properties and content/metadata field values independent of the parent item.
 Unless a content/metadata field is set to non-localizable, changes to the field value in the parent will not modify the value in the localized item.
 Similarly, the values of fields that are not marked as non-localizable can be freely changed in the localized item.
 A common use case for localizing an item is to translate content inherited from a parent item into a different language.`,
