@@ -10,6 +10,9 @@
  * @returns {string} The converted item ID, or the original ID if no conversion was possible.
  */
 export const convertItemIdToContextPublication = (itemId: string, contextItemId: string): string => {
+    if (itemId === 'tcm:0-0-0') {
+        return itemId;
+    }
     // A single regex to match and capture the prefix, publication ID, and rest of the ID for both TCM and ECL.
     // Group 1: The prefix ('tcm' or 'ecl')
     // Group 2: The publication ID (a number)
