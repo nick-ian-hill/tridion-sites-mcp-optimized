@@ -4,7 +4,7 @@ import { toLink } from "../utils/links.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
-import { reorderFieldsBySchema } from "../utils/fieldReordering.js";
+import { reorderFieldsBySchema, convertLinksRecursively } from "../utils/fieldReordering.js";
 import { processComponentPresentations, processRegions } from "../utils/pageUtils.js";
 
 const createPageInputProperties = {
@@ -273,10 +273,13 @@ This example shows a two-column layout within the main content area.
             }
 
             let processedMetadata = metadata;
-            if (processedMetadata && contextualMetadataSchemaId) {
-                processedMetadata = await reorderFieldsBySchema(processedMetadata, contextualMetadataSchemaId, 'metadata', authenticatedAxios);
+            if (processedMetadata) {
+                convertLinksRecursively(processedMetadata, locationId);
+                if (contextualMetadataSchemaId) {
+                    processedMetadata = await reorderFieldsBySchema(processedMetadata, contextualMetadataSchemaId, 'metadata', authenticatedAxios);
+                }
+                payload.Metadata = processedMetadata;
             }
-            if (processedMetadata) payload.Metadata = processedMetadata;
 
             payload.ComponentPresentations = processComponentPresentations(parsedComponentPresentations, locationId);
 

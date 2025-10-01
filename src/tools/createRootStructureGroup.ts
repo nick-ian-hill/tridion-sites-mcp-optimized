@@ -2,6 +2,8 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
+import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
+import { convertLinksRecursively } from "../utils/fieldReordering.js";
 
 export const createRootStructureGroup = {
     name: "createRootStructureGroup",
@@ -42,9 +44,16 @@ Example 2: Creates a root Structure Group with a title and applies metadata to i
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
         const userSessionId = match ? match[1] : null;
 
-        const { title, publicationId, metadataSchemaId, metadata } = args;
+        let { title, publicationId, metadataSchemaId, metadata } = args;
 
         try {
+            if (metadataSchemaId) {
+                metadataSchemaId = convertItemIdToContextPublication(metadataSchemaId, publicationId);
+            }
+            if (metadata) {
+                convertLinksRecursively(metadata, publicationId);
+            }
+
             // 1. Get the default model for a Structure Group, using the Publication as the container.
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const defaultModelResponse = await authenticatedAxios.get('/item/defaultModel/StructureGroup', {
