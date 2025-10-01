@@ -10,7 +10,7 @@ export const createSchema = {
     name: "createSchema",
     description: `Creates a new Content Manager System (CMS) item of type 'Schema'. Schemas define the structure of content and metadata for other CMS items.
     
-A Schema is defined by its content fields (in the 'fields' property) and metadata fields (in the 'metadataFields' property). Both of these properties are dictionaries where:
+A Schema with a purpose of 'Component' is defined by its content fields (in the 'fields' property). All Schemas, regardless of purpose, can also have metadata fields (in the 'metadataFields' property). Both of these properties are dictionaries where:
   - The KEY is the field's machine name (a valid XML name without spaces, e.g., "articleTitle").
   - The VALUE is a Field Definition object that specifies the field's type and properties.
 
@@ -29,7 +29,7 @@ Supported Field Types ('$type' values):
   - SingleLineTextFieldDefinition: A simple text input.
   - MultiLineTextFieldDefinition: A multi-line text area. Supports a 'Height' property for the UI.
   - XhtmlFieldDefinition: A rich-text (HTML) editor. Supports a 'Height' property for the UI. Can also include a 'FormattingFeatures' object to control the editor's toolbar.
-  - KeywordFieldDefinition: A link to a Keyword from a Category.
+  - KeywordFieldDefinition: A link to a Keyword from a Category. This requires a 'Category' property with a Link object pointing to the desired Category (e.g., { "$type": "Link", "IdRef": "tcm:1-3-512" }).
   - NumberFieldDefinition: A field for numeric values.
   - DateFieldDefinition: A field for date/time values.
   - ExternalLinkFieldDefinition: A field for a URL.
@@ -252,6 +252,37 @@ Example 8: Create a Region Schema with constraints on its Component Presentation
                 }
             ]
         })
+    });
+
+Example 9: Create a Schema with a Keyword field for classification. This field links to a Category, allowing editors to select from a predefined list of Keywords. Use 'getCategories' to find a suitable Category to link to.
+    const result = await tools.createSchema({
+        title: "Article With Classification",
+        locationId: "tcm:1-2-2",
+        purpose: "Component",
+        rootElementName: "Article",
+        fields: {
+            "title": {
+                "$type": "SingleLineTextFieldDefinition",
+                "Name": "title",
+                "Description": "The article title."
+            },
+            "category": {
+                "$type": "KeywordFieldDefinition",
+                "Name": "category",
+                "Description": "Classification for the article.",
+                "MinOccurs": 0,
+                "MaxOccurs": -1,
+                "Category": {
+                    "$type": "Link",
+                    "IdRef": "tcm:1-3-512"
+                },
+                "List": {
+                    "$type": "ListDefinition",
+                    "Height": 5,
+                    "Type": "Select"
+                }
+            }
+        }
     });`,
     input: {
         title: z.string().nonempty().describe("The title for the new Schema."),
