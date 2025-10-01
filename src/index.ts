@@ -77,6 +77,11 @@ import { generateContentFromPrompt } from './tools/generateContentFromPrompt.js'
 import { batchClassification } from './tools/batchClassification.js';
 import { classify } from './tools/classify.js';
 import { updateSchemaFieldProperties } from './tools/updateSchemaFieldProperties.js';
+import { getActivities } from './tools/getActivities.js';
+import { getProcessDefinitions } from './tools/getProcessDefinitions.js';
+import { startActivity } from './tools/startActivity.js';
+import { startWorkflow } from './tools/startWorkflow.js';
+import { finishActivity } from './tools/finishActivity.js';
 import { requestNavigation } from './tools/requestNavigation.js';
 import { requestOpenInEditor } from './tools/requestOpenInEditor.js';
 import { getUsers } from './tools/getUsers.js';
@@ -159,6 +164,12 @@ const tools: any[] = [
     getCategories,
     getKeywordsForCategory,
     dependencyGraphForItem,
+    // Workflow
+    getActivities,
+    getProcessDefinitions,
+    startActivity,
+    startWorkflow,
+    finishActivity,
 ];
 
 // --- Setup for MCP Server (for VS Code Client) ---

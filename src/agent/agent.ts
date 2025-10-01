@@ -48,6 +48,8 @@ const READ_ONLY_TOOLS = [
     'getLockedItems',
     'getSchemaLinks',
     'getUsers',
+    'getActivities',
+    'getProcessDefinitions',
     'readWordFileFromMultimediaComponent',
     'readExcelFileFromMultimediaComponent',
     'readTextFromPowerPointMultimediaComponent',
