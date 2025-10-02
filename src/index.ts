@@ -82,6 +82,7 @@ import { getProcessDefinitions } from './tools/getProcessDefinitions.js';
 import { startActivity } from './tools/startActivity.js';
 import { startWorkflow } from './tools/startWorkflow.js';
 import { finishActivity } from './tools/finishActivity.js';
+import { createProcessDefinition } from './tools/createProcessDefinition.js';
 import { requestNavigation } from './tools/requestNavigation.js';
 import { requestOpenInEditor } from './tools/requestOpenInEditor.js';
 import { getUsers } from './tools/getUsers.js';
@@ -170,6 +171,7 @@ const tools: any[] = [
     startActivity,
     startWorkflow,
     finishActivity,
+    createProcessDefinition,
 ];
 
 // --- Setup for MCP Server (for VS Code Client) ---
