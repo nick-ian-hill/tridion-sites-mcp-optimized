@@ -46,9 +46,10 @@ Example 1: Creates a new child Publication with a title, a publication URL for w
         locale: "en-US"
     });
 
-Example 2: Creates a basic 'Content' Publication intended to be a parent in a BluePrint structure, from which other Publications can inherit content.
+Example 2: Creates a basic 'Content' Publication that inherits structure (templates and template building blocks) from tcm:0-2-1 and content/metadata schemas from tcm:0-3-1.
     const result = await tools.createPublication({
         title: "Corporate Master Content",
+        parentPublications: ['tcm:0-2-1', 'tcm:0-3-1'],
         publicationType: "Content"
     });`,
     input: {
