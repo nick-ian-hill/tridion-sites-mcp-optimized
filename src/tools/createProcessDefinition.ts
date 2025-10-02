@@ -15,7 +15,7 @@ const activityDefinitionInputSchema = z.object({
         .describe("Optional C# script to make this an automatic activity. The script is executed when the activity starts."),
     scriptType: z.enum(["CSharp"]).default("CSharp")
         .describe("The scripting language used. Currently, only 'CSharp' is supported."),
-    nextActivities: z.array(z.string()).default([])
+    nextActivities: z.array(z.string().regex(/^tcm:\d+-\d+-131088$/)).default([])
         .describe("An array of titles of the next activities. For a 'Decision' activity, this can contain multiple titles, creating branches. For a 'Normal' activity, it should contain zero or one title.")
 }).refine(data => data.activityType === 'Decision' || data.nextActivities.length <= 1, {
     message: "A 'Normal' activity cannot have more than one next activity.",
@@ -23,14 +23,16 @@ const activityDefinitionInputSchema = z.object({
 
 type ActivityDefinitionInput = z.infer<typeof activityDefinitionInputSchema>;
 
-// Main input schema for the tool.
-const createProcessDefinitionInputSchema = z.object({
+// Main input properties for the tool.
+const createProcessDefinitionInputProperties = {
     title: z.string().nonempty({ message: "Process Definition title cannot be empty." }),
     locationId: z.string().regex(/^tcm:0-\d+-1$/, { message: "locationId must be a valid Publication URI (e.g., 'tcm:0-5-1')." })
         .describe("The TCM URI of the Publication that will contain this Process Definition. Use 'getPublications' to find the correct ID."),
     description: z.string().optional().describe("An optional description for the Process Definition."),
     activityDefinitions: z.string().describe("A JSON string representing an array of activity definitions that constitute the workflow. The first activity in the array will be the starting point of the workflow.")
-});
+};
+
+const createProcessDefinitionInputSchema = z.object(createProcessDefinitionInputProperties);
 
 
 export const createProcessDefinition = {
@@ -110,8 +112,9 @@ Example 2: Create a more complex workflow with a decision point, mirroring the p
         activityDefinitions: complexWorkflow
     });`,
 
-    input: createProcessDefinitionInputSchema,
+    input: createProcessDefinitionInputProperties,
     execute: async (args: z.infer<typeof createProcessDefinitionInputSchema>, context: any) => {
+        console.log(`[createProcessDefinition] Starting execution with args:`, args);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -121,25 +124,33 @@ Example 2: Create a more complex workflow with a decision point, mirroring the p
 
         try {
             // 1. Parse and validate the activity definitions JSON
+            console.log(`[createProcessDefinition] Parsing 'activityDefinitions' JSON string...`);
             let parsedActivities: ActivityDefinitionInput[];
             try {
                 parsedActivities = JSON.parse(activityDefinitionsJson);
+                console.log(`[createProcessDefinition] Successfully parsed 'activityDefinitions'.`);
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : String(error);
+                console.error(`[createProcessDefinition] JSON parsing failed: ${errorMessage}`);
                 return { content: [{ type: "text", text: `Error: The 'activityDefinitions' parameter is not a valid JSON string. Details: ${errorMessage}` }] };
             }
 
+            console.log(`[createProcessDefinition] Validating activity definitions structure...`);
             const validationResult = z.array(activityDefinitionInputSchema).safeParse(parsedActivities);
             if (!validationResult.success) {
-                return { content: [{ type: "text", text: `Error: Invalid activity definitions structure. Details: ${validationResult.error.format()}` }] };
+                const formattedError = JSON.stringify(validationResult.error.format(), null, 2);
+                console.error(`[createProcessDefinition] Zod validation failed:`, formattedError);
+                return { content: [{ type: "text", text: `Error: Invalid activity definitions structure. Details: ${formattedError}` }] };
             }
             const activities = validationResult.data;
+            console.log(`[createProcessDefinition] Zod validation successful.`);
 
             if (activities.length === 0) {
                 return { content: [{ type: "text", text: "Error: At least one activity definition must be provided." }] };
             }
 
             // 2. Perform cross-activity validation
+            console.log(`[createProcessDefinition] Performing cross-activity validation (unique titles, link integrity)...`);
             const activityTitles = new Set(activities.map(a => a.title));
             if (activityTitles.size !== activities.length) {
                 return { content: [{ type: "text", text: "Error: Activity titles must be unique." }] };
@@ -151,11 +162,13 @@ Example 2: Create a more complex workflow with a decision point, mirroring the p
                     return { content: [{ type: "text", text: `Error: Next activity '${nextTitle}' is defined as a transition target but does not exist as an activity.` }] };
                 }
             }
+            console.log(`[createProcessDefinition] Cross-activity validation successful.`);
 
             // 3. Prepare payload using temporary IDs for linking
             const titleToTempId = new Map(activities.map((act, index) => [act.title, `temp:${index}`]));
 
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
+            console.log(`[createProcessDefinition] Fetching default model for ProcessDefinition from container '${locationId}'...`);
             const defaultModelResponse = await authenticatedAxios.get('/item/defaultModel/ProcessDefinition', {
                 params: { containerId: locationId }
             });
@@ -164,6 +177,7 @@ Example 2: Create a more complex workflow with a decision point, mirroring the p
                 return handleUnexpectedResponse(defaultModelResponse);
             }
             const payload = defaultModelResponse.data;
+            console.log(`[createProcessDefinition] Successfully fetched default model.`);
 
             // 4. Build the final payload
             payload.Title = title;
@@ -202,10 +216,14 @@ Example 2: Create a more complex workflow with a decision point, mirroring the p
                 payload.LocationInfo = { ...payload.LocationInfo, OrganizationalItem: toLink(locationId) };
             }
             
+            console.log(`[createProcessDefinition] Final payload constructed. Posting to /items...`);
+            console.log(JSON.stringify(payload, null, 2));
+
             // 5. Post the payload to create the Process Definition and all its activities
             const createResponse = await authenticatedAxios.post('/items', payload);
 
             if (createResponse.status === 201) {
+                console.log(`[createProcessDefinition] API call successful. Process Definition created with ID: ${createResponse.data.Id}`);
                 return {
                     content: [
                         {
