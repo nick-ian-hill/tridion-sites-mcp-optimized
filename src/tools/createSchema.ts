@@ -26,16 +26,16 @@ Each Field Definition object MUST include a '$type' property to identify its typ
   - IsPublishable (Default: true): Whether the field value is included when publishing.
 
 Supported Field Types ('$type' values):
-  - SingleLineTextFieldDefinition: A simple text input.
+  - SingleLineTextFieldDefinition: A simple text input. XSD Schema properties like 'Pattern', 'MinLength', and 'MaxLength' can be used to restrict the allowed input values.
   - MultiLineTextFieldDefinition: A multi-line text area. Supports a 'Height' property for the UI.
   - XhtmlFieldDefinition: A rich-text (HTML) editor. Supports a 'Height' property for the UI. Can also include a 'FormattingFeatures' object to control the editor's toolbar.
   - KeywordFieldDefinition: A link to a Keyword from a Category. This requires a 'Category' property with a Link object pointing to the desired Category (e.g., { "$type": "Link", "IdRef": "tcm:1-3-512" }).
-  - NumberFieldDefinition: A field for numeric values.
-  - DateFieldDefinition: A field for date/time values.
+  - NumberFieldDefinition: A field for numeric values. The 'MinInclusive', 'MaxExclusive', 'TotalDigits', and 'FractionDigits' properties can be used to restrict the range of values.
+  - DateFieldDefinition: A field for date/time values. The date range can be restricted using properties like 'MinInclusive', 'MaxExclusive', etc.
   - ExternalLinkFieldDefinition: A field for a URL.
   - ComponentLinkFieldDefinition: A link to another Component. Can use 'AllowedTargetSchemas' to restrict which types of Components can be linked.
   - MultimediaLinkFieldDefinition: A link to a multimedia item (e.g., image, video). Can use 'AllowedTargetSchemas' to restrict which types of multimedia can be linked.
-  - EmbeddedSchemaFieldDefinition: Allows embedding fields from another Schema (which must have a purpose of 'Embedded'). Requires an 'EmbeddedSchema' property with a Link object (e.g., { "$type": "Link", "IdRef": "tcm:1-123-8" }).
+  - EmbeddedSchemaFieldDefinition: Allows embedding fields from another Schema (which must have a purpose of 'Embedded'). Requires an 'EmbeddedSchema' property with a Link object (e.g., { "$type": "Link", "IdRef": "tcm:1-123-8" }). Ensure a suitable embedded schema is available before trying to create a schema that links to one.
 
 Some field types can be configured as lists to provide a selection of predefined values. This is done by adding a 'List' property to the field definition.
   - Supported List '$type' values: ListDefinition (for Keywords), SingleLineTextListDefinition, NumberListDefinition, DateListDefinition.
@@ -161,13 +161,12 @@ Example 4: Create a Schema that uses an embeddable Schema for an embedded field.
         }
     });
 
-Example 5: Create a Schema with a multi-value checkbox field using a predefined list of dates.
+Example 5: Create a Metadata Schema with a multi-value checkbox field using a predefined list of dates.
     const result = await tools.createSchema({
         title: "Date Selection",
         locationId: "tcm:1-2-2",
-        purpose: "Component",
-        rootElementName: "Dates",
-        fields: {
+        purpose: "Metadata",
+        metadataFields: {
             "availableDates": {
                 "$type": "DateFieldDefinition",
                 "Name": "availableDates",
@@ -281,6 +280,39 @@ Example 9: Create a Schema with a Keyword field for classification. This field l
                     "Height": 5,
                     "Type": "Select"
                 }
+            }
+        }
+    });
+
+Example 10: Create a Schema with advanced constraints.
+    const result = await tools.createSchema({
+        title: "Data Schema With Constraints",
+        locationId: "tcm:1-2-2",
+        purpose: "Component",
+        rootElementName: "RestrictedContent",
+        description: "A Schema that uses various constraints for its fields.",
+        fields: {
+            "productCode": {
+                "$type": "SingleLineTextFieldDefinition",
+                "Name": "productCode",
+                "Description": "Product code must be 2 uppercase letters followed by 4 numbers.",
+                "MinOccurs": 1,
+                "Pattern": "[A-Z]{2}[0-9]{4}"
+            },
+            "rating": {
+                "$type": "NumberFieldDefinition",
+                "Name": "rating",
+                "Description": "Rating must be a number between 1 and 5 (inclusive).",
+                "MinOccurs": 1,
+                "MinInclusive": 1,
+                "MaxInclusive": 5
+            },
+            "price": {
+                "$type": "NumberFieldDefinition",
+                "Name": "price",
+                "Description": "Price with a maximum of 5 total digits and 2 decimal places.",
+                "TotalDigits": 5,
+                "FractionDigits": 2
             }
         }
     });`,
