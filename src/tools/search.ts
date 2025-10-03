@@ -39,7 +39,7 @@ export const search = {
   - LoadInfo`,
     input: {
         searchQuery: SearchQueryValidation.optional().describe("A search query model. If not provided, a default search for all items is performed."),
-        resultLimit: z.number().int().default(100).optional().describe("The maximum number of results to return."),
+        resultLimit: z.number().int().default(100).optional().describe("The maximum number of results to return. If the number of results matches the (default) result limit, consider setting a higher resultLimit and trying again."),
         details: z.enum(["IdAndTitle", "CoreDetails", "AllDetails"]).default("IdAndTitle").optional().describe(`Specifies a predefined level of detail for the returned items. For custom property selection, use 'includeProperties' instead.
 - "IdAndTitle": Returns only the ID and Title of each item. This is the most efficient option, and the best choice if you only need a list of items matching the query.
 - "CoreDetails": Returns the main properties of each item, excluding verbose security, link-related, and content/field-related information.
@@ -52,7 +52,7 @@ Important: Search results are content-less. Properties like 'Content', 'Metadata
 Available top-level properties in search results include, but are not limited to:
 - "LocationInfo": Information about the item's location (e.g., Path, ContextRepository, OrganizationalItem).
 - "VersionInfo": Details about the item's Version, CreationDate, Creator, RevisionDate, Revisor, etc.
-- "LockInfo": The LockType and LockUser (the user who has the item checked out).
+- "LockInfo": The LockType and LockUser (the user who has the item checked out). When purely interested in finding new items or items in various lock states, the 'getLockedItems' tool is more powerful.
 - "BluePrintInfo": Information related to the item's BluePrinting context (e.g., IsShared, IsLocalized, OwningRepository).
 - "MetadataSchema": The Title and Id of the item's metadata schema.
 Example: ["VersionInfo.Creator", "BluePrintInfo.OwningRepository", "LockInfo"]`),

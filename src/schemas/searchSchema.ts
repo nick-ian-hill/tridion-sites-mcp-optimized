@@ -10,7 +10,6 @@ const SchemaFilterValidation = z.object({
   fieldFilter: SchemaFieldFilterValidation.optional().describe("An optional filter for a specific field within the schema.")
 });
 
-
 export const SearchQueryValidation = z.object({
   // --- Core Search Criteria ---
   FullTextQuery: z.string().optional().describe("A full-text query string to search for. Supports query syntax like +, -, &&, ||, *, etc."),
@@ -39,7 +38,32 @@ export const SearchQueryValidation = z.object({
   // --- User and Lock Criteria ---
   Author: z.string().regex(/^tcm:0-\d+-65552$/).optional().describe("The TCM URI of the author (User) to search for."),
   LockUser: z.string().regex(/^tcm:0-\d+-65552$/).optional().describe("The TCM URI of the user that must hold the lock on an item."),
-  LockType: z.array(z.enum(["None", "CheckedOut", "Permanent", "NewItem", "InWorkflow", "Reserved"])).optional().describe("Filters items by their lock state."),
+  LockType: z.array(z.enum(["None", "CheckedOut", "Permanent", "InWorkflow"]))
+    .optional()
+    .describe("Filters items by their lock state. Supported values are: [\"None\"], [\"CheckedOut\"], and [\"CheckedOut\", \"Permanent\", \"InWorkflow\"]")
+    .refine(
+        (val) => {
+            if (!val) return true;
+
+            const arrayEquals = (a: string[], b: string[]) => {
+                if (a.length !== b.length) return false;
+                const sortedA = [...a].sort();
+                const sortedB = [...b].sort();
+                return sortedA.every((v, i) => v === sortedB[i]);
+            };
+
+            const validCombinations = [
+                ["None"],
+                ["CheckedOut"],
+                ["CheckedOut", "Permanent", "InWorkflow"]
+            ];
+
+            return validCombinations.some(combo => arrayEquals(val, combo));
+        },
+        {
+            message: `Invalid LockType combination. The only supported values are ["None"], ["CheckedOut"], or ["CheckedOut", "Permanent", "InWorkflow"].`
+        }
+    ),
 
   // --- Publishing and Blueprinting ---
   IsPublished: z.boolean().optional().describe("Filters items based on their published state. True for published, false for unpublished."),
