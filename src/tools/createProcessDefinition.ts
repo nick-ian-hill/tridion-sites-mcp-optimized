@@ -2,26 +2,7 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { toLink } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
-
-// Schema for a single activity definition provided by the agent.
-const activityDefinitionInputSchema = z.object({
-    title: z.string().nonempty({ message: "Activity title cannot be empty." }),
-    description: z.string().optional(),
-    activityType: z.enum(["Normal", "Decision"]).default("Normal")
-        .describe("The type of the activity. 'Normal' for a standard task, 'Decision' for a point where the workflow can branch."),
-    assigneeId: z.string().regex(/^(tcm:0-\d+-(65552|65568)|tcm:0-0-0)$/).optional()
-        .describe("Optional TCM URI of the User or Group to assign the activity to."),
-    allowOverrideDueDate: z.boolean().optional()
-        .describe("Set to true to allow the due date for this activity to be changed during the workflow process."),
-    script: z.string().optional()
-        .describe("Optional C# script to make this an automatic activity. The script is executed when the activity starts."),
-    scriptType: z.enum(["CSharp"]).default("CSharp")
-        .describe("The scripting language used. Currently, only 'CSharp' is supported."),
-    nextActivities: z.array(z.string()).default([])
-        .describe("An array of titles for the next activities. These titles must match the 'title' of other activities defined in this same request.")
-}).refine(data => data.activityType === 'Decision' || data.nextActivities.length <= 1, {
-    message: "A 'Normal' activity cannot have more than one next activity.",
-});
+import { activityDefinitionSchema } from "../schemas/activityDefinitionSchema.js";
 
 // Main input properties for the tool.
 const createProcessDefinitionInputProperties = {
@@ -29,7 +10,7 @@ const createProcessDefinitionInputProperties = {
     locationId: z.string().regex(/^tcm:0-\d+-1$/, { message: "locationId must be a valid Publication URI (e.g., 'tcm:0-5-1')." })
         .describe("The TCM URI of the Publication that will contain this Process Definition."),
     description: z.string().optional().describe("An optional description for the Process Definition."),
-    activityDefinitions: z.array(activityDefinitionInputSchema).min(1, { message: "At least one activity definition must be provided." })
+    activityDefinitions: z.array(activityDefinitionSchema).min(1, { message: "At least one activity definition must be provided." })
         .describe("An array of activity definition objects to be created and linked within the workflow.")
 };
 

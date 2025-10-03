@@ -9,26 +9,7 @@ import { processSchemaFieldDefinitions, reorderFieldsBySchema } from "../utils/f
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 import { filterResponseData } from "../utils/responseFiltering.js";
 import { handleCheckout, checkInItem, undoCheckoutItem } from "../utils/versioningUtils.js";
-
-const activityDefinitionInputSchema = z.object({
-    title: z.string().nonempty({ message: "Activity title cannot be empty." }),
-    description: z.string().optional(),
-    activityType: z.enum(["Normal", "Decision"]).default("Normal")
-        .describe("The type of the activity. 'Normal' for a standard task, 'Decision' for a point where the workflow can branch."),
-    assigneeId: z.string().regex(/^(tcm:0-\d+-(65552|65568)|tcm:0-0-0)$/).optional()
-        .describe("Optional TCM URI of the User or Group to assign the activity to."),
-    allowOverrideDueDate: z.boolean().optional()
-        .describe("Set to true to allow the due date for this activity to be changed during the workflow process."),
-    script: z.string().optional()
-        .describe("Optional script to make this an automatic activity. For C# scripts, newlines should be represented as '\\n'."),
-    scriptType: z.enum(["CSharp", "TranslationManagerActivity"]).default("CSharp")
-        .describe("The scripting language used. 'CSharp' for custom automation or 'TranslationManagerActivity' for translation-related workflows."),
-    nextActivities: z.array(z.string()).default([])
-        .describe("An array of titles for the next activities. These titles must match the 'title' of other activities defined in this same request.")
-}).refine(data => data.activityType === 'Decision' || data.nextActivities.length <= 1, {
-    message: "A 'Normal' activity cannot have more than one next activity.",
-});
-
+import { activityDefinitionSchema } from "../schemas/activityDefinitionSchema.js";
 
 const updateItemPropertiesInputProperties = {
     itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the CMS item to update."),
@@ -39,7 +20,7 @@ const updateItemPropertiesInputProperties = {
     title: z.string().optional().describe("The new title for the item."),
     metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the Metadata Schema for the item's metadata. Replaces the existing schema."),
     metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields. May be required in the case of mandatory fields when changing the metadata schema. Replaces existing metadata."),
-    activityDefinitions: z.array(activityDefinitionInputSchema).optional().describe("For Process Definition updates only. A complete array of activity definitions that will replace the existing ones."),
+    activityDefinitions: z.array(activityDefinitionSchema).optional().describe("For Process Definition updates only. A complete array of activity definitions that will replace the existing ones."),
     isAbstract: z.boolean().optional().describe("Set to true to make a Keyword abstract. (Applicable to Keyword)"),
     description: z.string().optional().describe("A new description for the item."),
     key: z.string().optional().describe("A new custom key for the Keyword. (Applicable to Keyword)"),
