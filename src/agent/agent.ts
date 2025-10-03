@@ -46,6 +46,7 @@ const READ_ONLY_TOOLS = [
     'getItemHistory',
     'getItemsInContainer',
     'getLockedItems',
+    'getMultimediaTypes',
     'getSchemaLinks',
     'getUsers',
     'getActivities',

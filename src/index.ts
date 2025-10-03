@@ -83,6 +83,7 @@ import { startActivity } from './tools/startActivity.js';
 import { startWorkflow } from './tools/startWorkflow.js';
 import { finishActivity } from './tools/finishActivity.js';
 import { createProcessDefinition } from './tools/createProcessDefinition.js';
+import { getMultimediaTypes } from './tools/getMultimediaTypes.js';
 import { requestNavigation } from './tools/requestNavigation.js';
 import { requestOpenInEditor } from './tools/requestOpenInEditor.js';
 import { getUsers } from './tools/getUsers.js';
@@ -109,6 +110,7 @@ const tools: any[] = [
     getItemHistory,
     getItemsInContainer,
     getLockedItems,
+    getMultimediaTypes,
     getSchemaLinks,
     getUsers,
     readTextFromWordMultimediaComponent,
