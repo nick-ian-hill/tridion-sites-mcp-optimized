@@ -63,7 +63,43 @@ The tool automatically handles different item types and their specific propertie
 For a Category, the container is the Publication.   
 For items other than Publications, the first number in the ID identifies the Publication (e.g., for both tcm:5-127 and tcm:5-2002-2, the Publication is 5).  
 For Publications, the second number identifies the Publication (e.g., tcm:0-5-1 represents Publication 5).  
-Therefore, when creating a Component in the Folder with ID tcm:10-4112-2, the Schema must have an ID in the form tcm:10-###-8.`,
+Therefore, when creating a Component in the Folder with ID tcm:10-4112-2, the Schema must have an ID in the form tcm:10-###-8.
+
+Examples:
+
+Example 1: Create a Component with content and metadata fields.
+    const result = await tools.createItem({
+        itemType: "Component",
+        locationId: "tcm:5-53-2",
+        title: "Community Spotlight",
+        schemaId: "tcm:5-74-8",
+        content: {
+            "headline": "Spotlight on Local Heroes",
+            "link": {
+                "linkText": "Read their stories",
+                "internalLink": "tcm:5-294"
+            }
+        },
+        metadata: {
+            "contentType": "tcm:5-189-1024",
+            "pageSize": 5
+        }
+    });
+
+Example 2: Create a Folder for a campaign.
+    const result = await tools.createItem({
+        itemType: "Folder",
+        locationId: "tcm:5-53-2",
+        title: "Campaigns",
+        metadataSchemaId: "tcm:5-984-8",
+        metadata: {
+            "Regions": [
+                "tcm:5-1200-1024",
+                "tcm:5-1201-1024"
+            ]
+        }
+    });
+`,
     input: createItemInputProperties,
 
     execute: async (args: CreateItemInput,
