@@ -11,6 +11,8 @@ const activityDefinitionInputSchema = z.object({
         .describe("The type of the activity. 'Normal' for a standard task, 'Decision' for a point where the workflow can branch."),
     assigneeId: z.string().regex(/^(tcm:0-\d+-(65552|65568)|tcm:0-0-0)$/).optional()
         .describe("Optional TCM URI of the User or Group to assign the activity to."),
+    allowOverrideDueDate: z.boolean().optional()
+        .describe("Set to true to allow the due date for this activity to be changed during the workflow process."),
     script: z.string().optional()
         .describe("Optional C# script to make this an automatic activity. The script is executed when the activity starts."),
     scriptType: z.enum(["CSharp"]).default("CSharp")
@@ -45,6 +47,7 @@ The 'activityDefinitions' parameter accepts an array of objects. Each object def
 - activityType: Either "Normal" (a single task) or "Decision" (a branch point).
 - nextActivities: An array of titles specifying where the workflow goes next. A "Decision" activity can have multiple next activities.
 - assigneeId: (Optional) The user or group responsible for the task.
+- allowOverrideDueDate: (Optional) A boolean to control if the activity's due date can be changed.
 - script: (Optional) A C# script to make the activity automatic.
 
 IMPORTANT: The tool assumes the backend can resolve temporary references during creation. This is a common pattern for creating complex, interlinked items in a single transaction.
@@ -80,6 +83,7 @@ Example 2: Create a more complex workflow with a decision point.
             "title": "Perform Task",
             "description": "Perform the specified task.",
             "assigneeId": "tcm:0-1-65568",
+            "allowOverrideDueDate": true,
             "nextActivities": ["Assign to Process Creator"]
           },
           {
@@ -162,6 +166,10 @@ Example 2: Create a more complex workflow with a decision point.
                     "ScriptType": ad.scriptType,
                     "NextActivityDefinitions": nextActivityLinks
                 };
+
+                if (ad.allowOverrideDueDate !== undefined) {
+                    activityPayload.AllowOverrideDueDate = ad.allowOverrideDueDate;
+                }
 
                 if (ad.assigneeId) {
                     activityPayload.Assignee = toLink(ad.assigneeId);
