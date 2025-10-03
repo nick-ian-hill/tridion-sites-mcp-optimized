@@ -62,8 +62,8 @@ Example 1: Make the 'articleBody' field optional and change the description of t
         ]
     });
     
-    Example 2: Make the metadata field 'AltText' mandatory.
-        const result = await tools.updateSchemaFieldProperties({
+Example 2: Make the metadata field 'AltText' mandatory.
+    const result = await tools.updateSchemaFieldProperties({
         schemaId: "tcm:5-213-8",
         fieldUpdates: [
             {
@@ -71,6 +71,25 @@ Example 1: Make the 'articleBody' field optional and change the description of t
                 fieldLocation: "Metadata",
                 propertyToUpdate: "MinOccurs",
                 newValue: 1
+            }
+        ]
+    });
+
+Example 3: Update a validation constraint on a field.
+    const result = await tools.updateSchemaFieldProperties({
+        schemaId: "tcm:1-250-8",
+        fieldUpdates: [
+            {
+                fieldName: "productCode",
+                fieldLocation: "Content",
+                propertyToUpdate: "Pattern",
+                newValue: "[A-Z]{3}[0-9]{5}"
+            },
+            {
+                fieldName: "rating",
+                fieldLocation: "Content",
+                propertyToUpdate: "MaxInclusive",
+                newValue: 10
             }
         ]
     });
