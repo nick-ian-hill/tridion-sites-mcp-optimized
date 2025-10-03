@@ -73,7 +73,6 @@ const filterDependencyGraphNode = (node: DependencyGraphNode, filterFn: (item: a
         filteredNode.Item = filterFn(node.Item);
     }
 
-    // With the interface, TypeScript now knows 'dep' is a DependencyGraphNode, fixing the error.
     if (node.Dependencies && Array.isArray(node.Dependencies)) {
         filteredNode.Dependencies = node.Dependencies.map(dep => filterDependencyGraphNode(dep, filterFn));
     }
@@ -148,13 +147,7 @@ export const filterResponseData = ({ responseData, details, includeProperties }:
     }
     
     if (typeof responseData === 'object' && responseData !== null) {
-        const filteredDictionary: { [key: string]: any } = {};
-        for (const key in responseData) {
-            if (Object.prototype.hasOwnProperty.call(responseData, key)) {
-                filteredDictionary[key] = filterFn(responseData[key]);
-            }
-        }
-        return filteredDictionary;
+        return filterFn(responseData);
     }
 
     return responseData;
