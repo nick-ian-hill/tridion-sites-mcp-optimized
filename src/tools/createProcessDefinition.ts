@@ -158,7 +158,7 @@ Example 2: Create a more complex workflow with a decision point.
                     "Title": ad.title,
                     "Description": ad.description,
                     "ActivityType": ad.activityType,
-                    "Script": ad.script,
+                    "Script": ad.script?.replace(/\\n/g, '\n'),
                     "ScriptType": ad.scriptType,
                     "NextActivityDefinitions": nextActivityLinks
                 };
