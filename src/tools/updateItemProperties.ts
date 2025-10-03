@@ -10,15 +10,34 @@ import { convertItemIdToContextPublication } from "../utils/convertItemIdToConte
 import { filterResponseData } from "../utils/responseFiltering.js";
 import { handleCheckout, checkInItem, undoCheckoutItem } from "../utils/versioningUtils.js";
 
+const activityDefinitionInputSchema = z.object({
+    title: z.string().nonempty({ message: "Activity title cannot be empty." }),
+    description: z.string().optional(),
+    activityType: z.enum(["Normal", "Decision"]).default("Normal")
+        .describe("The type of the activity. 'Normal' for a standard task, 'Decision' for a point where the workflow can branch."),
+    assigneeId: z.string().regex(/^(tcm:0-\d+-(65552|65568)|tcm:0-0-0)$/).optional()
+        .describe("Optional TCM URI of the User or Group to assign the activity to."),
+    script: z.string().optional()
+        .describe("Optional script to make this an automatic activity. For C# scripts, newlines should be represented as '\\n'."),
+    scriptType: z.enum(["CSharp", "TranslationManagerActivity"]).default("CSharp")
+        .describe("The scripting language used. 'CSharp' for custom automation or 'TranslationManagerActivity' for translation-related workflows."),
+    nextActivities: z.array(z.string()).default([])
+        .describe("An array of titles for the next activities. These titles must match the 'title' of other activities defined in this same request.")
+}).refine(data => data.activityType === 'Decision' || data.nextActivities.length <= 1, {
+    message: "A 'Normal' activity cannot have more than one next activity.",
+});
+
+
 const updateItemPropertiesInputProperties = {
     itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the CMS item to update."),
     itemType: z.enum([
         "Component", "Folder", "StructureGroup", "Keyword",
-        "Category", "Schema", "Bundle", "SearchFolder", "PageTemplate", "ComponentTemplate"
+        "Category", "Schema", "Bundle", "SearchFolder", "PageTemplate", "ComponentTemplate", "ProcessDefinition"
     ]).describe("The type of the CMS item to update."),
     title: z.string().optional().describe("The new title for the item."),
     metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the Metadata Schema for the item's metadata. Replaces the existing schema."),
     metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields. May be required in the case of mandatory fields when changing the metadata schema. Replaces existing metadata."),
+    activityDefinitions: z.array(activityDefinitionInputSchema).optional().describe("For Process Definition updates only. A complete array of activity definitions that will replace the existing ones."),
     isAbstract: z.boolean().optional().describe("Set to true to make a Keyword abstract. (Applicable to Keyword)"),
     description: z.string().optional().describe("A new description for the item."),
     key: z.string().optional().describe("A new custom key for the Keyword. (Applicable to Keyword)"),
@@ -55,11 +74,12 @@ To update only the metadata values of any item, use the 'updateMetadata' tool.
 Example use cases by item type:
 - All types: update 'title', 'description', and 'metadataSchemaId'. The 'metadata' can also be provided at the same time.
 - Schema: update the content and metadata field definitions using the 'fields' and 'metadataFields' properties.
+- ProcessDefinition: update the flow and properties of the workflow by providing a new 'activityDefinitions' array.
 - Keyword: update 'isAbstract', 'key', 'parentKeywords', and 'relatedKeywords'.
 - Bundle: update the list of 'itemsInBundle'.
 - PageTemplate/ComponentTemplate: update the associated 'templateBuildingBlocks' and other template-specific properties.
 
-When updating collection properties like 'fields', 'metadataFields', 'itemsInBundle', or 'relatedSchemaIds', the entire existing collection is replaced by the new value provided.
+When updating collection properties like 'fields', 'metadataFields', 'itemsInBundle', 'relatedSchemaIds', or 'activityDefinitions', the entire existing collection is replaced by the new value provided.
 
 IMPORTANT: 
 - Shared items ('BluePrintInfo.IsShared' is true) cannot be updated. To modify inherited properties, such as a Schema's fields, you must update the parent item in the BluePrint chain ('PrimaryBluePrintParentItem').
@@ -113,6 +133,46 @@ Example 2: Change the Metadata Schema of a Folder and provide the metadata for t
             "folderType": "Campaign",
             "campaignYear": 2025
         }
+    });
+
+Example 3: Update a Process Definition to change an activity's description.
+This example updates the 'Task Process' workflow. Note that the entire 'activityDefinitions' array must be provided, including all unchanged activities.
+
+    const result = await tools.updateItemProperties({
+        itemId: "tcm:5-1-131074",
+        itemType: "ProcessDefinition",
+        activityDefinitions: [
+          {
+            "title": "Perform Task",
+            "description": "User performs the assigned task.",
+            "assigneeId": "tcm:0-1-65568",
+            "nextActivities": ["Assign to Process Creator"]
+          },
+          {
+            "title": "Assign to Process Creator",
+            "description": "Task finished. Automatically routing to the process creator for review.",
+            "script": "ActivityFinishData finishData = new ActivityFinishData()\\n{\\n    Message = ProcessInstance.Activities.Last().FinishMessage,\\n    NextAssignee = new LinkToTrusteeData\\n    {\\n        IdRef = ProcessInstance.Creator.IdRef\\n    }\\n};\\nSessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);",
+            "nextActivities": ["Review Task"]
+          },
+          {
+            "title": "Review Task",
+            "activityType": "Decision",
+            "description": "Review and approve the task. Finish process or send it back.",
+            "nextActivities": ["Decline", "Accept"]
+          },
+          {
+            "title": "Decline",
+            "description": "The task was reviewed and will be sent back to the performer.",
+            "script": "string performedTaskActivityDefinitionId = ProcessInstance.Activities.Cast<ActivityInstanceData>().First().ActivityDefinition.IdRef;\\nActivityFinishData finishData = new ActivityFinishData()\\n{\\n    Message = ProcessInstance.Activities.Last().FinishMessage,\\n    NextAssignee = new LinkToTrusteeData\\n    {\\n        IdRef = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last(activity => activity.ActivityDefinition.IdRef == performedTaskActivityDefinitionId).Owner.IdRef\\n    }\\n};\\nSessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);",
+            "nextActivities": ["Perform Task"]
+          },
+          {
+            "title": "Accept",
+            "description": "The task process is complete.",
+            "script": "ActivityFinishData finishData = new ActivityFinishData()\\n{\\n    Message = \\"Automatic Activity 'Accept' Finished\\"\\n};\\nSessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);",
+            "nextActivities": []
+          }
+        ]
     });
 `,
     input: updateItemPropertiesInputProperties,
@@ -231,6 +291,41 @@ Example 2: Change the Metadata Schema of a Folder and provide the metadata for t
                     const processedMetadataFields = await processSchemaFieldDefinitions(updates.metadataFields, schemaLocationId, authenticatedAxios);
                     itemToUpdate.MetadataFields = { "$type": "FieldsDefinitionDictionary", ...processedMetadataFields };
                 }
+            }
+            if (itemType === 'ProcessDefinition' && updates.activityDefinitions) {
+                const activityTitles = new Set(updates.activityDefinitions.map(a => a.title));
+                for (const ad of updates.activityDefinitions) {
+                    for (const nextTitle of ad.nextActivities) {
+                        if (!activityTitles.has(nextTitle)) {
+                            throw new Error(`Validation Error: Next activity '${nextTitle}' is defined as a transition target but does not exist as an activity title in your provided list.`);
+                        }
+                    }
+                }
+        
+                itemToUpdate.ActivityDefinitions = updates.activityDefinitions.map((ad: any) => {
+                    const nextActivityLinks = ad.nextActivities.map((nextTitle: string) => ({
+                        "$type": "Link",
+                        "IdRef": "tcm:0-0-0",
+                        "Title": nextTitle
+                    }));
+        
+                    const activityPayload: any = {
+                        "$type": "TridionActivityDefinition",
+                        "Id": "tcm:0-0-0",
+                        "Title": ad.title,
+                        "Description": ad.description,
+                        "ActivityType": ad.activityType,
+                        "Script": ad.script?.replace(/\\n/g, '\n'),
+                        "ScriptType": ad.scriptType,
+                        "NextActivityDefinitions": nextActivityLinks
+                    };
+        
+                    if (ad.assigneeId) {
+                        activityPayload.Assignee = toLink(ad.assigneeId);
+                    }
+        
+                    return activityPayload;
+                });
             }
             if (itemType === 'PageTemplate' || itemType === 'ComponentTemplate') {
                 if (updates.templateBuildingBlocks) {
