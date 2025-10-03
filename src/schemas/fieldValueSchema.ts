@@ -45,7 +45,10 @@ const singleLineTextFieldSchema = z.object({
     IsIndexable: z.boolean().optional().describe("Whether the field value is included when performing a search."),
     IsLocalizable: z.boolean().optional().describe("Whether the field value can be changed in localized items."),
     IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing."),
-    List: listDefinitionSchema.optional()
+    List: listDefinitionSchema.optional(),
+    Pattern: z.string().optional().describe("A regular expression pattern that the field value must match."),
+    MinLength: z.number().int().optional().describe("The minimum number of characters allowed in the field."),
+    MaxLength: z.number().int().optional().describe("The maximum number of characters allowed in the field.")
 });
 
 const multiLineTextFieldSchema = z.object({
@@ -96,7 +99,13 @@ const numberFieldSchema = z.object({
     IsIndexable: z.boolean().optional().describe("Whether the field value is included when performing a search."),
     IsLocalizable: z.boolean().optional().describe("Whether the field value can be changed in localized items."),
     IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing."),
-    List: listDefinitionSchema.optional()
+    List: listDefinitionSchema.optional(),
+    MinExclusive: z.number().optional().describe("The exclusive minimum value allowed."),
+    MaxExclusive: z.number().optional().describe("The exclusive maximum value allowed."),
+    MinInclusive: z.number().optional().describe("The inclusive minimum value allowed."),
+    MaxInclusive: z.number().optional().describe("The inclusive maximum value allowed."),
+    TotalDigits: z.number().int().optional().describe("The maximum number of digits allowed."),
+    FractionDigits: z.number().int().optional().describe("The maximum number of digits allowed in the fractional part.")
 });
 
 const dateFieldSchema = z.object({
@@ -108,7 +117,11 @@ const dateFieldSchema = z.object({
     IsIndexable: z.boolean().optional().describe("Whether the field value is included when performing a search."),
     IsLocalizable: z.boolean().optional().describe("Whether the field value can be changed in localized items."),
     IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing."),
-    List: listDefinitionSchema.optional()
+    List: listDefinitionSchema.optional(),
+    MinExclusive: z.string().datetime().optional().describe("The exclusive minimum date/time value allowed (ISO 8601 format)."),
+    MaxExclusive: z.string().datetime().optional().describe("The exclusive maximum date/time value allowed (ISO 8601 format)."),
+    MinInclusive: z.string().datetime().optional().describe("The inclusive minimum date/time value allowed (ISO 8601 format)."),
+    MaxInclusive: z.string().datetime().optional().describe("The inclusive maximum date/time value allowed (ISO 8601 format).")
 });
 
 const externalLinkFieldSchema = z.object({
