@@ -4,36 +4,61 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 import { getLanguageId, getAvailableLanguages } from "../utils/languageUtils.js";
 
 const favoriteLinkSchema = z.object({
-    IdRef: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:.+)$/).describe("The unique ID of the favorite item."),
+    IdRef: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the favorite item."),
 }).describe("A favorite item link. Only the IdRef is needed.");
 
 const availableLanguages = getAvailableLanguages() as [string, ...string[]];
 
 const updateUserProfileInput = z.object({
     userId: z.string().regex(/^tcm:0-\d+-65552$/).describe("The TCM URI of the user whose profile is to be updated (e.g., 'tcm:0-20-65552')."),
-    favorites: z.array(favoriteLinkSchema).optional().describe("A complete array of favorite items. This will replace the user's entire existing list of favorites."),
+    favorites: z.array(favoriteLinkSchema).optional().describe("A complete array of favorite items to REPLACE the user's entire existing list."),
+    addFavorites: z.array(favoriteLinkSchema).optional().describe("An array of favorite items to ADD to the user's existing list. Duplicates will be ignored."),
+    removeFavorites: z.array(favoriteLinkSchema).optional().describe("An array of favorite items to REMOVE from the user's existing list."),
     languageName: z.enum(availableLanguages).optional().describe("The new language for the user."),
     localeId: z.number().int().optional().describe("The new locale ID for the user (e.g., 13321 for English/United States with AM/PM)."),
     description: z.string().optional().describe("The new description for the user."),
     userProfileJson: z.string().optional().describe("ADVANCED: A JSON string representing the entire UserProfile object. If provided, this will completely replace the user's profile. This option overrides all other specific parameters.")
 }).refine(data =>
     data.favorites !== undefined ||
+    data.addFavorites !== undefined ||
+    data.removeFavorites !== undefined ||
     data.languageName !== undefined ||
     data.localeId !== undefined ||
     data.description !== undefined ||
     data.userProfileJson !== undefined, {
-    message: "At least one update property (e.g., favorites, description) or the full 'userProfileJson' must be provided."
+    message: "At least one update property must be provided."
 }).refine(data =>
-    !(data.userProfileJson && (data.favorites !== undefined || data.languageName !== undefined || data.localeId !== undefined || data.description !== undefined)), {
-    message: "When 'userProfileJson' is provided, other specific update parameters like 'favorites' or 'description' are not allowed."
+    !(data.userProfileJson && (data.favorites !== undefined || data.addFavorites !== undefined || data.removeFavorites !== undefined || data.languageName !== undefined || data.localeId !== undefined || data.description !== undefined)), {
+    message: "When 'userProfileJson' is provided, other specific update parameters are not allowed."
+}).refine(data =>
+    !(data.favorites && (data.addFavorites !== undefined || data.removeFavorites !== undefined)), {
+    message: "The 'favorites' parameter (for full replacement) cannot be used at the same time as 'addFavorites' or 'removeFavorites'."
 });
 
 type UpdateUserProfileInput = z.infer<typeof updateUserProfileInput>;
 
 export const updateUserProfile = {
     name: "updateUserProfile",
-    description: `Updates a user's profile preferences, such as their favorites list, language, and locale.
-IMPORTANT: When updating favorites, this operation replaces the entire existing list with the new one you provide. To add or remove a single favorite, you should first use the 'getUserProfile' tool to get the current list, modify it, and then provide the complete, updated list to this tool.`,
+    description: `Updates a user's profile by either modifying specific properties or replacing the entire profile with a JSON object.
+
+There are three ways to manage favorites:
+1.  **Add/Remove (Recommended)**: Use the 'addFavorites' and 'removeFavorites' parameters to easily modify the existing list.
+2.  **Full Replacement**: Provide a complete list to the 'favorites' parameter. This will overwrite all existing favorites.
+3.  **Advanced JSON**: Provide a complete UserProfile JSON string to the 'userProfileJson' parameter to replace the entire profile.
+
+Example: Add a new favorite and remove an existing one for user 'tcm:0-20-65552'.
+The tool will fetch the user's current favorites, remove the item with ID 'tcm:4-5-8', add the item with ID 'tcm:5-484-2', and then save the updated list.
+
+    const result = await tools.updateUserProfile({
+        userId: "tcm:0-20-65552",
+        addFavorites: [
+            { "IdRef": "tcm:5-484-2" }
+        ],
+        removeFavorites: [
+            { "IdRef": "tcm:4-5-8" }
+        ]
+    });
+`,
     input: updateUserProfileInput,
     execute: async (params: UpdateUserProfileInput, context: any) => {
         const req = context?.request;
@@ -41,7 +66,7 @@ IMPORTANT: When updating favorites, this operation replaces the entire existing 
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
         const userSessionId = match ? match[1] : null;
 
-        const { userId, favorites, languageName, localeId, description, userProfileJson } = params;
+        const { userId, favorites, addFavorites, removeFavorites, languageName, localeId, description, userProfileJson } = params;
         const restUserId = userId.replace(':', '_');
 
         try {
@@ -66,17 +91,32 @@ IMPORTANT: When updating favorites, this operation replaces the entire existing 
                     const newFavorites = favorites.map(fav => ({ "$type": "FavoriteLink", "IdRef": fav.IdRef }));
                     if (!userProfilePayload.Preferences) userProfilePayload.Preferences = { "$type": "UserPreferences" };
                     userProfilePayload.Preferences.Favorites = newFavorites;
+                } else if (addFavorites !== undefined || removeFavorites !== undefined) {
+                    if (!userProfilePayload.Preferences) userProfilePayload.Preferences = { "$type": "UserPreferences" };
+                    let currentFavorites = userProfilePayload.Preferences.Favorites || [];
+                    
+                    if (removeFavorites) {
+                        const removeIds = new Set(removeFavorites.map(fav => fav.IdRef));
+                        currentFavorites = currentFavorites.filter((fav: any) => !removeIds.has(fav.IdRef));
+                    }
+
+                    if (addFavorites) {
+                        const currentIds = new Set(currentFavorites.map((fav: any) => fav.IdRef));
+                        const newFavoritesToAdd = addFavorites
+                            .filter(fav => !currentIds.has(fav.IdRef))
+                            .map(fav => ({ "$type": "FavoriteLink", "IdRef": fav.IdRef }));
+                        currentFavorites.push(...newFavoritesToAdd);
+                    }
+                    userProfilePayload.Preferences.Favorites = currentFavorites;
                 }
 
                 if (languageName !== undefined && userProfilePayload.User) {
                     const languageId = getLanguageId(languageName);
                     if (languageId !== undefined) userProfilePayload.User.LanguageId = languageId;
                 }
-
                 if (localeId !== undefined && userProfilePayload.User) {
                     userProfilePayload.User.LocaleId = localeId;
                 }
-
                 if (description !== undefined && userProfilePayload.User) {
                     userProfilePayload.User.Description = description;
                 }
