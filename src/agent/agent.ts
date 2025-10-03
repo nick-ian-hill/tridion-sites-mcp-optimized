@@ -49,6 +49,7 @@ const READ_ONLY_TOOLS = [
     'getMultimediaTypes',
     'getSchemaLinks',
     'getUsers',
+    'getUserProfile',
     'getActivities',
     'getProcessDefinitions',
     'readWordFileFromMultimediaComponent',

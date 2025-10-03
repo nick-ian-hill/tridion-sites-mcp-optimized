@@ -82,6 +82,8 @@ import { getProcessDefinitions } from './tools/getProcessDefinitions.js';
 import { startActivity } from './tools/startActivity.js';
 import { startWorkflow } from './tools/startWorkflow.js';
 import { finishActivity } from './tools/finishActivity.js';
+import { getUserProfile } from './tools/getUserProfile.js';
+import { updateUserProfile } from './tools/updateUserProfile.js';
 import { createProcessDefinition } from './tools/createProcessDefinition.js';
 import { getMultimediaTypes } from './tools/getMultimediaTypes.js';
 import { requestNavigation } from './tools/requestNavigation.js';
@@ -113,6 +115,7 @@ const tools: any[] = [
     getMultimediaTypes,
     getSchemaLinks,
     getUsers,
+    getUserProfile,
     readTextFromWordMultimediaComponent,
     readExcelFileFromMultimediaComponent,
     readTextFromPowerPointMultimediaComponent,
@@ -140,6 +143,7 @@ const tools: any[] = [
     updatePage,
     updatePublication,
     updateSchemaFieldProperties,
+    updateUserProfile,
     // Item Actions (Move, Copy, Delete)
     moveItem,
     copyItem,
