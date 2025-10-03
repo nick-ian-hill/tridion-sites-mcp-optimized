@@ -10,14 +10,14 @@ export const createPublication = {
 Introduction to Publications and BluePrints
 - Publications are the main organizational units in the Content Manager. They act as containers for all other content and design items like Components, Pages, Schemas, Categories, Keywords, and Templates.
 - BluePrinting is a hierarchical structure of related Publications that enables you to organize, reuse, and manage content and structure across multiple Publications within a single CMS instance.
-- The system can contain multiple BluePrint hierarchies, but a Publication can only belong to at most one hierarchy. It is not possible to remove a Publication from a hierarchy, but it can be deleted if none of its items are published or localized.
+- The system can contain multiple BluePrint hierarchies, but a Publication can only belong to at most one hierarchy, and all Publications in a hierarchy must share a common root Structure Group. It is not possible to remove a Publication from a hierarchy, but it can be deleted if none of its items are published or localized.
 
 Core Concepts and Terminology
 - Root Publication: The top-level parent in a BluePrint hierarchy. Since it has no parent, it contains only items created within that Publication (local items). To create a root Publication, do not specify any parent Publications. To be referenced as a parent, a Publication must have a root Structure Group. IMPORTANT It is only neccessary to create a root structure group for the root Publication, as it will be inherited by child Publications.
 - BluePrint Hierarchy: A system of two or more Publications where every Publication is a direct child or descendent of a common root Publication.
 - Inheritance: Items created in a parent Publication are shared down the BluePrint hierarchy to all child Publications.
 - Parent Publication: A Publication that is refenced as a parent by one or more Publications. All items in a parent Publication are inherited by its children and their descendents. When you make changes to a Primary item in a parent Publication, those changes are automatically applied to shared items in child Publications.
-- Child Publication: Inherits items from one or more parent Publications. It can also contain its own local content, which can be combined with shared content.
+- Child Publication: Inherits items from one or more parent Publications. The parent Publications must belong to the same BluePrint hierarchy, i.e., share a common root Structure Group. It can also contain its own local content, which can be combined with shared content.
 - Primary Item: An item that is not shared or localized from an item in an ancestor Publication. Changes to a Primary item are inherited by shared instances of the item in descended Publications.
 - Owning Item: A primary item or an item that has been localized. Changes to an owning item will impact shared copies of that item in descendent Publications.
 - Shared Item: A read-only item that is inherited from its owning item.
