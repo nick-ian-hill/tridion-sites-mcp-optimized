@@ -17,6 +17,8 @@ const activityDefinitionInputSchema = z.object({
         .describe("The type of the activity. 'Normal' for a standard task, 'Decision' for a point where the workflow can branch."),
     assigneeId: z.string().regex(/^(tcm:0-\d+-(65552|65568)|tcm:0-0-0)$/).optional()
         .describe("Optional TCM URI of the User or Group to assign the activity to."),
+    allowOverrideDueDate: z.boolean().optional()
+        .describe("Set to true to allow the due date for this activity to be changed during the workflow process."),
     script: z.string().optional()
         .describe("Optional script to make this an automatic activity. For C# scripts, newlines should be represented as '\\n'."),
     scriptType: z.enum(["CSharp", "TranslationManagerActivity"]).default("CSharp")
@@ -135,7 +137,7 @@ Example 2: Change the Metadata Schema of a Folder and provide the metadata for t
         }
     });
 
-Example 3: Update a Process Definition to change an activity's description.
+Example 3: Update a Process Definition to change an activity's description and allow its due date to be overridden.
 This example updates the 'Task Process' workflow. Note that the entire 'activityDefinitions' array must be provided, including all unchanged activities.
 
     const result = await tools.updateItemProperties({
@@ -146,6 +148,7 @@ This example updates the 'Task Process' workflow. Note that the entire 'activity
             "title": "Perform Task",
             "description": "User performs the assigned task.",
             "assigneeId": "tcm:0-1-65568",
+            "allowOverrideDueDate": true,
             "nextActivities": ["Assign to Process Creator"]
           },
           {
@@ -319,6 +322,10 @@ This example updates the 'Task Process' workflow. Note that the entire 'activity
                         "ScriptType": ad.scriptType,
                         "NextActivityDefinitions": nextActivityLinks
                     };
+
+                    if (ad.allowOverrideDueDate !== undefined) {
+                        activityPayload.AllowOverrideDueDate = ad.allowOverrideDueDate;
+                    }
         
                     if (ad.assigneeId) {
                         activityPayload.Assignee = toLink(ad.assigneeId);
