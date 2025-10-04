@@ -1,10 +1,11 @@
 const languageMap = new Map<string, number>([
     ['German', 1031],
-    ['English (United States)', 1033],
-    ['Spanish (International Sort)', 3082],
+    ['English', 1033],
+    ['Spanish', 3082],
     ['French', 1036],
+    ['Dutch', 1043],
     ['Japanese', 1041],
-    ['Chinese (Simplified)', 2052]
+    ['Chinese', 2052]
 ]);
 
 const idToNameMap = new Map<number, string>();
