@@ -10,7 +10,7 @@ IMPORTANT: Use 'IdAndTitle' or 'includeProperties' for efficiency, especially wi
     input: {
         containerId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The TCM URI or ECL URI of the container item."),
         recursive: z.boolean().optional().default(false).describe("Set to `true` to include items from all nested sub-containers. Use this for broad searches (e.g., 'find all images in the current Publication'), not for simply listing the contents of a single folder (e.g., 'what's in the 2025 folder?')."),
-        useDynamicVersion: z.boolean().optional().default(false).describe("If true, loads the latest saved version for any versioned items returned."),
+        useDynamicVersion: z.boolean().optional().default(true).describe("The default setting of `true` ensures that the latest data is returned for versioned items and that the response includes new items."),
         itemTypes: z.array(z.string()).optional().describe("An array of item types to filter the results, e.g., ['Component', 'Page', 'Folder']. If omitted, all item types are returned."),
         details: z.enum(["IdAndTitle", "CoreDetails", "AllDetails"]).default("IdAndTitle").optional().describe(`Specifies a predefined level of detail. For custom property selection, use 'includeProperties' instead.
 - "IdAndTitle": Returns the ID, Title, and $type of each item. This is the recommended default.
@@ -18,7 +18,7 @@ IMPORTANT: Use 'IdAndTitle' or 'includeProperties' for efficiency, especially wi
 - "AllDetails": Returns all available properties for each item. This is likely to fail if the container holds many items.`),
         includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response. If used, the 'details' parameter is ignored. 'Id', 'Title', and '$type' will always be included.`),
     },
-    execute: async ({ containerId, recursive = false, useDynamicVersion = false, itemTypes, details = "IdAndTitle", includeProperties }: { 
+    execute: async ({ containerId, recursive = false, useDynamicVersion = true, itemTypes, details = "IdAndTitle", includeProperties }: { 
         containerId: string, 
         recursive?: boolean, 
         useDynamicVersion?: boolean, 
