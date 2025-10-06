@@ -186,7 +186,7 @@ const httpServer = http.createServer((req, res) => {
 
     // Agent Endpoint for UI (Streaming)
     if (req.url?.startsWith('/agent/chat-stream') && req.method === 'POST') {
-                if (req.headers['x-api-key'] !== MCP_API_KEY) {
+        if (req.headers['x-api-key'] !== MCP_API_KEY) {
             res.writeHead(401, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Unauthorized: Missing or invalid API Key' }));
             return;
@@ -197,7 +197,7 @@ const httpServer = http.createServer((req, res) => {
 
     // Agent Endpoint for CLI/IDE (Synchronous)
     if (req.url === '/agent/chat' && req.method === 'POST') {
-                if (req.headers['x-api-key'] !== MCP_API_KEY) {
+        if (req.headers['x-api-key'] !== MCP_API_KEY) {
             res.writeHead(401, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Unauthorized: Missing or invalid API Key' }));
             return;
