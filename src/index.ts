@@ -1,18 +1,7 @@
 import http from 'node:http';
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-
-// --- Global Error Handlers ---
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('----- UNHANDLED REJECTION -----');
-    console.error('Reason:', reason);
-    process.exit(1);
-});
-process.on('uncaughtException', (err, origin) => {
-    console.error('----- UNCAUGHT EXCEPTION -----');
-    console.error('Error:', err);
-    process.exit(1);
-});
+import { handleAgentChat } from './agent/agent.js';
 
 // --- Tool Imports ---
 import { batchLocalizeItems } from "./tools/batchLocalizeItems.js";
@@ -89,9 +78,7 @@ import { getMultimediaTypes } from './tools/getMultimediaTypes.js';
 import { requestNavigation } from './tools/requestNavigation.js';
 import { requestOpenInEditor } from './tools/requestOpenInEditor.js';
 import { getUsers } from './tools/getUsers.js';
-import { handleAgentChat } from './agent/agent.js';
 
-// --- Main Tools Array ---
 const tools: any[] = [
     // UI Navigation
     requestNavigation,
@@ -180,51 +167,55 @@ const tools: any[] = [
     createProcessDefinition,
 ];
 
-// --- Setup for MCP Server (for VS Code Client) ---
 const mcpServer = new McpServer({ name: "tridion-sites-mcp-server", version: "1.0.0" });
 const mcpTransport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-
-tools.forEach(tool => {
-    mcpServer.tool(tool.name, tool.description, tool.input, tool.execute as any);
-});
+tools.forEach(tool => mcpServer.tool(tool.name, tool.description, tool.input, tool.execute as any));
 mcpServer.connect(mcpTransport);
-
-// --- Unified HTTP Server ---
 const MCP_API_KEY = process.env.MCP_API_KEY || "demo-secret-key";
 
 const httpServer = http.createServer((req, res) => {
-    // --- CORS and OPTIONS Pre-flight handler ---
     res.setHeader('Access-Control-Allow-Origin', 'http://localhost:8080');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     if (req.method === 'OPTIONS') {
-        res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-API-Key, Authorization');
+        res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Api-Key');
         res.writeHead(204);
         res.end();
         return;
     }
+console.log('Header API Key', req.headers['x-api-key']);
+console.log('Server API key', (MCP_API_KEY));
 
-    // --- ROUTING LOGIC ---
-    // A) Route for the UI's Gemini Agent
-    if (req.url === '/agent/chat' && req.method === 'POST') {
-        if (req.headers['x-api-key'] !== MCP_API_KEY) {
+
+    // Agent Endpoint for UI (Streaming)
+    if (req.url?.startsWith('/agent/chat-stream') && req.method === 'POST') {
+                if (req.headers['x-api-key'] !== MCP_API_KEY) {
             res.writeHead(401, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Unauthorized: Missing or invalid API Key' }));
             return;
         }
-        // Delegate all agent logic to the new handler
-        handleAgentChat(req, res, tools);
-        return; // End execution here for this route
+        handleAgentChat(req, res, tools, true);
+        return;
     }
 
-    // B) Fallback Route for the VS Code MCP Client (no API key check)
+    // Agent Endpoint for CLI/IDE (Synchronous)
+    if (req.url === '/agent/chat' && req.method === 'POST') {
+                if (req.headers['x-api-key'] !== MCP_API_KEY) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Unauthorized: Missing or invalid API Key' }));
+            return;
+        }
+        handleAgentChat(req, res, tools, false);
+        return;
+    }
+
+    // Fallback for VS Code MCP Client (Direct Tool Execution)
     if (req.method === 'POST') {
         let body = '';
         req.on('data', chunk => { body += chunk.toString(); });
         req.on('end', () => {
             try {
-                const parsedBody = JSON.parse(body);
-                mcpTransport.handleRequest(req, res, parsedBody);
+                mcpTransport.handleRequest(req, res, JSON.parse(body));
             } catch (e) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: 'Invalid JSON' }));
