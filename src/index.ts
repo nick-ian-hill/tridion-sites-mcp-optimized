@@ -183,9 +183,6 @@ const httpServer = http.createServer((req, res) => {
         res.end();
         return;
     }
-console.log('Header API Key', req.headers['x-api-key']);
-console.log('Server API key', (MCP_API_KEY));
-
 
     // Agent Endpoint for UI (Streaming)
     if (req.url?.startsWith('/agent/chat-stream') && req.method === 'POST') {
