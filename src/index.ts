@@ -78,6 +78,7 @@ import { getMultimediaTypes } from './tools/getMultimediaTypes.js';
 import { requestNavigation } from './tools/requestNavigation.js';
 import { requestOpenInEditor } from './tools/requestOpenInEditor.js';
 import { getUsers } from './tools/getUsers.js';
+import { countItems } from './tools/countItems.js';
 
 const tools: any[] = [
     // UI Navigation
@@ -85,6 +86,7 @@ const tools: any[] = [
     requestOpenInEditor,
     // General & System
     echo,
+    countItems,
     getCurrentTime,
     generateContentFromPrompt,
     search,
