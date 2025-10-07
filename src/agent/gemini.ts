@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI, FunctionDeclarationSchema } from "@google/generative-ai";
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
-import { PlanStep } from './types.js';
+import { PlanStep, Content } from './types.js';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 if (!GEMINI_API_KEY) {
@@ -46,15 +46,20 @@ const formatToolsForGemini = (tools: any[]): any[] => {
  */
 export const selectRelevantTools = async (prompt: string, allTools: any[]): Promise<any[]> => {
     const toolSelectorModel = genAI.getGenerativeModel({
-        model: "gemini-2.5-flash",
+        model: "gemini-2.5-pro",
         generationConfig: { temperature: 0.0 }
     });
     const toolSignatures = allTools.map(t => ({ name: t.name, description: t.description }));
     const selectionPrompt = `
-        You are an intelligent tool selection agent. Based on the user's request, identify the specific tools required.
+        You are an intelligent tool selection agent. Based on the user's request, identify the set of tools
+        needed to competently perform the specified task(s). Keep in mind that for tasks like creating an item,
+        it might be necessary to identify suitable dependencies such as schemas, keywords, components, and
+        multimedia components. In other words, do not be overly aggressive in limiting the tool selection to the
+        absolute minimum, but do exclude those tools that you are certain will not be needed.
         Request: "${prompt}"
         Available tools: ${JSON.stringify(toolSignatures, null, 2)}
-        Respond ONLY with a JSON array of the names of the most relevant tools. e.g., ["search", "getItem"].
+        Respond ONLY with a JSON array of the names of all the tools you think might be relevant for the task, e.g.,
+        ["search", "getItemsInContainer", "getItem", "createItem", "createMultimediaComponentFromPrompt"].
         If the request is a general question, return an empty array.
     `;
 
@@ -65,7 +70,7 @@ export const selectRelevantTools = async (prompt: string, allTools: any[]): Prom
         if (!Array.isArray(relevantToolNames)) return allTools;
 
         const relevantTools = allTools.filter(t => relevantToolNames.includes(t.name));
-        console.log(`[ToolSelector] Selected ${relevantTools.length} tools.`);
+        console.log(`[ToolSelector] Selected ${relevantTools.length} tools: [${relevantTools.map(t => t.name).join(', ')}]`);
         return relevantTools.length > 0 ? relevantTools : allTools;
     } catch (error) {
         console.error("[ToolSelector] Error selecting tools, falling back to all tools:", error);
@@ -74,54 +79,81 @@ export const selectRelevantTools = async (prompt: string, allTools: any[]): Prom
 };
 
 /**
- * Orchestrator/Planner Agent
+ * Determines the single next step for the agent to take. (ReAct model)
  */
-export const generatePlan = async (prompt: string, contextItemId: string | undefined, history: any[], relevantTools: any[]): Promise<PlanStep[]> => {
-    const plannerModel = genAI.getGenerativeModel({
+export const determineNextStep = async (
+    prompt: string,
+    contextItemId: string | undefined,
+    history: Content[],
+    relevantTools: any[]
+): Promise<PlanStep | null> => {
+    // We add a virtual 'finish' tool for the model to call when the task is complete.
+    const finishTool = {
+        name: "finish",
+        description: "Call this tool to signal that you have fully completed the user's request and all tasks are done.",
+        parameters: {
+            type: 'object',
+            properties: {
+                finalMessage: {
+                    type: 'string',
+                    description: "A concluding message for the user summarizing the outcome."
+                }
+            },
+            required: ['finalMessage']
+        }
+    };
+
+    const toolsForNextStep = [...formatToolsForGemini(relevantTools), finishTool];
+
+    const model = genAI.getGenerativeModel({
         model: "gemini-2.5-pro",
-        generationConfig: { responseMimeType: "application/json", temperature: 0.0 },
-        systemInstruction: `You are an expert orchestrator for a CMS. Your role is to create a deterministic, step-by-step plan.
-        - Decompose the user's request into a sequence of tool calls.
-        - The arguments for each tool call must be in a property named 'args'.
-        - Use the output of a previous step as input for a subsequent step using the 'outputVariable'. e.g., {'locationId': '\${folder.Id}'}. The value inside \${} is a path to a property in the JSON result of the step with that outputVariable.
-        - Always use 'search' or 'getItem' to get context (like folder IDs) before creating or modifying items.
-        - Your final output MUST be a JSON object with a single key "plan", which is an array of plan steps.`
+        tools: [{ functionDeclarations: toolsForNextStep }],
+        generationConfig: { temperature: 0.0 }
     });
 
-    const formattedTools = formatToolsForGemini(relevantTools);
     const fullPrompt = `
+        You are an expert orchestrator for a CMS. Your goal is to fulfill the user's request by calling tools one at a time.
+        Review the conversation history and the user's latest request, then decide on the single next action to take.
+
+        **Error Handling Rules:**
+        - If the last tool execution resulted in an error, analyze the error message.
+        - Decide if you can fix the problem by calling the same tool with different arguments, by calling a different tool, or if the error is unrecoverable.
+        - If you cannot recover from the error, call the 'finish' tool with a message explaining the failure.
+
+        **General Rules:**
+        - If you have enough information to complete the request, call the 'finish' tool.
+        - Otherwise, call the tool that will get you closer to fulfilling the request.
+
         User Request: "${prompt}"
         ${contextItemId ? `Context Item ID: "${contextItemId}"` : ''}
-        Conversation History: ${JSON.stringify(history)}
-        Available Tools: ${JSON.stringify(formattedTools, null, 2)}
-        Generate the plan.
     `;
 
-    const result = await plannerModel.generateContent(fullPrompt);
-    const responseText = result.response.text();
-    const planObject = JSON.parse(responseText);
+    const chat = model.startChat({ history });
+    const result = await chat.sendMessage(fullPrompt);
+    const call = result.response.functionCalls()?.[0];
 
-    return planObject.plan.map((step: any, index: number) => {
-        const newStep = { ...step }; // Create a copy to avoid mutation
+    if (!call) {
+        console.warn("[Reasoner] Model did not return a function call. Assuming task is complete.");
+        return {
+            step: -1, // This step won't be executed, it's just a signal
+            tool: 'finish',
+            args: { finalMessage: result.response.text() || "Task completed." },
+            description: "Finish the task.",
+            status: 'pending'
+        };
+    }
+    
+    const nextStep: PlanStep = {
+        step: history.filter(h => h.role === 'function').length + 1,
+        description: `Call tool: ${call.name}`,
+        tool: call.name,
+        args: call.args,
+        status: 'pending'
+    };
 
-        // If 'parameters' exists, move its content to 'args' and delete the original.
-        if (newStep.parameters) {
-            newStep.args = newStep.parameters;
-            delete newStep.parameters;
-        }
-
-        // Ensure 'args' always exists as an object.
-        if (!newStep.args) {
-            newStep.args = {};
-        }
-
-        // Add the required orchestrator properties.
-        newStep.step = index + 1;
-        newStep.status = 'pending';
-
-        return newStep;
-    });
+    return nextStep;
 };
+
 
 /**
  * Summarization Module
@@ -135,7 +167,6 @@ export const summarizeToolOutput = async (toolOutput: any, originalPrompt: strin
         generationConfig: { temperature: 0.2 }
     });
 
-    // This prompt is now more direct as it receives cleaner data from the orchestrator.
     const summaryPrompt = `
         Directly and concisely answer the user's question in a natural, conversational way using the provided tool output.
         
@@ -148,7 +179,6 @@ export const summarizeToolOutput = async (toolOutput: any, originalPrompt: strin
         return result.response.text().trim();
     } catch (error) {
         console.error("[Summarizer] Error generating summary:", error);
-        // The fallback now returns the cleaned-up output instead of a verbose object.
         return `Completed with result: ${toolOutput}`;
     }
 };

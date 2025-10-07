@@ -7,7 +7,7 @@ export interface Task {
     plan: PlanStep[];
     currentStep: number;
     contextItemId?: string;
-    history: Content[]; // Use the corrected Content type
+    history: Content[];
     shouldInvalidateContext: boolean;
 }
 
@@ -38,7 +38,7 @@ export interface OrchestratorEvent {
  */
 export type MessageEmitter = (event: OrchestratorEvent['type'], data: OrchestratorEvent['data']) => void;
 
-// CORRECTED: These types accurately represent the Gemini conversation history structure.
+// These types accurately represent the Gemini conversation history structure.
 export interface TextPart { text: string; }
 export interface FunctionCallPart { functionCall: { name: string; args: any; }; }
 export interface FunctionResponsePart { functionResponse: { name: string; response: any; }; }
@@ -46,6 +46,6 @@ export interface FunctionResponsePart { functionResponse: { name: string; respon
 export type ContentPart = TextPart | FunctionCallPart | FunctionResponsePart;
 
 export interface Content {
-    role: 'user' | 'model' | 'tool';
+    role: 'user' | 'model' | 'function';
     parts: ContentPart[];
 }
