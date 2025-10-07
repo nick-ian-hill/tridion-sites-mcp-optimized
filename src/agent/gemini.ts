@@ -42,43 +42,6 @@ const formatToolsForGemini = (tools: any[]): any[] => {
 };
 
 /**
- * Tool Selection Agent
- */
-export const selectRelevantTools = async (prompt: string, allTools: any[]): Promise<any[]> => {
-    const toolSelectorModel = genAI.getGenerativeModel({
-        model: "gemini-2.5-pro",
-        generationConfig: { temperature: 0.0 }
-    });
-    const toolSignatures = allTools.map(t => ({ name: t.name, description: t.description }));
-    const selectionPrompt = `
-        You are an intelligent tool selection agent. Based on the user's request, identify the set of tools
-        needed to competently perform the specified task(s). Keep in mind that for tasks like creating an item,
-        it might be necessary to identify suitable dependencies such as schemas, keywords, components, and
-        multimedia components. In other words, do not be overly aggressive in limiting the tool selection to the
-        absolute minimum, but do exclude those tools that you are certain will not be needed.
-        Request: "${prompt}"
-        Available tools: ${JSON.stringify(toolSignatures, null, 2)}
-        Respond ONLY with a JSON array of the names of all the tools you think might be relevant for the task, e.g.,
-        ["search", "getItemsInContainer", "getItem", "createItem", "createMultimediaComponentFromPrompt"].
-        If the request is a general question, return an empty array.
-    `;
-
-    try {
-        const result = await toolSelectorModel.generateContent(selectionPrompt);
-        const responseText = result.response.text().trim().replace(/```json|```/g, '');
-        const relevantToolNames = JSON.parse(responseText);
-        if (!Array.isArray(relevantToolNames)) return allTools;
-
-        const relevantTools = allTools.filter(t => relevantToolNames.includes(t.name));
-        console.log(`[ToolSelector] Selected ${relevantTools.length} tools: [${relevantTools.map(t => t.name).join(', ')}]`);
-        return relevantTools.length > 0 ? relevantTools : allTools;
-    } catch (error) {
-        console.error("[ToolSelector] Error selecting tools, falling back to all tools:", error);
-        return allTools;
-    }
-};
-
-/**
  * Determines the single next step for the agent to take. (ReAct model)
  */
 export const determineNextStep = async (

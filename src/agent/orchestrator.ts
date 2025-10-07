@@ -1,7 +1,7 @@
 import http from 'node:http';
 import { filterResponseData } from '../utils/responseFiltering.js';
 import { Task, PlanStep, MessageEmitter, Content } from './types.js';
-import { selectRelevantTools, determineNextStep } from './gemini.js';
+import { determineNextStep } from './gemini.js';
 import { READ_ONLY_TOOLS } from './readOnlyTools.js';
 import { AxiosError } from 'axios';
 
@@ -27,7 +27,7 @@ export class Orchestrator {
      * Main processing method using the ReAct (Reason-Act) loop.
      */
     async process(prompt: string, contextItemId: string | undefined, history: Content[]) {
-        const selectedTools = await selectRelevantTools(prompt, this.allTools);
+        const availableTools = this.allTools;
         
         const task: Task = {
             id: 'task-' + Date.now(),
@@ -51,7 +51,7 @@ export class Orchestrator {
                     task.originalPrompt,
                     task.contextItemId,
                     task.history,
-                    selectedTools
+                    availableTools
                 );
 
                 if (!nextStep || nextStep.tool === 'finish') {
