@@ -12,24 +12,35 @@ const extractItemsArray = (data: any): any[] => {
         return [];
     }
 
+    let actualData = data;
+
+    if (data.content && Array.isArray(data.content) && data.content[0]?.type === 'text' && typeof data.content[0].text === 'string') {
+        try {
+            actualData = JSON.parse(data.content[0].text);
+        } catch (e) {
+            console.error("Failed to parse JSON from tool output text:", e);
+            return []; // Cannot parse, so there are no items to count.
+        }
+    }
+
     // Case 1: The data itself is the array of items.
-    if (Array.isArray(data)) {
-        return data;
+    if (Array.isArray(actualData)) {
+        return actualData;
     }
 
     // Case 2: The data is an object with an 'items' property (e.g., from getItemsInContainer).
-    if (data.items && Array.isArray(data.items)) {
-        return data.items;
+    if (actualData.items && Array.isArray(actualData.items)) {
+        return actualData.items;
     }
 
     // Case 3: The data is an object with an 'Items' property (used by some API endpoints).
-    if (data.Items && Array.isArray(data.Items)) {
-        return data.Items;
+    if (actualData.Items && Array.isArray(actualData.Items)) {
+        return actualData.Items;
     }
 
     // Case 4: The data is a single object, not in an array (e.g., from getItem).
-    if (typeof data === 'object' && Object.keys(data).length > 0) {
-        return [data];
+    if (typeof actualData === 'object' && Object.keys(actualData).length > 0) {
+        return [actualData];
     }
 
     // Default case: No countable items found.
@@ -38,7 +49,7 @@ const extractItemsArray = (data: any): any[] => {
 
 export const countItems = {
     name: "countItems",
-    description: "Counts the number of items in various data structures returned by other tools (like 'search' or 'getItemsInContainer'). Use this tool to get a precise total whenever the user asks 'how many' items were found or for the 'total number' of results from a tool call.",
+    description: "Counts the number of items in a provided data structure from a previous tool call. It intelligently handles different response formats from tools like 'search' or 'getItemsInContainer'. Use this tool when asked to return an item count on the results of a tool call.",
     input: {
         data: z.any().describe("The data returned from a previous tool call, which contains the items to be counted."),
     },

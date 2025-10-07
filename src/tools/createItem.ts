@@ -13,7 +13,7 @@ const createItemInputProperties = {
         "Component", "Folder", "StructureGroup", "Keyword",
         "Category", "Bundle", "SearchFolder", "PageTemplate", "ComponentTemplate"
     ]).describe("The type of CMS item to create."),
-    title: z.string().describe("The title for the new item."),
+    title: z.string().describe("The title for the new item. Note that creation will fail if an item of the same type exists in the current container (e.g., 'Folder'), or in the inherited copy of the container in a child or descendent 'Publication'. In other words, for a given container and item type, the title needs to be unique across the BluePrint hierarchy."),
     locationId: z.string().regex(/^tcm:\d+-\d+-\d+$/).describe("The TCM URI of the parent container. Use 'search' or 'getItemsInContainer' to find a suitable container. For 'Keyword', the container must be a Category (use 'getCategories'). For 'Category', the container is a Publication (use 'getPublications')."),
     schemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("Required for 'Component'. The TCM URI of the Schema. Use 'getSchemaLinks' to find available Schemas in the target Publication."),
     metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("Optional. The TCM URI of the Metadata Schema. Use 'getSchemaLinks' to find available Schemas."),
@@ -64,6 +64,8 @@ For a Category, the container is the Publication.
 For items other than Publications, the first number in the ID identifies the Publication (e.g., for both tcm:5-127 and tcm:5-2002-2, the Publication is 5).  
 For Publications, the second number identifies the Publication (e.g., tcm:0-5-1 represents Publication 5).  
 Therefore, when creating a Component in the Folder with ID tcm:10-4112-2, the Schema must have an ID in the form tcm:10-###-8.
+
+Important: Creation will fail with a '409 Conflict' error if an item of the same type and with the same title already exists in the target location or its BluePrint context (e.g. a child Publication).
 
 Examples:
 
