@@ -172,8 +172,18 @@ export class Orchestrator {
             result.content[0]?.type === 'text' && 
             typeof result.content[0].text === 'string'
         ) {
+            const rawText = result.content[0].text;
             try {
-                cleanResult = JSON.parse(result.content[0].text);
+                const jsonStartIndex = rawText.indexOf('{');
+                if (jsonStartIndex > -1) {
+                    // If a '{' is found, extract the substring from that point onwards.
+                    const jsonString = rawText.substring(jsonStartIndex);
+                    cleanResult = JSON.parse(jsonString);
+                } else {
+                    // If no JSON object is found, treat the entire output as plain text.
+                    cleanResult = rawText;
+                }
+
             } catch (e) {
                 console.warn(`[Orchestrator] Could not parse JSON from tool '${step.tool}' result text. Using raw text.`);
                 cleanResult = result.content[0].text;
