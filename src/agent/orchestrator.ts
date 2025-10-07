@@ -23,16 +23,13 @@ export class Orchestrator {
         console.log('[Agent] Orchestrator initialized.');
     }
 
-    /**
-     * Main processing method using the ReAct (Reason-Act) loop.
-     */
     async process(prompt: string, contextItemId: string | undefined, history: Content[]) {
         const availableTools = this.allTools;
         
         const task: Task = {
             id: 'task-' + Date.now(),
             originalPrompt: prompt,
-            plan: [], // The plan is built dynamically
+            plan: [],
             currentStep: 0,
             contextItemId: contextItemId,
             history: history,
@@ -44,7 +41,7 @@ export class Orchestrator {
         let finalMessage = "Task failed to complete.";
 
         try {
-            const MAX_STEPS = 25; // Safeguard against infinite loops
+            const MAX_STEPS = 25;
             for (let i = 0; i < MAX_STEPS; i++) {
                 
                 const nextStep = await determineNextStep(
@@ -56,7 +53,7 @@ export class Orchestrator {
 
                 if (!nextStep || nextStep.tool === 'finish') {
                     finalMessage = nextStep?.args?.finalMessage || "Task completed successfully.";
-                    break; // Exit the loop
+                    break;
                 }
 
                 task.plan.push(nextStep);
@@ -75,8 +72,7 @@ export class Orchestrator {
             });
 
         } catch (error) {
-            // Robust error handling logic
-            this.emit('plan', { plan: task.plan }); // Emit the final state of the plan
+            this.emit('plan', { plan: task.plan });
 
             if (error instanceof AxiosError && error.response?.status === 401) {
                 finalMessage = "Authentication failed. Your session may have expired. Please refresh the page and try again.";
@@ -86,7 +82,6 @@ export class Orchestrator {
                 finalMessage = "The task failed with an unknown error.";
             }
 
-            // Emit a final result event with the specific error message
             this.emit('result', {
                 message: finalMessage,
                 history: task.history,
@@ -112,10 +107,16 @@ export class Orchestrator {
 
             step.status = 'completed';
             this.handleToolResult(result, step, task);
+
+            const resultSummary = JSON.stringify(step.result, null, 2);
+            this.emit('progress', {
+                isLog: true,
+                message: `Tool **${step.tool}** returned:\n\`\`\`json\n${resultSummary}\n\`\`\``
+            });
             
             task.history.push({ role: 'model', parts: [{ functionCall: { name: step.tool, args: step.args } }] });
             task.history.push({ role: 'function', parts: [{ functionResponse: { name: step.tool, response: step.result } }] });
-
+            
             this.emit('progress', {
                 isLog: true,
                 message: `Received response from **${step.tool}**. Now deciding next step...`
@@ -126,7 +127,6 @@ export class Orchestrator {
             step.status = 'failed';
             step.error = error.message;
 
-            // Add the error to the history so the model knows the tool failed
             task.history.push({ role: 'model', parts: [{ functionCall: { name: step.tool, args: step.args } }] });
             task.history.push({ role: 'function', parts: [{ functionResponse: { name: step.tool, response: { error: error.message } } }] });
 

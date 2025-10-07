@@ -80,6 +80,7 @@ export const determineNextStep = async (
 
         **Error Handling Rules:**
         - If the last tool execution resulted in an error, analyze the error message.
+        - If the error is 'ItemAlreadyExists' or a '409 Conflict' because an item name is not unique, this can mean that an item with this name already exists in an inherited 'copy' of this container in a child or descendent publication.
         - Decide if you can fix the problem by calling the same tool with different arguments, by calling a different tool, or if the error is unrecoverable.
         - If you cannot recover from the error, call the 'finish' tool with a message explaining the failure.
 
