@@ -1,7 +1,7 @@
 import http from 'node:http';
 import { filterResponseData } from '../utils/responseFiltering.js';
 import { Task, PlanStep, MessageEmitter, Content } from './types.js';
-import { determineNextStep } from './gemini.js';
+import { determineNextStep, summarizeToolOutput } from './gemini.js';
 import { READ_ONLY_TOOLS } from './readOnlyTools.js';
 import { AxiosError } from 'axios';
 
@@ -52,7 +52,16 @@ export class Orchestrator {
                 );
 
                 if (!nextStep || nextStep.tool === 'finish') {
-                    finalMessage = nextStep?.args?.finalMessage || "Task completed successfully.";
+                    if (nextStep?.args.finalMessage === '__NEEDS_SUMMARY__') {
+                        const lastStep = task.plan[task.plan.length - 1];
+                        if (lastStep && lastStep.status === 'completed') {
+                            finalMessage = await summarizeToolOutput(lastStep.result, task.originalPrompt);
+                        } else {
+                            finalMessage = "The task is complete.";
+                        }
+                    } else {
+                        finalMessage = nextStep?.args?.finalMessage || "Task completed successfully.";
+                    }
                     break;
                 }
 
@@ -114,8 +123,22 @@ export class Orchestrator {
                 message: `Tool **${step.tool}** returned:\n\`\`\`json\n${resultSummary}\n\`\`\``
             });
             
+            // --- THIS IS THE FIX ---
+            // The 'response' field for a functionResponse must be a JSON object.
+            // If the result of our tool is an array, we wrap it in an object.
+            let responseForHistory = step.result;
+            // The 'response' field must be a valid JSON object.
+            // If the result is an array, wrap it in an object.
+            if (Array.isArray(responseForHistory)) {
+                responseForHistory = { items: responseForHistory };
+            } 
+            // If the result is a primitive type (string, number, boolean), wrap it.
+            else if (typeof responseForHistory !== 'object' || responseForHistory === null) {
+                responseForHistory = { output: responseForHistory };
+            }
+
             task.history.push({ role: 'model', parts: [{ functionCall: { name: step.tool, args: step.args } }] });
-            task.history.push({ role: 'function', parts: [{ functionResponse: { name: step.tool, response: step.result } }] });
+            task.history.push({ role: 'function', parts: [{ functionResponse: { name: step.tool, response: responseForHistory } }] });
             
             this.emit('progress', {
                 isLog: true,
@@ -141,6 +164,22 @@ export class Orchestrator {
         if (result?.isUiAction && result.action) {
             this.emit('ui-action', result.action);
         }
-        step.result = filterResponseData({ responseData: result });
+
+        let cleanResult = result;
+        if (
+            result?.content && 
+            Array.isArray(result.content) && 
+            result.content[0]?.type === 'text' && 
+            typeof result.content[0].text === 'string'
+        ) {
+            try {
+                cleanResult = JSON.parse(result.content[0].text);
+            } catch (e) {
+                console.warn(`[Orchestrator] Could not parse JSON from tool '${step.tool}' result text. Using raw text.`);
+                cleanResult = result.content[0].text;
+            }
+        }
+        
+        step.result = filterResponseData({ responseData: cleanResult });
     }
 }

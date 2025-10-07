@@ -23,65 +23,42 @@ export async function handleAgentChat(
         body += chunk.toString();
     });
 
-    req.on('end', () => {
+    req.on('end', async () => {
         try {
             const parsedBody = JSON.parse(body || '{}');
             const { prompt, context, history = [] } = parsedBody;
 
+            let finalResult: any = null;
+            const eventEmitter: MessageEmitter = (event, data) => {
+                if (isStreaming && !res.writableEnded) {
+                    res.write(`event: ${event}\n`);
+                    res.write(`data: ${JSON.stringify(data)}\n\n`);
+                } else {
+                    if (event === 'result') finalResult = data;
+                    if (event === 'error') finalResult = { error: data };
+                }
+            };
+            
+            const orchestrator = new Orchestrator({ req, allTools: tools, emit: eventEmitter });
+            
+            await orchestrator.process(prompt, context?.itemId, history);
+
             if (isStreaming) {
-                const eventEmitter: MessageEmitter = (event, data) => {
-                    if (!res.writableEnded) {
-                        res.write(`event: ${event}\n`);
-                        res.write(`data: ${JSON.stringify(data)}\n\n`);
-                    }
-                };
-                
-                const orchestrator = new Orchestrator({ req, allTools: tools, emit: eventEmitter });
-
-                orchestrator.process(prompt, context?.itemId, history)
-                    .catch(e => {
-                        const error = e instanceof Error ? e : new Error(String(e));
-                        console.error("[Agent] Orchestrator process promise rejected critically.", error);
-                        if (!res.writableEnded) {
-                             eventEmitter('error', { message: `A critical server error occurred: ${error.message}` });
-                        }
-                    })
-                    .finally(() => {
-                        if (!res.writableEnded) {
-                            res.end();
-                        }
-                    });
-
+                if (!res.writableEnded) {
+                    res.end();
+                }
             } else {
-                (async () => {
-                    let finalResult: any = null;
-                    const eventEmitter: MessageEmitter = (event, data) => {
-                        if (event === 'result') finalResult = data;
-                        if (event === 'error') finalResult = { error: data };
-                    };
-                    
-                    const orchestrator = new Orchestrator({ req, allTools: tools, emit: eventEmitter });
-                    await orchestrator.process(prompt, context?.itemId, history);
-
-                    res.writeHead(finalResult?.error ? 500 : 200, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify(finalResult || { message: "Task completed without a final result." }));
-                })().catch(e => {
-                    const error = e instanceof Error ? e : new Error(String(e));
-                    console.error("[Agent] Non-streaming orchestrator failed critically:", error);
-                    if (!res.headersSent) {
-                        res.writeHead(500, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify({ error: `Agent Error: ${error.message}` }));
-                    }
-                });
+                res.writeHead(finalResult?.error ? 500 : 200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(finalResult || { message: "Task completed without a final result." }));
             }
         } catch (e) {
             const error = e instanceof Error ? e : new Error(String(e));
             console.error("[Agent] Failed to process request:", error);
-            if (!res.headersSent) {
+            if (!res.headersSent && !res.writableEnded) {
                 res.writeHead(500, { 'Content-Type': 'application/json' });
-            }
-            if (!res.writableEnded) {
                 res.end(JSON.stringify({ error: `Agent Error: ${error.message}` }));
+            } else if (!res.writableEnded) {
+                res.end();
             }
         }
     });
