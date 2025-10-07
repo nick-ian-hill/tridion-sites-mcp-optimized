@@ -79,6 +79,7 @@ import { requestNavigation } from './tools/requestNavigation.js';
 import { requestOpenInEditor } from './tools/requestOpenInEditor.js';
 import { getUsers } from './tools/getUsers.js';
 import { countItems } from './tools/countItems.js';
+import { mapItemIdToContextPublication } from './tools/mapItemIdToContextPublication.js';
 
 const tools: any[] = [
     // UI Navigation
@@ -88,6 +89,7 @@ const tools: any[] = [
     echo,
     countItems,
     getCurrentTime,
+    mapItemIdToContextPublication,
     generateContentFromPrompt,
     search,
     // Read Operations

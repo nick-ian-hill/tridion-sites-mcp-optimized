@@ -38,5 +38,6 @@ export const READ_ONLY_TOOLS = [
     'getCategories',
     'getKeywordsForCategory',
     'dependencyGraphForItem',
-    'countItems'
+    'countItems',
+    'mapItemIdToContextPublication'
 ];
