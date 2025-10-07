@@ -60,7 +60,6 @@ export class Orchestrator {
                 }
 
                 task.plan.push(nextStep);
-                this.emit('plan', { plan: task.plan }); // Emit the dynamically growing plan
                 
                 await this.executeStep(nextStep, task);
 
@@ -98,7 +97,12 @@ export class Orchestrator {
 
     private async executeStep(step: PlanStep, task: Task) {
         step.status = 'in-progress';
-        this.emit('progress', { message: `Starting step ${step.step}: Calling ${step.tool}`, step: step.step });
+        
+        const argsSummary = JSON.stringify(step.args, null, 2);
+        this.emit('progress', { 
+            isLog: true, 
+            message: `Calling tool: **${step.tool}**\n\`\`\`json\n${argsSummary}\n\`\`\`` 
+        });
 
         try {
             const toolToExecute = this.allTools.find(t => t.name === step.tool);
@@ -107,12 +111,15 @@ export class Orchestrator {
             const result = await toolToExecute.execute(step.args, { request: this.req });
 
             step.status = 'completed';
-            step.result = result;
             this.handleToolResult(result, step, task);
             
-            // This history is CRITICAL for the next loop iteration
             task.history.push({ role: 'model', parts: [{ functionCall: { name: step.tool, args: step.args } }] });
             task.history.push({ role: 'function', parts: [{ functionResponse: { name: step.tool, response: step.result } }] });
+
+            this.emit('progress', {
+                isLog: true,
+                message: `Received response from **${step.tool}**. Now deciding next step...`
+            });
 
         } catch (e) {
             const error = e instanceof Error ? e : new Error(String(e));
