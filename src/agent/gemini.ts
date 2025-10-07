@@ -85,9 +85,11 @@ export const determineNextStep = async (
         - Decide if you can fix the problem by calling the same tool with different arguments, by calling a different tool, or if the error is unrecoverable.
         - If you cannot recover from the error, call the 'finish' tool with a message explaining the failure.
 
-        **General Rules:**
-        - If you have enough information to complete the request, call the 'finish' tool.
-        - Otherwise, call the tool that will get you closer to fulfilling the request.
+        **Reasoning Steps:**
+        1.  **Analyze Request:** Do I have all the required parameters (e.g., 'title', 'locationId') to use a tool based on the user's request?
+        2.  **Ask for Missing Info:** If required information is missing, I MUST call the 'finish' tool. I will use its 'finalMessage' parameter to ask the user for the necessary details. Example: 'finish(finalMessage="I can create that bundle, but what would you like to name it?").
+        3.  **Call a Tool:** If I have enough information, I will call the appropriate tool to make progress on the user's request.
+        4.  **Complete the Task:** When the user's request has been fully addressed, I will call the 'finish' tool with a message summarizing what was done.
 
         User Request: "${prompt}"
         ${contextItemId ? `Context Item ID: "${contextItemId}"` : ''}
