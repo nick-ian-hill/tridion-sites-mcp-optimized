@@ -117,22 +117,19 @@ export class Orchestrator {
             step.status = 'completed';
             this.handleToolResult(result, step, task);
 
+            /* Uncomment this to see the tool response in the chat
             const resultSummary = JSON.stringify(step.result, null, 2);
             this.emit('progress', {
                 isLog: true,
                 message: `Tool **${step.tool}** returned:\n\`\`\`json\n${resultSummary}\n\`\`\``
             });
+            */
             
-            // --- THIS IS THE FIX ---
-            // The 'response' field for a functionResponse must be a JSON object.
-            // If the result of our tool is an array, we wrap it in an object.
             let responseForHistory = step.result;
-            // The 'response' field must be a valid JSON object.
-            // If the result is an array, wrap it in an object.
+
             if (Array.isArray(responseForHistory)) {
                 responseForHistory = { items: responseForHistory };
             } 
-            // If the result is a primitive type (string, number, boolean), wrap it.
             else if (typeof responseForHistory !== 'object' || responseForHistory === null) {
                 responseForHistory = { output: responseForHistory };
             }
