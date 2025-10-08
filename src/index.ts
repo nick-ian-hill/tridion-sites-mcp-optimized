@@ -1,7 +1,7 @@
 import http from 'node:http';
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { handleAgentChat } from './agent/agent.js';
+import { handleStartChat, handlePollChat } from './agent/agent.js';
 
 // --- Tool Imports ---
 import { batchLocalizeItems } from "./tools/batchLocalizeItems.js";
@@ -188,25 +188,25 @@ const httpServer = http.createServer((req, res) => {
         return;
     }
 
-    // Agent Endpoint for UI (Streaming)
-    if (req.url?.startsWith('/agent/chat-stream') && req.method === 'POST') {
-        if (req.headers['x-api-key'] !== MCP_API_KEY) {
-            res.writeHead(401, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'Unauthorized: Missing or invalid API Key' }));
-            return;
-        }
-        handleAgentChat(req, res, tools, true);
-        return;
-    }
-
-    // Agent Endpoint for CLI/IDE (Synchronous)
+    // Agent Endpoint to START a new chat task (returns a taskId)
     if (req.url === '/agent/chat' && req.method === 'POST') {
         if (req.headers['x-api-key'] !== MCP_API_KEY) {
             res.writeHead(401, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Unauthorized: Missing or invalid API Key' }));
             return;
         }
-        handleAgentChat(req, res, tools, false);
+        handleStartChat(req, res, tools);
+        return;
+    }
+
+    // Agent Endpoint for LONG POLLING updates
+    if (req.url === '/agent/poll-updates' && req.method === 'POST') {
+        if (req.headers['x-api-key'] !== MCP_API_KEY) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Unauthorized: Missing or invalid API Key' }));
+            return;
+        }
+        handlePollChat(req, res);
         return;
     }
 
