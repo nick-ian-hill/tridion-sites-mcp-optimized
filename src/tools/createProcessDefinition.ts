@@ -33,6 +33,17 @@ The 'activityDefinitions' parameter accepts an array of objects. Each object def
 
 IMPORTANT: The tool assumes the backend can resolve temporary references during creation. This is a common pattern for creating complex, interlinked items in a single transaction.
 
+### Scripting Automated Activities
+
+To make an activity "automated", you provide a C# script in the 'script' property. This script executes when the workflow reaches that activity. The script can perform various actions by interacting with the Core Service via the 'SessionAwareCoreServiceClient' object.
+
+Key points for scripting:
+- Most scripts will end by programmatically finishing the activity using 'SessionAwareCoreServiceClient.FinishActivity(...)'.
+- You can access information about the current workflow process via the 'ProcessInstance' object.
+- You can access the current activity via the 'CurrentActivityInstance' object.
+- Use 'ProcessInstance.Variables' to pass data between activities.
+- Ensure your C# code is correctly formatted as a single string, with newlines represented as '\\n'.
+
 Examples:
 
 Example 1: Create a simple, two-step approval workflow.
@@ -91,6 +102,69 @@ Example 2: Create a more complex workflow with a decision point.
             "script": "ActivityFinishData finishData = new ActivityFinishData()\\n{\\n    Message = \\"Automatic Activity 'Accept' Finished\\"\\n};\\nSessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);",
             "nextActivities": []
           }
+        ]
+    });
+
+Example 3: Create a workflow that automatically publishes the item(s) in the workflow package.
+    const result = await tools.createProcessDefinition({
+        title: "Auto-Publish Workflow",
+        locationId: "tcm:0-5-1",
+        description: "A workflow that automatically publishes items after approval.",
+        activityDefinitions: [
+            {
+                "title": "Approve for Publish",
+                "description": "Approve this item to send it to the publishing queue.",
+                "nextActivities": ["Publish Content"]
+            },
+            {
+                "title": "Publish Content",
+                "description": "This activity automatically publishes the items.",
+                "script": "PublishInstructionData publishInstruction = new PublishInstructionData();\\npublishInstruction.ResolveInstruction = new ResolveInstructionData();\\npublishInstruction.RenderInstruction = new RenderInstructionData();\\n\\n// Extract item URIs from the workflow package\\nString[] itemsToPublish = ProcessInstance.Subjects.Select(s => s.IdRef).ToArray();\\n\\n// Hardcoded Target Type URI (e.g., 'Staging')\\nString[] targets = new String[] { \\"tcm:0-1-65537\\" };\\n\\nif (itemsToPublish.Length > 0)\\n{\\n    PublishTransactionData[] tx = SessionAwareCoreServiceClient.Publish(itemsToPublish, publishInstruction, targets, PublishPriority.Normal, null);\\n    ProcessInstance.Variables.Add(\\"PublishTransaction\\", tx[0].Id);\\n}\\n\\nActivityFinishData finishData = new ActivityFinishData() { Message = \\"Content sent to publisher.\\" };\\nSessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);"
+            }
+        ]
+    });
+
+Example 4: Create a workflow with an automated activity that aborts the entire process.
+    const result = await tools.createProcessDefinition({
+        title: "Workflow with Abort Step",
+        locationId: "tcm:0-5-1",
+        description: "A workflow with a review step and an explicit abort option.",
+        activityDefinitions: [
+            {
+                "title": "Review",
+                "activityType": "Decision",
+                "description": "Review the item and decide to approve or abort.",
+                "nextActivities": ["Approve", "Abort Process"]
+            },
+            {
+                "title": "Approve",
+                "description": "The item is approved and the workflow finishes.",
+                "nextActivities": []
+            },
+            {
+                "title": "Abort Process",
+                "description": "This activity automatically aborts and deletes the entire workflow process.",
+                "script": "SessionAwareCoreServiceClient.Delete(ProcessInstance.Id);"
+            }
+        ]
+    });
+
+Example 5: Create a workflow with a timed delay. The script suspends the activity for 24 hours.
+    const result = await tools.createProcessDefinition({
+        title: "Delayed Notification Workflow",
+        locationId: "tcm:0-5-1",
+        description: "A workflow that waits for one day before proceeding.",
+        activityDefinitions: [
+            {
+                "title": "Initial Step",
+                "description": "Start the process.",
+                "nextActivities": ["Wait One Day"]
+            },
+            {
+                "title": "Wait One Day",
+                "description": "This automated activity pauses the workflow for 24 hours.",
+                "script": "if (string.IsNullOrEmpty(ResumeBookmark))\\n{\\n    SessionAwareCoreServiceClient.Suspend(CurrentActivityInstance.Id, \\"Suspending for 24 hours\\", DateTime.Now.AddDays(1), \\"ResumeAfterDelay\\", null);\\n}\\nelse if (ResumeBookmark == \\"ResumeAfterDelay\\")\\n{\\n    ActivityFinishData finishData = new ActivityFinishData() { Message = \\"Resumed after 24 hour delay.\\" };\\n    SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\\n}"
+            }
         ]
     });`,
     input: createProcessDefinitionInputProperties,

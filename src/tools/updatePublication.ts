@@ -6,7 +6,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 export const updatePublication = {
     name: "updatePublication",
     description: `Updates an existing Publication. Publications are the main organizational units in the Content Management System, acting as containers for content and design items.
-    Updating a Publication might be necessary to change its URL settings, adjust paths for multimedia, set a different locale, or reconfigure default templates.
+    Updating a Publication might be necessary to change its URL settings, adjust paths for multimedia, set a different locale, or reconfigure default templates and workflow processes.
     Publications are central to BluePrinting, where they can be parents (sharing content) or children (inheriting content).
     This tool modifies the properties of a single, existing Publication.
 
@@ -24,6 +24,13 @@ Example 2: Changes the locale to French (France) and sets a new default Page Tem
         itemId: "tcm:0-5-1",
         locale: "fr-FR",
         defaultPageTemplate: "tcm:5-123-128"
+    });
+
+Example 3: Update the default task process and enable workflow process associations for a Publication.
+    const result = await tools.updatePublication({
+        itemId: "tcm:0-5-1",
+        defaultTaskProcessId: "tcm:5-1-131074",
+        enableWorkflowProcessAssociations: true
     });`,
     input: {
         itemId: z.string().regex(/^tcm:\d+-\d+-1$/).describe("The unique ID of the Publication to update."),
@@ -39,10 +46,11 @@ Example 2: Changes the locale to French (France) and sets a new default Page Tem
         defaultMultimediaSchema: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the new default Multimedia Schema. This is the Schema that will be used by default when creating a new Multimedia Component."),
         pageSnapshotTemplate: z.string().regex(/^tcm:\d+-\d+-128$/).optional().describe("The TCM URI of the new Page Template for rendering Page snapshots in Workflow."),
         componentSnapshotTemplate: z.string().regex(/^tcm:\d+-\d+-32$/).optional().describe("The TCM URI of the new Component Template for rendering Component snapshots in Workflow."),
-        pageTemplateProcess: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of the new workflow Process Definition for Page Templates."),
-        componentTemplateProcess: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of the new workflow Process Definition for Component Templates."),
+        pageTemplateProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of the Process Definition to associate with Page Templates."),
+        componentTemplateProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of the Process Definition to associate with Component Templates."),
+        defaultTaskProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of the default Process Definition for tasks."),
         templateBundleProcess: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of the new Process Definition to associate with Template Bundles."),
-        shareProcessAssociations: z.boolean().optional().describe("Set to true to indicate that shared items inherit Process Associations from the primary Publication."),
+        enableWorkflowProcessAssociations: z.boolean().optional().describe("If true, enables Workflow Process Associations in Shared Schemas and Structure Groups."),
         locale: z.string().optional().describe("The new locale for the Publication (e.g., 'en-US', 'de-DE')."),
         publicationType: z.string().optional().describe("The new type of the Publication (e.g., 'Web', 'Content'). Use the getPublicationTypes tool to see the available types.")
     },
@@ -58,6 +66,9 @@ Example 2: Changes the locale to French (France) and sets a new default Page Tem
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const getItemResponse = await authenticatedAxios.get(`/items/${restItemId}`);
+            if (getItemResponse.status !== 200) {
+                return handleUnexpectedResponse(getItemResponse);
+            }
             const itemToUpdate = getItemResponse.data;
 
             if (updates.title) itemToUpdate.Title = updates.title;
@@ -68,18 +79,19 @@ Example 2: Changes the locale to French (France) and sets a new default Page Tem
             if (updates.locale) itemToUpdate.Locale = updates.locale;
             if (updates.publicationType) itemToUpdate.PublicationType = updates.publicationType;
 
-            if (updates.shareProcessAssociations !== undefined) {
-                itemToUpdate.ShareProcessAssociations = updates.shareProcessAssociations;
+            if (updates.enableWorkflowProcessAssociations !== undefined) {
+                itemToUpdate.EnableWorkflowProcessAssociations = updates.enableWorkflowProcessAssociations;
             }
 
             if (updates.defaultPageTemplate) itemToUpdate.DefaultPageTemplate = toLink(updates.defaultPageTemplate);
             if (updates.defaultComponentTemplate) itemToUpdate.DefaultComponentTemplate = toLink(updates.defaultComponentTemplate);
             if (updates.defaultTemplateBuildingBlock) itemToUpdate.DefaultTemplateBuildingBlock = toLink(updates.defaultTemplateBuildingBlock);
-            if (updates.defaultMultimediaSchema) itemToUpdate.DefaultMultimediaSchema = toLink(updates.defaultMultimediaSchema);            
+            if (updates.defaultMultimediaSchema) itemToUpdate.DefaultMultimediaSchema = toLink(updates.defaultMultimediaSchema);
             if (updates.pageSnapshotTemplate) itemToUpdate.PageSnapshotTemplate = toLink(updates.pageSnapshotTemplate);
             if (updates.componentSnapshotTemplate) itemToUpdate.ComponentSnapshotTemplate = toLink(updates.componentSnapshotTemplate);
-            if (updates.pageTemplateProcess) itemToUpdate.PageTemplateProcess = toLink(updates.pageTemplateProcess);
-            if (updates.componentTemplateProcess) itemToUpdate.ComponentTemplateProcess = toLink(updates.componentTemplateProcess);
+            if (updates.pageTemplateProcessId) itemToUpdate.PageTemplateProcess = toLink(updates.pageTemplateProcessId);
+            if (updates.componentTemplateProcessId) itemToUpdate.ComponentTemplateProcess = toLink(updates.componentTemplateProcessId);
+            if (updates.defaultTaskProcessId) itemToUpdate.DefaultProcessDefinitions = toLinkArray([updates.defaultTaskProcessId]);
             if (updates.templateBundleProcess) itemToUpdate.TemplateBundleProcess = toLink(updates.templateBundleProcess);
             if (updates.parentPublications) itemToUpdate.ParentPublications = toLinkArray(updates.parentPublications);
 

@@ -5,7 +5,6 @@
  * current context item.
  */
 export const READ_ONLY_TOOLS = [
-    'echo',
     'getCurrentTime',
     'requestNavigation',
     'requestOpenInEditor',

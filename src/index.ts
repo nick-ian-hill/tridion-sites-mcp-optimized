@@ -17,7 +17,6 @@ import { createSchema } from "./tools/createSchema.js";
 import { deleteItem } from "./tools/deleteItem.js";
 import { demoteItem } from "./tools/demoteItem.js";
 import { dependencyGraphForItem } from "./tools/dependencyGraphForItem.js";
-import { echo } from "./tools/echo.js";
 import { getCurrentTime } from './tools/getCurrentTime.js';
 import { getBluePrintHierarchy } from "./tools/getBluePrintHierarchy.js";
 import { getCategories } from "./tools/getCategories.js";
@@ -80,13 +79,13 @@ import { requestOpenInEditor } from './tools/requestOpenInEditor.js';
 import { getUsers } from './tools/getUsers.js';
 import { countItems } from './tools/countItems.js';
 import { mapItemIdToContextPublication } from './tools/mapItemIdToContextPublication.js';
+import { updateProcessDefinition } from './tools/updateProcessDefinition.js';
 
 const tools: any[] = [
     // UI Navigation
     requestNavigation,
     requestOpenInEditor,
     // General & System
-    echo,
     countItems,
     getCurrentTime,
     mapItemIdToContextPublication,
@@ -135,6 +134,7 @@ const tools: any[] = [
     updatePublication,
     updateSchemaFieldProperties,
     updateUserProfile,
+    updateProcessDefinition,
     // Item Actions (Move, Copy, Delete)
     moveItem,
     copyItem,

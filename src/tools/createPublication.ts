@@ -51,18 +51,30 @@ Example 2: Creates a basic 'Content' Publication that inherits structure (templa
         title: "Corporate Master Content",
         parentPublications: ['tcm:0-2-1', 'tcm:0-3-1'],
         publicationType: "Content"
+    });
+
+Example 3: Creates a Publication and configures its default workflow processes.
+    const result = await tools.createPublication({
+        title: "Editorial Workflow Publication",
+        parentPublications: ['tcm:0-5-1'],
+        publicationUrl: "/editorial",
+        defaultTaskProcessId: "tcm:5-1-131074",
+        enableWorkflowProcessAssociations: true
     });`,
     input: {
         title: z.string().describe("The title for the new Publication."),
         parentPublications: z.array(z.string().regex(/^tcm:\d+-\d+-1$/)).optional().describe("An array of URIs for parent Publications. Use the 'getPublications' tool to find available publications. The parents must belong to the same BluePrint hierarchy. If no parent Publications are specified, a root Publication will be created."),
         publicationKey: z.string().optional().describe("Optional unique key. Only provide this if the key must be different from the title. If omitted, the title is used as the key."),
-        //publicationPath: z.string().optional().describe("The publication path, which forms the base of the publish path for Structure Groups and Pages within this Publication."),
-        //publicationUrl: z.string().optional().describe("The server-relative URL for the Publication. This will be prefixed to the URLs of published Pages."),
-        //multimediaPath: z.string().optional().describe("The physical path on the server where multimedia binaries will be published."),
-        //multimediaUrl: z.string().optional().describe("The URL that corresponds to the Multimedia Path, used to construct links to published multimedia."),
-
+        publicationPath: z.string().optional().describe("The publication path, which forms the base of the publish path for Structure Groups and Pages within this Publication."),
+        publicationUrl: z.string().optional().describe("The server-relative URL for the Publication. This will be prefixed to the URLs of published Pages."),
+        multimediaPath: z.string().optional().describe("The physical path on the server where multimedia binaries will be published."),
+        multimediaUrl: z.string().optional().describe("The URL that corresponds to the Multimedia Path, used to construct links to published multimedia."),
         locale: z.string().optional().describe("The locale for the Publication (e.g., 'en-US', 'de-DE')."),
-        publicationType: z.string().optional().describe("The type of the Publication (e.g., 'Web', 'Content'). Use the 'getPublicationTypes' tool to see the available types.")
+        publicationType: z.string().optional().describe("The type of the Publication (e.g., 'Web', 'Content'). Use the 'getPublicationTypes' tool to see the available types."),
+        pageTemplateProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of the Process Definition to associate with Page Templates."),
+        componentTemplateProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of the Process Definition to associate with Component Templates."),
+        defaultTaskProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of the default Process Definition for tasks."),
+        enableWorkflowProcessAssociations: z.boolean().optional().describe("If true, enables Workflow Process Associations in Shared Schemas and Structure Groups.")
     },
     execute: async (args: any,
         context: any
@@ -74,7 +86,8 @@ Example 2: Creates a basic 'Content' Publication that inherits structure (templa
 
         const {
             title, parentPublications, publicationKey, publicationPath,
-            publicationUrl, multimediaPath, multimediaUrl, locale, publicationType
+            publicationUrl, multimediaPath, multimediaUrl, locale, publicationType,
+            pageTemplateProcessId, componentTemplateProcessId, defaultTaskProcessId, enableWorkflowProcessAssociations
         } = args;
 
         try {
@@ -98,6 +111,21 @@ Example 2: Creates a basic 'Content' Publication that inherits structure (templa
             if (locale) payload.Locale = locale;
             if (publicationType) payload.PublicationType = publicationType;
             if (parentPublications) payload.Parents = toLinkArray(parentPublications);
+
+            // Add workflow settings
+            if (pageTemplateProcessId) {
+                payload.PageTemplateProcess = { IdRef: pageTemplateProcessId };
+            }
+            if (componentTemplateProcessId) {
+                payload.ComponentTemplateProcess = { IdRef: componentTemplateProcessId };
+            }
+            if (defaultTaskProcessId) {
+                payload.DefaultProcessDefinitions = toLinkArray([defaultTaskProcessId]);
+            }
+            if (typeof enableWorkflowProcessAssociations === 'boolean') {
+                payload.EnableWorkflowProcessAssociations = enableWorkflowProcessAssociations;
+            }
+
 
             // 3. Post the customized payload to create the Publication
             const createResponse = await authenticatedAxios.post('/items', payload);
