@@ -9,7 +9,7 @@ const formattingFeaturesSchema = z.object({
   DocType: z.enum(["Strict", "Transitional"]).optional().describe("Gets or sets the rules that are applied to this format area when Components based on this Schema are validated. You have the option of selecting \"Strict\" or \"Transitional\" document types.")
 });
 
-const listDefinitionSchema = z.discriminatedUnion("$type", [
+export const listDefinitionSchema = z.discriminatedUnion("$type", [
   z.object({
     "$type": z.literal("ListDefinition"),
     Type: z.enum(["Select", "Radio", "Checkbox", "Tree"]),
@@ -36,7 +36,7 @@ const listDefinitionSchema = z.discriminatedUnion("$type", [
   })
 ]);
 
-const singleLineTextFieldSchema = z.object({
+export const singleLineTextFieldSchema = z.object({
     "$type": z.literal("SingleLineTextFieldDefinition"),
     Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
     Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),
@@ -51,7 +51,7 @@ const singleLineTextFieldSchema = z.object({
     MaxLength: z.number().int().optional().describe("The maximum number of characters allowed in the field.")
 });
 
-const multiLineTextFieldSchema = z.object({
+export const multiLineTextFieldSchema = z.object({
     "$type": z.literal("MultiLineTextFieldDefinition"),
     Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
     Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),
@@ -63,7 +63,7 @@ const multiLineTextFieldSchema = z.object({
     Height: z.number().int().default(2).describe("The height of the text area in the UI.")
 });
 
-const xhtmlFieldSchema = z.object({
+export const xhtmlFieldSchema = z.object({
     "$type": z.literal("XhtmlFieldDefinition"),
     Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
     Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),
@@ -76,7 +76,7 @@ const xhtmlFieldSchema = z.object({
     FormattingFeatures: formattingFeaturesSchema.optional().describe("Specifies the formatting options for the XHTML field.")
 });
 
-const keywordFieldSchema = z.object({
+export const keywordFieldSchema = z.object({
     "$type": z.literal("KeywordFieldDefinition"),
     Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
     Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),
@@ -90,7 +90,7 @@ const keywordFieldSchema = z.object({
     AllowAutoClassification: z.boolean().optional().describe("Whether to allow automatic classification for this Keyword field.")
 });
 
-const numberFieldSchema = z.object({
+export const numberFieldSchema = z.object({
     "$type": z.literal("NumberFieldDefinition"),
     Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
     Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),
@@ -108,7 +108,7 @@ const numberFieldSchema = z.object({
     FractionDigits: z.number().int().optional().describe("The maximum number of digits allowed in the fractional part.")
 });
 
-const dateFieldSchema = z.object({
+export const dateFieldSchema = z.object({
     "$type": z.literal("DateFieldDefinition"),
     Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
     Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),
@@ -124,7 +124,7 @@ const dateFieldSchema = z.object({
     MaxInclusive: z.string().datetime().optional().describe("The inclusive maximum date/time value allowed (ISO 8601 format).")
 });
 
-const externalLinkFieldSchema = z.object({
+export const externalLinkFieldSchema = z.object({
     "$type": z.literal("ExternalLinkFieldDefinition"),
     Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
     Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),
@@ -135,7 +135,7 @@ const externalLinkFieldSchema = z.object({
     IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing.")
 });
 
-const componentLinkFieldSchema = z.object({
+export const componentLinkFieldSchema = z.object({
     "$type": z.literal("ComponentLinkFieldDefinition"),
     Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
     Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),
@@ -147,7 +147,7 @@ const componentLinkFieldSchema = z.object({
     AllowedTargetSchemas: z.array(linkSchema).optional().describe("Restricts which types of Components can be linked.")
 });
 
-const multimediaLinkFieldSchema = z.object({
+export const multimediaLinkFieldSchema = z.object({
     "$type": z.literal("MultimediaLinkFieldDefinition"),
     Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
     Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),
@@ -159,7 +159,7 @@ const multimediaLinkFieldSchema = z.object({
     AllowedTargetSchemas: z.array(linkSchema).optional().describe("Restricts which types of multimedia can be linked.")
 });
 
-const embeddedSchemaFieldSchema = z.object({
+export const embeddedSchemaFieldSchema = z.object({
     "$type": z.literal("EmbeddedSchemaFieldDefinition"),
     Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
     Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),

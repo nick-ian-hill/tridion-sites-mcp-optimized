@@ -1,14 +1,34 @@
-import { z } from "zod";
+import { z, ZodIssue } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { processSchemaFieldDefinitions } from "../utils/fieldReordering.js";
 import { handleCheckout, checkInItem, undoCheckoutItem } from "../utils/versioningUtils.js";
 
+import {
+    singleLineTextFieldSchema,
+    multiLineTextFieldSchema,
+    xhtmlFieldSchema,
+    keywordFieldSchema,
+    numberFieldSchema,
+    dateFieldSchema,
+    externalLinkFieldSchema,
+    componentLinkFieldSchema,
+    multimediaLinkFieldSchema,
+    embeddedSchemaFieldSchema
+} from "../schemas/fieldValueSchema.js";
+
 const fieldUpdateSchema = z.object({
     fieldName: z.string().describe("The XML name of the field to modify (e.g., 'articleBody')."),
     fieldLocation: z.enum(["Content", "Metadata"]).describe("Specifies whether the field is in the 'Content' or 'Metadata' definition."),
     propertyToUpdate: z.string().describe("The name of the property to change, using dot notation for nested properties (e.g., 'MinOccurs', 'List.Type')."),
-    newValue: z.any().describe("The new value for the property. Can be a string, number, boolean, or a JSON object for complex properties like 'AllowedTargetSchemas'.")
+
+    newValue: z.union([
+        z.string(),
+        z.number(),
+        z.boolean(),
+        z.record(z.any()),
+        z.array(z.any())
+    ]).describe("The new value for the property. Can be a string, number, boolean, or a JSON object for complex properties like 'AllowedTargetSchemas'.")
 });
 
 const updateSchemaFieldPropertiesInputProperties = {
@@ -17,6 +37,20 @@ const updateSchemaFieldPropertiesInputProperties = {
 };
 
 const updateSchemaFieldPropertiesSchema = z.object(updateSchemaFieldPropertiesInputProperties);
+
+// Map field types to their corresponding Zod schemas for easy lookup.
+const schemaTypeMap = {
+    "SingleLineTextFieldDefinition": singleLineTextFieldSchema,
+    "MultiLineTextFieldDefinition": multiLineTextFieldSchema,
+    "XhtmlFieldDefinition": xhtmlFieldSchema,
+    "KeywordFieldDefinition": keywordFieldSchema,
+    "NumberFieldDefinition": numberFieldSchema,
+    "DateFieldDefinition": dateFieldSchema,
+    "ExternalLinkFieldDefinition": externalLinkFieldSchema,
+    "ComponentLinkFieldDefinition": componentLinkFieldSchema,
+    "MultimediaLinkFieldDefinition": multimediaLinkFieldSchema,
+    "EmbeddedSchemaFieldDefinition": embeddedSchemaFieldSchema
+};
 
 /**
  * Sets a potentially nested property on an object using a dot-notation path.
@@ -39,7 +73,7 @@ const setNestedProperty = (obj: any, path: string, value: any): void => {
 
 export const updateSchemaFieldProperties = {
     name: "updateSchemaFieldProperties",
-    description: `Updates specific properties of one or more fields within a given Schema. This is more efficient than replacing the entire fields collection.
+    description: `Updates specific properties of one or more fields within a given Schema. FOr surgical updates, this is more efficient and robust than using the 'updateItemProperties' tool and replacing the entire fields collection.
     
 Versioning is handled automatically. If the item is not checked out, it will be checked out, updated, and then checked back in. If the item is already checked out by you, it will remain checked out after the update. The operation will be aborted if the item is checked out by another user.
 
@@ -130,12 +164,37 @@ Example 3: Update a validation constraint on a field.
                 if (!fieldCollection) {
                     throw new Error(`Schema ${schemaId} does not have a '${fieldLocation}' fields definition.`);
                 }
-
                 const fieldToUpdate = fieldCollection[fieldName];
                 if (!fieldToUpdate) {
                     throw new Error(`Field '${fieldName}' not found in the '${fieldLocation}' definition of Schema ${schemaId}.`);
                 }
 
+
+                const fieldType = fieldToUpdate.$type as keyof typeof schemaTypeMap;
+                const zodSchemaForField = schemaTypeMap[fieldType];
+
+                if (!zodSchemaForField) {
+                    throw new Error(`Validation failed: Unknown field type '${fieldType}' for field '${fieldName}'.`);
+                }
+
+                // 1. Validate the path
+                const pathParts = propertyToUpdate.split('.');
+                let currentValidator: any = zodSchemaForField;
+                for (const part of pathParts) {
+                    if (currentValidator.shape && part in currentValidator.shape) {
+                        currentValidator = currentValidator.shape[part];
+                    } else {
+                        throw new Error(`Validation failed: Property path '${propertyToUpdate}' is not valid for a field of type '${fieldType}'.`);
+                    }
+                }
+
+                // 2. Validate the value against the final validator in the path
+                const validationResult = currentValidator.safeParse(newValue);
+                if (!validationResult.success) {
+                    throw new Error(`Validation failed for '${propertyToUpdate}': ${validationResult.error.errors.map((e: ZodIssue) => e.message).join(', ')}`);
+                }
+                
+                // If validation passes, perform the update
                 setNestedProperty(fieldToUpdate, propertyToUpdate, newValue);
             }
 
