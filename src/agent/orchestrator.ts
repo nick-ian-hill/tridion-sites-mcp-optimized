@@ -4,6 +4,7 @@ import { Task, PlanStep, MessageEmitter, Content } from './types.js';
 import { determineNextStep, summarizeToolOutput } from './gemini.js';
 import { READ_ONLY_TOOLS } from './readOnlyTools.js';
 import { AxiosError } from 'axios';
+import { prepareHistoryForModel } from './historyUtils.js';
 
 interface OrchestratorOptions {
     req: http.IncomingMessage;
@@ -25,7 +26,7 @@ export class Orchestrator {
 
     async process(prompt: string, contextItemId: string | undefined, history: Content[]) {
         const availableTools = this.allTools;
-        
+
         const task: Task = {
             id: 'task-' + Date.now(),
             originalPrompt: prompt,
@@ -37,17 +38,19 @@ export class Orchestrator {
         };
 
         task.history.push({ role: 'user', parts: [{ text: prompt }] });
-        
+
         let finalMessage = "Task failed to complete.";
 
         try {
             const MAX_STEPS = 25;
             for (let i = 0; i < MAX_STEPS; i++) {
-                
+
+                const preparedHistory = prepareHistoryForModel(task.history);
+
                 const nextStep = await determineNextStep(
                     task.originalPrompt,
                     task.contextItemId,
-                    task.history,
+                    preparedHistory,
                     availableTools
                 );
 
@@ -66,7 +69,7 @@ export class Orchestrator {
                 }
 
                 task.plan.push(nextStep);
-                
+
                 await this.executeStep(nextStep, task);
 
                 if (i === MAX_STEPS - 1) {
@@ -101,11 +104,11 @@ export class Orchestrator {
 
     private async executeStep(step: PlanStep, task: Task) {
         step.status = 'in-progress';
-        
+
         const argsSummary = JSON.stringify(step.args, null, 2);
-        this.emit('progress', { 
-            isLog: true, 
-            message: `Calling tool: **${step.tool}**\n\`\`\`json\n${argsSummary}\n\`\`\`` 
+        this.emit('progress', {
+            isLog: true,
+            message: `Calling tool: **${step.tool}**\n\`\`\`json\n${argsSummary}\n\`\`\``
         });
 
         try {
@@ -124,19 +127,37 @@ export class Orchestrator {
                 message: `Tool **${step.tool}** returned:\n\`\`\`json\n${resultSummary}\n\`\`\``
             });
             */
-            
-            let responseForHistory = step.result;
 
+            // For the conversation history, we need a concise summary of the result,
+            // not the full verbose object, to prevent the context from growing too large.
+            let responseForHistory;
+            const isReadOnly = READ_ONLY_TOOLS.includes(step.tool);
+
+            // For read-only tools, we pass the (filtered) result to the model as it may contain data
+            // the model needs for its next step (e.g., a list of items from a search).
+            if (isReadOnly) {
+                responseForHistory = step.result;
+            } else {
+                // For write operations, the model only needs to know it succeeded.
+                // We can include the ID of the affected item for context.
+                if (typeof step.result === 'object' && step.result !== null && step.result.Id) {
+                    responseForHistory = { status: 'success', itemId: step.result.Id };
+                } else {
+                    responseForHistory = { status: 'success' };
+                }
+            }
+
+            // Ensure the response is always a valid JSON object for the history.
             if (Array.isArray(responseForHistory)) {
                 responseForHistory = { items: responseForHistory };
-            } 
+            }
             else if (typeof responseForHistory !== 'object' || responseForHistory === null) {
                 responseForHistory = { output: responseForHistory };
             }
 
             task.history.push({ role: 'model', parts: [{ functionCall: { name: step.tool, args: step.args } }] });
             task.history.push({ role: 'function', parts: [{ functionResponse: { name: step.tool, response: responseForHistory } }] });
-            
+
             this.emit('progress', {
                 isLog: true,
                 message: `Received response from **${step.tool}**. Now deciding next step...`
@@ -155,38 +176,39 @@ export class Orchestrator {
     }
 
     private handleToolResult(result: any, step: PlanStep, task: Task) {
+        // Check if a write operation occurred to invalidate the UI cache if needed.
         if (!task.shouldInvalidateContext && !READ_ONLY_TOOLS.includes(step.tool)) {
             task.shouldInvalidateContext = true;
         }
+        // Handle specific UI actions if the tool requested one.
         if (result?.isUiAction && result.action) {
             this.emit('ui-action', result.action);
         }
 
         let cleanResult = result;
+
         if (
-            result?.content && 
-            Array.isArray(result.content) && 
-            result.content[0]?.type === 'text' && 
+            result?.content &&
+            Array.isArray(result.content) &&
+            result.content[0]?.type === 'text' &&
             typeof result.content[0].text === 'string'
         ) {
             const rawText = result.content[0].text;
             try {
-                const jsonStartIndex = rawText.indexOf('{');
+                const jsonStartIndex = rawText.search(/[[{]/);
                 if (jsonStartIndex > -1) {
-                    // If a '{' is found, extract the substring from that point onwards.
                     const jsonString = rawText.substring(jsonStartIndex);
                     cleanResult = JSON.parse(jsonString);
                 } else {
-                    // If no JSON object is found, treat the entire output as plain text.
                     cleanResult = rawText;
                 }
-
             } catch (e) {
                 console.warn(`[Orchestrator] Could not parse JSON from tool '${step.tool}' result text. Using raw text.`);
-                cleanResult = result.content[0].text;
+                cleanResult = rawText;
             }
         }
-        
+
+        // Assign the cleaned result and filter out any unwanted properties before storing.
         step.result = filterResponseData({ responseData: cleanResult });
     }
 }

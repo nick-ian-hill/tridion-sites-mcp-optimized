@@ -68,6 +68,10 @@ export const determineNextStep = async (
 
     const toolsForNextStep = [...formatToolsForGemini(relevantTools), finishTool];
 
+    const toolsSize = JSON.stringify(toolsForNextStep).length;
+    console.log(`[Request Debug] Tool definitions size: ${toolsSize.toLocaleString()} chars`);
+
+
     const model = genAI.getGenerativeModel({
         model: "gemini-2.5-pro",
         tools: [{ functionDeclarations: toolsForNextStep }],
@@ -91,7 +95,8 @@ export const determineNextStep = async (
         1.  **Analyze Request:** Do I have all the required parameters (e.g., 'title', 'locationId') to use a tool based on the user's request?
         2.  **Ask for Missing Info:** If required information is missing, I MUST call the 'finish' tool. I will use its 'finalMessage' parameter to ask the user for the necessary details. Example: 'finish(finalMessage="I can create that bundle, but what would you like to name it?").
         3.  **Call a Tool:** If I have enough information, I will call the appropriate tool to make progress on the user's request.
-        4.  **Complete the Task:** When the user's request has been fully addressed, I will call the 'finish' tool with a message summarizing what was done.
+        4.  **Summarize the Result:** After a tool has returned data that directly answers the user's original question (e.g., after a 'search' or 'get' operation), I MUST call the 'finish' tool with the special argument "finalMessage: '__NEEDS_SUMMARY__'". This will trigger the final summary for the user.
+        5.  **Complete the Task:** When the user's request has been fully addressed, I will call the 'finish' tool with a message summarizing what was done.
 
         User Request: "${prompt}"
         ${contextItemId ? `Context Item ID: "${contextItemId}"` : ''}
@@ -103,15 +108,16 @@ export const determineNextStep = async (
 
     if (!call) {
         console.warn("[Reasoner] Model did not return a function call. Assuming task is complete.");
+
+        const textResponse = result.response.text().trim();
+
         return {
-            step: -1, // This step won't be executed, it's just a signal
+            step: -1,
             tool: 'finish',
-            // Instead of returning the model's text, return a special signal
-            // that a summary of the last action is needed.
-            args: { finalMessage: '__NEEDS_SUMMARY__' },
-            description: "Finish the task.",
+            args: { finalMessage: textResponse || "Task completed." },
+            description: "Finish with a direct text response from the model.",
             status: 'pending'
-        };
+        }
     }
     
     const nextStep: PlanStep = {
