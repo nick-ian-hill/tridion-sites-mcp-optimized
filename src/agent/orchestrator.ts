@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { filterResponseData } from '../utils/responseFiltering.js';
-import { Task, PlanStep, MessageEmitter, Content } from './types.js';
+import { Task, PlanStep, MessageEmitter, Content, TextPart } from './types.js';
 import { determineNextStep, summarizeToolOutput } from './gemini.js';
 import { READ_ONLY_TOOLS } from './readOnlyTools.js';
 import { AxiosError } from 'axios';
@@ -47,8 +47,12 @@ export class Orchestrator {
 
                 const preparedHistory = prepareHistoryForModel(task.history);
 
+                // Find the most recent user prompt to ensure the model has the correct immediate context.
+                const lastUserMessage = task.history.findLast(h => h.role === 'user');
+                const latestPrompt = (lastUserMessage?.parts[0] as TextPart)?.text || task.originalPrompt;
+
                 const nextStep = await determineNextStep(
-                    task.originalPrompt,
+                    latestPrompt,
                     task.contextItemId,
                     preparedHistory,
                     availableTools
@@ -58,7 +62,7 @@ export class Orchestrator {
                     if (nextStep?.args.finalMessage === '__NEEDS_SUMMARY__') {
                         const lastStep = task.plan[task.plan.length - 1];
                         if (lastStep && lastStep.status === 'completed') {
-                            finalMessage = await summarizeToolOutput(lastStep.result, task.originalPrompt);
+                            finalMessage = await summarizeToolOutput(lastStep.result, latestPrompt);
                         } else {
                             finalMessage = "The task is complete.";
                         }
