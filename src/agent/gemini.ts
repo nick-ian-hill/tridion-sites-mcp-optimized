@@ -1,14 +1,14 @@
-import { GoogleGenerativeAI, FunctionDeclarationSchema } from "@google/generative-ai";
+import { GoogleGenAI, FunctionDeclaration, Content, Type, GenerateContentResponse } from "@google/genai";
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
-import { PlanStep, Content } from './types.js';
+import { PlanStep } from './types.js';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 if (!GEMINI_API_KEY) {
     throw new Error("Server is not configured with a GEMINI_API_KEY.");
 }
 
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+const genAI = new GoogleGenAI({apiKey: GEMINI_API_KEY});
 
 // Helper to clean Zod schemas for Gemini
 const removeUnsupportedProperties = (schema: any): any => {
@@ -28,7 +28,7 @@ const removeUnsupportedProperties = (schema: any): any => {
 };
 
 // Converts our internal tool definitions to Gemini's expected format
-const formatToolsForGemini = (tools: any[]): any[] => {
+const formatToolsForGemini = (tools: any[]): FunctionDeclaration[] => {
     return tools.map(tool => {
         const zodSchema = z.object(tool.input);
         let jsonSchema = zodToJsonSchema(zodSchema);
@@ -36,7 +36,7 @@ const formatToolsForGemini = (tools: any[]): any[] => {
         return {
             name: tool.name,
             description: tool.description,
-            parameters: jsonSchema as FunctionDeclarationSchema
+            parameters: jsonSchema as any
         };
     });
 };
@@ -51,14 +51,14 @@ export const determineNextStep = async (
     relevantTools: any[]
 ): Promise<PlanStep | null> => {
     // We add a virtual 'finish' tool for the model to call when the task is complete.
-    const finishTool = {
+    const finishTool: FunctionDeclaration = {
         name: "finish",
         description: "Call this tool to signal that you have fully completed the user's request and all tasks are done.",
         parameters: {
-            type: 'object',
+            type: Type.OBJECT,
             properties: {
                 finalMessage: {
-                    type: 'string',
+                    type: Type.STRING,
                     description: "A concluding message for the user summarizing the outcome."
                 }
             },
@@ -70,13 +70,6 @@ export const determineNextStep = async (
 
     const toolsSize = JSON.stringify(toolsForNextStep).length;
     console.log(`[Request Debug] Tool definitions size: ${toolsSize.toLocaleString()} chars`);
-
-
-    const model = genAI.getGenerativeModel({
-        model: "gemini-2.5-pro",
-        tools: [{ functionDeclarations: toolsForNextStep }],
-        generationConfig: { temperature: 0.0 }
-    });
 
     const fullPrompt = `
         You are an expert orchestrator for a CMS. Your goal is to fulfill the user's request by calling tools one at a time.
@@ -102,14 +95,23 @@ export const determineNextStep = async (
         ${contextItemId ? `Context Item ID: "${contextItemId}"` : ''}
     `;
 
-    const chat = model.startChat({ history });
-    const result = await chat.sendMessage(fullPrompt);
-    const call = result.response.functionCalls()?.[0];
+    const contents: Content[] = [...history, { role: 'user', parts: [{ text: fullPrompt }] }];
+    
+    const result: GenerateContentResponse = await genAI.models.generateContent({
+        model: "gemini-2.5-pro",
+        contents: contents,
+        config: {
+            tools: [{ functionDeclarations: toolsForNextStep }],
+            temperature: 0.0
+        }
+    });
+    
+    const call = result.functionCalls?.[0];
 
-    if (!call) {
+    if (!call || !call.name) {
         console.warn("[Reasoner] Model did not return a function call. Assuming task is complete.");
 
-        const textResponse = result.response.text().trim();
+        const textResponse = (result.text ?? "").trim();
 
         return {
             step: -1,
@@ -131,18 +133,12 @@ export const determineNextStep = async (
     return nextStep;
 };
 
-
 /**
  * Summarization Module
  */
 export const summarizeToolOutput = async (toolOutput: any, originalPrompt: string): Promise<string> => {
     // If there's nothing to summarize, return an empty string.
     if (toolOutput === null || toolOutput === undefined) return "";
-
-    const summarizerModel = genAI.getGenerativeModel({
-        model: "gemini-2.5-flash",
-        generationConfig: { temperature: 0.0 } // Set to 0.0 for factual summarization
-    });
 
     const summaryPrompt = `
         Directly and concisely answer the user's question in a natural, conversational way using the provided tool output.
@@ -152,8 +148,14 @@ export const summarizeToolOutput = async (toolOutput: any, originalPrompt: strin
     `;
 
     try {
-        const result = await summarizerModel.generateContent(summaryPrompt);
-        return result.response.text().trim();
+        const result = await genAI.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: summaryPrompt,
+            config: {
+                temperature: 0.0
+            }
+        });
+        return (result.text ?? "").trim();
     } catch (error) {
         console.error("[Summarizer] Error generating summary:", error);
         return `Completed with result: ${toolOutput}`;

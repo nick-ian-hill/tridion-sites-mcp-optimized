@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
+import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 
@@ -43,20 +43,21 @@ ${contextualText}
 
             console.log(`[generateContent] Calling Gemini with temperature: ${temperature}`);
             
-            const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-            const model = genAI.getGenerativeModel({
-                model: "gemini-2.5-flash-lite",
-                generationConfig: {
-                    temperature: temperature,
-                },
-                safetySettings: [{
-                    category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                    threshold: HarmBlockThreshold.BLOCK_NONE
-                }]
-            });
+            const genAI = new GoogleGenAI({apiKey: GEMINI_API_KEY});
             
-            const result = await model.generateContent(finalPrompt);
-            const generatedText = result.response.text();
+            const result = await genAI.models.generateContent({
+                model: "gemini-2.5-flash-lite",
+                contents: finalPrompt,
+                config: {
+                    temperature: temperature,
+                    safetySettings: [{
+                        category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                        threshold: HarmBlockThreshold.BLOCK_NONE
+                    }]
+                }
+            });
+
+            const generatedText = (result.text ?? "").trim();
 
             return {
                 content: [{

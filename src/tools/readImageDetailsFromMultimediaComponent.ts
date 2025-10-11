@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 
@@ -81,8 +81,7 @@ export const readImageDetailsFromMultimediaComponent = {
             // --- Step 3: Call the Gemini Vision API ---
             // For available models see: https://ai.google.dev/gemini-api/docs/models
             console.log(`Sending prompt and image to Gemini 2.5 Flash Image model...`);
-            const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-image-preview" });
+            const genAI = new GoogleGenAI({apiKey: GEMINI_API_KEY});
 
             const imagePart = {
                 inlineData: {
@@ -91,9 +90,12 @@ export const readImageDetailsFromMultimediaComponent = {
                 },
             };
 
-            const result = await model.generateContent([prompt, imagePart]);
-            const response = result.response;
-            const text = response.text();
+            const result = await genAI.models.generateContent({
+                model: "gemini-2.5-flash-image",
+                contents: [prompt, imagePart]
+            });
+            
+            const text = (result.text ?? "").trim();
 
             console.log("Successfully received response from Gemini.");
 

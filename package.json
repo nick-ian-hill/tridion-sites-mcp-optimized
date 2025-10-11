@@ -12,7 +12,6 @@
   "license": "ISC",
   "dependencies": {
     "@google/genai": "^1.16.0",
-    "@google/generative-ai": "^0.24.1",
     "@modelcontextprotocol/sdk": "^1.17.2",
     "@viz-js/viz": "^3.17.0",
     "axios": "^1.11.0",
