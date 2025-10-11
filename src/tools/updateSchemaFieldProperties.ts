@@ -27,7 +27,7 @@ const fieldUpdateSchema = z.object({
         z.number(),
         z.boolean(),
         z.record(z.any()),
-        z.array(z.any())
+        z.array(z.record(z.any()))
     ]).describe("The new value for the property. Can be a string, number, boolean, or a JSON object for complex properties like 'AllowedTargetSchemas'.")
 });
 
