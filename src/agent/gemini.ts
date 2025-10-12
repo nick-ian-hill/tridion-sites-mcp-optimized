@@ -188,7 +188,7 @@ export const determineNextStep = async (
     return nextStep;
 };
 
-export const selectRelevantTools = async (prompt: string, allTools: any[], maxTools: number = 8): Promise<any[]> => {
+export const selectRelevantTools = async (prompt: string, allTools: any[], maxTools: number = 6): Promise<any[]> => {
     const toolLister: FunctionDeclaration = {
         name: 'setSelectedTools',
         description: 'Use this function to provide the list of tools relevant to the user\'s request.',

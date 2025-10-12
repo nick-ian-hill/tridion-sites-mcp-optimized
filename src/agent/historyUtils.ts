@@ -1,7 +1,7 @@
 import { Content, FunctionResponsePart } from './types.js';
 import { filterResponseData } from '../utils/responseFiltering.js';
 
-export const MAX_HISTORY_CHAR_LENGTH = 250000;
+export const MAX_HISTORY_CHAR_LENGTH = 500000;
 
 export function prepareHistoryForModel(history: Content[]): Content[] {
     const originalLength = JSON.stringify(history).length;
