@@ -1,11 +1,10 @@
 import http from 'node:http';
 import { filterResponseData } from '../utils/responseFiltering.js';
 import { Task, PlanStep, MessageEmitter, Content } from './types.js';
-import { determineNextStep, summarizeToolOutput, detectIntent, selectRelevantTools, DetectedIntent } from './gemini.js';
+import { determineNextStep, summarizeToolOutput, selectRelevantTools, detectIntent, DetectedIntent, MANDATORY_TOOLS } from './gemini.js';
 import { READ_ONLY_TOOLS } from './readOnlyTools.js';
 import { AxiosError } from 'axios';
 import { prepareHistoryForModel } from './historyUtils.js';
-import { FunctionCallingConfigMode } from '@google/genai';
 
 interface OrchestratorOptions {
     req: http.IncomingMessage;
@@ -41,29 +40,37 @@ export class Orchestrator {
         let finalMessage = "Task failed to complete.";
 
         try {
-            this.emit('progress', { isLog: true, message: "Analyzing user's request..." });
+            this.emit('progress', { isLog: true, message: "Analyzing user's request and complexity..." });
             const intent: DetectedIntent = await detectIntent(prompt);
 
             let availableTools: any[];
-            let functionCallingMode: FunctionCallingConfigMode;
 
-            if (intent.strategy === 'FORCE_TOOL_CALL') {
-                this.emit('progress', { isLog: true, message: "Strategy: Force Tool Call. Selecting relevant tools..." });
-                availableTools = await selectRelevantTools(prompt, this.allTools);
-                functionCallingMode = FunctionCallingConfigMode.ANY;
+            switch (intent.strategy) {
+                case 'SIMPLE_ACTION':
+                    this.emit('progress', { isLog: true, message: "Strategy: Simple Action. Selecting a small toolset..." });
+                    availableTools = await selectRelevantTools(prompt, this.allTools, MANDATORY_TOOLS.length + 1);
+                    break;
                 
-                this.emit('progress', {
-                   isLog: true,
-                   message: `Tool router selected ${availableTools.length}/${this.allTools.length} tools for this task.`
-                });
+                case 'MEDIUM_ACTION':
+                    this.emit('progress', { isLog: true, message: "Strategy: Medium Action. Selecting a medium toolset..." });
+                    availableTools = await selectRelevantTools(prompt, this.allTools, 20);
+                    break;
+                
+                case 'COMPLEX_OR_GENERAL':
+                default:
+                    this.emit('progress', { isLog: true, message: "Strategy: Complex/General. Using all available tools..." });
+                    availableTools = this.allTools;
+                    break;
+            }
 
-            } else { // AUTO_MODE
-                this.emit('progress', { isLog: true, message: "Strategy: Auto Mode. Using all available tools..." });
-                availableTools = this.allTools;
-                functionCallingMode = FunctionCallingConfigMode.AUTO;
+             if (intent.strategy !== 'COMPLEX_OR_GENERAL') {
+                this.emit('progress', {
+                    isLog: true,
+                    message: `Tool router selected ${availableTools.length}/${this.allTools.length} tools for this task.`
+                });
             }
             
-            finalMessage = await this.executePlan(task, availableTools, prompt, functionCallingMode);
+            finalMessage = await this.executePlan(task, availableTools, prompt);
 
             this.emit('result', {
                 message: finalMessage,
@@ -90,8 +97,8 @@ export class Orchestrator {
         }
     }
 
-    private async executePlan(task: Task, availableTools: any[], latestPrompt: string, functionCallingMode: FunctionCallingConfigMode): Promise<string> {
-        const MAX_STEPS = 25;
+    private async executePlan(task: Task, availableTools: any[], latestPrompt: string): Promise<string> {
+        const MAX_STEPS = 20;
         for (let i = 0; i < MAX_STEPS; i++) {
             const preparedHistory = prepareHistoryForModel(task.history);
             
@@ -99,8 +106,7 @@ export class Orchestrator {
                 latestPrompt,
                 task.contextItemId,
                 preparedHistory,
-                availableTools,
-                functionCallingMode
+                availableTools
             );
 
             if (!nextStep || nextStep.tool === 'finish') {

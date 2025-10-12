@@ -10,9 +10,8 @@ if (!GEMINI_API_KEY) {
 
 const genAI = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
-// The desired execution strategy
 export interface DetectedIntent {
-    strategy: 'FORCE_TOOL_CALL' | 'AUTO_MODE';
+  strategy: 'SIMPLE_ACTION' | 'MEDIUM_ACTION' | 'COMPLEX_OR_GENERAL';
 }
 
 export interface NextStepResult {
@@ -21,23 +20,28 @@ export interface NextStepResult {
 }
 
 /**
- * Detects the user's intent and determines the best execution strategy.
+ * Detects if the prompt is a general question, a simple action, or a medium/complex action.
  */
 export const detectIntent = async (prompt: string): Promise<DetectedIntent> => {
     const tools: FunctionDeclaration[] = [
         {
-            name: 'forceToolExecutionForAction',
-            description: 'Use for any specific user command that implies performing a clear action or task, such as "create", "update", "delete", "get item", "move", "copy", "search for".',
+            name: 'handleSimpleAction',
+            description: 'Use for a very clear, specific, single-action command that requires only a few tools. Examples: "create a folder", "get item X", "what time is it?".',
             parameters: { type: Type.OBJECT, properties: {} }
         },
         {
-            name: 'answerInformationally',
-            description: 'Use for conversational questions, requests for information about the agent\'s capabilities (e.g., "what can you do?", "list tools"), or ambiguous requests where a direct text answer might be better than forcing a tool.',
+            name: 'handleMediumAction',
+            description: 'Use for a clear command that may require a few steps or a moderate number of tools. Examples: "find an image and copy it to a new folder", "update the content and metadata of a component".',
+            parameters: { type: Type.OBJECT, properties: {} }
+        },
+        {
+            name: 'handleComplexOrGeneralQuery',
+            description: 'Use for broad, ambiguous, multi-part requests, or general conversational questions. This is the default choice if unsure. Examples: "find all components modified last week and add them to the marketing bundle", "what can you do?", "list all tools".',
             parameters: { type: Type.OBJECT, properties: {} }
         }
     ];
 
-    const systemInstruction = `You are an expert intent strategist. Analyze the user's prompt and decide on the best execution mode. If it's a clear command, choose 'forceToolExecutionForAction'. If it's a question about capabilities or seems conversational, choose 'answerInformationally'. You MUST call one of the provided functions.`;
+    const systemInstruction = `You are an expert intent strategist. Analyze the user's prompt and classify its complexity. You MUST call one of the provided functions. Default to handleComplexOrGeneralQuery if uncertain.`;
 
     try {
         const result = await genAI.models.generateContent({
@@ -52,17 +56,21 @@ export const detectIntent = async (prompt: string): Promise<DetectedIntent> => {
         });
 
         const call = result.functionCalls?.[0];
-        if (call?.name === 'answerInformationally') {
-            console.log("[IntentDetector] Strategy: AUTO_MODE (Informational/Conversational)");
-            return { strategy: 'AUTO_MODE' };
+        if (call?.name === 'handleSimpleAction') {
+            console.log("[IntentDetector] Strategy: SIMPLE_ACTION");
+            return { strategy: 'SIMPLE_ACTION' };
+        }
+        if (call?.name === 'handleMediumAction') {
+            console.log("[IntentDetector] Strategy: MEDIUM_ACTION");
+            return { strategy: 'MEDIUM_ACTION' };
         }
         
-        console.log("[IntentDetector] Strategy: FORCE_TOOL_CALL (Action/Command)");
-        return { strategy: 'FORCE_TOOL_CALL' }; // Default to the more common case
+        console.log("[IntentDetector] Strategy: COMPLEX_OR_GENERAL");
+        return { strategy: 'COMPLEX_OR_GENERAL' };
 
     } catch (error) {
-        console.error("[IntentDetector] Error detecting intent, defaulting to FORCE_TOOL_CALL:", error);
-        return { strategy: 'FORCE_TOOL_CALL' }; // Failsafe
+        console.error("[IntentDetector] Error detecting intent, defaulting to COMPLEX_OR_GENERAL:", error);
+        return { strategy: 'COMPLEX_OR_GENERAL' };
     }
 };
 
@@ -104,8 +112,7 @@ export const determineNextStep = async (
     prompt: string,
     contextItemId: string | undefined,
     history: Content[],
-    relevantTools: any[],
-    functionCallingMode: FunctionCallingConfigMode = FunctionCallingConfigMode.ANY
+    relevantTools: any[]
 ): Promise<NextStepResult> => {
     const finishTool: FunctionDeclaration = {
         name: "finish",
@@ -125,11 +132,7 @@ export const determineNextStep = async (
     const toolsForNextStep = [...formatToolsForGemini(relevantTools), finishTool];
 
     const systemInstruction = `
-        You are an expert orchestrator for a CMS. Your goal is to fulfill the user's request by calling tools one at a time.
-        
-        **Current Mode: ${functionCallingMode}**
-        - If Mode is ANY, you MUST respond by calling a single tool. Do not respond with text.
-        - If Mode is AUTO, you have the flexibility to either call a tool OR respond directly with a text message if that is more appropriate (e.g., for a simple conversational question).
+        You are an expert orchestrator for a CMS. Your goal is to fulfill the user's request. You have the flexibility to either call a tool OR respond directly with a text message if that is more appropriate (e.g., for a simple conversational question).
 
         **Answering Informational Questions:**
         - If the user's request is a direct question for information (e.g., 'list the tools', 'what is the current time?') and doesn't seem to be part of a larger multi-step task, your primary goal is conciseness.
@@ -162,7 +165,7 @@ export const determineNextStep = async (
             systemInstruction: systemInstruction,
             tools: [{ functionDeclarations: toolsForNextStep }],
             toolConfig: {
-                functionCallingConfig: { mode: functionCallingMode }
+                functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO }
             },
             temperature: 0.0
         }
@@ -195,16 +198,22 @@ export const determineNextStep = async (
     return { planStep: nextStep, modelResponseContent };
 };
 
-export const selectRelevantTools = async (prompt: string, allTools: any[], maxTools: number = 6): Promise<any[]> => {
+export const MANDATORY_TOOLS = [
+        'bulkReadItems', 'getItem', 'createItem', 'createPage', 'createSchema', 
+        'search', 'getPublications', 'getCurrentTime', 'updateContent', 
+        'updateMetadata', 'updatePage', 'localizeItem'
+    ];
+
+export const selectRelevantTools = async (prompt: string, allTools: any[], maxTools: number): Promise<any[]> => {
     const toolLister: FunctionDeclaration = {
         name: 'setSelectedTools',
-        description: 'Use this function to provide the list of tools relevant to the user\'s request.',
+        description: 'Use this function to provide the list of additional tools relevant to the user\'s request.',
         parameters: {
             type: Type.OBJECT,
             properties: {
                 toolNames: {
                     type: Type.ARRAY,
-                    description: 'An array of the names of the tools that are most relevant to the user\'s request.',
+                    description: 'An array of the names of the additional tools that are most relevant to the user\'s request.',
                     items: { type: Type.STRING }
                 }
             },
@@ -212,56 +221,56 @@ export const selectRelevantTools = async (prompt: string, allTools: any[], maxTo
         }
     };
 
-    const simplifiedTools = allTools.map(t => ({ name: t.name, description: t.description }));
+    // Filter out mandatory tools from the list the selector model will see
+    const optionalTools = allTools.filter(t => !MANDATORY_TOOLS.includes(t.name));
+    const simplifiedOptionalTools = optionalTools.map(t => ({ name: t.name, description: t.description }));
+
+    const numToolsToSelect = maxTools - MANDATORY_TOOLS.length;
+    if (numToolsToSelect <= 0) {
+        console.log(`[ToolRouter] Tool budget (${maxTools}) met by mandatory tools. Selecting mandatory tools only.`);
+        return allTools.filter(t => MANDATORY_TOOLS.includes(t.name) || t.name === 'finish');
+    }
 
     const systemInstruction = `
-        You are a tool routing expert. Your job is to analyze the user's request and the list of available tools.
-        You must select the top ${maxTools} most relevant tools that are likely to be needed to fulfill the user's request.
-        Consider that the user might issue follow-up commands. For example, if they ask to "create a folder", they might later ask to "get the item" or "move it", so include related tools.
-        If the user asks a question about an item (e.g., "what is its ID?"), you must include tools for retrieving items like 'getItem'.
-        You MUST call the 'setSelectedTools' function with the names of your selected tools.
+        You are a tool routing expert. Your job is to analyze the user's request and select the most relevant tools.
+        The following core tools are already included: ${MANDATORY_TOOLS.join(', ')}.
+        From the list of available tools below, you must select the top ${numToolsToSelect} MOST RELEVANT *additional* tools that are likely to be needed.
+        Do NOT re-select any of the core tools. You MUST call the 'setSelectedTools' function with the names of your selected additional tools.
     `;
 
     const fullPrompt = `
         User Request: "${prompt}"
 
-        Available Tools:
-        ${JSON.stringify(simplifiedTools, null, 2)}
+        Available Additional Tools:
+        ${JSON.stringify(simplifiedOptionalTools, null, 2)}
     `;
 
     try {
         const result = await genAI.models.generateContent({
             model: "gemini-2.5-pro",
             contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
-            config: {
-                systemInstruction,
-                tools: [{ functionDeclarations: [toolLister] }],
-                toolConfig: {
-                    functionCallingConfig: {
-                        mode: FunctionCallingConfigMode.ANY,
-                    }
-                },
-                temperature: 0.0
-            }
+            config: { systemInstruction, tools: [{ functionDeclarations: [toolLister] }], toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.ANY } }, temperature: 0.0 }
         });
 
         const call = result.functionCalls?.[0];
-        if (call?.name === 'setSelectedTools' && call.args?.toolNames) {
-            const toolNames = call.args.toolNames as string[];
-            console.log(`[ToolRouter] Selected ${toolNames.length} relevant tools:`, toolNames);
-            const relevantTools = allTools.filter(t => toolNames.includes(t.name));
-            if (!relevantTools.some(t => t.name === 'finish')) {
-                 const finishTool = allTools.find(t => t.name === 'finish');
-                 if(finishTool) relevantTools.push(finishTool);
-            }
-            return relevantTools;
-        }
+        const finalToolNames = new Set<string>(MANDATORY_TOOLS);
 
-        console.warn("[ToolRouter] Model did not select tools as expected. Falling back to all tools.");
-        return allTools;
+        if (call?.name === 'setSelectedTools' && call.args?.toolNames) {
+            const additionalToolNames = call.args.toolNames as string[];
+            additionalToolNames.forEach(name => finalToolNames.add(name));
+        } else {
+             console.warn("[ToolRouter] Model did not select any additional tools.");
+        }
+        
+        // Ensure 'finish' is always present
+        finalToolNames.add('finish');
+
+        console.log(`[ToolRouter] Selected ${finalToolNames.size} total tools.`);
+        return allTools.filter(t => finalToolNames.has(t.name));
+
     } catch (error) {
-        console.error("[ToolRouter] Error selecting relevant tools, falling back to all tools:", error);
-        return allTools;
+        console.error("[ToolRouter] Error selecting relevant tools, falling back to mandatory tools:", error);
+        return allTools.filter(t => MANDATORY_TOOLS.includes(t.name) || t.name === 'finish');
     }
 };
 
