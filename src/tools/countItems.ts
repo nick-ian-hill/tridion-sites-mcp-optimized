@@ -51,12 +51,14 @@ export const countItems = {
     name: "countItems",
     description: "Counts the number of items in a provided data structure from a previous tool call. It intelligently handles different response formats from tools like 'search' or 'getItemsInContainer'. Use this tool when asked to return an item count on the results of a tool call.",
     input: {
-        data: z.any().describe("The data returned from a previous tool call, which contains the items to be counted."),
+        data: z.union([
+            z.record(z.string(), z.any()),
+            z.array(z.record(z.string(), z.any()))]).describe("The data returned from a previous tool call, which contains the items to be counted."),
     },
     execute: async ({ data }: { data: any }) => {
         const items = extractItemsArray(data);
         const count = items.length;
-        
+
         return {
             count: count,
             summary: `There are ${count} items in the list.`
