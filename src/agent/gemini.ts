@@ -10,6 +10,57 @@ if (!GEMINI_API_KEY) {
 
 const genAI = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
+// The desired execution strategy
+export interface DetectedIntent {
+    strategy: 'FORCE_TOOL_CALL' | 'AUTO_MODE';
+}
+
+/**
+ * Detects the user's intent and determines the best execution strategy.
+ */
+export const detectIntent = async (prompt: string): Promise<DetectedIntent> => {
+    const tools: FunctionDeclaration[] = [
+        {
+            name: 'forceToolExecutionForAction',
+            description: 'Use for any specific user command that implies performing a clear action or task, such as "create", "update", "delete", "get item", "move", "copy", "search for".',
+            parameters: { type: Type.OBJECT, properties: {} }
+        },
+        {
+            name: 'answerInformationally',
+            description: 'Use for conversational questions, requests for information about the agent\'s capabilities (e.g., "what can you do?", "list tools"), or ambiguous requests where a direct text answer might be better than forcing a tool.',
+            parameters: { type: Type.OBJECT, properties: {} }
+        }
+    ];
+
+    const systemInstruction = `You are an expert intent strategist. Analyze the user's prompt and decide on the best execution mode. If it's a clear command, choose 'forceToolExecutionForAction'. If it's a question about capabilities or seems conversational, choose 'answerInformationally'. You MUST call one of the provided functions.`;
+
+    try {
+        const result = await genAI.models.generateContent({
+            model: "gemini-2.5-pro",
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            config: {
+                systemInstruction,
+                tools: [{ functionDeclarations: tools }],
+                toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.ANY } },
+                temperature: 0.0
+            }
+        });
+
+        const call = result.functionCalls?.[0];
+        if (call?.name === 'answerInformationally') {
+            console.log("[IntentDetector] Strategy: AUTO_MODE (Informational/Conversational)");
+            return { strategy: 'AUTO_MODE' };
+        }
+        
+        console.log("[IntentDetector] Strategy: FORCE_TOOL_CALL (Action/Command)");
+        return { strategy: 'FORCE_TOOL_CALL' }; // Default to the more common case
+
+    } catch (error) {
+        console.error("[IntentDetector] Error detecting intent, defaulting to FORCE_TOOL_CALL:", error);
+        return { strategy: 'FORCE_TOOL_CALL' }; // Failsafe
+    }
+};
+
 // Helper to clean Zod schemas for Gemini
 const removeUnsupportedProperties = (schema: any): any => {
     if (!schema || typeof schema !== 'object') return schema;
@@ -42,13 +93,14 @@ const formatToolsForGemini = (tools: any[]): FunctionDeclaration[] => {
 };
 
 /**
- * Determines the single next step for the agent to take. (ReAct model)
+ * Determines the single next step for the agent to take.
  */
 export const determineNextStep = async (
     prompt: string,
     contextItemId: string | undefined,
     history: Content[],
-    relevantTools: any[]
+    relevantTools: any[],
+    functionCallingMode: FunctionCallingConfigMode = FunctionCallingConfigMode.ANY // Default to ANY
 ): Promise<PlanStep | null> => {
     const finishTool: FunctionDeclaration = {
         name: "finish",
@@ -69,9 +121,14 @@ export const determineNextStep = async (
 
     const systemInstruction = `
         You are an expert orchestrator for a CMS. Your goal is to fulfill the user's request by calling tools one at a time.
-        You MUST respond by calling a single tool. Do not respond with text.
-        When formulating a response, especially for the 'finalMessage' in the 'finish' tool, you MUST use Markdown for any formatting (like lists, bold text, or code snippets).
-        Review the conversation history and the user's latest request, then decide on the single next action to take.
+        
+        **Current Mode: ${functionCallingMode}**
+        - If Mode is ANY, you MUST respond by calling a single tool. Do not respond with text.
+        - If Mode is AUTO, you have the flexibility to either call a tool OR respond directly with a text message if that is more appropriate (e.g., for a simple conversational question).
+
+        **Answering Informational Questions:**
+        - If the user's request is a direct question for information (e.g., 'list the tools', 'what is the current time?') and doesn't seem to be part of a larger multi-step task, your primary goal is conciseness.
+        - If a single tool can provide the answer, call that tool. In the *next* step, your ONLY action should be to call the 'finish' tool with a 'finalMessage' that directly and concisely answers the user's question. 
 
         **Error Handling Rules:**
         - If the last tool execution resulted in an error, analyze the error message.
@@ -81,15 +138,13 @@ export const determineNextStep = async (
         - If you cannot recover from the error, call the 'finish' tool with a message explaining the failure.
 
         **Reasoning Steps:**
-        0.  **PRIORITY 1: Analyze Tool Output.** Check the last message in the conversation history. If it is a 'functionResponse', your entire focus is to process that output.
-            - If the tool's output directly and completely answers the user's latest question, your ONLY next step is to call the 'finish' tool with the special argument "finalMessage: '__NEEDS_SUMMARY__'".
+        1.  **Analyze Tool Output:** Check the last message in the conversation history. If it is a 'functionResponse', your entire focus is to process that output.
+            - If the output directly and completely answers the user's latest question, your ONLY next step is to call the 'finish' tool with the special argument "finalMessage: '__NEEDS_SUMMARY__'".
             - If the output is an intermediate step towards a larger goal, call the next logical tool.
-            - **Crucially, do not re-answer previous questions or get distracted by the conversational history prior to the tool call. Focus exclusively on the tool's output and the user's latest request.**
-        1.  **Handle General Questions:** If the user's LATEST request is a general question that does not map to a specific tool or command (e.g., "what can you do?", "who are you?", "can you help me?"), you MUST call the 'finish' tool with a helpful, conversational response in the 'finalMessage'.
         2.  **Analyze New Request:** If there is no recent tool output, analyze the user's latest request. Do I have all the required parameters (e.g., 'title', 'locationId') to use a tool based on the user's request?
-        3.  **Ask for Missing Info:** If required information is missing, I MUST call the 'finish' tool. I will use its 'finalMessage' parameter to ask the user for the necessary details. Example: 'finish(finalMessage="I can create that bundle, but what would you like to name it?").
+        3.  **Ask for Missing Info:** If required information is missing, I MUST call the 'finish' tool. I will use its 'finalMessage' parameter to ask the user for the necessary details.
         4.  **Call a Tool:** If I have enough information, I will call the appropriate tool to make progress on the user's request.
-        5.  **Complete the Task:** When the user's request has been fully addressed (e.g., after creating an item where no summary is needed), I will call the 'finish' tool with a message summarizing what was done.
+        5.  **Complete the Task:** When the user's request has been fully addressed, call the 'finish' tool with a message summarizing what was done.
 
         User Request: "${prompt}"
         ${contextItemId ? `Context Item ID: "${contextItemId}"` : ''}
@@ -102,15 +157,12 @@ export const determineNextStep = async (
             systemInstruction: systemInstruction,
             tools: [{ functionDeclarations: toolsForNextStep }],
             toolConfig: {
-                functionCallingConfig: {
-                    // Force the model to call a function. It cannot return text.
-                    mode: FunctionCallingConfigMode.ANY,
-                }
+                functionCallingConfig: { mode: functionCallingMode } // Dynamically set the mode
             },
             temperature: 0.0
         }
     });
-
+    
     const call = result.functionCalls?.[0];
 
     if (!call || !call.name) {
@@ -136,9 +188,76 @@ export const determineNextStep = async (
     return nextStep;
 };
 
-/**
- * Summarization Module
- */
+export const selectRelevantTools = async (prompt: string, allTools: any[], maxTools: number = 8): Promise<any[]> => {
+    const toolLister: FunctionDeclaration = {
+        name: 'setSelectedTools',
+        description: 'Use this function to provide the list of tools relevant to the user\'s request.',
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                toolNames: {
+                    type: Type.ARRAY,
+                    description: 'An array of the names of the tools that are most relevant to the user\'s request.',
+                    items: { type: Type.STRING }
+                }
+            },
+            required: ['toolNames']
+        }
+    };
+
+    const simplifiedTools = allTools.map(t => ({ name: t.name, description: t.description }));
+
+    const systemInstruction = `
+        You are a tool routing expert. Your job is to analyze the user's request and the list of available tools.
+        You must select the top ${maxTools} most relevant tools that are likely to be needed to fulfill the user's request.
+        Consider that the user might issue follow-up commands. For example, if they ask to "create a folder", they might later ask to "get the item" or "move it", so include related tools.
+        If the user asks a question about an item (e.g., "what is its ID?"), you must include tools for retrieving items like 'getItem'.
+        You MUST call the 'setSelectedTools' function with the names of your selected tools.
+    `;
+
+    const fullPrompt = `
+        User Request: "${prompt}"
+
+        Available Tools:
+        ${JSON.stringify(simplifiedTools, null, 2)}
+    `;
+
+    try {
+        const result = await genAI.models.generateContent({
+            model: "gemini-2.5-pro",
+            contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+            config: {
+                systemInstruction,
+                tools: [{ functionDeclarations: [toolLister] }],
+                toolConfig: {
+                    functionCallingConfig: {
+                        mode: FunctionCallingConfigMode.ANY,
+                    }
+                },
+                temperature: 0.0
+            }
+        });
+
+        const call = result.functionCalls?.[0];
+        if (call?.name === 'setSelectedTools' && call.args?.toolNames) {
+            const toolNames = call.args.toolNames as string[];
+            console.log(`[ToolRouter] Selected ${toolNames.length} relevant tools:`, toolNames);
+            const relevantTools = allTools.filter(t => toolNames.includes(t.name));
+            if (!relevantTools.some(t => t.name === 'finish')) {
+                 const finishTool = allTools.find(t => t.name === 'finish');
+                 if(finishTool) relevantTools.push(finishTool);
+            }
+            return relevantTools;
+        }
+
+        console.warn("[ToolRouter] Model did not select tools as expected. Falling back to all tools.");
+        return allTools;
+    } catch (error) {
+        console.error("[ToolRouter] Error selecting relevant tools, falling back to all tools:", error);
+        return allTools;
+    }
+};
+
 export const summarizeToolOutput = async (toolOutput: any, userPrompt: string): Promise<string> => {
     if (toolOutput === null || toolOutput === undefined) return "";
 

@@ -1,10 +1,11 @@
 import http from 'node:http';
 import { filterResponseData } from '../utils/responseFiltering.js';
-import { Task, PlanStep, MessageEmitter, Content, TextPart } from './types.js';
-import { determineNextStep, summarizeToolOutput } from './gemini.js';
+import { Task, PlanStep, MessageEmitter, Content } from './types.js';
+import { determineNextStep, summarizeToolOutput, detectIntent, selectRelevantTools, DetectedIntent } from './gemini.js';
 import { READ_ONLY_TOOLS } from './readOnlyTools.js';
 import { AxiosError } from 'axios';
 import { prepareHistoryForModel } from './historyUtils.js';
+import { FunctionCallingConfigMode } from '@google/genai';
 
 interface OrchestratorOptions {
     req: http.IncomingMessage;
@@ -25,8 +26,6 @@ export class Orchestrator {
     }
 
     async process(prompt: string, contextItemId: string | undefined, history: Content[]) {
-        const availableTools = this.allTools;
-
         const task: Task = {
             id: 'task-' + Date.now(),
             originalPrompt: prompt,
@@ -42,44 +41,33 @@ export class Orchestrator {
         let finalMessage = "Task failed to complete.";
 
         try {
-            const MAX_STEPS = 25;
-            for (let i = 0; i < MAX_STEPS; i++) {
+            // ==========================================================
+            // Dynamic Router with Adaptive Function Calling Mode
+            // ==========================================================
+            this.emit('progress', { isLog: true, message: "Analyzing user's request..." });
+            const intent: DetectedIntent = await detectIntent(prompt);
 
-                const preparedHistory = prepareHistoryForModel(task.history);
+            let availableTools: any[];
+            let functionCallingMode: FunctionCallingConfigMode;
 
-                // Find the most recent user prompt to ensure the model has the correct immediate context.
-                const lastUserMessage = task.history.findLast(h => h.role === 'user');
-                const latestPrompt = (lastUserMessage?.parts[0] as TextPart)?.text || task.originalPrompt;
+            // --- Configure strategy based on intent ---
+            if (intent.strategy === 'FORCE_TOOL_CALL') {
+                this.emit('progress', { isLog: true, message: "Strategy: Force Tool Call. Selecting relevant tools..." });
+                availableTools = await selectRelevantTools(prompt, this.allTools);
+                functionCallingMode = FunctionCallingConfigMode.ANY;
+                
+                this.emit('progress', {
+                   isLog: true,
+                   message: `Tool router selected ${availableTools.length}/${this.allTools.length} tools for this task.`
+                });
 
-                const nextStep = await determineNextStep(
-                    latestPrompt,
-                    task.contextItemId,
-                    preparedHistory,
-                    availableTools
-                );
-
-                if (!nextStep || nextStep.tool === 'finish') {
-                    if (nextStep?.args.finalMessage === '__NEEDS_SUMMARY__') {
-                        const lastStep = task.plan[task.plan.length - 1];
-                        if (lastStep && lastStep.status === 'completed') {
-                            finalMessage = await summarizeToolOutput(lastStep.result, latestPrompt);
-                        } else {
-                            finalMessage = "The task is complete.";
-                        }
-                    } else {
-                        finalMessage = nextStep?.args?.finalMessage || "Task completed successfully.";
-                    }
-                    break;
-                }
-
-                task.plan.push(nextStep);
-
-                await this.executeStep(nextStep, task);
-
-                if (i === MAX_STEPS - 1) {
-                    finalMessage = "Task stopped as it reached the maximum number of steps.";
-                }
+            } else { // AUTO_MODE
+                this.emit('progress', { isLog: true, message: "Strategy: Auto Mode. Using all available tools..." });
+                availableTools = this.allTools;
+                functionCallingMode = FunctionCallingConfigMode.AUTO;
             }
+            
+            finalMessage = await this.executePlan(task, availableTools, prompt, functionCallingMode);
 
             this.emit('result', {
                 message: finalMessage,
@@ -106,6 +94,39 @@ export class Orchestrator {
         }
     }
 
+    private async executePlan(task: Task, availableTools: any[], latestPrompt: string, functionCallingMode: FunctionCallingConfigMode): Promise<string> {
+        const MAX_STEPS = 25;
+        for (let i = 0; i < MAX_STEPS; i++) {
+            const preparedHistory = prepareHistoryForModel(task.history);
+            const nextStep = await determineNextStep(
+                latestPrompt,
+                task.contextItemId,
+                preparedHistory,
+                availableTools,
+                functionCallingMode
+            );
+
+            if (!nextStep || nextStep.tool === 'finish') {
+                if (nextStep?.args.finalMessage === '__NEEDS_SUMMARY__') {
+                    const lastStep = task.plan[task.plan.length - 1];
+                    if (lastStep && lastStep.status === 'completed') {
+                        return await summarizeToolOutput(lastStep.result, latestPrompt);
+                    }
+                    return "The task is complete.";
+                }
+                return nextStep?.args?.finalMessage || "Task completed successfully.";
+            }
+
+            task.plan.push(nextStep);
+            await this.executeStep(nextStep, task);
+
+            if (i === MAX_STEPS - 1) {
+                return "Task stopped as it reached the maximum number of steps.";
+            }
+        }
+        return "Task finished unexpectedly.";
+    }
+
     private async executeStep(step: PlanStep, task: Task) {
         step.status = 'in-progress';
 
@@ -123,35 +144,20 @@ export class Orchestrator {
 
             step.status = 'completed';
             this.handleToolResult(result, step, task);
-
-            /* Uncomment this to see the tool response in the chat
-            const resultSummary = JSON.stringify(step.result, null, 2);
-            this.emit('progress', {
-                isLog: true,
-                message: `Tool **${step.tool}** returned:\n\`\`\`json\n${resultSummary}\n\`\`\``
-            });
-            */
-
-            // For the conversation history, we need a concise summary of the result,
-            // not the full verbose object, to prevent the context from growing too large.
+            
             let responseForHistory;
             const isReadOnly = READ_ONLY_TOOLS.includes(step.tool);
 
-            // For read-only tools, we pass the (filtered) result to the model as it may contain data
-            // the model needs for its next step (e.g., a list of items from a search).
             if (isReadOnly) {
                 responseForHistory = step.result;
             } else {
-                // For write operations, the model only needs to know it succeeded.
-                // We can include the ID of the affected item for context.
                 if (typeof step.result === 'object' && step.result !== null && step.result.Id) {
                     responseForHistory = { status: 'success', itemId: step.result.Id };
                 } else {
                     responseForHistory = { status: 'success' };
                 }
             }
-
-            // Ensure the response is always a valid JSON object for the history.
+            
             if (Array.isArray(responseForHistory)) {
                 responseForHistory = { items: responseForHistory };
             }
@@ -180,11 +186,9 @@ export class Orchestrator {
     }
 
     private handleToolResult(result: any, step: PlanStep, task: Task) {
-        // Check if a write operation occurred to invalidate the UI cache if needed.
         if (!task.shouldInvalidateContext && !READ_ONLY_TOOLS.includes(step.tool)) {
             task.shouldInvalidateContext = true;
         }
-        // Handle specific UI actions if the tool requested one.
         if (result?.isUiAction && result.action) {
             this.emit('ui-action', result.action);
         }
@@ -211,8 +215,7 @@ export class Orchestrator {
                 cleanResult = rawText;
             }
         }
-
-        // Assign the cleaned result and filter out any unwanted properties before storing.
+        
         step.result = filterResponseData({ responseData: cleanResult });
     }
 }
