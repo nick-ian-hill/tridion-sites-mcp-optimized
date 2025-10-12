@@ -15,6 +15,11 @@ export interface DetectedIntent {
     strategy: 'FORCE_TOOL_CALL' | 'AUTO_MODE';
 }
 
+export interface NextStepResult {
+    planStep: PlanStep | null;
+    modelResponseContent: Content | null;
+}
+
 /**
  * Detects the user's intent and determines the best execution strategy.
  */
@@ -100,8 +105,8 @@ export const determineNextStep = async (
     contextItemId: string | undefined,
     history: Content[],
     relevantTools: any[],
-    functionCallingMode: FunctionCallingConfigMode = FunctionCallingConfigMode.ANY // Default to ANY
-): Promise<PlanStep | null> => {
+    functionCallingMode: FunctionCallingConfigMode = FunctionCallingConfigMode.ANY
+): Promise<NextStepResult> => {
     const finishTool: FunctionDeclaration = {
         name: "finish",
         description: "Call this tool to signal that you have fully completed the user's request and all tasks are done.",
@@ -157,24 +162,26 @@ export const determineNextStep = async (
             systemInstruction: systemInstruction,
             tools: [{ functionDeclarations: toolsForNextStep }],
             toolConfig: {
-                functionCallingConfig: { mode: functionCallingMode } // Dynamically set the mode
+                functionCallingConfig: { mode: functionCallingMode }
             },
             temperature: 0.0
         }
     });
     
     const call = result.functionCalls?.[0];
+    const modelResponseContent = result.candidates?.[0]?.content ?? null;
 
     if (!call || !call.name) {
         console.warn("[Reasoner] Model did not return a function call. Assuming task is complete.");
         const textResponse = (result.text ?? "").trim();
-        return {
+        const planStep: PlanStep = {
             step: -1,
             tool: 'finish',
             args: { finalMessage: textResponse || "Task completed." },
             description: "Finish with a direct text response from the model.",
             status: 'pending'
-        }
+        };
+        return { planStep, modelResponseContent };
     }
 
     const nextStep: PlanStep = {
@@ -185,7 +192,7 @@ export const determineNextStep = async (
         status: 'pending'
     };
 
-    return nextStep;
+    return { planStep: nextStep, modelResponseContent };
 };
 
 export const selectRelevantTools = async (prompt: string, allTools: any[], maxTools: number = 6): Promise<any[]> => {

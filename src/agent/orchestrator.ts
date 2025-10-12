@@ -41,16 +41,12 @@ export class Orchestrator {
         let finalMessage = "Task failed to complete.";
 
         try {
-            // ==========================================================
-            // Dynamic Router with Adaptive Function Calling Mode
-            // ==========================================================
             this.emit('progress', { isLog: true, message: "Analyzing user's request..." });
             const intent: DetectedIntent = await detectIntent(prompt);
 
             let availableTools: any[];
             let functionCallingMode: FunctionCallingConfigMode;
 
-            // --- Configure strategy based on intent ---
             if (intent.strategy === 'FORCE_TOOL_CALL') {
                 this.emit('progress', { isLog: true, message: "Strategy: Force Tool Call. Selecting relevant tools..." });
                 availableTools = await selectRelevantTools(prompt, this.allTools);
@@ -98,7 +94,8 @@ export class Orchestrator {
         const MAX_STEPS = 25;
         for (let i = 0; i < MAX_STEPS; i++) {
             const preparedHistory = prepareHistoryForModel(task.history);
-            const nextStep = await determineNextStep(
+            
+            const { planStep: nextStep, modelResponseContent } = await determineNextStep(
                 latestPrompt,
                 task.contextItemId,
                 preparedHistory,
@@ -115,6 +112,10 @@ export class Orchestrator {
                     return "The task is complete.";
                 }
                 return nextStep?.args?.finalMessage || "Task completed successfully.";
+            }
+            
+            if (modelResponseContent) {
+                task.history.push(modelResponseContent as Content);
             }
 
             task.plan.push(nextStep);
@@ -165,7 +166,6 @@ export class Orchestrator {
                 responseForHistory = { output: responseForHistory };
             }
 
-            task.history.push({ role: 'model', parts: [{ functionCall: { name: step.tool, args: step.args } }] });
             task.history.push({ role: 'function', parts: [{ functionResponse: { name: step.tool, response: responseForHistory } }] });
 
             this.emit('progress', {
@@ -178,7 +178,6 @@ export class Orchestrator {
             step.status = 'failed';
             step.error = error.message;
 
-            task.history.push({ role: 'model', parts: [{ functionCall: { name: step.tool, args: step.args } }] });
             task.history.push({ role: 'function', parts: [{ functionResponse: { name: step.tool, response: { error: error.message } } }] });
 
             this.emit('error', { message: `Step ${step.step} failed: ${error.message}`, step: step.step });
