@@ -67,7 +67,7 @@ Available top-level properties in search results include, but are not limited to
 - "LockInfo": The LockType and LockUser (the user who has the item checked out). When purely interested in finding new items or items in various lock states, the 'getLockedItems' tool is more powerful.
 - "BluePrintInfo": Information related to the item's BluePrinting context (e.g., IsShared, IsLocalized, OwningRepository).
 - "MetadataSchema": The Title and Id of the item's metadata schema.
-Example: ["VersionInfo.Creator", "BluePrintInfo.OwningRepository", "LockInfo"]`),
+Example: ["VersionInfo.Creator", "BluePrintInfo.OwningRepository", "LockInfo", "ComponentType"]`),
     },
     execute: async ({ searchQuery, resultLimit = 100, details = "IdAndTitle", includeProperties }: { searchQuery?: z.infer<typeof SearchQueryValidation>, resultLimit: number, details?: "IdAndTitle" | "CoreDetails" | "AllDetails", includeProperties?: string[] }, context: any) => {
         const req = context?.request;
