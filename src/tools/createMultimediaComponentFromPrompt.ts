@@ -13,7 +13,8 @@ const createMultimediaComponentFromPromptInputProperties = {
     fileName: z.string().describe("The desired file name for the multimedia component in the CMS (e.g., 'generated-image.jpg')."),
     locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new component will be created. Use 'search' or 'getItemsInContainer' to find a suitable Folder."),
     schemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the Multimedia Schema to use. If not provided, a default will be determined automatically. Use 'getSchemaLinks' with purpose 'Multimedia' to find available schemas."),
-    metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields.")
+    metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields."),
+    aspectRatio: z.enum(['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9']).optional().describe("The desired aspect ratio for the generated image. Defaults to 1:1 square if not specified.")
 };
 
 const createMultimediaComponentFromPromptSchema = z.object(createMultimediaComponentFromPromptInputProperties);
@@ -30,17 +31,26 @@ export const createMultimediaComponentFromPrompt = {
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
         const userSessionId = match ? match[1] : null;
 
-        const { prompt, title, fileName, locationId, schemaId, metadata } = input;
+        const { prompt, title, fileName, locationId, schemaId, metadata, aspectRatio } = input;
 
         try {
             console.log(`Generating image for prompt: "${prompt}"`);
             let base64Content: string | undefined;
-            //base64Content = 'R0lGODlhAQABAIAAAP8AADAAACwAAAAAAQABAAACAkQBADs=';           
-
+            
             const ai = new GoogleGenAI({ vertexai: false, apiKey: GEMINI_API_KEY });
+            
+            const generationConfig: any = {
+                responseModalities: ['Image']
+            };
+
+            if (aspectRatio) {
+                generationConfig.imageConfig = { aspectRatio };
+            }
+
             const result = await ai.models.generateContent({
-                model: "gemini-2.5-flash-image-preview",
-                contents: prompt
+                model: "gemini-2.5-flash-image",
+                contents: prompt,
+                config: generationConfig
             });
 
             if (result?.candidates?.[0]?.content?.parts) {

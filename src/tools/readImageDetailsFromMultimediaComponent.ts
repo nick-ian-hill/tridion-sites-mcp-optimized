@@ -78,8 +78,6 @@ export const readImageDetailsFromMultimediaComponent = {
             const base64Content = imageBuffer.toString('base64');
             console.log(`Successfully downloaded and encoded ${imageBuffer.length} bytes.`);
             
-            // --- Step 3: Call the Gemini Vision API ---
-            // For available models see: https://ai.google.dev/gemini-api/docs/models
             console.log(`Sending prompt and image to Gemini 2.5 Flash Image model...`);
             const genAI = new GoogleGenAI({apiKey: GEMINI_API_KEY});
 
@@ -92,7 +90,10 @@ export const readImageDetailsFromMultimediaComponent = {
 
             const result = await genAI.models.generateContent({
                 model: "gemini-2.5-flash-image",
-                contents: [prompt, imagePart]
+                contents: [prompt, imagePart],
+                config: {
+                    responseModalities: ['Text']
+                }
             });
             
             const text = (result.text ?? "").trim();

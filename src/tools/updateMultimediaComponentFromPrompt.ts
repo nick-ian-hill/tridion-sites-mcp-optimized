@@ -9,7 +9,8 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 
 const updateMultimediaComponentFromPromptInputProperties = {
     itemId: z.string().regex(/^tcm:\d+-\d+$/).describe("The TCM URI of the multimedia component to update (e.g., 'tcm:5-123')."),
-    prompt: z.string().describe("A descriptive text prompt to guide the image modification (e.g., 'make the car red', 'add a sunny sky').")
+    prompt: z.string().describe("A descriptive text prompt to guide the image modification (e.g., 'make the car red', 'add a sunny sky')."),
+    aspectRatio: z.enum(['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9']).optional().describe("The desired aspect ratio for the updated image. Defaults to the original image's aspect ratio.")
 };
 
 const updateMultimediaComponentFromPromptSchema = z.object(updateMultimediaComponentFromPromptInputProperties);
@@ -24,7 +25,7 @@ export const updateMultimediaComponentFromPrompt = {
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
         const userSessionId = match ? match[1] : null;
 
-        const { itemId, prompt } = input;
+        const { itemId, prompt, aspectRatio } = input;
         const restItemId = itemId.replace(':', '_');
         let wasCheckedOutByTool = false;
         const authenticatedAxios = createAuthenticatedAxios(userSessionId);
@@ -59,19 +60,25 @@ export const updateMultimediaComponentFromPrompt = {
 
             let newImageBase64: string | undefined;
 
-            // For debugging: Uncomment the line below and comment out the entire Gemini API block that follows.
-            // newImageBase64 = "R0lGODlhAQABAIAAAP8AADAAACwAAAAAAQABAAACAkQBADs=";
-
             // --- Gemini API Block ---
             console.log(`Sending image and prompt to Gemini: "${prompt}"`);
             const ai = new GoogleGenAI({ vertexai: false, apiKey: GEMINI_API_KEY });
 
+            const generationConfig: any = {
+                responseModalities: ['Image']
+            };
+
+            if (aspectRatio) {
+                generationConfig.imageConfig = { aspectRatio };
+            }
+
             const result = await ai.models.generateContent({
-                model: "gemini-2.5-flash-image-preview",
+                model: "gemini-2.5-flash-image",
                 contents: [
                     { text: prompt },
                     { inlineData: { mimeType: originalMimeType, data: originalImageBuffer.toString('base64') } }
-                ]
+                ],
+                config: generationConfig
             });
             
             if (result?.candidates?.[0]?.content?.parts) {
