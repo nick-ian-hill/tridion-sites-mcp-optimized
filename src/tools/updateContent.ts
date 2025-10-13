@@ -16,6 +16,8 @@ Important Constraints:
 To update metadata, use the 'updateMetadata' tool.
 To update other properties, use the 'updateItemProperties' tool.
 
+When providing values for an embedded schema field, the data structure is a flat JSON object (for a single-value field) or an array of flat objects (for a multi-value field).
+
 Examples:
 
 Example 1: Updates the values of the content fields with XML names 'TitleField', 'Abstract', and 'Tags'.
@@ -26,7 +28,20 @@ Example 1: Updates the values of the content fields with XML names 'TitleField',
             "Abstract": "<p>The <em>quick</em> brown fox jumped over the lazy dog.</p>",
             "Tags": ["AI", "Google", "Machine Learning"]
         }
-    });`,
+    });
+    
+Example 2: Updates the content of an embedded schema field.
+    const result = await tools.updateContent({
+        "itemId": "tcm:5-123",
+        "content": {
+            "headline": "Existing Headline",
+            "sourceAttribution": {
+                "authorName": "Dr. Ellie Sattler",
+                "publication": "Science Today"
+            }
+        }
+    });
+    `,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-16)?)$/).describe("The unique ID of the component to update (e.g., 'tcm:5-123')."),
         content: z.record(fieldValueSchema).describe("A JSON object containing the Component's content fields. The tool will automatically order the fields to match the Schema definition."),

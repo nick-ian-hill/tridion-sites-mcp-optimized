@@ -72,7 +72,7 @@ IMPORTANT:
 - If allowed, use the 'checkInItem' tool before calling 'updateItemProperties' to update an item currently checked out to a different user.
 
 Example 1: Update a Schema to make a mandatory field optional.
-This example modifies the 'News Article' Schema (tcm:2-104-8) to make the 'articleBody' embedded field optional by changing its 'MinOccurs' property from 1 to 0. Note that the entire 'fields' object must be provided, including the unchanged fields.
+This example modifies the 'News Article' Schema (tcm:2-104-8) to include a new field, 'image'. Note that the entire 'fields' object must be provided, including the unchanged fields.
 
     const result = await tools.updateItemProperties({
         itemId: "tcm:2-104-8",
@@ -101,7 +101,7 @@ This example modifies the 'News Article' Schema (tcm:2-104-8) to make the 'artic
                 "$type": "EmbeddedSchemaFieldDefinition",
                 "Name": "articleBody",
                 "Description": "Article Body",
-                "MinOccurs": 0, // Changed from 1 to 0
+                "MinOccurs": 0,
                 "MaxOccurs": -1,
                 "IsLocalizable": true,
                 "EmbeddedSchema": { "IdRef": "tcm:2-102-8" }
@@ -109,14 +109,35 @@ This example modifies the 'News Article' Schema (tcm:2-104-8) to make the 'artic
         }
     });
 
-Example 2: Change the Metadata Schema of a Folder and provide the metadata for the new schema. This can be neccesary when the new schema has mandatory fields.
+Example 2: Change the Metadata Schema of a Folder and provide the mandatory values for the new schema.
     const result = await tools.updateItemProperties({
         itemId: "tcm:5-123-2",
         itemType: "Folder",
-        metadataSchemaId: "tcm:5-321-8",
+        metadataSchemaId: "tcm:5-322-8",
         metadata: {
-            "folderType": "Campaign",
-            "campaignYear": 2025
+            "campaignYear": 2025,
+            "campaignManager": {
+                "name": "Jane Doe",
+                "email": "jane.doe@example.com"
+            },
+            "featuredProducts": [
+                {
+                    "productLink": {
+                        "$type": "Link",
+                        "IdRef": "tcm:5-801",
+                        "Title": "Product A"
+                    },
+                    "promoText": "Early bird special!"
+                },
+                {
+                    "productLink": {
+                        "$type": "Link",
+                        "IdRef": "tcm:5-802",
+                        "Title": "Product B"
+                    },
+                    "promoText": "Limited time offer."
+                }
+            ]
         }
     });
 `,

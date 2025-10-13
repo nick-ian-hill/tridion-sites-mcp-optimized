@@ -24,7 +24,33 @@ Example 1: Updates the metadata fields with XML names 'Keywords' and 'Author' fo
             "Keywords": ["Update", "Tool", "Metadata"],
             "Author": "Author Name"
         }
-    });`,
+    });
+    
+Example 2: Updates the metadata values for a 'Folder' with featuring a multi-value embedded schema field.
+    const result = await tools.updateMetadata({
+        "itemId": "tcm:4-567-2",
+        "metadata": {
+            "Products": [
+                {
+                    "Description": {
+                        $type: "Link",
+                        IdRef: "tcm:4-101",
+                        Title: "Product A"
+                    },
+                    "AvailableFrom": "2025-10-02T00:00:00"
+                },
+                {
+                    "Description": {
+                        $type: "Link",
+                        IdRef: "tcm:4-102",
+                        Title: "Product B"
+                    },
+                    "AvailableFrom": "2025-10-02T00:00:00"
+                }
+            ],
+        }
+    });
+    `,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the item to update (e.g., 'tcm:5-1234-64')."),
         metadata: z.record(fieldValueSchema).describe("A JSON object containing the item's metadata fields. The tool will automatically order the fields to match the Metadata Schema definition."),

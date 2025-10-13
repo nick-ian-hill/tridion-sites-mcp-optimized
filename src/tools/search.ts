@@ -36,7 +36,19 @@ export const search = {
   - ExtensionProperties
   - ListLinks
   - SecurityDescriptor
-  - LoadInfo`,
+  - LoadInfo
+
+  Examples:
+ 
+  Example 1: Find 'Multimedia Components' which have a field containing the text 'logo'. Since we cannot limit the results to only 'Multimedia Components', you will need to review the value of the 'ComponentType' property and select only those items for which the value is 'MultimediaComponent'.
+      const result = await tools.search({
+      searchQuery: {
+        ItemTypes: ['Component'],
+        FullTextQuery: 'logo'
+      },
+      includeProperties: ['ComponentType']
+    });
+  `,
     input: {
         searchQuery: SearchQueryValidation.optional().describe("A search query model. If not provided, a default search for all items is performed."),
         resultLimit: z.number().int().default(100).optional().describe("The maximum number of results to return. If the number of results matches the (default) result limit, consider setting a higher resultLimit and trying again."),
@@ -44,7 +56,7 @@ export const search = {
 - "IdAndTitle": Returns only the ID and Title of each item. This is the most efficient option, and the best choice if you only need a list of items matching the query.
 - "CoreDetails": Returns the main properties of each item, excluding verbose security, link-related, and content/field-related information.
 - "AllDetails": Returns all available properties for each item, excluding content/field data.`),
-        includeProperties: z.array(z.string()).optional().describe(`The strongly preferred method for retrieving specific details to minimize token usage. Provide an array of property names to include in the response, using dot notation for nested properties (e.g., "VersionInfo.Creator").
+        includeProperties: z.array(z.string()).optional().describe(`The strongly preferred method for retrieving specific details to minimize token usage. Provide an array of property names to include in the response, using dot notation for nested properties (e.g., "VersionInfo.Creator",  "ComponentType").
 If this parameter is used, the 'details' parameter is ignored. 'Id', 'Title', and '$type' are always included.
 
 Important: Search results are content-less. Properties like 'Content', 'Metadata', 'Fields', and 'MetadataFields' are never available via search. To retrieve them, first find the item ID using this tool, then use 'bulkReadItems' or 'getItem'.

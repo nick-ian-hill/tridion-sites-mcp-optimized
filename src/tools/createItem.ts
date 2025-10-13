@@ -64,6 +64,7 @@ For a Category, the container is the Publication.
 For items other than Publications, the first number in the ID identifies the Publication (e.g., for both tcm:5-127 and tcm:5-2002-2, the Publication is 5).  
 For Publications, the second number identifies the Publication (e.g., tcm:0-5-1 represents Publication 5).  
 Therefore, when creating a Component in the Folder with ID tcm:10-4112-2, the Schema must have an ID in the form tcm:10-###-8.
+When providing values for an embedded schema field, the data structure is a flat JSON object (for a single-value field) or an array of flat objects (for a multi-value field).
 
 Important: Creation will fail with a '409 Conflict' error if an item of the same type and with the same title already exists in the target location or its BluePrint context (e.g. a child Publication).
 
@@ -98,6 +99,42 @@ Example 2: Create a Folder for a campaign.
             "Regions": [
                 "tcm:5-1200-1024",
                 "tcm:5-1201-1024"
+            ]
+        }
+    });
+
+Example 3: Create a Component featuring a single-value embedded schema field, "sourceAttribution".
+    const result = await tools.createItem({
+        itemType: "Component",
+        locationId: "tcm:5-53-2",
+        title: "New Research Published",
+        schemaId: "tcm:5-74-8",
+        content: {
+            "headline": "Breakthrough in Quantum Computing",
+            "sourceAttribution": {
+                "authorName": "Dr. Alan Grant",
+                "publication": "Journal of Science"
+            }
+        }
+    });
+
+Example 4: Create a Component featuring a multi-value embedded schema field, "teamMembers".
+    const result = await tools.createItem({
+        itemType: "Component",
+        locationId: "tcm:5-53-2",
+        title: "Team Page",
+        schemaId: "tcm:5-78-8",
+        content: {
+            "pageTitle": "Meet the Team",
+            "teamMembers": [
+                {
+                    "name": "Dr. Eleanor Vance",
+                    "role": "Lead Scientist"
+                },
+                {
+                    "name": "Dr. Jasper Finch",
+                    "role": "Research Associate"
+                }
             ]
         }
     });
