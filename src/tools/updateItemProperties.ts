@@ -66,6 +66,16 @@ Example use cases by item type:
 
 When updating collection properties like 'fields', 'metadataFields', 'itemsInBundle', or 'relatedSchemaIds', the entire existing collection is replaced by the new value provided.
 
+When providing a value for a Component Link field, the linked Component must be based on a Schema specified in that field's 'AllowedTargetSchemas' list. If you encounter a schema validation error on a component link field, use the following strategy:
+- Use 'getItem' to retrieve the main Schema's definition.
+- Inspect the AllowedTargetSchemas property for the specific field causing the error.
+- Use the 'search' tool with the BasedOnSchemas filter to find a valid Component URI to use in the link.
+
+To discover all available fields within an embedded schema, including optional ones, you must inspect the schema definition. Use the following strategy:
+- Use getItem to retrieve the main Schema's definition.
+- Locate the specific EmbeddedSchemaFieldDefinition within the Fields or MetadataFields.
+- Inspect the EmbeddedFields property of that definition. This property contains a dictionary of all the fields (both mandatory and optional) that you can populate.
+
 IMPORTANT: 
 - Shared items ('BluePrintInfo.IsShared' is true) cannot be updated. To modify inherited properties, such as a Schema's fields, you must update the parent item in the BluePrint chain ('PrimaryBluePrintParentItem').
 - For versioned items (Component, Schema, PageTemplate, ComponentTemplate), items that are not checked out will be automatically checked back in after updating. Items that are checked out before updating will remain checked out.
@@ -94,7 +104,10 @@ This example modifies the 'News Article' Schema (tcm:2-104-8) to include a new f
                 "MaxOccurs": 1,
                 "IsLocalizable": true,
                 "AllowedTargetSchemas": [
-                    { "IdRef": "tcm:2-66-8" }
+                    {
+                        "$type": "Link",
+                        "IdRef": "tcm:2-66-8"
+                    }
                 ]
             },
             "articleBody": {
@@ -104,7 +117,10 @@ This example modifies the 'News Article' Schema (tcm:2-104-8) to include a new f
                 "MinOccurs": 0,
                 "MaxOccurs": -1,
                 "IsLocalizable": true,
-                "EmbeddedSchema": { "IdRef": "tcm:2-102-8" }
+                "EmbeddedSchema": {
+                    "$type": "Link",
+                    "IdRef": "tcm:2-102-8"
+                }
             }
         }
     });
@@ -124,16 +140,14 @@ Example 2: Change the Metadata Schema of a Folder and provide the mandatory valu
                 {
                     "productLink": {
                         "$type": "Link",
-                        "IdRef": "tcm:5-801",
-                        "Title": "Product A"
+                        "IdRef": "tcm:5-801"
                     },
                     "promoText": "Early bird special!"
                 },
                 {
                     "productLink": {
                         "$type": "Link",
-                        "IdRef": "tcm:5-802",
-                        "Title": "Product B"
+                        "IdRef": "tcm:5-802"
                     },
                     "promoText": "Limited time offer."
                 }

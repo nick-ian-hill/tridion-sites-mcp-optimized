@@ -193,14 +193,8 @@ const primitiveFieldValueSchema = z.union([
   linkSchema,
 ]);
 
-const deepFieldSchema = z.union([
-  primitiveFieldValueSchema,
-  z.array(primitiveFieldValueSchema),
-  z.record(primitiveFieldValueSchema),
-]);
-
 export const fieldValueSchema = z.union([
   primitiveFieldValueSchema,
-  z.array(z.union([deepFieldSchema, z.unknown()])),
-  z.record(z.union([deepFieldSchema, z.unknown()])).describe("For an embedded schema field, this represents the object containing the embedded fields. The tool will automatically reorder the fields to match the schema definition."),
+  z.array(z.unknown()),
+  z.record(z.unknown()).describe("For an embedded schema field, this represents the object containing the embedded fields. The tool will automatically reorder the fields to match the schema definition."),
 ]);

@@ -38,6 +38,8 @@ export const search = {
   - SecurityDescriptor
   - LoadInfo
 
+  When using search query parameters that target items in a specific publication: 'BasedOnSchema', 'UsedKeywords', 'ProcessDefinitions', and 'ActivityDefinitions', it's mandatory to also provide a value for the 'SearchIn' parameter, otherwise the request will fail. 
+
   Examples:
  
   Example 1: Find 'Multimedia Components' which have a field containing the text 'logo'. Since we cannot limit the results to only 'Multimedia Components', you will need to review the value of the 'ComponentType' property and select only those items for which the value is 'MultimediaComponent'.
@@ -45,6 +47,20 @@ export const search = {
       searchQuery: {
         ItemTypes: ['Component'],
         FullTextQuery: 'logo'
+      },
+      includeProperties: ['ComponentType']
+    });
+
+Example 2: Find 'Multimedia Components' based on the 'Default Multimedia Schema' (tcm:4-5-8) within the '200 Example Content' Publication (tcm:0-4-1).
+    const result = await tools.search({
+      searchQuery: {
+        ItemTypes: ['Component'],
+        SearchIn: 'tcm:0-4-1',
+        BasedOnSchemas: [
+          {
+            schemaUri: 'tcm:4-5-8'
+          }
+        ]
       },
       includeProperties: ['ComponentType']
     });

@@ -22,12 +22,12 @@ export const SearchQueryValidation = z.object({
   ])).optional().describe("An array of item types to limit the search results to. If asked to search for a 'Bundle' or 'SearchFolder', use the 'VirtualFolder' type and then review the '$type' property of any returned items. To find 'MultimediaComponents', search for 'Component' and then review the 'ComponentType' property."),
 
   // --- Location and Scope ---
-  SearchIn: z.string().regex(/^(tcm:\d+-\d+-[124]|ecl:[a-zA-Z0-9-]+)$/).optional().describe("The unique TCM URI of the publication or folder to search within. MUST be provided as a string."),
+  SearchIn: z.string().regex(/^(tcm:\d+-\d+-[124]|ecl:[a-zA-Z0-9-]+)$/).optional().describe("The unique TCM URI of the publication or folder to search within. MUST be provided as a string. Required when using the 'BasedOnSchemas', 'UsedKeywords', 'ProcessDefinition', or 'ActivityDefinition' query parameters."),
   SearchInSubtree: z.boolean().default(true).optional().describe("When true, searches recursively in the publication/folder specified in SearchIn. Defaults to true."),
 
   // --- Schema and Keyword Criteria ---
-  BasedOnSchemas: z.array(SchemaFilterValidation).optional().describe("An array of Schema filters. Each filter can specify a Schema URI and an optional field-level filter."),
-  UsedKeywords: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)).optional().describe("An array of Keyword TCM URIs. Only items classified with these keywords will be returned."),
+  BasedOnSchemas: z.array(SchemaFilterValidation).optional().describe("An array of Schema filters. Each filter can specify a Schema URI and an optional field-level filter. You must specify a value for 'SearchIn' when using this parameter."),
+  UsedKeywords: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)).optional().describe("An array of Keyword TCM URIs. Only items classified with these keywords will be returned. You must specify a value for 'SearchIn' when using this parameter."),
 
   // --- Date and Modification Criteria ---
   LastModifiedAfter: z.string().datetime().optional().describe("Filters items last modified after this date (ISO 8601 format, e.g., '2023-10-27T10:00:00Z')."),
@@ -75,8 +75,8 @@ export const SearchQueryValidation = z.object({
   IsDescriptionCaseSensitive: z.boolean().optional().describe("When true, the search on the 'Description' field is case-sensitive."),
 
   // --- Workflow ---
-  ActivityDefinition: z.string().regex(/^tcm:\d+-\d+-131088$/).optional().describe("The TCM URI of an Activity Definition an item must be associated with."),
-  ProcessDefinition: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of a Process Definition an item must be associated with."),
+  ActivityDefinition: z.string().regex(/^tcm:\d+-\d+-131088$/).optional().describe("The TCM URI of an Activity Definition an item must be associated with. You must specify a value for 'SearchIn' when using this parameter."),
+  ProcessDefinition: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of a Process Definition an item must be associated with. You must specify a value for 'SearchIn' when using this parameter."),
 });
 
 export type SearchQuery = z.infer<typeof SearchQueryValidation>;

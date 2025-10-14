@@ -66,11 +66,21 @@ For Publications, the second number identifies the Publication (e.g., tcm:0-5-1 
 Therefore, when creating a Component in the Folder with ID tcm:10-4112-2, the Schema must have an ID in the form tcm:10-###-8.
 When providing values for an embedded schema field, the data structure is a flat JSON object (for a single-value field) or an array of flat objects (for a multi-value field).
 
+When populating a Component Link field (ComponentLinkFieldDefinition), the linked Component must be based on a Schema specified in that field's 'AllowedTargetSchemas' list. If you encounter a schema validation error on a component link field, use the following strategy:
+- Use 'getItem' to retrieve the main Schema's definition.
+- Inspect the AllowedTargetSchemas property for the specific field causing the error.
+- Use the 'search' tool with the BasedOnSchemas filter to find a valid Component URI to use in the link.
+
+To discover all available fields within an embedded schema, including optional ones, you must inspect the schema definition. Use the following strategy:
+- Use getItem to retrieve the main Schema's definition.
+- Locate the specific EmbeddedSchemaFieldDefinition within the Fields or MetadataFields.
+- Inspect the EmbeddedFields property of that definition. This property contains a dictionary of all the fields (both mandatory and optional) that you can populate.
+
 Important: Creation will fail with a '409 Conflict' error if an item of the same type and with the same title already exists in the target location or its BluePrint context (e.g. a child Publication).
 
 Examples:
 
-Example 1: Create a Component with content and metadata fields.
+Example 1: Create a Component with content and metadata fields. The content field contains a single-value embedded schema field, "stories".
     const result = await tools.createItem({
         itemType: "Component",
         locationId: "tcm:5-53-2",
@@ -78,13 +88,29 @@ Example 1: Create a Component with content and metadata fields.
         schemaId: "tcm:5-74-8",
         content: {
             "headline": "Spotlight on Local Heroes",
-            "link": {
+            "stories": {
                 "linkText": "Read their stories",
-                "internalLink": "tcm:5-294"
+                "internalLink": {
+                    "$type": "Link",
+                    "IdRef": "tcm:5-294"
+                },
+                "relatedArticles": [
+                    {
+                        "$type": "Link",
+                        "IdRef": "tcm:5-801"
+                    },
+                    {
+                        "$type": "Link",
+                        "IdRef": "tcm:5-802"
+                    }
+                ]
             }
         },
         metadata: {
-            "contentType": "tcm:5-189-1024",
+            "contentType": {
+                "$type": "Link",
+                "IdRef": "tcm:5-189-1024"
+            },
             "pageSize": 5
         }
     });
@@ -97,43 +123,13 @@ Example 2: Create a Folder for a campaign.
         metadataSchemaId: "tcm:5-984-8",
         metadata: {
             "Regions": [
-                "tcm:5-1200-1024",
-                "tcm:5-1201-1024"
-            ]
-        }
-    });
-
-Example 3: Create a Component featuring a single-value embedded schema field, "sourceAttribution".
-    const result = await tools.createItem({
-        itemType: "Component",
-        locationId: "tcm:5-53-2",
-        title: "New Research Published",
-        schemaId: "tcm:5-74-8",
-        content: {
-            "headline": "Breakthrough in Quantum Computing",
-            "sourceAttribution": {
-                "authorName": "Dr. Alan Grant",
-                "publication": "Journal of Science"
-            }
-        }
-    });
-
-Example 4: Create a Component featuring a multi-value embedded schema field, "teamMembers".
-    const result = await tools.createItem({
-        itemType: "Component",
-        locationId: "tcm:5-53-2",
-        title: "Team Page",
-        schemaId: "tcm:5-78-8",
-        content: {
-            "pageTitle": "Meet the Team",
-            "teamMembers": [
                 {
-                    "name": "Dr. Eleanor Vance",
-                    "role": "Lead Scientist"
+                    "$type": "Link",
+                    "IdRef": "tcm:5-1200-1024",
                 },
                 {
-                    "name": "Dr. Jasper Finch",
-                    "role": "Research Associate"
+                    "$type": "Link",
+                    "IdRef": "tcm:5-1201-1024",
                 }
             ]
         }

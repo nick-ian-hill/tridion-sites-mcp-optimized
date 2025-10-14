@@ -18,6 +18,16 @@ To update other properties, use the 'updateItemProperties' tool.
 
 When providing values for an embedded schema field, the data structure is a flat JSON object (for a single-value field) or an array of flat objects (for a multi-value field).
 
+When populating a Component Link field (ComponentLinkFieldDefinition), the linked Component must be based on a Schema specified in that field's 'AllowedTargetSchemas' list. If you encounter a schema validation error on a component link field, use the following strategy:
+- Use 'getItem' to retrieve the main Schema's definition.
+- Inspect the AllowedTargetSchemas property for the specific field causing the error.
+- Use the 'search' tool with the BasedOnSchemas filter to find a valid Component URI to use in the link.
+
+To discover all available fields within an embedded schema, including optional ones, you must inspect the schema definition. Use the following strategy:
+- Use getItem to retrieve the main Schema's definition.
+- Locate the specific EmbeddedSchemaFieldDefinition within the Fields or MetadataFields.
+- Inspect the EmbeddedFields property of that definition. This property contains a dictionary of all the fields (both mandatory and optional) that you can populate.
+
 Examples:
 
 Example 1: Updates the values of the content fields with XML names 'TitleField', 'Abstract', and 'Tags'.
@@ -37,7 +47,17 @@ Example 2: Updates the content of an embedded schema field.
             "headline": "Existing Headline",
             "sourceAttribution": {
                 "authorName": "Dr. Ellie Sattler",
-                "publication": "Science Today"
+                "publication": "Science Today",
+                "relatedArticles": [
+                    {
+                        "$type": "Link",
+                        "IdRef": "tcm:5-801"
+                    },
+                    {
+                        "$type": "Link",
+                        "IdRef": "tcm:5-802"
+                    }
+                ]
             }
         }
     });

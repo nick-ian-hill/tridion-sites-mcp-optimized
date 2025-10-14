@@ -10,7 +10,7 @@ export const createSchema = {
     name: "createSchema",
     description: `Creates a new Content Manager System (CMS) item of type 'Schema'. Schemas define the structure of content and metadata for other CMS items.
     
-A Schema with a purpose of 'Component' is defined by its content fields (in the 'fields' property). All Schemas, regardless of purpose, can also have metadata fields (in the 'metadataFields' property). Both of these properties are dictionaries where:
+A Schema with a purpose of 'Component' is defined by its content fields (specified via the 'fields' property) and metadata fields (specified via the 'metadataFields' property). For schemas with any other purpose (e.g., 'Metadata') ONLY specify fields using the 'metadataFields' property. Both of these properties are dictionaries where:
   - The KEY is the field's machine name (a valid XML name without spaces, e.g., "articleTitle").
   - The VALUE is a Field Definition object that specifies the field's type and properties.
 
@@ -326,7 +326,7 @@ Example 10: Create a Schema with advanced constraints.
         rootElementName: xmlNameSchema.optional().describe("The name of the root element for the XML structure defined by the Schema. Only applies to component and embeddable schemas. When using two or more embeddable schemas in a schema (via embedded schema fields), this value needs to be unique between the embeddable schemas."),
         description: z.string().nonempty().describe("An mandatory description of the Schema."),
         fields: z.record(fieldDefinitionSchema).optional().describe("Only used for Component Schemas. A dictionary of field definitions for the schema's content fields. The keys of the dictionary are the machine names of the fields."),
-        metadataFields: z.record(fieldDefinitionSchema).optional().describe("A dictionary of field definitions for the schema's metadata. The keys of the dictionary are the machine names of the metadata fields."),
+        metadataFields: z.record(fieldDefinitionSchema).optional().describe("A dictionary of metadata field definitions for the schema's metadata. The keys of the dictionary are the machine names of the metadata fields. You MUST use this property when defining METADATA fields regardless of schema purpose."),
         allowedMultimediaTypes: z.array(z.string().regex(/^tcm:0-\d+-65544$/)).optional().describe("An array of TCM URIs for allowed Multimedia Types. Only applicable when 'purpose' is 'Multimedia'."),
         bundleProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of a Process Definition to associate as the Bundle Process."),
         componentProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of a Process Definition to associate as the Component Process for workflow."),

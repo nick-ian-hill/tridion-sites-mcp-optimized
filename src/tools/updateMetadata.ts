@@ -15,6 +15,16 @@ Important Constraints:
 To update content fields for a component, use the 'updateContent' tool instead.
 To update other properties, use the 'updateItemProperties', 'updatePage', or 'updatePublication' tool depending on the item type.
 
+When populating a Component Link field (ComponentLinkFieldDefinition), the linked Component must be based on a Schema specified in that field's 'AllowedTargetSchemas' list. If you encounter a schema validation error on a component link field, use the following strategy:
+- Use 'getItem' to retrieve the main Schema's definition.
+- Inspect the AllowedTargetSchemas property for the specific field causing the error.
+- Use the 'search' tool with the BasedOnSchemas filter to find a valid Component URI to use in the link.
+
+To discover all available fields within an embedded schema, including optional ones, you must inspect the schema definition. Use the following strategy:
+- Use getItem to retrieve the main Schema's definition.
+- Locate the specific EmbeddedSchemaFieldDefinition within the Fields or MetadataFields.
+- Inspect the EmbeddedFields property of that definition. This property contains a dictionary of all the fields (both mandatory and optional) that you can populate.
+
 Examples:
 
 Example 1: Updates the metadata fields with XML names 'Keywords' and 'Author' for a Component.
@@ -34,20 +44,34 @@ Example 2: Updates the metadata values for a 'Folder' with featuring a multi-val
                 {
                     "Description": {
                         $type: "Link",
-                        IdRef: "tcm:4-101",
-                        Title: "Product A"
+                        IdRef: "tcm:4-101"
                     },
-                    "AvailableFrom": "2025-10-02T00:00:00"
+                    "AvailableFrom": "2025-10-02T00:00:00",
+                    "relatedProducts": [
+                        {
+                            "$type": "Link",
+                            "IdRef": "tcm:4-801"
+                        },
+                        {
+                            "$type": "Link",
+                            "IdRef": "tcm:4-802"
+                        }
+                    ]
                 },
                 {
                     "Description": {
                         $type: "Link",
-                        IdRef: "tcm:4-102",
-                        Title: "Product B"
+                        IdRef: "tcm:4-102"
                     },
-                    "AvailableFrom": "2025-10-02T00:00:00"
+                    "AvailableFrom": "2025-10-02T00:00:00",
+                    "relatedProducts": [
+                        {
+                            "$type": "Link",
+                            "IdRef": "tcm:4-803"
+                        }
+                    ]
                 }
-            ],
+            ]
         }
     });
     `,
