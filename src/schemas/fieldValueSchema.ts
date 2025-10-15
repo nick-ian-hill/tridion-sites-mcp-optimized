@@ -9,6 +9,9 @@ const formattingFeaturesSchema = z.object({
   DocType: z.enum(["Strict", "Transitional"]).optional().describe("Gets or sets the rules that are applied to this format area when Components based on this Schema are validated. You have the option of selecting \"Strict\" or \"Transitional\" document types.")
 });
 
+const flexibleDateTimeSchema = z.string().regex(
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|([+-]\d{2}:\d{2}))?$/);
+
 export const listDefinitionSchema = z.discriminatedUnion("$type", [
   z.object({
     "$type": z.literal("ListDefinition"),
@@ -26,7 +29,7 @@ export const listDefinitionSchema = z.discriminatedUnion("$type", [
     "$type": z.literal("DateListDefinition"),
     Type: z.enum(["Select", "Radio", "Checkbox"]),
     Height: z.number().int().optional().describe("The height of the list control in the UI."),
-    Entries: z.array(z.string().datetime()).optional()
+    Entries: z.array(flexibleDateTimeSchema).optional().describe("A list of dates in ISO 8601 format.")
   }),
   z.object({
     "$type": z.literal("SingleLineTextListDefinition"),
@@ -85,7 +88,7 @@ export const keywordFieldSchema = z.object({
     IsIndexable: z.boolean().optional().describe("Whether the field value is included when performing a search."),
     IsLocalizable: z.boolean().optional().describe("Whether the field value can be changed in localized items."),
     IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing."),
-    List: listDefinitionSchema,
+    List: listDefinitionSchema.optional(),
     Category: linkSchema.describe("A Link to the Category from which Keywords can be selected."),
     AllowAutoClassification: z.boolean().optional().describe("Whether to allow automatic classification for this Keyword field.")
 });
@@ -118,10 +121,10 @@ export const dateFieldSchema = z.object({
     IsLocalizable: z.boolean().optional().describe("Whether the field value can be changed in localized items."),
     IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing."),
     List: listDefinitionSchema.optional(),
-    MinExclusive: z.string().datetime().optional().describe("The exclusive minimum date/time value allowed (ISO 8601 format)."),
-    MaxExclusive: z.string().datetime().optional().describe("The exclusive maximum date/time value allowed (ISO 8601 format)."),
-    MinInclusive: z.string().datetime().optional().describe("The inclusive minimum date/time value allowed (ISO 8601 format)."),
-    MaxInclusive: z.string().datetime().optional().describe("The inclusive maximum date/time value allowed (ISO 8601 format).")
+    MinExclusive: flexibleDateTimeSchema.optional().describe("The exclusive minimum date/time value allowed (ISO 8601 format)."),
+    MaxExclusive: flexibleDateTimeSchema.optional().describe("The exclusive maximum date/time value allowed (ISO 8601 format)."),
+    MinInclusive: flexibleDateTimeSchema.optional().describe("The inclusive minimum date/time value allowed (ISO 8601 format)."),
+    MaxInclusive: flexibleDateTimeSchema.optional().describe("The inclusive maximum date/time value allowed (ISO 8601 format).")
 });
 
 export const externalLinkFieldSchema = z.object({
