@@ -68,7 +68,23 @@ Example 1: Create a simple Schema with a single, optional text field.
         }
     });
 
-Example 2: Create a more complex 'Article' Schema with both content fields and metadata fields.
+Example 2: Create a simple Metadata Schema. Note the 'purpose' is 'Metadata', there is no 'rootElementName', and the fields are defined in 'metadataFields'.
+    const result = await tools.createSchema({
+        title: "Simple Metadata Schema",
+        locationId: "tcm:1-2-2",
+        purpose: "Metadata",
+        metadataFields: {
+            "textField": {
+                "$type": "SingleLineTextFieldDefinition",
+                "Name": "textField",
+                "Description": "A single line of text",
+                "MaxOccurs": 1,
+                "MinOccurs": 0
+            }
+        }
+    });
+
+Example 3: Create a more complex 'Article' Schema with both content fields and metadata fields.
     const result = await tools.createSchema({
         title: "Article",
         locationId: "tcm:1-2-2",
@@ -103,10 +119,10 @@ Example 2: Create a more complex 'Article' Schema with both content fields and m
         }
     });
 
-Example 3: Create a Schema with an XHTML field that has custom formatting features, disabling several toolbar buttons.
+Example 4: Create a Schema with an XHTML field that has custom formatting features, disabling several toolbar buttons.
     const result = await tools.createSchema({
         title: "Rich Text Schema with Custom Formatting",
-        locationId: "tcm:1-2-2",
+        locationId: "tcm:1-234-2",
         purpose: "Component",
         rootElementName: "RichText",
         fields: {
@@ -131,10 +147,10 @@ Example 3: Create a Schema with an XHTML field that has custom formatting featur
         }
     });
 
-Example 4: Create a Schema that uses an embeddable Schema for an embedded field. First, ensure you have an 'Embeddable' Schema created (e.g., an 'Author' Schema with TCM URI tcm:1-123-8). The embeddable Schema will be referenced via the 'EmbeddedSchema' property, the value of which should be a Link. There should also be an EmbeddedFields property, the value of which should be an empty object.
+Example 5: Create a Schema that uses an embeddable Schema for an embedded field. First, ensure you have an 'Embeddable' Schema created (e.g., an 'Author' Schema with TCM URI tcm:1-123-8). The embeddable Schema will be referenced via the 'EmbeddedSchema' property, the value of which should be a Link. There should also be an EmbeddedFields property, the value of which should be an empty object.
     const result = await tools.createSchema({
         title: "ArticleSchema",
-        locationId: "tcm:1-2-2",
+        locationId: "tcm:11-4567-2",
         purpose: "Component",
         rootElementName: "ArticleRoot",
         fields: {
@@ -154,14 +170,14 @@ Example 4: Create a Schema that uses an embeddable Schema for an embedded field.
                 "Description": "An author of the article.",
                 "EmbeddedSchema": {
                     "$type": "Link",
-                    "IdRef": "tcm:1-123-8"
+                    "IdRef": "tcm:11-123-8"
                 },
                 "EmbeddedFields": {}
             }
         }
     });
 
-Example 5: Create a Metadata Schema with a multi-value checkbox field using a predefined list of dates.
+Example 6: Create a Metadata Schema with a multi-value checkbox field using a predefined list of dates.
     const result = await tools.createSchema({
         title: "Date Selection",
         locationId: "tcm:1-2-2",
@@ -185,10 +201,10 @@ Example 5: Create a Metadata Schema with a multi-value checkbox field using a pr
         }
     });
 
-Example 6: Create a Schema with a multi-value Component Link field. This allows linking to multiple other Components. The 'MaxOccurs' property is set to -1 for unlimited values.
+Example 7: Create a Schema with a multi-value Component Link field. This allows linking to multiple other Components. The 'MaxOccurs' property is set to -1 for unlimited values.
     const result = await tools.createSchema({
         title: "Linked Articles",
-        locationId: "tcm:1-2-2",
+        locationId: "tcm:18-2-2",
         purpose: "Component",
         rootElementName: "Links",
         fields: {
@@ -200,14 +216,14 @@ Example 6: Create a Schema with a multi-value Component Link field. This allows 
                 "AllowedTargetSchemas": [
                     {
                         "$type": "Link",
-                        "IdRef": "tcm:1-103-8"
+                        "IdRef": "tcm:18-103-8"
                     }
                 ]
             }
         }
     });
 
-Example 7: Create a Schema with a multi-value Multimedia Link field. This allows linking to multiple multimedia items like images or videos.
+Example 8: Create a Schema with a multi-value Multimedia Link field. This allows linking to multiple multimedia items like images or videos.
     const result = await tools.createSchema({
         title: "Image Gallery",
         locationId: "tcm:1-2-2",
@@ -229,12 +245,11 @@ Example 7: Create a Schema with a multi-value Multimedia Link field. This allows
         }
     });
 
-Example 8: Create a Region Schema with constraints on its Component Presentations. This region will allow up to 5 CPs that must use a specific Schema and Component Template.
+Example 9: Create a Region Schema with constraints on its Component Presentations. This region will allow up to 5 CPs that must use a specific Schema and Component Template.
     const result = await tools.createSchema({
         title: "Constrained Region Schema",
         locationId: "tcm:5-2-2",
         purpose: "Region",
-        rootElementName: "ConstrainedRegion",
         description: "A Region that constrains what can be put inside it.",
         regionDefinition: JSON.stringify({
             "$type": "RegionDefinition",
@@ -253,7 +268,7 @@ Example 8: Create a Region Schema with constraints on its Component Presentation
         })
     });
 
-Example 9: Create a Schema with a Keyword field for classification. This field links to a Category, allowing editors to select from a predefined list of Keywords. Use 'getCategories' to find a suitable Category to link to.
+Example 10: Create a Schema with a Keyword field for classification. This field links to a Category, allowing editors to select from a predefined list of Keywords. Use 'getCategories' to find a suitable Category to link to.
     const result = await tools.createSchema({
         title: "Article With Classification",
         locationId: "tcm:1-2-2",
@@ -284,7 +299,7 @@ Example 9: Create a Schema with a Keyword field for classification. This field l
         }
     });
 
-Example 10: Create a Schema with advanced constraints.
+Example 11: Create a Schema with advanced constraints.
     const result = await tools.createSchema({
         title: "Data Schema With Constraints",
         locationId: "tcm:1-2-2",
@@ -315,7 +330,33 @@ Example 10: Create a Schema with advanced constraints.
                 "FractionDigits": 2
             }
         }
-    });`,
+    });
+    
+Example 12: Create an 'Embedded' Schema to be used within other Schemas.
+    const result = await tools.createSchema({
+        title: "Author Details",
+        locationId: "tcm:20-1234-2",
+        purpose: "Embedded",
+        rootElementName: "AuthorDetails",
+        description: "An embeddable schema for author information, containing their name and biography. This schema can then be inserted into other schemas using an 'EmbeddedSchemaFieldDefinition'.",
+        fields: {
+            "name": {
+                "$type": "SingleLineTextFieldDefinition",
+                "Name": "name",
+                "Description": "The author's full name.",
+                "MinOccurs": 1,
+                "MaxOccurs": 1
+            },
+            "biography": {
+                "$type": "MultiLineTextFieldDefinition",
+                "Name": "biography",
+                "Description": "A short biography of the author.",
+                "Height": 5,
+                "MinOccurs": 0
+            }
+        }
+    });
+    `,
     input: {
         title: z.string().nonempty().describe("The title for the new Schema."),
         locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new Schema will be created. Use 'search' or 'getItemsInContainer' to find a Folder."),
@@ -386,7 +427,13 @@ Example 10: Create a Schema with advanced constraints.
             const payload = defaultModelResponse.data;
             payload.Title = title;
             payload.Purpose = purpose;
-            payload.RootElementName = rootElementName;
+
+            if (purpose === 'Component' || purpose === 'Embedded') {
+                payload.RootElementName = rootElementName;
+            } else {
+                delete payload.RootElementName;
+            }
+
             if (description) payload.Description = description;
             if (processedFields) payload.Fields = { "$type": "FieldsDefinitionDictionary", ...processedFields };
             if (processedMetadataFields) payload.MetadataFields = { "$type": "FieldsDefinitionDictionary", ...processedMetadataFields };
