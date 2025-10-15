@@ -322,7 +322,7 @@ Example 10: Create a Schema with advanced constraints.
         purpose: z.enum([
             "Component", "Multimedia", "Embedded",
             "Metadata", "Bundle", "Region"
-        ]).describe("The purpose of the Schema, which determines where it can be used."),
+        ]).describe("The purpose of the Schema, which determines the item type(s) for which it can be used. When asked to create a metadata schema, be sure to set the purpose to 'Metadata' and use the 'metadataFields' parameter for defining the fields."),
         rootElementName: xmlNameSchema.optional().describe("The name of the root element for the XML structure defined by the Schema. Only applies to component and embeddable schemas. When using two or more embeddable schemas in a schema (via embedded schema fields), this value needs to be unique between the embeddable schemas."),
         description: z.string().nonempty().describe("An mandatory description of the Schema."),
         fields: z.record(fieldDefinitionSchema).optional().describe("Only used for Component Schemas. A dictionary of field definitions for the schema's content fields. The keys of the dictionary are the machine names of the fields."),
