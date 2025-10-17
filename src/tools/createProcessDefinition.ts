@@ -81,7 +81,7 @@ Example 2: Create a more complex workflow with a decision point.
           {
             "title": "Assign to Process Creator",
             "description": "Task was finished and it will be sent to the process creator.",
-            "script": "ActivityFinishData finishData = new ActivityFinishData()\\n{\\n    Message = ProcessInstance.Activities.Last().FinishMessage,\\n    NextAssignee = new LinkToTrusteeData\\n    {\\n        IdRef = ProcessInstance.Creator.IdRef\\n    }\\n};\\nSessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);",
+            "script": "ActivityFinishData finishData = new ActivityFinishData()\\n{\\nMessage = ProcessInstance.Activities.Last().FinishMessage,\\nNextAssignee = new LinkToTrusteeData\\n{\\nIdRef = ProcessInstance.Creator.IdRef\\n}\\n};\\nSessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);",
             "nextActivities": ["Review Task"]
           },
           {
@@ -93,13 +93,13 @@ Example 2: Create a more complex workflow with a decision point.
           {
             "title": "Decline",
             "description": "The task was reviewed and will be sent back to the performer.",
-            "script": "string performedTaskActivityDefinitionId = ProcessInstance.Activities.Cast<ActivityInstanceData>().First().ActivityDefinition.IdRef;\\nActivityFinishData finishData = new ActivityFinishData()\\n{\\n    Message = ProcessInstance.Activities.Last().FinishMessage,\\n    NextAssignee = new LinkToTrusteeData\\n    {\\n        IdRef = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last(activity => activity.ActivityDefinition.IdRef == performedTaskActivityDefinitionId).Owner.IdRef\\n    }\\n};\\nSessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);",
+            "script": "string performedTaskActivityDefinitionId = ProcessInstance.Activities.Cast<ActivityInstanceData>().First().ActivityDefinition.IdRef;\\nActivityFinishData finishData = new ActivityFinishData()\\n{\\nMessage = ProcessInstance.Activities.Last().FinishMessage,\\nNextAssignee = new LinkToTrusteeData\\n{\\nIdRef = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last(activity => activity.ActivityDefinition.IdRef == performedTaskActivityDefinitionId).Owner.IdRef\\n}\\n};\\nSessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);",
             "nextActivities": ["Perform Task"]
           },
           {
             "title": "Accept",
             "description": "The task process is complete.",
-            "script": "ActivityFinishData finishData = new ActivityFinishData()\\n{\\n    Message = \\"Automatic Activity 'Accept' Finished\\"\\n};\\nSessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);",
+            "script": "ActivityFinishData finishData = new ActivityFinishData()\\n{\\nMessage = \\"Automatic Activity 'Accept' Finished\\"\\n};\\nSessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);",
             "nextActivities": []
           }
         ]
@@ -119,7 +119,7 @@ Example 3: Create a workflow that automatically publishes the item(s) in the wor
             {
                 "title": "Publish Content",
                 "description": "This activity automatically publishes the items.",
-                "script": "PublishInstructionData publishInstruction = new PublishInstructionData();\\npublishInstruction.ResolveInstruction = new ResolveInstructionData();\\npublishInstruction.RenderInstruction = new RenderInstructionData();\\n\\n// Extract item URIs from the workflow package\\nString[] itemsToPublish = ProcessInstance.Subjects.Select(s => s.IdRef).ToArray();\\n\\n// Hardcoded Target Type URI (e.g., 'Staging')\\nString[] targets = new String[] { \\"tcm:0-1-65537\\" };\\n\\nif (itemsToPublish.Length > 0)\\n{\\n    PublishTransactionData[] tx = SessionAwareCoreServiceClient.Publish(itemsToPublish, publishInstruction, targets, PublishPriority.Normal, null);\\n    ProcessInstance.Variables.Add(\\"PublishTransaction\\", tx[0].Id);\\n}\\n\\nActivityFinishData finishData = new ActivityFinishData() { Message = \\"Content sent to publisher.\\" };\\nSessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);"
+                "script": "PublishInstructionData p=new PublishInstructionData();p.ResolveInstruction=new ResolveInstructionData{IncludeChildPublications=false,IncludeComponentLinks=true,IncludeDynamicVersion=true,IncludeWorkflow=true,StructureResolveOption=StructureResolveOption.OnlyItems};p.RenderInstruction=new RenderInstructionData();string[] i=ProcessInstance.Subjects.Select(s=>{int v=s.IdRef.LastIndexOf(\"-v\");return v>-1?s.IdRef.Substring(0,v):s.IdRef;}).ToArray();if(i.Length>0){string[] t=new string[]{\"tcm:0-3-65538\"};PublishTransactionData[] tx=SessionAwareCoreServiceClient.Publish(i,p,t,Tridion.ContentManager.CoreService.Client.PublishPriority.Normal,null);ProcessInstance.Variables.Add(\"PublishTransaction\",tx[0].Id);}SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id,new ActivityFinishData{Message=\"Content approved and sent to publisher.\"},null);"
             }
         ]
     });
