@@ -51,18 +51,38 @@ async function startServer() {
                 const potentialTool = Object.values(module)[0];
 
                 if (isTool(potentialTool)) {
-                    mcpServer.tool(
-                        potentialTool.name, 
-                        potentialTool.description, 
-                        potentialTool.input, 
-                        potentialTool.execute as any
-                    );
                     tools.push(potentialTool);
                 } else {
                     console.warn(`Warning: File ${file} does not export a valid tool object.`);
                 }
             }
         }
+
+        const toolsAsRecord: Record<string, Tool> = tools.reduce((acc, tool) => {
+            acc[tool.name] = tool;
+            return acc;
+        }, {} as Record<string, Tool>);
+
+        for (const potentialTool of tools) {
+            mcpServer.tool(
+                potentialTool.name, 
+                potentialTool.description, 
+                potentialTool.input, 
+                // Handle scriptRunner as a special case
+                (args: any, context: any) => {
+                    let finalContext = context;
+                    if (potentialTool.name === 'scriptRunner') {
+                        finalContext = {
+                            ...context,
+                            tools: toolsAsRecord
+                        };
+                    }
+                    // All other tools get the default context
+                    return potentialTool.execute(args, finalContext);
+                }
+            );
+        }
+
         console.log(`Successfully loaded and registered ${tools.length} tools.`);
 
     } catch (error) {
