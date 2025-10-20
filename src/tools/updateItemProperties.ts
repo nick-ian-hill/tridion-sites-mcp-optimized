@@ -78,7 +78,7 @@ To discover all available fields within an embedded schema, including optional o
 IMPORTANT: 
 - Shared items ('BluePrintInfo.IsShared' is true) cannot be updated. To modify inherited properties, such as a Schema's fields, you must update the parent item in the BluePrint chain ('PrimaryBluePrintParentItem').
 - For versioned items (Component, Schema, PageTemplate, ComponentTemplate), items that are not checked out will be automatically checked back in after updating. Items that are checked out before updating will remain checked out.
-- If allowed, use the 'checkInItem' tool before calling 'updateItemProperties' to update an item currently checked out to a different user.
+- The operation will be aborted if the item is checked out by another user.
 
 Example 1: Update a Schema to make a mandatory field optional.
 This example modifies the 'News Article' Schema (tcm:2-104-8) to include a new field, 'image'. Note that the entire 'fields' object must be provided, including the unchanged fields.
