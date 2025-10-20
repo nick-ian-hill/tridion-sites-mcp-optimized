@@ -2,7 +2,6 @@ import { z, ZodIssue } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { processSchemaFieldDefinitions } from "../utils/fieldReordering.js";
-import { handleCheckout, checkInItem, undoCheckoutItem } from "../utils/versioningUtils.js";
 
 import {
     singleLineTextFieldSchema,
@@ -73,7 +72,7 @@ const setNestedProperty = (obj: any, path: string, value: any): void => {
 
 export const updateSchemaFieldProperties = {
     name: "updateSchemaFieldProperties",
-    description: `Updates specific properties of one or more fields within a given Schema. FOr surgical updates, this is more efficient and robust than using the 'updateItemProperties' tool and replacing the entire fields collection.
+    description: `Updates specific properties of one or more fields within a given Schema. For surgical updates, this is more efficient and robust than using the 'updateItemProperties' tool and replacing the entire fields collection.
     
 Versioning is handled automatically. If the item is not checked out, it will be checked out, updated, and then checked back in. If the item is already checked out by you, it will remain checked out after the update. The operation will be aborted if the item is checked out by another user.
 
@@ -142,20 +141,12 @@ Example 3: Update a validation constraint on a field.
         const userSessionId = match ? match[1] : null;
 
         const restItemId = schemaId.replace(':', '_');
-        let wasCheckedOutByTool = false;
         const authenticatedAxios = createAuthenticatedAxios(userSessionId);
 
         try {
             const getItemResponse = await authenticatedAxios.get(`/items/${restItemId}`, { params: { useDynamicVersion: true } });
             if (getItemResponse.status !== 200) return handleUnexpectedResponse(getItemResponse);
-            const initialItem = getItemResponse.data;
-
-            const versioningResult = await handleCheckout(schemaId, initialItem, authenticatedAxios);
-            if (versioningResult.error) {
-                return { content: [{ type: "text", text: versioningResult.error }] };
-            }
-            let itemToUpdate = versioningResult.item;
-            wasCheckedOutByTool = versioningResult.wasCheckedOutByTool;
+            const itemToUpdate = getItemResponse.data;
 
             for (const update of fieldUpdates) {
                 const { fieldName, fieldLocation, propertyToUpdate, newValue } = update;
@@ -215,22 +206,11 @@ Example 3: Update a validation constraint on a field.
             if (updateResponse.status !== 200) return handleUnexpectedResponse(updateResponse);
             const updatedItem = updateResponse.data;
 
-            // Handle check-in
-            if (wasCheckedOutByTool) {
-                const checkInResult = await checkInItem(schemaId, authenticatedAxios);
-                if (!('status' in checkInResult && checkInResult.status === 200)) {
-                    return checkInResult;
-                }
-            }
-
             return {
                 content: [{ type: "text", text: `Successfully updated fields in Schema ${schemaId}.\n\n${JSON.stringify(updatedItem, null, 2)}` }],
             };
 
         } catch (error) {
-            if (wasCheckedOutByTool) {
-                await undoCheckoutItem(schemaId, authenticatedAxios);
-            }
             return handleAxiosError(error, `Failed to update fields for Schema ${schemaId}`);
         }
     }

@@ -3,7 +3,6 @@ import { GoogleGenAI } from "@google/genai";
 import FormData from "form-data";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
-import { handleCheckout, checkInItem, undoCheckoutItem } from "../utils/versioningUtils.js";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 
@@ -27,7 +26,6 @@ export const updateMultimediaComponentFromPrompt = {
 
         const { itemId, prompt, aspectRatio } = input;
         const restItemId = itemId.replace(':', '_');
-        let wasCheckedOutByTool = false;
         const authenticatedAxios = createAuthenticatedAxios(userSessionId);
 
         try {
@@ -35,18 +33,11 @@ export const updateMultimediaComponentFromPrompt = {
             const getInitialItemResponse = await authenticatedAxios.get(`/items/${restItemId}`, { params: { useDynamicVersion: true } });
             if (getInitialItemResponse.status !== 200) return handleUnexpectedResponse(getInitialItemResponse);
             
-            const initialItem = getInitialItemResponse.data;
+            const itemToUpdate = getInitialItemResponse.data;
 
-            if (initialItem.ComponentType !== 'Multimedia') {
+            if (itemToUpdate.ComponentType !== 'Multimedia') {
                 throw new Error(`Item ${itemId} is not a Multimedia Component.`);
             }
-
-            const versioningResult = await handleCheckout(itemId, initialItem, authenticatedAxios);
-            if (versioningResult.error) {
-                return { content: [{ type: "text", text: versioningResult.error }] };
-            }
-            let itemToUpdate = versioningResult.item;
-            wasCheckedOutByTool = versioningResult.wasCheckedOutByTool;
 
             console.log(`Downloading binary content for ${itemId}`);
             const downloadResponse = await authenticatedAxios.get(`/items/${restItemId}/binary/download`, {
@@ -115,24 +106,12 @@ export const updateMultimediaComponentFromPrompt = {
             console.log(`Updating component ${itemId} with new binary.`);
             const updateResponse = await authenticatedAxios.put(`/items/${restItemId}`, itemToUpdate);
             if (updateResponse.status !== 200) return handleUnexpectedResponse(updateResponse);
-
-            if (wasCheckedOutByTool) {
-                console.log(`Checking in component ${itemId}.`);
-                const checkInResult = await checkInItem(itemId, authenticatedAxios);
-                if (!('status' in checkInResult && checkInResult.status === 200)) {
-                    return checkInResult;
-                }
-            }
             
             return {
                 content: [{ type: "text", text: `Successfully updated multimedia component ${itemId} based on the prompt.` }],
             };
 
         } catch (error) {
-            if (wasCheckedOutByTool) {
-                console.log(`An error occurred. Undoing checkout for ${itemId}.`);
-                await undoCheckoutItem(itemId, authenticatedAxios);
-            }
             return handleAxiosError(error, `Failed to update multimedia component ${itemId} from prompt`);
         }
     }

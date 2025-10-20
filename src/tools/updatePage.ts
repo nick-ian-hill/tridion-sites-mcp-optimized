@@ -6,7 +6,6 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 import { reorderFieldsBySchema } from "../utils/fieldReordering.js";
 import { processComponentPresentations, processRegions } from "../utils/pageUtils.js";
-import { handleCheckout, checkInItem, undoCheckoutItem } from "../utils/versioningUtils.js";
 
 export const updatePage = {
     name: "updatePage",
@@ -77,7 +76,6 @@ Example 4: Change the Metadata Schema and provide metadata for the new fields. S
 
         const { itemId, ...updates } = params;
         const restItemId = itemId.replace(':', '_');
-        let wasCheckedOutByTool = false;
         const authenticatedAxios = createAuthenticatedAxios(userSessionId);
 
         try {
@@ -85,15 +83,7 @@ Example 4: Change the Metadata Schema and provide metadata for the new fields. S
             if (getItemResponse.status !== 200) {
                 return handleUnexpectedResponse(getItemResponse);
             }
-            const initialItem = getItemResponse.data;
-
-            const versioningResult = await handleCheckout(itemId, initialItem, authenticatedAxios);
-            if (versioningResult.error) {
-                return { content: [{ type: "text", text: versioningResult.error }] };
-            }
-            let itemToUpdate = versioningResult.item;
-            wasCheckedOutByTool = versioningResult.wasCheckedOutByTool;
-
+            const itemToUpdate = getItemResponse.data;
 
             if (updates.title) itemToUpdate.Title = updates.title;
             if (updates.fileName) itemToUpdate.FileName = updates.fileName;
@@ -154,21 +144,11 @@ Example 4: Change the Metadata Schema and provide metadata for the new fields. S
             }
             const updatedItem = updateResponse.data;
 
-            if (wasCheckedOutByTool) {
-                const checkInResult = await checkInItem(itemId, authenticatedAxios);
-                if (!('status' in checkInResult && checkInResult.status === 200)) {
-                    return checkInResult;
-                }
-            }
-
             return {
                 content: [{ type: "text", text: `Successfully updated Page ${itemId}.\n\n${JSON.stringify(updatedItem, null, 2)}` }],
             };
 
         } catch (error) {
-            if (wasCheckedOutByTool) {
-                await undoCheckoutItem(itemId, authenticatedAxios);
-            }
             return handleAxiosError(error, `Failed to update Page ${itemId}`);
         }
     }

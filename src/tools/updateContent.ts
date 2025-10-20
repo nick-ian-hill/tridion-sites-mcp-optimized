@@ -3,7 +3,6 @@ import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 import { reorderFieldsBySchema, convertLinksRecursively } from "../utils/fieldReordering.js";
-import { handleCheckout, checkInItem, undoCheckoutItem } from "../utils/versioningUtils.js";
 
 export const updateContent = {
     name: "updateContent",
@@ -72,7 +71,6 @@ Example 2: Updates the content of an embedded schema field.
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
         const userSessionId = match ? match[1] : null;
 
-        let wasCheckedOutByTool = false;
         const restItemId = itemId.replace(':', '_');
         const authenticatedAxios = createAuthenticatedAxios(userSessionId);
 
@@ -81,19 +79,12 @@ Example 2: Updates the content of an embedded schema field.
             if (getInitialItemResponse.status !== 200) {
                 return handleUnexpectedResponse(getInitialItemResponse);
             }
-            const initialItem = getInitialItemResponse.data;
-            const schemaId = initialItem.Schema?.IdRef;
+            const itemToUpdate = getInitialItemResponse.data;
+            const schemaId = itemToUpdate.Schema?.IdRef;
 
             if (!schemaId) {
                 return handleAxiosError(new Error(`Component ${itemId} does not have an associated Schema.`), "Failed to update component");
             }
-
-            const versioningResult = await handleCheckout(itemId, initialItem, authenticatedAxios);
-            if (versioningResult.error) {
-                return { content: [{ type: "text", text: versioningResult.error }] };
-            }
-            let itemToUpdate = versioningResult.item;
-            wasCheckedOutByTool = versioningResult.wasCheckedOutByTool;
             
             convertLinksRecursively(content, itemId);
             const orderedContent = await reorderFieldsBySchema(content, schemaId, 'content', authenticatedAxios);
@@ -105,21 +96,11 @@ Example 2: Updates the content of an embedded schema field.
                 return handleUnexpectedResponse(updateResponse);
             }
 
-            if (wasCheckedOutByTool) {
-                const checkInResult = await checkInItem(itemId, authenticatedAxios);
-                if (!('status' in checkInResult && checkInResult.status === 200)) {
-                    return checkInResult;
-                }
-            }
-
             return {
                 content: [{ type: "text", text: `Successfully updated component ${itemId}.` }],
             };
             
         } catch (error) {
-            if (wasCheckedOutByTool) {
-                await undoCheckoutItem(itemId, authenticatedAxios);
-            }
             return handleAxiosError(error, "Failed to update component");
         }
     }

@@ -8,7 +8,6 @@ import { fieldDefinitionSchema, fieldValueSchema } from "../schemas/fieldValueSc
 import { processSchemaFieldDefinitions, reorderFieldsBySchema } from "../utils/fieldReordering.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 import { filterResponseData } from "../utils/responseFiltering.js";
-import { handleCheckout, checkInItem, undoCheckoutItem } from "../utils/versioningUtils.js";
 
 const updateItemPropertiesInputProperties = {
     itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the CMS item to update."),
@@ -164,9 +163,6 @@ Example 2: Change the Metadata Schema of a Folder and provide the mandatory valu
 
         const { itemId, itemType, includeProperties, ...updates } = params;
         const restItemId = itemId.replace(':', '_');
-        const versionedItemTypes = ["Component", "Schema", "PageTemplate", "ComponentTemplate"];
-        const isVersioned = versionedItemTypes.includes(itemType);
-        let wasCheckedOutByTool = false;
         const authenticatedAxios = createAuthenticatedAxios(userSessionId);
 
         try {
@@ -222,16 +218,7 @@ Example 2: Change the Metadata Schema of a Folder and provide the mandatory valu
             if (getItemResponse.status !== 200) {
                 return handleUnexpectedResponse(getItemResponse);
             }
-            let itemToUpdate = getItemResponse.data;
-
-            if (isVersioned) {
-                const versioningResult = await handleCheckout(itemId, itemToUpdate, authenticatedAxios);
-                if (versioningResult.error) {
-                    return { content: [{ type: "text", text: versioningResult.error }] };
-                }
-                itemToUpdate = versioningResult.item;
-                wasCheckedOutByTool = versioningResult.wasCheckedOutByTool;
-            }
+            const itemToUpdate = getItemResponse.data;
 
             if (updates.title) itemToUpdate.Title = updates.title;
             if (updates.description) itemToUpdate.Description = updates.description;
@@ -300,13 +287,6 @@ Example 2: Change the Metadata Schema of a Folder and provide the mandatory valu
             }
             const updatedItem = updateResponse.data;
 
-            if (isVersioned && wasCheckedOutByTool) {
-                const checkInResult = await checkInItem(itemId, authenticatedAxios);
-                if (!('status' in checkInResult && checkInResult.status === 200)) {
-                    return checkInResult;
-                }
-            }
-
             const finalData = filterResponseData({ responseData: updatedItem, includeProperties });
 
             return {
@@ -314,9 +294,6 @@ Example 2: Change the Metadata Schema of a Folder and provide the mandatory valu
             };
 
         } catch (error) {
-            if (isVersioned && wasCheckedOutByTool) {
-                await undoCheckoutItem(itemId, authenticatedAxios);
-            }
             return handleAxiosError(error, `Failed to update ${itemType} ${itemId}`);
         }
     }

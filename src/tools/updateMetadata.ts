@@ -3,7 +3,6 @@ import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 import { reorderFieldsBySchema, convertLinksRecursively } from "../utils/fieldReordering.js";
-import { handleCheckout, checkInItem, undoCheckoutItem } from "../utils/versioningUtils.js";
 
 export const updateMetadata = {
     name: "updateMetadata",
@@ -85,7 +84,6 @@ Example 2: Updates the metadata values for a 'Folder' with featuring a multi-val
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
         const userSessionId = match ? match[1] : null;
 
-        let wasCheckedOutByTool = false;
         const restItemId = itemId.replace(':', '_');
         const authenticatedAxios = createAuthenticatedAxios(userSessionId);
 
@@ -93,30 +91,19 @@ Example 2: Updates the metadata values for a 'Folder' with featuring a multi-val
             const getItemResponse = await authenticatedAxios.get(`/items/${restItemId}`, { params: { useDynamicVersion: true } });
             if (getItemResponse.status !== 200) return handleUnexpectedResponse(getItemResponse);
             
-            const item = getItemResponse.data;
-            let itemToUpdate = item;
-            const isVersioned = !!item?.VersionInfo?.Version;
+            const itemToUpdate = getItemResponse.data;
             
             let schemaIdForMetadata: string | undefined;
 
-            if (item.MetadataSchema?.IdRef && item.MetadataSchema.IdRef !== 'tcm:0-0-0') {
-                schemaIdForMetadata = item.MetadataSchema.IdRef;
+            if (itemToUpdate.MetadataSchema?.IdRef && itemToUpdate.MetadataSchema.IdRef !== 'tcm:0-0-0') {
+                schemaIdForMetadata = itemToUpdate.MetadataSchema.IdRef;
             } 
-            else if (item.$type === 'Component') {
-                schemaIdForMetadata = item.Schema?.IdRef;
+            else if (itemToUpdate.$type === 'Component') {
+                schemaIdForMetadata = itemToUpdate.Schema?.IdRef;
             }
             
             if (!schemaIdForMetadata) {
                 return handleAxiosError(new Error(`Could not determine a valid Schema for the metadata fields of item ${itemId}.`), "Failed to update item metadata");
-            }
-            
-            if (isVersioned) {
-                const versioningResult = await handleCheckout(itemId, item, authenticatedAxios);
-                if (versioningResult.error) {
-                    return { content: [{ type: "text", text: versioningResult.error }] };
-                }
-                itemToUpdate = versioningResult.item;
-                wasCheckedOutByTool = versioningResult.wasCheckedOutByTool;
             }
 
             convertLinksRecursively(metadata, itemId);
@@ -129,20 +116,10 @@ Example 2: Updates the metadata values for a 'Folder' with featuring a multi-val
                 return handleUnexpectedResponse(updateResponse);
             }
 
-            if (wasCheckedOutByTool) {
-                const checkInResult = await checkInItem(itemId, authenticatedAxios);
-                if (!('status' in checkInResult && checkInResult.status === 200)) {
-                    return checkInResult;
-                }
-            }
-
             return {
                 content: [{ type: "text", text: `Successfully updated metadata for item ${itemId}.` }],
             };
         } catch (error) {
-            if (wasCheckedOutByTool) {
-                await undoCheckoutItem(itemId, authenticatedAxios);
-            }
             return handleAxiosError(error, "Failed to update item metadata");
         }
     }
