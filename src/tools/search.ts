@@ -15,6 +15,7 @@ export const search = {
 
   ### Important: Retrieving Full Item Details
   The search service is optimized for finding items, not for retrieving their full content or deep structural data. Properties like a Component's 'Content'/'Metadata' or a Schema's 'Fields'/'MetadataFields' are NEVER returned by this tool, regardless of the 'details' or 'includeProperties' settings.
+  When using 'FullTextQuery' to search for a substring, a leading/trailing asterisk or other wildcard may be necessary, e.g., "*ing", "?art*".
 
   For tasks requiring inspection of these properties, always use a two-step process:
   1.  Find: Use 'search' with the default 'details: "IdAndTitle"' to efficiently get a list of relevant item IDs.
