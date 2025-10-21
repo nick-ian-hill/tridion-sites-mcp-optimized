@@ -26,15 +26,18 @@ const scriptRunnerInputProperties = {
     stopOnError: z.boolean().optional().default(true)
         .describe("If true (default), the entire operation stops if any single item fails. If false, it logs the error and continues to the next item."),
     maxConcurrency: z.number().int().min(1).max(10).optional().default(5)
-        .describe("The maximum number of scripts to run in parallel. Set to 1 for sequential execution (e.g., for script validation and debugging, or if the server is under heavy load).")
+        .describe("The maximum number of scripts to run in parallel. Set to 1 for sequential execution (e.g., for script validation and debugging, or if the server is under heavy load)."),
+    includeScriptResults: z.boolean().optional().default(false)
+        .describe("If true, the final summary will include the return value from each successful script execution. Default is false. Useful for reporting tasks.")
 };
 
-// This Zod object is now used internally for type inference, but not exported
 const scriptRunnerSchema = z.object(scriptRunnerInputProperties);
 
 export const scriptRunner = {
     name: "scriptRunner",
-    description: `Executes an advanced, multi-step JavaScript script for each item in a provided list. 
+    description: `Executes an advanced, multi-step JavaScript script for each item in a provided list.
+    This is the ideal tool for complex bulk updates (like content modifications or AI-driven rewrites) and custom reporting (extracting data).
+    Setting 'includeScriptResults: true' will collect and return custom data from each script, enabling powerful reporting workflows.
     By default, up to 5 scripts can run in parallel. Setting a higher 'maxConcurrency' value can increase speed at the cost of overall server load. Only use a value of 1 when debugging a script or when explicitly requested by the user.
     
 The script receives a 'context' object with the following properties:
@@ -138,6 +141,35 @@ This script uses the AI to rewrite the 'Summary' field of several articles to ha
             context.log('Successfully updated with AI-generated content.');
         \`
     });
+
+Example 3: Report on Component Schema and Author
+This script retrieves the Schema and Author (from metadata) for a list of components and returns this data.
+
+    const result = await tools.scriptRunner({
+        itemIds: ["tcm:5-300", "tcm:5-301"],
+        includeScriptResults: true, // <-- Set to true to get the return values
+        script: \`
+            // Get the item's data
+            const itemResult = await context.tools.getItem({ 
+                itemId: context.currentItemId,
+                includeProperties: ["Schema.Title", "Metadata.author", "Info.LastModifiedDate"]
+            });
+            const item = JSON.parse(itemResult.content[0].text);
+
+            const schemaTitle = item.Schema ? item.Schema.Title : "N/A";
+            const author = item.Metadata ? item.Metadata.author : "N/A";
+            const modified = item.Info ? item.Info.LastModifiedDate : "N/A";
+
+            context.log(\`Item \${item.Id} uses Schema '\${schemaTitle}' and author is '\${author}'.\`);
+
+            // Return a custom object. This will be in the 'Script Results' section.
+            return { 
+                schema: schemaTitle, 
+                author: author,
+                lastModified: modified
+            };
+        \`
+    });
 `,
 
     // The 'input' property is now the plain object
@@ -148,7 +180,7 @@ This script uses the AI to rewrite the 'Summary' field of several articles to ha
         input: z.infer<typeof scriptRunnerSchema>,
         mcpContext: any
     ) => {
-        const { itemIds, script, parameters = {}, stopOnError, maxConcurrency } = input;
+        const { itemIds, script, parameters = {}, stopOnError, maxConcurrency, includeScriptResults } = input;
 
         if (!mcpContext.tools || typeof mcpContext.tools !== 'object') {
             return {
@@ -287,6 +319,14 @@ ${logs.join('\n')}
                 .map(r => ({ itemId: r.itemId, error: r.error }));
             summary += "\n--- Error Details ---\n";
             summary += JSON.stringify(errorDetails, null, 2);
+        }
+
+        if (includeScriptResults) {
+            const successResults = results
+                .filter(r => r.status === 'success')
+                .map(r => ({ itemId: r.itemId, result: r.result }));
+            summary += "\n--- Script Results ---\n";
+            summary += JSON.stringify(successResults, null, 2);
         }
 
         return {
