@@ -20,7 +20,9 @@ const scriptRunnerInputProperties = {
         .min(1, "At least one item ID must be provided.")
         .describe("An array of unique IDs (TCM URIs) for the items to be processed."),
     script: z.string()
-        .describe("A JavaScript string (as an async function body) to execute for each item. The script has access to a 'context' object."),
+        .describe("A JavaScript string (as an async function body) to execute for each item. The script has access to a 'context' object. This is the 'map' phase."),
+    postProcessingScript: z.string().optional()
+        .describe("An optional second JavaScript string that runs once after all items are processed. It receives an object `{ results, parameters }` and its return value becomes the final output of the tool. This is the 'reduce' phase."),
     parameters: z.record(z.any()).optional()
         .describe("An optional JSON object of parameters to pass into the script. Use this for static values like find/replace strings (e.g., {'find': 'old text', 'replace': 'new text'})."),
     stopOnError: z.boolean().optional().default(true)
@@ -35,12 +37,14 @@ const scriptRunnerSchema = z.object(scriptRunnerInputProperties);
 
 export const scriptRunner = {
     name: "scriptRunner",
-    description: `Executes an advanced, multi-step JavaScript script for each item in a provided list.
-    This is the ideal tool for complex bulk updates (like content modifications or AI-driven rewrites) and custom reporting (extracting data).
-    Setting 'includeScriptResults: true' will collect and return custom data from each script, enabling powerful reporting workflows.
+    description: `Executes an advanced, multi-step JavaScript script for each item in a provided list, with an optional final processing step.
+    This is the ideal tool for complex bulk updates and custom reporting. It supports two phases:
+    Phase 1 ('map'): The main 'script' runs for each item in 'itemIds', perfect for gathering data or updating items individually.
+    Phase 2 ('reduce'): The optional 'postProcessingScript' runs once on the collected results from Phase 1, allowing for aggregation, filtering, or sorting to find a final answer.
+
     By default, up to 5 scripts can run in parallel. Setting a higher 'maxConcurrency' value can increase speed at the cost of overall server load. Only use a value of 1 when debugging a script or when explicitly requested by the user.
     
-The script receives a 'context' object with the following properties:
+The 'script' receives a 'context' object with the following properties:
 - context.currentItemId (string): The ID of the item currently being processed.
 - context.parameters (object): The JSON object you passed to the 'parameters' input.
 - context.tools (object): A dictionary of all available tools (e.g., context.tools.getItem, context.tools.updateContent).
@@ -142,7 +146,7 @@ This script uses the AI to rewrite the 'Summary' field of several articles to ha
         \`
     });
 
-Example 3: Report on Component Schema and Author
+Example 3: Report on Component Schema and Author (Map only)
 This script retrieves the Schema and Author (from metadata) for a list of components and returns this data.
 
     const result = await tools.scriptRunner({
@@ -170,6 +174,47 @@ This script retrieves the Schema and Author (from metadata) for a list of compon
             };
         \`
     });
+
+Example 4: Find Component with the Most Versions (Map and Reduce)
+This script first gets the version count for each component, then the post-processing script finds the one with the highest count. This completes the entire task in a single tool call.
+
+    const result = await tools.scriptRunner({
+        itemIds: ["tcm:5-100", "tcm:5-101", "tcm:5-102"],
+        script: \`
+            // Phase 1 (Map): Get version count for EACH item.
+            // This script runs for every single item in the 'itemIds' array.
+            const historyResult = await context.tools.getItemHistory({ itemId: context.currentItemId });
+            const history = JSON.parse(historyResult.content[0].text);
+            
+            // Return an object. This will be collected into an array for the next phase.
+            return {
+                versionCount: history.length,
+                title: history[0].Title // Get title from the first version entry
+            };
+        \`,
+        postProcessingScript: \`
+            // Phase 2 (Reduce): Find the single best item from ALL results.
+            // This script runs only ONCE, after the main script has finished for all items.
+            // It receives the collected return values in the 'results' variable.
+            if (!results || results.length === 0) {
+                return "No results to process.";
+            }
+
+            // 'results' is an array like: [{ itemId: "tcm:5-100", status: "success", result: { versionCount: 5, title: "A" } }, ...]
+            // We use the standard JavaScript reduce function to find the item with the highest versionCount.
+            const componentWithMostVersions = results.reduce((max, current) => {
+                // If the current item's version count is higher than the max we've seen so far, it becomes the new max.
+                if (current.result.versionCount > max.result.versionCount) {
+                    return current;
+                } else {
+                    return max;
+                }
+            });
+
+            // The return value of this script is the final output of the tool.
+            return componentWithMostVersions;
+        \`
+    });
 `,
 
     // The 'input' property is now the plain object
@@ -180,7 +225,7 @@ This script retrieves the Schema and Author (from metadata) for a list of compon
         input: z.infer<typeof scriptRunnerSchema>,
         mcpContext: any
     ) => {
-        const { itemIds, script, parameters = {}, stopOnError, maxConcurrency, includeScriptResults } = input;
+        const { itemIds, script, postProcessingScript, parameters = {}, stopOnError, maxConcurrency, includeScriptResults } = input;
 
         if (!mcpContext.tools || typeof mcpContext.tools !== 'object') {
             return {
@@ -258,7 +303,7 @@ This script retrieves the Schema and Author (from metadata) for a list of compon
             }
         };
 
-        // --- Execution Logic ---
+        // --- Execution Logic (Map Phase) ---
         if (maxConcurrency === 1) {
             log("Running in sequential mode.");
             for (const [index, itemId] of itemIds.entries()) {
@@ -300,7 +345,42 @@ This script retrieves the Schema and Author (from metadata) for a list of compon
         }
         // --- End of Execution Logic ---
 
-        logs.push("\nscriptRunner finished.");
+        logs.push("\nMap phase finished.");
+        
+        // --- Post-Processing Logic (Reduce Phase) ---
+        if (postProcessingScript) {
+            logs.push("\nStarting post-processing script (reduce phase)...");
+            try {
+                const postProcessingFunction = new Function('context', `
+                    return (async ({ results, parameters }) => {
+                        "use strict";
+                        ${postProcessingScript}
+                    })(context);
+                `) as (context: { results: any[], parameters: Record<string, any> }) => Promise<any>;
+
+                const finalResult = await postProcessingFunction({ results, parameters });
+                logs.push("Post-processing script finished successfully.");
+
+                const finalOutput = `--- Post-Processing Result ---\n${JSON.stringify(finalResult, null, 2)}\n\n--- Execution Log ---\n${logs.join('\n')}`;
+
+                return {
+                    content: [{
+                        type: "text",
+                        text: finalOutput
+                    }],
+                };
+
+            } catch (error: any) {
+                const errorMessage = `Post-Processing Script Error: ${error.message}`;
+                logs.push(errorMessage);
+                const summary = `--- Execution Log ---\n${logs.join('\n')}`;
+                return {
+                    content: [{ type: "text", text: summary }],
+                };
+            }
+        }
+        // --- End of Post-Processing Logic ---
+        
         const successCount = results.filter(r => r.status === 'success').length;
         const errorCount = results.filter(r => r.status === 'error').length;
 
