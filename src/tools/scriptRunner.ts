@@ -1,7 +1,19 @@
 import { z } from "zod";
 
-// Define the shape of the context object that the agent's script will receive.
-interface ScriptContext {
+// Define the shape of the context object for the pre-processing script.
+interface PreScriptContext {
+    /** The JSON object passed to the 'parameters' input of the scriptRunner tool. */
+    parameters: Record<string, any>;
+    /** A dictionary of all available tools, wrapped for execution (e.g., `tools.search`, `tools.getItemsInContainer`). */
+    tools: { [toolName: string]: (args: any) => Promise<any> };
+    /** The original MCP context, containing session IDs, etc. (for advanced use). */
+    mcpContext: any;
+    /** A function to log messages, which will be included in the final summary. */
+    log: (message: string) => void;
+}
+
+// Define the shape of the context object for the main 'map' script.
+interface MapScriptContext {
     /** The TCM URI of the item currently being processed in the loop. */
     currentItemId: string;
     /** The JSON object passed to the 'parameters' input of the scriptRunner tool. */
@@ -17,40 +29,56 @@ interface ScriptContext {
 // This plain object defines the input properties, matching your other tools
 const scriptRunnerInputProperties = {
     itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/))
-        .min(1, "At least one item ID must be provided.")
-        .describe("An array of unique IDs (TCM URIs) for the items to be processed."),
-    script: z.string()
-        .describe("A JavaScript string (as an async function body) to execute for each item. The script has access to a 'context' object. This is the 'map' phase."),
+        .optional()
+        .describe("An array of unique IDs (TCM URIs) for the items to be processed. This is required *unless* a 'preProcessingScript' is provided to generate the list."),
+    preProcessingScript: z.string().optional()
+        .describe("An optional first JavaScript string (as an async function body) that runs once *before* the main loop. It must return an array of item ID strings (string[]). This is the 'setup' phase, perfect for dynamically fetching or filtering the items to be processed (e.g., by calling 'context.tools.search(...)')."),
+    mapScript: z.string()
+        .describe("A JavaScript string (as an async function body) to execute for each item. The mapScript has access to a 'context' object. This is the 'map' phase."),
     postProcessingScript: z.string().optional()
-        .describe("An optional second JavaScript string that runs once after all items are processed. It receives an object `{ results, parameters }` and its return value becomes the final output of the tool. This is the 'reduce' phase."),
+        .describe("An optional second JavaScript string (as an async function body) that runs once after all items are processed. The script has access to two predefined variables: `results` (an array of all execution results from the 'map' phase) and `parameters` (the JSON object passed to the tool). Its return value becomes the final output of the tool. This is the 'reduce' phase."),
     parameters: z.record(z.any()).optional()
-        .describe("An optional JSON object of parameters to pass into the script. Use this for static values like find/replace strings (e.g., {'find': 'old text', 'replace': 'new text'})."),
+        .describe("An optional JSON object of parameters to pass into both the 'preProcessingScript' and the main 'mapScript'. Use this for static values like search queries or find/replace strings."),
     stopOnError: z.boolean().optional().default(true)
-        .describe("If true (default), the entire operation stops if any single item fails. If false, it logs the error and continues to the next item."),
+        .describe("If true (default), the entire operation stops if any single item fails during the 'map' phase. If false, it logs the error and continues to the next item."),
     maxConcurrency: z.number().int().min(1).max(10).optional().default(5)
-        .describe("The maximum number of scripts to run in parallel. Set to 1 for sequential execution (e.g., for script validation and debugging, or if the server is under heavy load)."),
+        .describe("The maximum number of 'map' scripts to run in parallel. Set to 1 for sequential execution (e.g., for script validation and debugging, or if the server is under heavy load)."),
     includeScriptResults: z.boolean().optional().default(false)
-        .describe("If true, the final summary will include the return value from each successful script execution. Default is false. Useful for reporting tasks.")
+        .describe("If true, the final summary will include the return value from each successful 'map' script execution. Default is false. Useful for reporting tasks.")
 };
 
-const scriptRunnerSchema = z.object(scriptRunnerInputProperties);
+const scriptRunnerSchema = z.object(scriptRunnerInputProperties).refine(
+    (data) => (data.itemIds && data.itemIds.length > 0) || !!data.preProcessingScript,
+    {
+        message: "Either 'itemIds' must be provided with at least one item, or a 'preProcessingScript' must be provided to generate the item list.",
+        path: ["itemIds"], // Associates the error with the itemIds field
+    }
+);
 
 export const scriptRunner = {
     name: "scriptRunner",
-    description: `Executes an advanced, multi-step JavaScript script for each item in a provided list, with an optional final processing step.
-    This is the ideal tool for complex bulk updates and custom reporting. It supports two phases:
-    Phase 1 ('map'): The main 'script' runs for each item in 'itemIds', perfect for gathering data or updating items individually.
-    Phase 2 ('reduce'): The optional 'postProcessingScript' runs once on the collected results from Phase 1, allowing for aggregation, filtering, or sorting to find a final answer.
-
-    By default, up to 5 scripts can run in parallel. Setting a higher 'maxConcurrency' value can increase speed at the cost of overall server load. Only use a value of 1 when debugging a script or when explicitly requested by the user.
+    description: `Executes an advanced, multi-step JavaScript script, ideal for complex bulk updates and custom reporting.
+    It supports up to three phases:
     
-The 'script' receives a 'context' object with the following properties:
+    Phase 1 ('setup'): The optional 'preProcessingScript' runs once to dynamically fetch or filter the list of item IDs to be processed.
+    Phase 2 ('map'): The main 'mapScript' runs for each item in the list generated by Phase 1 or provided via 'itemIds'.
+    Phase 3 ('reduce'): The optional 'postProcessingScript' runs once on the collected results from Phase 2, allowing for aggregation, filtering, or sorting to find a final answer.
+
+    By default, up to 5 scripts can run in parallel in the 'map' phase. Setting a higher 'maxConcurrency' value can increase speed at the cost of overall server load. Only use a value of 1 when debugging a script or when explicitly requested by the user.
+    
+The 'preProcessingScript' receives a 'context' object with:
+- context.parameters (object): The JSON object you passed to the 'parameters' input.
+- context.tools (object): A dictionary of all available tools (e.g., context.tools.search).
+- context.log(message) (function): A function to log progress.
+This script *must* return an array of item ID strings.
+
+The mandatory 'mapScript' receives a 'context' object with:
 - context.currentItemId (string): The ID of the item currently being processed.
 - context.parameters (object): The JSON object you passed to the 'parameters' input.
 - context.tools (object): A dictionary of all available tools (e.g., context.tools.getItem, context.tools.updateContent).
-- context.log(message) (function): A function to log progress to the final summary.
+- context.log(message) (function): A function to log progress.
         
-The script *must* be 'async' and can 'await' tool calls. All tool calls (e.g., 'await context.tools.getItem({ itemId: context.currentItemId })') are automatically authenticated.
+All scripts *must* be 'async' and can 'await' tool calls. All tool calls (e.g., 'await context.tools.getItem({ itemId: context.currentItemId })') are automatically authenticated.
 All tools return a standard object, typically \`{ content: [{ type: "text", text: "..." }] }\`.
 For tools that return data (like 'getItem'), the 'text' field will contain a JSON string that you must parse.
 
@@ -60,7 +88,7 @@ const generatedText = aiResult.content[0].text;
 
 Examples:
 
-Example 1: Find and Replace in a Component Field
+Example 1: Find and Replace in a Component Field (Map only)
 This script finds 'Old Product Name' and replaces it with 'New Product Name' in the 'TextField' of several components. It runs up to 10 in parallel.
 
     const result = await tools.scriptRunner({
@@ -70,7 +98,7 @@ This script finds 'Old Product Name' and replaces it with 'New Product Name' in 
             "replace": "New Product Name"
         },
         maxConcurrency: 10,
-        script: \`
+        mapScript: \`
             // Get the item's content
             const itemResult = await context.tools.getItem({ 
                 itemId: context.currentItemId,
@@ -106,7 +134,7 @@ This script finds 'Old Product Name' and replaces it with 'New Product Name' in 
         \`
     });
 
-Example 2: AI-Driven Content Rewrite
+Example 2: AI-Driven Content Rewrite (Map only)
 This script uses the AI to rewrite the 'Summary' field of several articles to have a 'professional' tone. It runs sequentially (maxConcurrency: 1).
 
     const result = await tools.scriptRunner({
@@ -115,7 +143,7 @@ This script uses the AI to rewrite the 'Summary' field of several articles to ha
             "tone": "professional and engaging"
         },
         maxConcurrency: 1,
-        script: \`
+        mapScript: \`
             // Get the item's content
             const itemResult = await context.tools.getItem({ 
                 itemId: context.currentItemId,
@@ -152,7 +180,7 @@ This script retrieves the Schema and Author (from metadata) for a list of compon
     const result = await tools.scriptRunner({
         itemIds: ["tcm:5-300", "tcm:5-301"],
         includeScriptResults: true, // <-- Set to true to get the return values
-        script: \`
+        mapScript: \`
             // Get the item's data
             const itemResult = await context.tools.getItem({ 
                 itemId: context.currentItemId,
@@ -180,8 +208,8 @@ This script first gets the version count for each component, then the post-proce
 
     const result = await tools.scriptRunner({
         itemIds: ["tcm:5-100", "tcm:5-101", "tcm:5-102"],
-        script: \`
-            // Phase 1 (Map): Get version count for EACH item.
+        mapScript: \`
+            // Phase 2 (Map): Get version count for EACH item.
             // This script runs for every single item in the 'itemIds' array.
             const historyResult = await context.tools.getItemHistory({ itemId: context.currentItemId });
             const history = JSON.parse(historyResult.content[0].text);
@@ -193,7 +221,7 @@ This script first gets the version count for each component, then the post-proce
             };
         \`,
         postProcessingScript: \`
-            // Phase 2 (Reduce): Find the single best item from ALL results.
+            // Phase 3 (Reduce): Find the single best item from ALL results.
             // This script runs only ONCE, after the main script has finished for all items.
             // It receives the collected return values in the 'results' variable.
             if (!results || results.length === 0) {
@@ -215,6 +243,45 @@ This script first gets the version count for each component, then the post-proce
             return componentWithMostVersions;
         \`
     });
+
+Example 5: Find and Process Items from a Search Result (Setup and Map)
+This script uses the 'setup' phase to find all Components based on a specific Schema, and then the 'map' phase to update a field in each one.
+
+    const result = await tools.scriptRunner({
+        parameters: {
+            "schemaId": "tcm:5-20-8", // The Schema to search for
+            "newValue": "This content was bulk updated."
+        },
+        preProcessingScript: \`
+            // Phase 1 (Setup): Find all components to process.
+            context.log(\`Searching for Components based on Schema: \${context.parameters.schemaId}\`);
+            const searchResult = await context.tools.search({
+                searchQuery: {
+                    ItemTypes: ["Component"],
+                    BasedOnSchemas: [{ schemaUri: context.parameters.schemaId }],
+                    SearchIn: "tcm:0-5-1" // Search in '200 Example Content'
+                },
+                resultLimit: 500
+            });
+
+            const items = JSON.parse(searchResult.content[0].text);
+            // The pre-script MUST return an array of strings (item IDs)
+            const itemIds = items.map(item => item.Id);
+            
+            context.log(\`Found \${itemIds.length} items to process.\`);
+            return itemIds;
+        \`,
+        mapScript: \`
+            // Phase 2 (Map): Update the 'TextField' for EACH item.
+            await context.tools.updateContent({
+                itemId: context.currentItemId,
+                content: {
+                    "TextField": context.parameters.newValue
+                }
+            });
+            context.log("Content updated.");
+        \`
+    });
 `,
 
     // The 'input' property is now the plain object
@@ -225,7 +292,16 @@ This script first gets the version count for each component, then the post-proce
         input: z.infer<typeof scriptRunnerSchema>,
         mcpContext: any
     ) => {
-        const { itemIds, script, postProcessingScript, parameters = {}, stopOnError, maxConcurrency, includeScriptResults } = input;
+        const { 
+            itemIds: initialItemIds, 
+            preProcessingScript, 
+            mapScript, 
+            postProcessingScript, 
+            parameters = {}, 
+            stopOnError, 
+            maxConcurrency, 
+            includeScriptResults 
+        } = input;
 
         if (!mcpContext.tools || typeof mcpContext.tools !== 'object') {
             return {
@@ -233,27 +309,11 @@ This script first gets the version count for each component, then the post-proce
             };
         }
 
-        // Create the sandboxed async function from the agent's script string.
-        let scriptFunction: (context: ScriptContext) => Promise<any>;
-        try {
-            scriptFunction = new Function('context', `
-                return (async (context) => {
-                    "use strict";
-                    ${script}
-                })(context);
-            `) as (context: ScriptContext) => Promise<any>;
-        } catch (error: any) {
-            return {
-                content: [{ type: "text", text: `Script Compilation Error: ${error.message}` }]
-            };
-        }
-
         const results: any[] = [];
         const logs: string[] = [];
         const log = (message: string) => logs.push(message);
 
-        log(`Starting scriptRunner for ${itemIds.length} items with maxConcurrency: ${maxConcurrency}`);
-
+        // --- Create Tool Wrappers ---
         const toolWrappers: { [toolName: string]: (args: any) => Promise<any> } = {};
         for (const toolName in mcpContext.tools) {
             const originalToolExecute = mcpContext.tools[toolName].execute;
@@ -262,98 +322,170 @@ This script first gets the version count for each component, then the post-proce
             };
         }
 
+        let finalItemIds: string[] = initialItemIds || [];
         let hasFailed = false;
 
-        /**
-         * A single, reusable function to run the script for one item
-         * and handle logging, results, and errors.
-         */
-        const runTask = async (itemId: string, index: number): Promise<void> => {
-            logs.push(`\n[${index + 1}/${itemIds.length}] Processing item: ${itemId}`);
+        // --- Phase 1: Pre-Processing Logic (Setup Phase) ---
+        if (preProcessingScript) {
+            logs.push("Starting pre-processing script (setup phase)...");
             
-            const perItemContext: ScriptContext = {
-                currentItemId: itemId,
+            let preScriptFunction: (context: PreScriptContext) => Promise<any>;
+            try {
+                preScriptFunction = new Function('context', `
+                    return (async (context) => {
+                        "use strict";
+                        ${preProcessingScript}
+                    })(context);
+                `) as (context: PreScriptContext) => Promise<any>;
+            } catch (error: any) {
+                return {
+                    content: [{ type: "text", text: `Pre-processing Script Compilation Error: ${error.message}` }]
+                };
+            }
+
+            const preScriptContext: PreScriptContext = {
                 parameters: parameters,
                 tools: toolWrappers,
                 mcpContext: mcpContext,
-                log: (message: string) => logs.push(`[${itemId}] ${message}`)
+                log: (message: string) => logs.push(`[PreScript] ${message}`)
             };
 
             try {
-                const result = await scriptFunction(perItemContext);
-                results.push({ itemId: itemId, status: "success", result: result || "No return value" });
-                logs.push(`[${itemId}] Success.`);
+                const preScriptResult = await preScriptFunction(preScriptContext);
+
+                if (!Array.isArray(preScriptResult) || !preScriptResult.every(item => typeof item === 'string')) {
+                    const errorMsg = "Pre-processing script Error: The script must return an array of item ID strings (string[]).";
+                    logs.push(errorMsg);
+                    return { content: [{ type: "text", text: errorMsg + `\nReceived: ${JSON.stringify(preScriptResult)}` }] };
+                }
+
+                finalItemIds = preScriptResult;
+                logs.push(`Pre-processing script finished. Found ${finalItemIds.length} items to process.`);
 
             } catch (error: any) {
-                let errorMessage: string;
-                if (error && error.content && Array.isArray(error.content) && error.content[0]?.type === 'text') {
-                    // This was a "clean" error returned by a tool
-                    errorMessage = error.content[0].text;
-                } else if (error instanceof Error) {
-                    // This was a standard script error (e.g., SyntaxError, TypeError)
-                    errorMessage = `${error.name}: ${error.message}`;
-                } else {
-                    // Fallback for other error types
-                    errorMessage = String(error);
+                let errorMessage = `Pre-processing Script FAILED: ${String(error)}`;
+                if (error instanceof Error) {
+                    errorMessage = `Pre-processing Script FAILED: ${error.name}: ${error.message}`;
+                }
+                logs.push(errorMessage);
+                return { content: [{ type: "text", text: `--- Execution Log ---\n${logs.join('\n')}` }] };
+            }
+        }
+
+        // --- Phase 2: Execution Logic (Map Phase) ---
+        log(`\nStarting map phase for ${finalItemIds.length} items with maxConcurrency: ${maxConcurrency}`);
+
+        // Compile the main script function *once*
+        let mapScriptFunction: (context: MapScriptContext) => Promise<any>;
+        try {
+            mapScriptFunction = new Function('context', `
+                return (async (context) => {
+                    "use strict";
+                    ${mapScript}
+                })(context);
+            `) as (context: MapScriptContext) => Promise<any>;
+        } catch (error: any) {
+            return {
+                content: [{ type: "text", text: `Map Script Compilation Error: ${error.message}` }]
+            };
+        }
+
+        if (finalItemIds.length > 0) {
+            /**
+             * A single, reusable function to run the script for one item
+             * and handle logging, results, and errors.
+             */
+            const runTask = async (itemId: string, index: number): Promise<void> => {
+                logs.push(`\n[${index + 1}/${finalItemIds.length}] Processing item: ${itemId}`);
+                
+                const perItemContext: MapScriptContext = {
+                    currentItemId: itemId,
+                    parameters: parameters,
+                    tools: toolWrappers,
+                    mcpContext: mcpContext,
+                    log: (message: string) => logs.push(`[${itemId}] ${message}`)
+                };
+
+                try {
+                    const result = await mapScriptFunction(perItemContext);
+                    results.push({ itemId: itemId, status: "success", result: result || "No return value" });
+                    logs.push(`[${itemId}] Success.`);
+
+                } catch (error: any) {
+                    let errorMessage: string;
+                    if (error && error.content && Array.isArray(error.content) && error.content[0]?.type === 'text') {
+                        // This was a "clean" error returned by a tool
+                        errorMessage = error.content[0].text;
+                    } else if (error instanceof Error) {
+                        // This was a standard script error (e.g., SyntaxError, TypeError)
+                        errorMessage = `${error.name}: ${error.message}`;
+                    } else {
+                        // Fallback for other error types
+                        errorMessage = String(error);
+                    }
+                    
+                    logs.push(`[${itemId}] FAILED: ${errorMessage}`);
+                    results.push({ itemId: itemId, status: "error", error: errorMessage });
+                    hasFailed = true;
+                }
+            };
+
+            // --- Run tasks (sequentially or in parallel) ---
+            if (maxConcurrency === 1) {
+                log("Running in sequential mode.");
+                for (const [index, itemId] of finalItemIds.entries()) {
+                    if (stopOnError && hasFailed) {
+                        logs.push("\nOperation stopped due to error.");
+                        break;
+                    }
+                    await runTask(itemId, index);
+                }
+            } else {
+                log(`Running in parallel mode with ${maxConcurrency} workers.`);
+                const workerPool = new Set<Promise<void>>();
+                let index = 0;
+                
+                for (const itemId of finalItemIds) {
+                    if (stopOnError && hasFailed) {
+                        logs.push("\nOperation stopping due to error. No new tasks will be started.");
+                        break;
+                    }
+                    
+                    // Wait for any promise in the set to finish if the pool is full
+                    while (workerPool.size >= maxConcurrency) {
+                        await Promise.race(workerPool);
+                    }
+                    
+                    const taskPromise = runTask(itemId, index++);
+                    
+                    // Wrapper to remove the promise from the pool on completion
+                    const onFinally = () => {
+                        workerPool.delete(taskPromise);
+                    };
+                    
+                    taskPromise.then(onFinally, onFinally); // Remove from pool on success or failure
+                    workerPool.add(taskPromise);
                 }
                 
-                logs.push(`[${itemId}] FAILED: ${errorMessage}`);
-                results.push({ itemId: itemId, status: "error", error: errorMessage });
-                hasFailed = true;
-            }
-        };
-
-        // --- Execution Logic (Map Phase) ---
-        if (maxConcurrency === 1) {
-            log("Running in sequential mode.");
-            for (const [index, itemId] of itemIds.entries()) {
-                if (stopOnError && hasFailed) {
-                    logs.push("\nOperation stopped due to error.");
-                    break;
-                }
-                await runTask(itemId, index);
+                // Wait for all remaining tasks in the pool to finish
+                await Promise.allSettled(Array.from(workerPool));
             }
         } else {
-            log(`Running in parallel mode with ${maxConcurrency} workers.`);
-            const workerPool = new Set<Promise<void>>();
-            let index = 0;
-            
-            for (const itemId of itemIds) {
-                if (stopOnError && hasFailed) {
-                    logs.push("\nOperation stopping due to error. No new tasks will be started.");
-                    break;
-                }
-                
-                // Wait for any promise in the set to finish if the pool is full
-                while (workerPool.size >= maxConcurrency) {
-                    await Promise.race(workerPool);
-                }
-                
-                const taskPromise = runTask(itemId, index++);
-                
-                // Wrapper to remove the promise from the pool on completion
-                const onFinally = () => {
-                    workerPool.delete(taskPromise);
-                };
-                
-                taskPromise.then(onFinally, onFinally); // Remove from pool on success or failure
-                workerPool.add(taskPromise);
-            }
-            
-            // Wait for all remaining tasks in the pool to finish
-            await Promise.allSettled(Array.from(workerPool));
+            log("No items found to process. Skipping map phase.");
         }
-        // --- End of Execution Logic ---
+        // --- End of Map Phase ---
 
         logs.push("\nMap phase finished.");
         
-        // --- Post-Processing Logic (Reduce Phase) ---
+        // --- Phase 3: Post-Processing Logic (Reduce Phase) ---
         if (postProcessingScript) {
             logs.push("\nStarting post-processing script (reduce phase)...");
             try {
                 const postProcessingFunction = new Function('context', `
-                    return (async ({ results, parameters }) => {
+                    return (async (context) => {
                         "use strict";
+                        const results = context.results;
+                        const parameters = context.parameters;
                         ${postProcessingScript}
                     })(context);
                 `) as (context: { results: any[], parameters: Record<string, any> }) => Promise<any>;
@@ -373,6 +505,7 @@ This script first gets the version count for each component, then the post-proce
             } catch (error: any) {
                 const errorMessage = `Post-Processing Script Error: ${error.message}`;
                 logs.push(errorMessage);
+                // Return the log, even if post-processing fails
                 const summary = `--- Execution Log ---\n${logs.join('\n')}`;
                 return {
                     content: [{ type: "text", text: summary }],
@@ -381,11 +514,12 @@ This script first gets the version count for each component, then the post-proce
         }
         // --- End of Post-Processing Logic ---
         
+        // --- Final Summary (if no post-processing) ---
         const successCount = results.filter(r => r.status === 'success').length;
         const errorCount = results.filter(r => r.status === 'error').length;
 
         let summary = `ScriptRunner Summary:
-- Total items: ${itemIds.length}
+- Total items processed: ${finalItemIds.length}
 - Succeeded: ${successCount}
 - Failed: ${errorCount}
 
