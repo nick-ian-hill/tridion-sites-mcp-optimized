@@ -44,7 +44,9 @@ const toolOrchestratorInputProperties = {
     maxConcurrency: z.number().int().min(1).max(10).optional().default(5)
         .describe("The maximum number of 'map' scripts to run in parallel. Set to 1 for sequential execution (e.g., for script validation and debugging, or if the server is under heavy load)."),
     includeScriptResults: z.boolean().optional().default(false)
-        .describe("If true, the final summary will include the return value from each successful 'map' script execution. Default is false. Useful for reporting tasks.")
+        .describe("Controls whether the final output includes the individual results from the 'mapScript'. This parameter is ignored if a 'postProcessingScript' is provided. Set to 'true' for 'reporting' tasks where you want a list of all results. Leave 'false' for 'bulk update' tasks where you only care about the final summary."),
+    debug: z.boolean().optional().default(false)
+        .describe("If true, the full execution log is included in the JSON response. Defaults to false. Only consider setting this to true when debugging.")
 };
 
 const toolOrchestratorSchema = z.object(toolOrchestratorInputProperties).refine(
@@ -300,7 +302,8 @@ This script uses the 'setup' phase to find all Components based on a specific Sc
             parameters = {}, 
             stopOnError, 
             maxConcurrency, 
-            includeScriptResults 
+            includeScriptResults,
+            debug
         } = input;
 
         if (!mcpContext.tools || typeof mcpContext.tools !== 'object') {
@@ -512,12 +515,19 @@ This script uses the 'setup' phase to find all Components based on a specific Sc
                 const finalResult = await postProcessingFunction({ results, parameters });
                 logs.push("Post-processing script finished successfully.");
 
-                const finalOutput = `--- Post-Processing Result ---\n${JSON.stringify(finalResult, null, 2)}\n\n--- Execution Log ---\n${logs.join('\n')}`;
+                let responsePayload: any = finalResult;
+
+                if (debug) {
+                    responsePayload = {
+                        result: finalResult,
+                        executionLog: logs.join('\n')
+                    };
+                }
 
                 return {
                     content: [{
                         type: "text",
-                        text: finalOutput
+                        text: JSON.stringify(responsePayload, null, 2)
                     }],
                 };
 
@@ -537,35 +547,33 @@ This script uses the 'setup' phase to find all Components based on a specific Sc
         const successCount = results.filter(r => r.status === 'success').length;
         const errorCount = results.filter(r => r.status === 'error').length;
 
-        let summary = `ToolOrchestrator Summary:
-- Total items processed: ${finalItemIds.length}
-- Succeeded: ${successCount}
-- Failed: ${errorCount}
-
---- Execution Log ---
-${logs.join('\n')}
-`;
+        // Create a JSON summary object
+        const summaryObject: any = {
+            summary: "ToolOrchestrator Summary",
+            totalItemsProcessed: finalItemIds.length,
+            succeeded: successCount,
+            failed: errorCount
+        };
         
         if (errorCount > 0) {
-            const errorDetails = results
+            summaryObject.errors = results
                 .filter(r => r.status === 'error')
                 .map(r => ({ itemId: r.itemId, error: r.error }));
-            summary += "\n--- Error Details ---\n";
-            summary += JSON.stringify(errorDetails, null, 2);
         }
 
         if (includeScriptResults) {
-            const successResults = results
+            summaryObject.results = results
                 .filter(r => r.status === 'success')
                 .map(r => ({ itemId: r.itemId, result: r.result }));
-            summary += "\n--- Script Results ---\n";
-            summary += JSON.stringify(successResults, null, 2);
         }
 
+        if (debug) {
+            summaryObject.executionLog = logs.join('\n');
+        }
         return {
             content: [{
                 type: "text",
-                text: summary
+                text: JSON.stringify(summaryObject, null, 2)
             }],
         };
     }
