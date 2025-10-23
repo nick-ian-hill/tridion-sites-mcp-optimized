@@ -2,7 +2,7 @@ import { z } from "zod";
 
 // Define the shape of the context object for the pre-processing script.
 interface PreScriptContext {
-    /** The JSON object passed to the 'parameters' input of the scriptRunner tool. */
+    /** The JSON object passed to the 'parameters' input of the toolOrchestrator tool. */
     parameters: Record<string, any>;
     /** A dictionary of all available tools, wrapped for execution (e.g., `tools.search`, `tools.getItemsInContainer`). */
     tools: { [toolName: string]: (args: any) => Promise<any> };
@@ -16,7 +16,7 @@ interface PreScriptContext {
 interface MapScriptContext {
     /** The TCM URI of the item currently being processed in the loop. */
     currentItemId: string;
-    /** The JSON object passed to the 'parameters' input of the scriptRunner tool. */
+    /** The JSON object passed to the 'parameters' input of the toolOrchestrator tool. */
     parameters: Record<string, any>;
     /** A dictionary of all available tools, wrapped for execution (e.g., `tools.getItem`, `tools.updateContent`). */
     tools: { [toolName: string]: (args: any) => Promise<any> };
@@ -27,7 +27,7 @@ interface MapScriptContext {
 }
 
 // This plain object defines the input properties, matching your other tools
-const scriptRunnerInputProperties = {
+const toolOrchestratorInputProperties = {
     itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/))
         .optional()
         .describe("An array of unique IDs (TCM URIs) for the items to be processed. This is required *unless* a 'preProcessingScript' is provided to generate the list."),
@@ -47,7 +47,7 @@ const scriptRunnerInputProperties = {
         .describe("If true, the final summary will include the return value from each successful 'map' script execution. Default is false. Useful for reporting tasks.")
 };
 
-const scriptRunnerSchema = z.object(scriptRunnerInputProperties).refine(
+const toolOrchestratorSchema = z.object(toolOrchestratorInputProperties).refine(
     (data) => (data.itemIds && data.itemIds.length > 0) || !!data.preProcessingScript,
     {
         message: "Either 'itemIds' must be provided with at least one item, or a 'preProcessingScript' must be provided to generate the item list.",
@@ -55,9 +55,9 @@ const scriptRunnerSchema = z.object(scriptRunnerInputProperties).refine(
     }
 );
 
-export const scriptRunner = {
-    name: "scriptRunner",
-    description: `Executes an advanced, multi-step JavaScript script, ideal for complex bulk updates and custom reporting.
+export const toolOrchestrator = {
+    name: "toolOrchestrator",
+    description: `Executes an advanced, multi-step JavaScript script. Recommended for any task which involves processing data from or updating many items (e.g., data analysis, reporting, find and replace, bulk updates).
     It supports up to three phases:
     
     Phase 1 ('setup'): The optional 'preProcessingScript' runs once to dynamically fetch or filter the list of item IDs to be processed.
@@ -91,7 +91,7 @@ Examples:
 Example 1: Find and Replace in a Component Field (Map only)
 This script finds 'Old Product Name' and replaces it with 'New Product Name' in the 'TextField' of several components. It runs up to 10 in parallel.
 
-    const result = await tools.scriptRunner({
+    const result = await tools.toolOrchestrator({
         itemIds: ["tcm:5-100", "tcm:5-101", "tcm:5-102"],
         parameters: {
             "find": "Old Product Name",
@@ -137,7 +137,7 @@ This script finds 'Old Product Name' and replaces it with 'New Product Name' in 
 Example 2: AI-Driven Content Rewrite (Map only)
 This script uses the AI to rewrite the 'Summary' field of several articles to have a 'professional' tone. It runs sequentially (maxConcurrency: 1).
 
-    const result = await tools.scriptRunner({
+    const result = await tools.toolOrchestrator({
         itemIds: ["tcm:5-200", "tcm:5-201"],
         parameters: {
             "tone": "professional and engaging"
@@ -177,7 +177,7 @@ This script uses the AI to rewrite the 'Summary' field of several articles to ha
 Example 3: Report on Component Schema and Author (Map only)
 This script retrieves the Schema and Author (from metadata) for a list of components and returns this data.
 
-    const result = await tools.scriptRunner({
+    const result = await tools.toolOrchestrator({
         itemIds: ["tcm:5-300", "tcm:5-301"],
         includeScriptResults: true, // <-- Set to true to get the return values
         mapScript: \`
@@ -206,7 +206,7 @@ This script retrieves the Schema and Author (from metadata) for a list of compon
 Example 4: Find Component with the Most Versions (Map and Reduce)
 This script first gets the version count for each component, then the post-processing script finds the one with the highest count. This completes the entire task in a single tool call.
 
-    const result = await tools.scriptRunner({
+    const result = await tools.toolOrchestrator({
         itemIds: ["tcm:5-100", "tcm:5-101", "tcm:5-102"],
         mapScript: \`
             // Phase 2 (Map): Get version count for EACH item.
@@ -247,7 +247,7 @@ This script first gets the version count for each component, then the post-proce
 Example 5: Find and Process Items from a Search Result (Setup and Map)
 This script uses the 'setup' phase to find all Components based on a specific Schema, and then the 'map' phase to update a field in each one.
 
-    const result = await tools.scriptRunner({
+    const result = await tools.toolOrchestrator({
         parameters: {
             "schemaId": "tcm:5-20-8", // The Schema to search for
             "newValue": "This content was bulk updated."
@@ -285,11 +285,11 @@ This script uses the 'setup' phase to find all Components based on a specific Sc
 `,
 
     // The 'input' property is now the plain object
-    input: scriptRunnerInputProperties,
+    input: toolOrchestratorInputProperties,
 
     execute: async (
         // Type inference for 'input' now uses the internal schema
-        input: z.infer<typeof scriptRunnerSchema>,
+        input: z.infer<typeof toolOrchestratorSchema>,
         mcpContext: any
     ) => {
         const { 
@@ -305,7 +305,7 @@ This script uses the 'setup' phase to find all Components based on a specific Sc
 
         if (!mcpContext.tools || typeof mcpContext.tools !== 'object') {
             return {
-                content: [{ type: "text", text: "Error: Tool execution context is missing. 'scriptRunner' cannot access other tools." }]
+                content: [{ type: "text", text: "Error: Tool execution context is missing. 'toolOrchestrator' cannot access other tools." }]
             };
         }
 
@@ -313,12 +313,31 @@ This script uses the 'setup' phase to find all Components based on a specific Sc
         const logs: string[] = [];
         const log = (message: string) => logs.push(message);
 
+        const DISALLOWED_TOOLS: string[] = [
+            "toolOrchestrator",
+            "deleteItem",
+            "batchDelete",
+            "createMultimediaComponentFromPrompt",
+            "generateContentFromPrompt",
+            "updateMultimediaComponentFromPrompt",
+        ];
+
         // --- Create Tool Wrappers ---
         const toolWrappers: { [toolName: string]: (args: any) => Promise<any> } = {};
         for (const toolName in mcpContext.tools) {
             const originalToolExecute = mcpContext.tools[toolName].execute;
+
             toolWrappers[toolName] = (args: any) => {
-                return originalToolExecute(args, mcpContext);
+                // --- Disallow Check ---
+                if (DISALLOWED_TOOLS.includes(toolName)) {
+                    const errorMsg = `Execution Error: The tool '${toolName}' is disallowed within this script. Disallowed tools are: [${DISALLOWED_TOOLS.join(', ')}]`;
+                    // Throw an error to stop the script's execution.
+                    // Return a rejected promise to be caught by the async try/catch block.
+                    return Promise.reject(new Error(errorMsg));
+                }
+
+                // If allowed, execute the original tool
+                return originalToolExecute(args || {}, mcpContext);
             };
         }
 
@@ -518,7 +537,7 @@ This script uses the 'setup' phase to find all Components based on a specific Sc
         const successCount = results.filter(r => r.status === 'success').length;
         const errorCount = results.filter(r => r.status === 'error').length;
 
-        let summary = `ScriptRunner Summary:
+        let summary = `ToolOrchestrator Summary:
 - Total items processed: ${finalItemIds.length}
 - Succeeded: ${successCount}
 - Failed: ${errorCount}

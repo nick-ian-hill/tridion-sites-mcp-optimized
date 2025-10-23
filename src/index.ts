@@ -68,10 +68,10 @@ async function startServer() {
                 potentialTool.name, 
                 potentialTool.description, 
                 potentialTool.input, 
-                // Handle scriptRunner as a special case
+                // Handle toolOrchestrator as a special case
                 (args: any, context: any) => {
                     let finalContext = context;
-                    if (potentialTool.name === 'scriptRunner') {
+                    if (potentialTool.name === 'toolOrchestrator') {
                         finalContext = {
                             ...context,
                             tools: toolsAsRecord
