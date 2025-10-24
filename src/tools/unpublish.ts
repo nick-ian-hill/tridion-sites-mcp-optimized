@@ -33,7 +33,7 @@ const unpublishInputProperties = {
     resolveInstruction: resolveInstructionSchema
         .describe("Specifies advanced rules for resolving dependencies."),
     dryRun: z.boolean().optional().default(false)
-        .describe("If true, returns the list of items that *would* be unpublished without actually creating an unpublish transaction. This is a preview.")
+        .describe("If true, returns the list of items that would be unpublished without actually creating an unpublish transaction. This is a preview. If no items are listed, the actual unpublish operation would fail with a warning.")
 };
 
 const unpublishSchema = z.object(unpublishInputProperties);
