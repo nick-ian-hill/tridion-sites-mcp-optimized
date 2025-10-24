@@ -139,10 +139,18 @@ The mandatory 'mapScript' receives a 'context' object with:
 - context.parameters (object): The JSON object you passed to the 'parameters' input.
 - context.tools (object): A dictionary of all available tools (e.g., context.tools.getItem, context.tools.updateContent).
 - context.log(message) (function): A function to log progress.
-        
-All scripts *must* be 'async' and can 'await' tool calls. All tool calls (e.g., 'await context.tools.getItem({ itemId: context.currentItemId })') are automatically authenticated.
-All tools return a standard object, typically \`{ content: [{ type: "text", text: "..." }] }\`.
-For tools that return data (like 'getItem'), the 'text' field will contain a JSON string that you must parse.
+
+The optional 'postProcessingScript' receives a 'context' object with:
+- context.results (array): The read-only array of all results from the 'map' phase.
+- context.parameters (object): The JSON object you passed to the 'parameters' input.
+- context.log(message) (function): A function to log progress.
+This script's return value is the final output of the tool.
+
+All scripts *must* be 'async' and can 'await' tool calls.
+All tool calls (e.g., 'await context.tools.getItem(...)') are automatically authenticated.
+For tools that return data (like 'getItem' or 'search'), the orchestrator will automatically parse the JSON response.
+You will receive the data object directly, not a string that needs to be parsed.
+For tools that return a simple message (like 'updateContent'), you will receive the full response object (e.g., { content: [{ type: "text", text: "Update successful." }] }).
 
 To use the AI, call the 'generateContentFromPrompt' tool:
 const aiResult = await context.tools.generateContentFromPrompt({ prompt: '...' });
@@ -162,12 +170,11 @@ This script finds 'Old Product Name' and replaces it with 'New Product Name' in 
         maxConcurrency: 10,
         mapScript: \`
             // Get the item's content
-            const itemResult = await context.tools.getItem({ 
+            // The JSON is automatically parsed. 'item' is the data object.
+            const item = await context.tools.getItem({ 
                 itemId: context.currentItemId,
                 includeProperties: ["Content.TextField"]
             });
-            // All tools return a { content: [...] } object with a JSON string.
-            const item = JSON.parse(itemResult.content[0].text);
 
             // Check and replace
             let content = item.Content;
@@ -185,6 +192,7 @@ This script finds 'Old Product Name' and replaces it with 'New Product Name' in 
 
             // Save changes if any
             if (updated) {
+                // updateContent returns a standard wrapper, not JSON
                 const updateResult = await context.tools.updateContent({
                     itemId: context.currentItemId,
                     content: content
@@ -207,11 +215,11 @@ This script uses the AI to rewrite the 'Summary' field of several articles to ha
         maxConcurrency: 1,
         mapScript: \`
             // Get the item's content
-            const itemResult = await context.tools.getItem({ 
+            // The JSON is automatically parsed.
+            const item = await context.tools.getItem({ 
                 itemId: context.currentItemId,
                 includeProperties: ["Content.Summary"]
             });
-            const item = JSON.parse(itemResult.content[0].text);
             
             const originalSummary = item.Content ? item.Content.Summary : null;
             if (!originalSummary) {
@@ -222,6 +230,7 @@ This script uses the AI to rewrite the 'Summary' field of several articles to ha
 
             // Use AI to rewrite the summary
             const aiPrompt = \`Rewrite the following summary to have a \${context.parameters.tone} tone:\\n\\n\${originalSummary}\`;
+            // generateContentFromPrompt returns a simple text wrapper
             const aiResult = await context.tools.generateContentFromPrompt({ prompt: aiPrompt });
             const newSummary = aiResult.content[0].text;
             context.log(\`New summary: \${newSummary.substring(0, 50)}...\`);
@@ -244,11 +253,17 @@ This script retrieves the Schema and Author (from metadata) for a list of compon
         includeScriptResults: true, // <-- Set to true to get the return values
         mapScript: \`
             // Get the item's data
-            const itemResult = await context.tools.getItem({ 
+            // The JSON is automatically parsed.
+            const item = await context.tools.getItem({ 
                 itemId: context.currentItemId,
                 includeProperties: ["Schema.Title", "Metadata.author", "Info.LastModifiedDate"]
             });
-            const item = JSON.parse(itemResult.content[0].text);
+
+            // BEST PRACTICE: Check if the item exists
+                if (!item) {
+                    context.log("Item not found or is inaccessible. Skipping.");
+                    return null; // Return null to skip
+                }
 
             const schemaTitle = item.Schema ? item.Schema.Title : "N/A";
             const author = item.Metadata ? item.Metadata.author : "N/A";
@@ -273,8 +288,9 @@ This script first gets the version count for each component, then the post-proce
         mapScript: \`
             // Phase 2 (Map): Get version count for EACH item.
             // This script runs for every single item in the 'itemIds' array.
-            const historyResult = await context.tools.getItemHistory({ itemId: context.currentItemId });
-            const history = JSON.parse(historyResult.content[0].text);
+
+            // The JSON is automatically parsed.
+            const history = await context.tools.getItemHistory({ itemId: context.currentItemId });
             
             // Return an object. This will be collected into an array for the next phase.
             return {
@@ -286,20 +302,25 @@ This script first gets the version count for each component, then the post-proce
             // Phase 3 (Reduce): Find the single best item from ALL results.
             // This script runs only ONCE, after the main script has finished for all items.
             // It receives the collected return values in the 'results' variable.
+            
+            context.log(\`Processing \${results.length} results.\`);
+            
             if (!results || results.length === 0) {
                 return "No results to process.";
             }
 
             // 'results' is an array like: [{ itemId: "tcm:5-100", status: "success", result: { versionCount: 5, title: "A" } }, ...]
             // We use the standard JavaScript reduce function to find the item with the highest versionCount.
-            const componentWithMostVersions = results.reduce((max, current) => {
-                // If the current item's version count is higher than the max we've seen so far, it becomes the new max.
-                if (current.result.versionCount > max.result.versionCount) {
-                    return current;
-                } else {
-                    return max;
-                }
-            });
+            const componentWithMostVersions = results
+                .filter(r => r.status === 'success') // Only check successful items
+                .reduce((max, current) => {
+                    // If the current item's version count is higher than the max we've seen so far, it becomes the new max.
+                    if (current.result.versionCount > (max.result.versionCount || 0)) {
+                        return current;
+                    } else {
+                        return max;
+                    }
+                }, { result: { versionCount: 0 } }); // Initial 'max' object
 
             // The return value of this script is the final output of the tool.
             return componentWithMostVersions;
@@ -317,7 +338,9 @@ This script uses the 'setup' phase to find all Components based on a specific Sc
         preProcessingScript: \`
             // Phase 1 (Setup): Find all components to process.
             context.log(\`Searching for Components based on Schema: \${context.parameters.schemaId}\`);
-            const searchResult = await context.tools.search({
+            
+            // The JSON is automatically parsed. 'items' is an array.
+            const items = await context.tools.search({
                 searchQuery: {
                     ItemTypes: ["Component"],
                     BasedOnSchemas: [{ schemaUri: context.parameters.schemaId }],
@@ -326,7 +349,6 @@ This script uses the 'setup' phase to find all Components based on a specific Sc
                 resultLimit: 500
             });
 
-            const items = JSON.parse(searchResult.content[0].text);
             // The pre-script MUST return an array of strings (item IDs)
             const itemIds = items.map(item => item.Id);
             
@@ -352,14 +374,16 @@ This script finds all published Pages, checks if they've been modified since the
         preProcessingScript: \`
             // Phase 1 (Setup): Find all published Pages to check.
             context.log('Searching for all published Pages...');
-            const searchResult = await context.tools.search({
+            
+            // The JSON is automatically parsed.
+            const items = await context.tools.search({
                 searchQuery: { 
                     IsPublished: true,
                     ItemTypes: ["Page"]
                 },
                 resultLimit: 1000
             });
-            const items = JSON.parse(searchResult.content[0].text);
+            
             const itemIds = items.map(item => item.Id);
             context.log(\`Found \${itemIds.length} Pages to check.\`);
             return itemIds;
@@ -367,21 +391,21 @@ This script finds all published Pages, checks if they've been modified since the
         mapScript: \`
             // Phase 2 (Map): Check modification vs. publish date for EACH item.
             // We *only* get the properties we need to be fast.
-            const itemResult = await context.tools.getItem({ 
+            
+            // The JSON is automatically parsed.
+            const item = await context.tools.getItem({ 
                 itemId: context.currentItemId,
                 includeProperties: ["VersionInfo.RevisionDate", "Title"]
             });
-            const item = JSON.parse(itemResult.content[0].text);
             const revisionDate = new Date(item.VersionInfo.RevisionDate);
 
-            // Here too: only get the *one* property we care about.
-            const publishInfoResult = await context.tools.getPublishInfo({ 
+            // The JSON is automatically parsed.
+            const publishInfos = await context.tools.getPublishInfo({ 
                 itemId: context.currentItemId,
                 includeProperties: ["PublishedAt"] 
             });
-            const publishInfos = JSON.parse(publishInfoResult.content[0].text);
 
-            if (publishInfos.length === 0) {
+            if (!publishInfos || publishInfos.length === 0) {
                 return null; // Not published anywhere, skip.
             }
 
@@ -405,6 +429,9 @@ This script finds all published Pages, checks if they've been modified since the
         postProcessingScript: \`
             // Phase 3 (Reduce): Collect the results into a final JSON summary.
             // This returns a *JSON object* (not a string) for the agent to parse.
+
+            context.log(\`Aggregating \${results.length} results.\`);
+            
             const modifiedItems = results
                 .filter(r => r.status === 'success' && r.result !== null)
                 .map(r => r.result);
@@ -437,7 +464,9 @@ This script attempts to delete a list of items. It uses 'stopOnError: false' to 
             // We can now just check the 'status' property set by the orchestrator.
             const successes = results.filter(r => r.status === 'success').length;
             const failures = results.filter(r => r.status === 'error').length;
-            
+
+            context.log(\`Batch complete with \${successes} successes and \${failures} failures.\`);
+
             // Collect details for the failed items
             const failedItems = results
                 .filter(r => r.status === 'error')
@@ -496,8 +525,29 @@ This script attempts to delete a list of items. It uses 'stopOnError: false' to 
 
             if (mcpContext.tools[toolName] && mcpContext.tools[toolName].execute) {
                 const originalToolExecute = mcpContext.tools[toolName].execute;
-                toolWrappers[toolName] = (args: any) => {
-                    return originalToolExecute(args || {}, mcpContext);
+                toolWrappers[toolName] = async (args: any) => {
+                    const result = await originalToolExecute(args || {}, mcpContext);
+                    
+                    // Check if the result looks like a standard JSON text response
+                    if (result && result.content && Array.isArray(result.content) && 
+                        result.content[0] && result.content[0].type === 'text' && 
+                        result.content[0].text && 
+                        (result.content[0].text.startsWith('{') || result.content[0].text.startsWith('['))) 
+                    {
+                        try {
+                            // If it looks like JSON, parse it and return the data directly
+                            return JSON.parse(result.content[0].text);
+                        } catch (e) {
+                            // It looked like JSON but failed to parse.
+                            // Fall through to return the original object.
+                        }
+                    }
+                    
+                    // Fallback for:
+                    // - Non-JSON text responses (e.g., "Update successful.")
+                    // - Malformed JSON
+                    // - Non-text responses (e.g., error objects)
+                    return result;
                 };
             }
         }
@@ -653,6 +703,8 @@ This script attempts to delete a list of items. It uses 'stopOnError: false' to 
                     let errorMessage: string;
                     if (error && error.content && Array.isArray(error.content) && error.content[0]?.type === 'text') {
                         errorMessage = error.content[0].text;
+                    } else if (error && error.data && error.data.content && Array.isArray(error.data.content) && error.data.content[0]?.type === 'text') {
+                         errorMessage = error.data.content[0].text;
                     } else if (error instanceof Error) {
                         errorMessage = `${error.name}: ${error.message}`;
                     } else {
@@ -736,9 +788,9 @@ This script attempts to delete a list of items. It uses 'stopOnError: false' to 
             // Create a dedicated sandbox
             const sandboxContext = { ...baseSandbox };
             sandboxContext.context = {
-                // Deep-clone results to prevent script from mutating original results array
-                results: JSON.parse(JSON.stringify(results)),
-                parameters: Object.freeze(parameters)
+                results: Object.freeze(results),
+                parameters: Object.freeze(parameters),
+                log: postScriptLog
             };
             sandboxContext.console = { log: postScriptLog, error: postScriptLog, warn: postScriptLog };
             const sandbox = vm.createContext(sandboxContext, {
@@ -773,9 +825,10 @@ This script attempts to delete a list of items. It uses 'stopOnError: false' to 
                     }],
                 };
 
-            } catch (error: any) {
-                const errorMessage = `Post-Processing Script Error: ${error.message}`;
-                logs.push(errorMessage);
+            } catch (error: any)
+            {
+                const errorMessage = (error instanceof Error) ? `${error.name}: ${error.message}` : String(error);
+                logs.push(`Post-Processing Script FAILED: ${errorMessage}`);
                 // Return the log, even if post-processing fails
                 const summary = `--- Execution Log ---\n${logs.join('\n')}`;
                 return {
