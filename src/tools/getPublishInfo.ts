@@ -7,8 +7,9 @@ const getPublishInfoInputProperties = {
     itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)
         .describe("The unique ID (TCM URI) of the item to check."),
     includeProperties: z.array(z.string()).optional()
-        .describe(`An array of property names to include in the response, reducing the amount of data returned. 
-Use dot notation for nested properties (e.g., "TargetType.Title", "User.Description", "PublishedAt"). 
+        .describe(`An array of property names to include in the response. 
+IMPORTANT: To avoid fetching large, unnecessary data (like User and TargetType details), always use this to specify only the properties you need (e.g., ["PublishedAt"]). 
+Use dot notation for nested properties (e.g., "TargetType.Title", "User.Description"). 
 '$type' will always be included.`),
 };
 
@@ -17,7 +18,8 @@ const getPublishInfoSchema = z.object(getPublishInfoInputProperties);
 export const getPublishInfo = {
     name: "getPublishInfo",
     description: `Retrieves a list of publish states for a specified item, showing when, where (to which Target Type), and by whom it was last published. This shows the current state, not the history of all publish actions.
-    When asked to retrieve publish information for a large set of items, it's recommended that this tool is called via the 'toolOrchestrator'.`,
+    When asked to retrieve publish information for a large set of items, it's recommended that this tool is called via the 'toolOrchestrator'.
+    In such cases, only request the information needed, and consider using a post processing script to limit the amount of returned data.`,
 
     input: getPublishInfoInputProperties,
 

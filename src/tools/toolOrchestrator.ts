@@ -344,6 +344,117 @@ This script uses the 'setup' phase to find all Components based on a specific Sc
             context.log("Content updated.");
         \`
     });
+
+Example 6: Report on Items Modified Since Last Publish (Setup, Map, and Reduce)
+This script finds all published Pages, checks if they've been modified since their last publish date, and returns a summary. This is a highly efficient way to answer "What's changed?".
+
+    const result = await tools.toolOrchestrator({
+        preProcessingScript: \`
+            // Phase 1 (Setup): Find all published Pages to check.
+            context.log('Searching for all published Pages...');
+            const searchResult = await context.tools.search({
+                searchQuery: { 
+                    IsPublished: true,
+                    ItemTypes: ["Page"]
+                },
+                resultLimit: 1000
+            });
+            const items = JSON.parse(searchResult.content[0].text);
+            const itemIds = items.map(item => item.Id);
+            context.log(\`Found \${itemIds.length} Pages to check.\`);
+            return itemIds;
+        \`,
+        mapScript: \`
+            // Phase 2 (Map): Check modification vs. publish date for EACH item.
+            // We *only* get the properties we need to be fast.
+            const itemResult = await context.tools.getItem({ 
+                itemId: context.currentItemId,
+                includeProperties: ["VersionInfo.RevisionDate", "Title"]
+            });
+            const item = JSON.parse(itemResult.content[0].text);
+            const revisionDate = new Date(item.VersionInfo.RevisionDate);
+
+            // Here too: only get the *one* property we care about.
+            const publishInfoResult = await context.tools.getPublishInfo({ 
+                itemId: context.currentItemId,
+                includeProperties: ["PublishedAt"] 
+            });
+            const publishInfos = JSON.parse(publishInfoResult.content[0].text);
+
+            if (publishInfos.length === 0) {
+                return null; // Not published anywhere, skip.
+            }
+
+            // Find the most recent publish date
+            const lastPublishedAt = publishInfos.reduce((latest, info) => {
+                const current = new Date(info.PublishedAt);
+                return current > latest ? current : latest;
+            }, new Date(0));
+            
+            // Return a data object if modified
+            if (revisionDate > lastPublishedAt) {
+                return {
+                    id: context.currentItemId,
+                    title: item.Title,
+                    modified: revisionDate.toISOString(),
+                    lastPublished: lastPublishedAt.toISOString()
+                };
+            }
+            return null; // Not modified
+        \`,
+        postProcessingScript: \`
+            // Phase 3 (Reduce): Collect the results into a final JSON summary.
+            // This returns a *JSON object* (not a string) for the agent to parse.
+            const modifiedItems = results
+                .filter(r => r.status === 'success' && r.result !== null)
+                .map(r => r.result);
+
+            return {
+                totalChecked: results.length,
+                totalModified: modifiedItems.length,
+                modifiedItems: modifiedItems // Agent will receive this array
+            };
+        \`
+    });
+
+Example 7: Robust Batch Operation with Error Reporting (stopOnError: false)
+This script attempts to delete a list of items. It uses 'stopOnError: false' to ensure it tries all items, even if some fail (e.g., they are locked, already deleted, or cause a tool error). The post-script then provides a summary of successes and failures.
+
+    const result = await tools.toolOrchestrator({
+        itemIds: ["tcm:5-400", "tcm:5-9999", "tcm:5-401"], // Assume tcm:5-9999 does not exist
+        stopOnError: false, // <-- Key hint: Continue processing even if one fails
+        mapScript: \`
+            // Phase 2 (Map): Attempt to delete one item.
+            // If 'deleteItem' fails, the orchestrator will automatically catch
+            // the error, log it, and add a { status: "error" } to the results.
+            // Because 'stopOnError: false', it will then continue to the next item.
+            context.log(\`Attempting to delete \${context.currentItemId}...\`);
+            await context.tools.deleteItem({ itemId: context.currentItemId });
+            return "Successfully deleted."; // This goes into 'result.result'
+        \`,
+        postProcessingScript: \`
+            // Phase 3 (Reduce): Summarize successes and failures.
+            // We can now just check the 'status' property set by the orchestrator.
+            const successes = results.filter(r => r.status === 'success').length;
+            const failures = results.filter(r => r.status === 'error').length;
+            
+            // Collect details for the failed items
+            const failedItems = results
+                .filter(r => r.status === 'error')
+                .map(r => ({ 
+                    item: r.itemId, 
+                    error: r.error // 'error' is automatically populated by the orchestrator
+                }));
+
+            // Return a final JSON summary object
+            return {
+                message: \`Batch delete complete. \${successes} succeeded, \${failures} failed.\`,
+                successCount: successes,
+                failureCount: failures,
+                failedItems: failedItems
+            };
+        \`
+    });
 `,
 
     // The 'input' property is now the plain object
