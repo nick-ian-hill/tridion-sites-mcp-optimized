@@ -642,7 +642,11 @@ This script attempts to delete a list of items. It uses 'stopOnError: false' to 
                     );
 
                     const result = await Promise.race([scriptPromise, timeoutPromise]);
-                    results.push({ itemId: itemId, status: "success", result: result || "No return value" });
+                    results.push({
+                        itemId: itemId,
+                        status: "success",
+                        result: (result === undefined) ? "No return value" : result
+                    });
                     logs.push(`[${itemId}] Success.`);
 
                 } catch (error: any) {
