@@ -30,6 +30,10 @@ export const getLockedItems = {
 description: `Gets a list of new and locked items (e.g., checked-out, in workflow).
 This tool is ideal for finding items in specific states using AND/NOT logic.
 
+Strategy for tasks requiring post-processing or aggregation of results (e.g., "Find the Most...", "Count all...")
+When post-processing of data from a large set of items is required, do not use this tool directly.
+This approach is token-inefficient and will fail on large result sets. The correct, scalable method is to use the 'toolOrchestrator', and supply a postProcessingScript to perform the aggregation on the server-side. See the 'toolOrchestrator' documentation for the recommended 3-phase (setup-map-reduce) pattern.
+
 Example 1: Find all items that HAVE the 'CheckedOut' state.
     const result = await tools.getLockedItems({
         allOfLockStates: ["CheckedOut"],

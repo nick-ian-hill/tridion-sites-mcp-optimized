@@ -6,7 +6,13 @@ import { filterResponseData } from "../utils/responseFiltering.js";
 export const getItemsInContainer = {
     name: "getItemsInContainer",
     description: `Gets a list of items inside a specified container (e.g., a Publication, Folder, Structure Group, Category, or Bundle). This is a primary discovery tool, often used to find the IDs of items to be used in other tools like 'getItem', 'updateContent', 'deleteItem', etc. It's best for browsing a known structure, whereas the 'search' tool is better for finding items across the entire system based on criteria.
-IMPORTANT: Use 'IdAndTitle' or 'includeProperties' for efficiency, especially with the 'recursive' option.`,
+IMPORTANT: Use 'IdAndTitle' or 'includeProperties' for efficiency, especially with the 'recursive' option.
+
+Strategy for tasks requiring post-processing or aggregation of results (e.g., "Find the Most...", "Count all...")
+When post-processing of data from a large set of items is required, do not use this tool directly.
+This approach is token-inefficient and will fail on large result sets. The correct, scalable method is to use the 'toolOrchestrator', and supply a postProcessingScript to perform the aggregation on the server-side. See the 'toolOrchestrator' documentation for the recommended 3-phase (setup-map-reduce) pattern.
+
+`,
     input: {
         containerId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The TCM URI or ECL URI of the container item."),
         recursive: z.boolean().optional().default(false).describe("Set to `true` to include items from all nested sub-containers. Use this for broad searches (e.g., 'find all images in the current Publication'), not for simply listing the contents of a single folder (e.g., 'what's in the 2025 folder?')."),

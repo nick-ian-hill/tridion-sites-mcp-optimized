@@ -41,6 +41,10 @@ export const search = {
 
   When using search query parameters that target items in a specific publication: 'BasedOnSchema', 'UsedKeywords', 'ProcessDefinitions', and 'ActivityDefinitions', it's mandatory to also provide a value for the 'SearchIn' parameter, otherwise the request will fail. 
 
+  Strategy for tasks requiring post-processing or aggregation of results (e.g., "Find the Most...", "Count all...")
+  When post-processing of data from a large set of items is required, do not use this tool directly.
+  This approach is token-inefficient and will fail on large result sets. The correct, scalable method is to use the 'toolOrchestrator', and supply a postProcessingScript to perform the aggregation on the server-side. See the 'toolOrchestrator' documentation for the recommended 3-phase (setup-map-reduce) pattern.
+
   Examples:
  
   Example 1: Find 'Multimedia Components' which have a field containing the text 'logo'. Since we cannot limit the results to only 'Multimedia Components', you will need to review the value of the 'ComponentType' property and select only those items for which the value is 'MultimediaComponent'.

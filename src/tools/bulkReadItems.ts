@@ -18,6 +18,10 @@ ID formats for versioned items:
 - Components: tcm:integer-integer, tcm:integer-integer-16, ecl:integer-integer, or ecl:integer-integer-16.
 - Other versioned types (Schema, Page, Component Template, Page Template): tcm:integer-integer-type, where 'type' is the item type number (Schema = 8, Page = 64, Component Template = 32, Page Template = 128, Template Building Block = 2048).
 
+Strategy for tasks requiring post-processing or aggregation of results (e.g., "Find the Most...", "Count all...")
+When post-processing of data from a large set of items is required, do not use this tool directly.
+This approach is token-inefficient and will fail on large result sets. The correct, scalable method is to use the 'toolOrchestrator', and supply a postProcessingScript to perform the aggregation on the server-side. See the 'toolOrchestrator' documentation for the recommended 3-phase (setup-map-reduce) pattern.
+
 Example: Retrieve a specific nested property for multiple items.
 This example gets the revision date for two Components. The output includes the base 'Id', 'Title', and '$type' properties, plus a 'VersionInfo' object containing only the requested 'RevisionDate'.
 

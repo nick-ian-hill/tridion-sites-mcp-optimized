@@ -18,6 +18,10 @@ Only select "AllDetails" if you absolutely need full details about the returned 
   - SecurityDescriptor
   - LoadInfo
 
+  Strategy for tasks requiring post-processing or aggregation of results (e.g., "Find the Most...", "Count all...")
+  When post-processing of data from a large set of items is required, do not use this tool directly.
+  This approach is token-inefficient and will fail on large result sets. The correct, scalable method is to use the 'toolOrchestrator', and supply a postProcessingScript to perform the aggregation on the server-side. See the 'toolOrchestrator' documentation for the recommended 3-phase (setup-map-reduce) pattern.
+
 Examples:
 
 Example 1: Finds all items that are directly using a Schema, returning only their IDs and titles.
