@@ -5,7 +5,8 @@
   "main": "src/index.js",
   "type": "module",
   "scripts": {
-    "start": "node --loader ts-node/esm src/index.ts"
+    "start": "node --loader ts-node/esm src/index.ts",
+    "run:orchestrator": "node --loader ts-node/esm src/runOrchestratorTest.ts"
   },
   "keywords": [],
   "author": "",
