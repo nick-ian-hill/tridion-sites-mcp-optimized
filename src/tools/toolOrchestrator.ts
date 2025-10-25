@@ -371,23 +371,22 @@ This script uses the 'setup' phase to find all Components based on a specific Sc
         \`
     });
 
-Example 6: Report on Items Modified Since Last Publish (Setup, Map, and Reduce)
-This script finds all Pages in a Publication, checks, for each target type, whether the page has been modified since it was published, and returns a summary.
-This is the correct, reliable way to answer "What's changed?".
+Example 6: Comprehensive "Stale Content" Report (Checks all Dependencies)
+This script finds all Pages in a Publication and checks if they OR any of their dependent items (components, images, etc.) have been modified since the last publish date.
+This is the most robust and accurate way to find stale content.
 
     const result = await tools.toolOrchestrator({
         preProcessingScript: \`
             // Phase 1 (Setup): Find ALL pages in the Publication.
             // We use getItemsInContainer because tools.search() will
-            // NOT return pages that do not yet have a major version,
-            // which could cause this report to miss modified items.
+            // NOT return pages that do not yet have a major version.
             context.log('Finding ALL pages in Publication tcm:0-5-1...');
             
             const allItems = await context.tools.getItemsInContainer({
                 containerId: "tcm:0-5-1",
                 itemTypes: ["Page"],
                 recursive: true,
-                details: "IdAndTitle" // Most efficient
+                details: "IdAndTitle"
             });
 
             const itemIds = allItems.map(item => item.Id);
@@ -395,62 +394,129 @@ This is the correct, reliable way to answer "What's changed?".
             return itemIds;
         \`,
         mapScript: \`
-            // Phase 2 (Map): Check modification vs. publish date for EACH target.
+            context.log(\`Checking Page: \${context.currentItemId}\`);
             
+            // 1. Get Page's own info
             const item = await context.tools.getItem({ 
                 itemId: context.currentItemId,
-                includeProperties: ["VersionInfo.RevisionDate", "Title"]
+                includeProperties: ["Title", "VersionInfo.RevisionDate"]
             });
 
             if (!item || !item.VersionInfo) {
-                context.log("Item not found or lacks VersionInfo. Skipping.");
+                context.log("Page not found or lacks VersionInfo. Skipping.");
                 return null;
             }
-            const revisionDate = new Date(item.VersionInfo.RevisionDate);
+            context.log(\`  Page Title: \${item.Title}\`);
 
+            // 2. Get Publish info for the Page
             const publishInfos = await context.tools.getPublishInfo({ 
                 itemId: context.currentItemId,
                 includeProperties: ["PublishedAt", "TargetType.Title"] 
             });
 
             if (!publishInfos || publishInfos.length === 0) {
-                context.log("No publish info found. Skipping item.");
+                context.log("  No publish info found. Skipping page.");
+                return null; // Page has never been published
+            }
+
+            // 3. Get *all* dependencies (direct and indirect)
+            context.log('  Fetching dependency graph...');
+            let dependencies = [];
+            try {
+                // Assumes 'dependencyGraphForItem' tool exists
+                dependencies = await context.tools.dependencyGraphForItem({
+                    itemId: context.currentItemId,
+                    direction: "Uses" // Get items this page *uses*
+                });
+                context.log(\`  Found \${dependencies.length} total dependencies.\`);
+            } catch (e) {
+                context.log(\`  ERROR: Failed to get dependency graph: \${e.message}\`);
                 return null;
             }
 
-            const modifiedOnTargets = [];
-            for (const info of publishInfos) {
-                if (info && info.PublishedAt && info.TargetType && info.TargetType.Title) {
-                    const publishedAt = new Date(info.PublishedAt);
-                    if (revisionDate > publishedAt) {
-                        modifiedOnTargets.push(info.TargetType.Title);
+            // 4. Get VersionInfo for all dependencies
+            let dependencyDetails = [];
+            if (dependencies.length > 0) {
+                const dependencyIds = [...new Set(dependencies.map(dep => dep.IdRef))];
+                try {
+                    // Assumes 'bulkReadItems' tool exists
+                    dependencyDetails = await context.tools.bulkReadItems({
+                        itemIds: dependencyIds,
+                        includeProperties: ["Title", "VersionInfo.RevisionDate"]
+                    });
+                    context.log(\`  Fetched details for \${(dependencyDetails || []).length} unique dependencies.\`);
+                } catch (e) {
+                    context.log(\`  ERROR: Failed to fetch dependency details: \${e.message}\`);
+                    return null;
+                }
+            }
+
+            // 5. Find the single LATEST modification date
+            let latestModificationDate = new Date(item.VersionInfo.RevisionDate);
+            let latestModifiedItem = { 
+                title: \`\${item.Title} (Page)\`, 
+                date: latestModificationDate 
+            };
+
+            for (const comp of (dependencyDetails || [])) {
+                if (comp && comp.VersionInfo && comp.VersionInfo.RevisionDate) {
+                    const compRevisionDate = new Date(comp.VersionInfo.RevisionDate);
+                    if (compRevisionDate > latestModificationDate) {
+                        latestModificationDate = compRevisionDate;
+                        latestModifiedItem = { 
+                            title: \`\${comp.Title} (\${comp.Id})\`, 
+                            date: latestModificationDate 
+                        };
                     }
                 }
             }
+            context.log(\`  Latest modification: \${latestModificationDate.toISOString()} from "\${latestModifiedItem.title}"\`);
             
-            if (modifiedOnTargets.length > 0) {
+            // 6. Loop through each target and do one simple comparison
+            const staleOnTargets = {};
+            for (const info of publishInfos) {
+                if (!info || !info.PublishedAt || !info.TargetType || !info.TargetType.Title) {
+                    continue;
+                }
+                
+                const targetName = info.TargetType.Title;
+                const publishedAt = new Date(info.PublishedAt);
+                context.log(\`  -> Checking Target: "\${targetName}", Published: \${publishedAt.toISOString()}\`);
+
+                if (latestModificationDate > publishedAt) {
+                    context.log('     Comparison: TRUE (Stale)');
+                    staleOnTargets[targetName] = {
+                        reason: 'Content modified',
+                        staleItem: latestModifiedItem.title,
+                        modifiedDate: latestModifiedItem.date.toISOString(),
+                        publishedDate: publishedAt.toISOString()
+                    };
+                } else {
+                    context.log('     Comparison: FALSE (Up to date)');
+                }
+            }
+            
+            // 7. Return a result ONLY if any target was found to be stale
+            if (Object.keys(staleOnTargets).length > 0) {
                 return {
                     id: context.currentItemId,
                     title: item.Title,
-                    modifiedSince: revisionDate.toISOString(),
-                    staleOnTargets: [...new Set(modifiedOnTargets)]
+                    staleTargets: staleOnTargets
                 };
             }
             
-            return null; // Not modified on any target
+            return null; // Not stale on any target
         \`,
         postProcessingScript: \`
-            // Phase 3 (Reduce): Collect the results into a final JSON summary.
             context.log(\`Aggregating \${results.length} results.\`);
-            
             const modifiedItems = results
                 .filter(r => r.status === 'success' && r.result !== null)
                 .map(r => r.result);
 
             return {
                 totalChecked: results.length,
-                totalModified: modifiedItems.length,
-                pagesWithStaleTargets: modifiedItems
+                totalStalePages: modifiedItems.length,
+                stalePages: modifiedItems
             };
         \`
     });
