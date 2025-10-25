@@ -338,6 +338,10 @@ This script uses the 'setup' phase to find all Components based on a specific Sc
         preProcessingScript: \`
             // Phase 1 (Setup): Find all components to process.
             context.log(\`Searching for Components based on Schema: \${context.parameters.schemaId}\`);
+
+            // WARNING: tools.search() will NOT find changes that have not been checked-in, or items that do not yet have a major version.
+            // If you need to process ALL items, use
+            // context.tools.getItemsInContainer() instead.
             
             // The JSON is automatically parsed. 'items' is an array.
             const items = await context.tools.search({
@@ -368,73 +372,67 @@ This script uses the 'setup' phase to find all Components based on a specific Sc
     });
 
 Example 6: Report on Items Modified Since Last Publish (Setup, Map, and Reduce)
-This script finds all published Pages, checks if they've been modified since their last publish date on each specific target, and returns a summary. This is a highly efficient and accurate way to answer "What's changed?".
+This script finds all Pages in a Publication, checks, for each target type, whether the page has been modified since it was published, and returns a summary.
+This is the correct, reliable way to answer "What's changed?".
 
     const result = await tools.toolOrchestrator({
         preProcessingScript: \`
-            // Phase 1 (Setup): Find all published Pages to check.
-            context.log('Searching for all published Pages...');
+            // Phase 1 (Setup): Find ALL pages in the Publication.
+            // We use getItemsInContainer because tools.search() will
+            // NOT return pages that do not yet have a major version,
+            // which could cause this report to miss modified items.
+            context.log('Finding ALL pages in Publication tcm:0-5-1...');
             
-            // The JSON is automatically parsed.
-            const items = await context.tools.search({
-                searchQuery: { 
-                    IsPublished: true,
-                    ItemTypes: ["Page"]
-                },
-                resultLimit: 1000
+            const allItems = await context.tools.getItemsInContainer({
+                containerId: "tcm:0-5-1",
+                itemTypes: ["Page"],
+                recursive: true,
+                details: "IdAndTitle" // Most efficient
             });
-            
-            const itemIds = items.map(item => item.Id);
-            context.log(\`Found \${itemIds.length} Pages to check.\`);
+
+            const itemIds = allItems.map(item => item.Id);
+            context.log(\`Found \${itemIds.length} total Pages to check.\`);
             return itemIds;
         \`,
         mapScript: \`
             // Phase 2 (Map): Check modification vs. publish date for EACH target.
-            // We *only* get the properties we need to be fast.
             
-            // The JSON is automatically parsed.
             const item = await context.tools.getItem({ 
                 itemId: context.currentItemId,
                 includeProperties: ["VersionInfo.RevisionDate", "Title"]
             });
 
-            // Handle cases where item might not be found or lacks version info
             if (!item || !item.VersionInfo) {
                 context.log("Item not found or lacks VersionInfo. Skipping.");
                 return null;
             }
             const revisionDate = new Date(item.VersionInfo.RevisionDate);
 
-            // The JSON is automatically parsed. Get TargetType.Title as well.
             const publishInfos = await context.tools.getPublishInfo({ 
                 itemId: context.currentItemId,
                 includeProperties: ["PublishedAt", "TargetType.Title"] 
             });
 
             if (!publishInfos || publishInfos.length === 0) {
-                return null; // Not published anywhere, skip.
+                context.log("No publish info found. Skipping item.");
+                return null;
             }
 
-            // Check each target
             const modifiedOnTargets = [];
             for (const info of publishInfos) {
-                // Check for valid publish info
                 if (info && info.PublishedAt && info.TargetType && info.TargetType.Title) {
                     const publishedAt = new Date(info.PublishedAt);
-                    // Compare the item's single revision date to each target's publish date
                     if (revisionDate > publishedAt) {
                         modifiedOnTargets.push(info.TargetType.Title);
                     }
                 }
             }
             
-            // Return a data object only if it's modified on at least one target
             if (modifiedOnTargets.length > 0) {
                 return {
                     id: context.currentItemId,
                     title: item.Title,
                     modifiedSince: revisionDate.toISOString(),
-                    // Return a de-duplicated list of target names
                     staleOnTargets: [...new Set(modifiedOnTargets)]
                 };
             }
@@ -443,11 +441,8 @@ This script finds all published Pages, checks if they've been modified since the
         \`,
         postProcessingScript: \`
             // Phase 3 (Reduce): Collect the results into a final JSON summary.
-            // This returns a *JSON object* (not a string) for the agent to parse.
-
             context.log(\`Aggregating \${results.length} results.\`);
             
-            // Filter for only successful items that returned a result (i.e., were modified)
             const modifiedItems = results
                 .filter(r => r.status === 'success' && r.result !== null)
                 .map(r => r.result);
@@ -455,7 +450,7 @@ This script finds all published Pages, checks if they've been modified since the
             return {
                 totalChecked: results.length,
                 totalModified: modifiedItems.length,
-                pagesWithStaleTargets: modifiedItems // Agent will receive this array
+                pagesWithStaleTargets: modifiedItems
             };
         \`
     });
