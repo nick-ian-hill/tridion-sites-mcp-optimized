@@ -78,61 +78,144 @@ async function runTest() {
     };
 
     // --- 3. Define Your Test Case ---
-    // This is the "Modified Pages Report" test script.
+    // This script now uses the 'dependencyGraphForItem' tool for a
+    // complete and accurate check of all dependencies.
     
     const testInput = {
         debug: true,
         maxConcurrency: 1, // Keep at 1 for clearer test logs
         
-        itemIds: ["tcm:5-1784-64"],
+        preProcessingScript: `
+            context.log('TEST RUN: Finding ALL pages in Publication tcm:0-5-1...');
+            
+            const allItems = await context.tools.getItemsInContainer({
+                containerId: "tcm:0-5-1", // The root of the Publication
+                itemTypes: ["Page"],
+                recursive: true,
+                details: "IdAndTitle"
+            });
+
+            const itemIds = allItems.map(item => item.Id);
+            context.log('Found ' + itemIds.length + ' total Pages to check.');
+            return itemIds;
+        `,
         mapScript: `
-            // This is the FULL, correct script
-            context.log('Checking: ' + context.currentItemId);
+            context.log('Checking Page: ' + context.currentItemId);
+            
+            // 1. Get Page's own info
             const item = await context.tools.getItem({ 
                 itemId: context.currentItemId,
-                includeProperties: ["VersionInfo.RevisionDate", "Title"]
+                includeProperties: ["Title", "VersionInfo.RevisionDate"]
             });
 
             if (!item || !item.VersionInfo) {
-                context.log("Item not found or lacks VersionInfo. Skipping.");
+                context.log("Page not found or lacks VersionInfo. Skipping.");
                 return null;
             }
-            const revisionDate = new Date(item.VersionInfo.RevisionDate);
-            context.log('  Item Title: ' + item.Title);
-            context.log('  Item RevisionDate: ' + revisionDate.toISOString());
+            context.log('  Page Title: ' + item.Title);
 
+            // 2. Get Publish info for the Page
             const publishInfos = await context.tools.getPublishInfo({ 
                 itemId: context.currentItemId,
                 includeProperties: ["PublishedAt", "TargetType.Title"] 
             });
 
             if (!publishInfos || publishInfos.length === 0) {
-                context.log("  No publish info found. Skipping.");
+                context.log("  No publish info found. Skipping page.");
+                return null; // Page has never been published
+            }
+
+            // 3. Get *all* dependencies (direct and indirect)
+            context.log('  Fetching dependency graph...');
+            let dependencies = [];
+            try {
+                // We assume the tool is named 'dependencyGraphForItem'
+                // and it returns a list of Link objects
+                dependencies = await context.tools.dependencyGraphForItem({
+                    itemId: context.currentItemId,
+                    direction: "Uses" // Get items this page *uses*
+                });
+                context.log('  Found ' + dependencies.length + ' total dependencies.');
+            } catch (e) {
+                context.log('  ERROR: Failed to get dependency graph: ' + e.message);
+                context.log('  This test assumes a tool "dependencyGraphForItem" exists.');
                 return null;
             }
 
-            const modifiedOnTargets = [];
-            for (const info of publishInfos) {
-                if (info && info.PublishedAt && info.TargetType && info.TargetType.Title) {
-                    const publishedAt = new Date(info.PublishedAt);
-                    context.log('  -> Target: "' + info.TargetType.Title + '", Published: ' + publishedAt.toISOString());
-                    if (revisionDate > publishedAt) {
-                        context.log('     Comparison: TRUE (Modified)');
-                        modifiedOnTargets.push(info.TargetType.Title);
-                    } else {
-                        context.log('     Comparison: FALSE (Not Modified)');
+            // 4. Get VersionInfo for all dependencies
+            let dependencyDetails = [];
+            if (dependencies.length > 0) {
+                // Use a Set to get unique IDs
+                const dependencyIds = [...new Set(dependencies.map(dep => dep.IdRef))];
+                
+                try {
+                    // Use bulkReadItems for efficiency
+                    dependencyDetails = await context.tools.bulkReadItems({
+                        itemIds: dependencyIds,
+                        includeProperties: ["Title", "VersionInfo.RevisionDate"]
+                    });
+                    context.log('  Fetched details for ' + (dependencyDetails.length || 0) + ' unique dependencies.');
+                } catch (e) {
+                    context.log('  ERROR: Failed to fetch dependency details: ' + e.message);
+                    return null;
+                }
+            }
+
+            // 5. Find the single LATEST modification date from the page + all dependencies
+            let latestModificationDate = new Date(item.VersionInfo.RevisionDate);
+            let latestModifiedItem = { 
+                title: item.Title + ' (Page)', 
+                date: latestModificationDate 
+            };
+
+            for (const comp of dependencyDetails) {
+                if (comp && comp.VersionInfo && comp.VersionInfo.RevisionDate) {
+                    const compRevisionDate = new Date(comp.VersionInfo.RevisionDate);
+                    if (compRevisionDate > latestModificationDate) {
+                        latestModificationDate = compRevisionDate;
+                        latestModifiedItem = { 
+                            title: comp.Title + ' (' + comp.Id + ')', 
+                            date: latestModificationDate 
+                        };
                     }
                 }
             }
+            context.log('  Latest modification: ' + latestModificationDate.toISOString() + ' from "' + latestModifiedItem.title + '"');
             
-            if (modifiedOnTargets.length > 0) {
+            // 6. Loop through each target and do one simple comparison
+            const staleOnTargets = {};
+            for (const info of publishInfos) {
+                if (!info || !info.PublishedAt || !info.TargetType || !info.TargetType.Title) {
+                    continue;
+                }
+                
+                const targetName = info.TargetType.Title;
+                const publishedAt = new Date(info.PublishedAt);
+                context.log('  -> Checking Target: "' + targetName + '", Published: ' + publishedAt.toISOString());
+
+                if (latestModificationDate > publishedAt) {
+                    context.log('     Comparison: TRUE (Stale)');
+                    staleOnTargets[targetName] = {
+                        reason: 'Content modified',
+                        staleItem: latestModifiedItem.title,
+                        modifiedDate: latestModifiedItem.date.toISOString(),
+                        publishedDate: publishedAt.toISOString()
+                    };
+                } else {
+                    context.log('     Comparison: FALSE (Up to date)');
+                }
+            }
+            
+            // 7. Return a result ONLY if any target was found to be stale
+            if (Object.keys(staleOnTargets).length > 0) {
                 return {
                     id: context.currentItemId,
                     title: item.Title,
-                    staleOnTargets: [...new Set(modifiedOnTargets)]
+                    staleTargets: staleOnTargets
                 };
             }
-            return null; // Not modified on any target
+            
+            return null; // Not stale on any target
         `,
         postProcessingScript: `
             context.log('TEST RUN: Aggregating ' + results.length + ' results.');
@@ -142,8 +225,8 @@ async function runTest() {
 
             return {
                 totalChecked: results.length,
-                totalModified: modifiedItems.length,
-                pagesWithStaleTargets: modifiedItems
+                totalStalePages: modifiedItems.length,
+                stalePages: modifiedItems
             };
         `
     };
@@ -156,8 +239,6 @@ async function runTest() {
         const result = await orchestratorTool.execute(testInput as any, mcpContext);
         
         console.log("\n--- toolOrchestrator Final Output ---");
-        // The orchestrator's logs will have already appeared in your terminal
-        // This prints the final JSON payload.
         const output = JSON.parse(result.content[0].text);
         console.log(JSON.stringify(output, null, 2));
 

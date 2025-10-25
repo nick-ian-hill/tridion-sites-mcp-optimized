@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "node --loader ts-node/esm src/index.ts",
-    "run:orchestrator": "node --loader ts-node/esm src/runOrchestratorTest.ts"
+    "orchestrator": "node --loader ts-node/esm src/runOrchestratorTest.ts"
   },
   "keywords": [],
   "author": "",
