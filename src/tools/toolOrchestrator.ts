@@ -421,34 +421,43 @@ This is the most robust and accurate way to find stale content.
 
             // 3. Get *all* dependencies (direct and indirect)
             context.log('  Fetching dependency graph...');
-            let dependencies = [];
+            
+            // Helper function to flatten the dependency graph tree
+            function flattenDependencies(node) {
+                let items = [];
+                if (node.Dependencies && node.Dependencies.length > 0) {
+                    for (const childNode of node.Dependencies) {
+                        if (childNode.Item) {
+                            items.push(childNode.Item);
+                        }
+                        // Recurse
+                        items = items.concat(flattenDependencies(childNode));
+                    }
+                }
+                return items;
+            }
+
+            let dependencyDetails = [];
             try {
-                // Assumes 'dependencyGraphForItem' tool exists
-                dependencies = await context.tools.dependencyGraphForItem({
+                // Get the graph object *directly*
+                const graph = await context.tools.dependencyGraphForItem({
                     itemId: context.currentItemId,
-                    direction: "Uses" // Get items this page *uses*
+                    direction: "Uses", // Get items this page *uses*
+                    // Ask for the details we need directly
+                    includeProperties: ["Title", "VersionInfo.RevisionDate"]
                 });
-                context.log(\`  Found \${dependencies.length} total dependencies.\`);
+                
+                if (graph && graph.Dependencies) {
+                    // Flatten the tree structure to get a simple list of items
+                    dependencyDetails = flattenDependencies(graph);
+                    context.log(\`  Found \${dependencyDetails.length} total dependencies.\`);
+                } else {
+                    context.log(\`  No dependencies found or graph was invalid.\`);
+                    dependencyDetails = [];
+                }
             } catch (e) {
                 context.log(\`  ERROR: Failed to get dependency graph: \${e.message}\`);
                 return null;
-            }
-
-            // 4. Get VersionInfo for all dependencies
-            let dependencyDetails = [];
-            if (dependencies.length > 0) {
-                const dependencyIds = [...new Set(dependencies.map(dep => dep.IdRef))];
-                try {
-                    // Assumes 'bulkReadItems' tool exists
-                    dependencyDetails = await context.tools.bulkReadItems({
-                        itemIds: dependencyIds,
-                        includeProperties: ["Title", "VersionInfo.RevisionDate"]
-                    });
-                    context.log(\`  Fetched details for \${(dependencyDetails || []).length} unique dependencies.\`);
-                } catch (e) {
-                    context.log(\`  ERROR: Failed to fetch dependency details: \${e.message}\`);
-                    return null;
-                }
             }
 
             // 5. Find the single LATEST modification date
@@ -458,7 +467,7 @@ This is the most robust and accurate way to find stale content.
                 date: latestModificationDate 
             };
 
-            for (const comp of (dependencyDetails || [])) {
+            for (const comp of dependencyDetails) {
                 if (comp && comp.VersionInfo && comp.VersionInfo.RevisionDate) {
                     const compRevisionDate = new Date(comp.VersionInfo.RevisionDate);
                     if (compRevisionDate > latestModificationDate) {
@@ -488,7 +497,7 @@ This is the most robust and accurate way to find stale content.
                     staleOnTargets[targetName] = {
                         reason: 'Content modified',
                         staleItem: latestModifiedItem.title,
-                        modifiedDate: latestModifiedItem.date.toISOString(),
+                        modifiedDate: latestModificationDate.toISOString(),
                         publishedDate: publishedAt.toISOString()
                     };
                 } else {
