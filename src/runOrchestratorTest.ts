@@ -125,43 +125,53 @@ async function runTest() {
                 return null; // Page has never been published
             }
 
-            // 3. Get *all* dependencies (direct and indirect)
-            context.log('  Fetching dependency graph...');
-            let dependencies = [];
+            // 3. Get *all* Component dependencies (direct and indirect)
+            context.log('  Fetching dependency graph for components...');
+            
+            // Helper function to flatten the dependency graph tree
+            function flattenDependencies(node) {
+                let items = [];
+                if (node.Dependencies && node.Dependencies.length > 0) {
+                    for (const childNode of node.Dependencies) {
+                        if (childNode.Item) {
+                            items.push(childNode.Item);
+                        }
+                        // Recurse
+                        items = items.concat(flattenDependencies(childNode));
+                    }
+                }
+                return items;
+            }
+
+            let dependencyDetails = []; // This will hold our component items
             try {
-                // We assume the tool is named 'dependencyGraphForItem'
-                // and it returns a list of Link objects
-                dependencies = await context.tools.dependencyGraphForItem({
+                // --- FIX: Inside the orchestrator, tool calls return the final JSON *directly*,
+                // not the { content: [...] } wrapper.
+                const graph = await context.tools.dependencyGraphForItem({
                     itemId: context.currentItemId,
-                    direction: "Uses" // Get items this page *uses*
+                    direction: "Uses", // Get items this page *uses*
+                    rloItemTypes: ["Component"], // Only find Components
+                    includeProperties: ["Title", "VersionInfo.RevisionDate"] // Get details we need
                 });
-                context.log('  Found ' + dependencies.length + ' total dependencies.');
+                
+                // Now, 'graph' is the DependencyGraphNode object, not a 'response' object
+                if (graph && graph.Dependencies) {
+                    dependencyDetails = flattenDependencies(graph);
+                    context.log('  Found ' + dependencyDetails.length + ' total Component dependencies.');
+                } else {
+                    context.log('  Tool returned an invalid graph object. Assuming 0 dependencies.');
+                    dependencyDetails = [];
+                    context.log('  Found 0 total Component dependencies.');
+                }
+                // --- END FIX ---
+                
             } catch (e) {
                 context.log('  ERROR: Failed to get dependency graph: ' + e.message);
-                context.log('  This test assumes a tool "dependencyGraphForItem" exists.');
                 return null;
             }
 
-            // 4. Get VersionInfo for all dependencies
-            let dependencyDetails = [];
-            if (dependencies.length > 0) {
-                // Use a Set to get unique IDs
-                const dependencyIds = [...new Set(dependencies.map(dep => dep.IdRef))];
-                
-                try {
-                    // Use bulkReadItems for efficiency
-                    dependencyDetails = await context.tools.bulkReadItems({
-                        itemIds: dependencyIds,
-                        includeProperties: ["Title", "VersionInfo.RevisionDate"]
-                    });
-                    context.log('  Fetched details for ' + (dependencyDetails.length || 0) + ' unique dependencies.');
-                } catch (e) {
-                    context.log('  ERROR: Failed to fetch dependency details: ' + e.message);
-                    return null;
-                }
-            }
 
-            // 5. Find the single LATEST modification date from the page + all dependencies
+            // 4. Find the single LATEST modification date from the page + all dependencies
             let latestModificationDate = new Date(item.VersionInfo.RevisionDate);
             let latestModifiedItem = { 
                 title: item.Title + ' (Page)', 
@@ -182,7 +192,7 @@ async function runTest() {
             }
             context.log('  Latest modification: ' + latestModificationDate.toISOString() + ' from "' + latestModifiedItem.title + '"');
             
-            // 6. Loop through each target and do one simple comparison
+            // 5. Loop through each target and do one simple comparison
             const staleOnTargets = {};
             for (const info of publishInfos) {
                 if (!info || !info.PublishedAt || !info.TargetType || !info.TargetType.Title) {
@@ -206,7 +216,7 @@ async function runTest() {
                 }
             }
             
-            // 7. Return a result ONLY if any target was found to be stale
+            // 6. Return a result ONLY if any target was found to be stale
             if (Object.keys(staleOnTargets).length > 0) {
                 return {
                     id: context.currentItemId,
