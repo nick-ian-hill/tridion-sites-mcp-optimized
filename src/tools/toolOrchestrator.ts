@@ -368,7 +368,7 @@ This script uses the 'setup' phase to find all Components based on a specific Sc
     });
 
 Example 6: Report on Items Modified Since Last Publish (Setup, Map, and Reduce)
-This script finds all published Pages, checks if they've been modified since their last publish date, and returns a summary. This is a highly efficient way to answer "What's changed?".
+This script finds all published Pages, checks if they've been modified since their last publish date on each specific target, and returns a summary. This is a highly efficient and accurate way to answer "What's changed?".
 
     const result = await tools.toolOrchestrator({
         preProcessingScript: \`
@@ -389,7 +389,7 @@ This script finds all published Pages, checks if they've been modified since the
             return itemIds;
         \`,
         mapScript: \`
-            // Phase 2 (Map): Check modification vs. publish date for EACH item.
+            // Phase 2 (Map): Check modification vs. publish date for EACH target.
             // We *only* get the properties we need to be fast.
             
             // The JSON is automatically parsed.
@@ -397,34 +397,49 @@ This script finds all published Pages, checks if they've been modified since the
                 itemId: context.currentItemId,
                 includeProperties: ["VersionInfo.RevisionDate", "Title"]
             });
+
+            // Handle cases where item might not be found or lacks version info
+            if (!item || !item.VersionInfo) {
+                context.log("Item not found or lacks VersionInfo. Skipping.");
+                return null;
+            }
             const revisionDate = new Date(item.VersionInfo.RevisionDate);
 
-            // The JSON is automatically parsed.
+            // The JSON is automatically parsed. Get TargetType.Title as well.
             const publishInfos = await context.tools.getPublishInfo({ 
                 itemId: context.currentItemId,
-                includeProperties: ["PublishedAt"] 
+                includeProperties: ["PublishedAt", "TargetType.Title"] 
             });
 
             if (!publishInfos || publishInfos.length === 0) {
                 return null; // Not published anywhere, skip.
             }
 
-            // Find the most recent publish date
-            const lastPublishedAt = publishInfos.reduce((latest, info) => {
-                const current = new Date(info.PublishedAt);
-                return current > latest ? current : latest;
-            }, new Date(0));
+            // Check each target
+            const modifiedOnTargets = [];
+            for (const info of publishInfos) {
+                // Check for valid publish info
+                if (info && info.PublishedAt && info.TargetType && info.TargetType.Title) {
+                    const publishedAt = new Date(info.PublishedAt);
+                    // Compare the item's single revision date to each target's publish date
+                    if (revisionDate > publishedAt) {
+                        modifiedOnTargets.push(info.TargetType.Title);
+                    }
+                }
+            }
             
-            // Return a data object if modified
-            if (revisionDate > lastPublishedAt) {
+            // Return a data object only if it's modified on at least one target
+            if (modifiedOnTargets.length > 0) {
                 return {
                     id: context.currentItemId,
                     title: item.Title,
-                    modified: revisionDate.toISOString(),
-                    lastPublished: lastPublishedAt.toISOString()
+                    modifiedSince: revisionDate.toISOString(),
+                    // Return a de-duplicated list of target names
+                    staleOnTargets: [...new Set(modifiedOnTargets)]
                 };
             }
-            return null; // Not modified
+            
+            return null; // Not modified on any target
         \`,
         postProcessingScript: \`
             // Phase 3 (Reduce): Collect the results into a final JSON summary.
@@ -432,6 +447,7 @@ This script finds all published Pages, checks if they've been modified since the
 
             context.log(\`Aggregating \${results.length} results.\`);
             
+            // Filter for only successful items that returned a result (i.e., were modified)
             const modifiedItems = results
                 .filter(r => r.status === 'success' && r.result !== null)
                 .map(r => r.result);
@@ -439,7 +455,7 @@ This script finds all published Pages, checks if they've been modified since the
             return {
                 totalChecked: results.length,
                 totalModified: modifiedItems.length,
-                modifiedItems: modifiedItems // Agent will receive this array
+                pagesWithStaleTargets: modifiedItems // Agent will receive this array
             };
         \`
     });
