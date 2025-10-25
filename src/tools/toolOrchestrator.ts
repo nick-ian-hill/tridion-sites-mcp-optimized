@@ -175,6 +175,12 @@ This script finds 'Old Product Name' and replaces it with 'New Product Name' in 
                 itemId: context.currentItemId,
                 includeProperties: ["Content.TextField"]
             });
+            
+            // BEST PRACTICE: Check if the item exists
+            if (!item) {
+                context.log("Item not found or is inaccessible. Skipping.");
+                return; // Stop execution for this item
+            }
 
             // Check and replace
             let content = item.Content;
@@ -192,7 +198,7 @@ This script finds 'Old Product Name' and replaces it with 'New Product Name' in 
 
             // Save changes if any
             if (updated) {
-                // updateContent returns a standard wrapper, not JSON
+            // updateContent returns a standard wrapper, not JSON
                 const updateResult = await context.tools.updateContent({
                     itemId: context.currentItemId,
                     content: content
@@ -220,6 +226,12 @@ This script uses the AI to rewrite the 'Summary' field of several articles to ha
                 itemId: context.currentItemId,
                 includeProperties: ["Content.Summary"]
             });
+
+            // BEST PRACTICE: Check if the item exists
+            if (!item) {
+                context.log("Item not found or is inaccessible. Skipping.");
+                return; // Stop execution for this item
+            }
             
             const originalSummary = item.Content ? item.Content.Summary : null;
             if (!originalSummary) {
@@ -300,31 +312,56 @@ This script first gets the version count for each component, then the post-proce
         \`,
         postProcessingScript: \`
             // Phase 3 (Reduce): Find the single best item from ALL results.
-            // This script runs only ONCE, after the main script has finished for all items.
-            // It receives the collected return values in the 'results' variable.
-            
-            context.log(\`Processing \${results.length} results.\`);
-            
-            if (!results || results.length === 0) {
-                return "No results to process.";
+            context.log(\`Processing \${results.length} total results.\`);
+
+            // 1. Separate successes from failures
+            const successfulResults = results.filter(r => r.status === 'success');
+            const failedResults = results.filter(r => r.status === 'error');
+
+            // 2. Report on failures
+            if (failedResults.length > 0) {
+                context.log(\`Warning: \${failedResults.length} items failed to process.\`);
+                // You could even log the specific errors
+                // for (const failure of failedResults) {
+                //    context.log(\`  - \${failure.itemId}: \${failure.error}\`);
+                // }
             }
 
-            // 'results' is an array like: [{ itemId: "tcm:5-100", status: "success", result: { versionCount: 5, title: "A" } }, ...]
-            // We use the standard JavaScript reduce function to find the item with the highest versionCount.
-            const componentWithMostVersions = results
-                .filter(r => r.status === 'success') // Only check successful items
+            // 3. Check if there are ANY successes to process
+            if (successfulResults.length === 0) {
+                context.log("No items were processed successfully.");
+                
+                // Return a meaningful error object instead of a default value
+                return {
+                    message: "Could not determine component with most versions: All item operations failed.",
+                    totalItems: results.length,
+                    successCount: 0,
+                    failureCount: failedResults.length,
+                    // Optionally include the specific failure details
+                    failures: failedResults.map(f => ({ item: f.itemId, error: f.error }))
+                };
+            }
+            
+            // 4. If we are here, we have at least one success.
+            //    We can now safely run the 'reduce' logic.
+            context.log(\`Finding max versions from \${successfulResults.length} successful items.\`);
+
+            const componentWithMostVersions = successfulResults
                 .reduce((max, current) => {
-                    // If the current item's version count is higher than the max we've seen so far, it becomes the new max.
-                    if (current.result.versionCount > (max.result.versionCount || 0)) {
-                        return current;
+                    // Get counts, with a fallback for safety
+                    const currentVersions = current.result?.versionCount || 0;
+                    const maxVersions = max.result?.versionCount || 0;
+                    
+                    if (currentVersions > maxVersions) {
+                        return current; // This item is the new max
                     } else {
-                        return max;
+                        return max; // Keep the existing max
                     }
-                }, { result: { versionCount: 0 } }); // Initial 'max' object
+                }); // No initial value is needed, since we know the array is not empty.
 
             // The return value of this script is the final output of the tool.
             return componentWithMostVersions;
-        \`
+            \`
     });
 
 Example 5: Find and Process Items from a Search Result (Setup and Map)
