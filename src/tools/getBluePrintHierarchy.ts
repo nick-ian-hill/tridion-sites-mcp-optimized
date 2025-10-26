@@ -54,7 +54,7 @@ IMPORTANT: Requesting a high level of detail for many items can be slow. Prefer 
 - "IdAndTitle": Returns only the ID and Title of each item.
 - "CoreDetails": Returns the main properties, excluding verbose security and link-related information.
 - "AllDetails": Returns all available properties for each item. Only select "AllDetails" if you absolutely need full details about the returned items.`),
-        includeProperties: z.array(z.string()).optional().describe(`An array of property names to include in the response for custom control. If used, 'details' is ignored. This is ignored if outputFormat is 'JsonGraph' or 'Svg'. Prefer this option to avoid returning unnecessary data and limit token usage.`),
+        includeProperties: z.array(z.string()).optional().describe(`An array of property names to include in the response for custom control (e.g., Parents.IdRef, Children.Title). If used, 'details' is ignored. This is ignored if outputFormat is 'JsonGraph' or 'Svg'. Prefer this option to avoid returning unnecessary data and limit token usage.`),
     },
     execute: async ({ itemId, outputFormat = "Raw", details = "IdAndTitle", includeProperties }: { itemId: string; outputFormat: "Raw" | "JsonGraph" | "Svg"; details?: "IdAndTitle" | "CoreDetails" | "AllDetails", includeProperties?: string[] }, context: any) => {
         const req = context?.request;

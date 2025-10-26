@@ -607,6 +607,98 @@ This script attempts to delete a list of items. It uses 'stopOnError: false' to 
             };
         \`
     });
+
+Example 8: Report Pages Published to Staging but Not Live
+This script finds all Pages in a Publication, efficiently gets the required Target Type IDs once in the setup phase, and then checks the publish status of each page against those specific IDs.
+
+    const result = await tools.toolOrchestrator({
+        parameters: {
+            "publicationTitle": "400 Example Site",
+            "stagingTargetTitle": "DXA Staging",
+            "liveTargetTitle": "DXA Live"
+        },
+        // Phase 1 (Setup): Find pages and Target Type IDs ONCE
+        preProcessingScript: \`
+            context.log(\`Setup: Finding Pub ID for '\${context.parameters.publicationTitle}'...\`);
+            const publications = await context.tools.getPublications({ details: "IdAndTitle" });
+            const publication = publications.find(p => p.Title === context.parameters.publicationTitle);
+            if (!publication) throw new Error(\`Publication '\${context.parameters.publicationTitle}' not found.\`);
+            context.log(\`Pub ID: \${publication.Id}\`);
+
+            context.log('Setup: Finding Target Type IDs...');
+            const targetTypes = await context.tools.getTargetTypes({ details: "IdAndTitle" });
+            const stagingTarget = targetTypes.find(t => t.Title === context.parameters.stagingTargetTitle);
+            const liveTarget = targetTypes.find(t => t.Title === context.parameters.liveTargetTitle);
+            if (!stagingTarget) throw new Error(\`Target Type '\${context.parameters.stagingTargetTitle}' not found.\`);
+            if (!liveTarget) throw new Error(\`Target Type '\${context.parameters.liveTargetTitle}' not found.\`);
+            context.log(\`Staging ID: \${stagingTarget.Id}, Live ID: \${liveTarget.Id}\`);
+
+            context.log('Setup: Finding all Pages in Publication...');
+            const pages = await context.tools.getItemsInContainer({
+                containerId: publication.Id,
+                itemTypes: ["Page"],
+                recursive: true,
+                details: "IdAndTitle"
+            });
+            const pageIds = pages.map(p => p.Id);
+            context.log(\`Found \${pageIds.length} Pages.\`);
+
+            // Return object containing itemIds and the target IDs for the map script
+            return {
+                itemIds: pageIds,
+                stagingTargetId: stagingTarget.Id,
+                liveTargetId: liveTarget.Id
+            };
+        \`,
+        // Phase 2 (Map): Check publish status using IDs from preProcessingResult
+        mapScript: \`
+            const pageId = context.currentItemId;
+            context.log(\`Map: Checking publish info for Page \${pageId}...\`);
+
+            // Access Target IDs passed from the setup phase
+            const stagingId = context.preProcessingResult.stagingTargetId;
+            const liveId = context.preProcessingResult.liveTargetId;
+
+            const publishInfo = await context.tools.getPublishInfo({
+                itemId: pageId,
+                // Use 'IdRef' to get the ID from the TargetType Link object
+                includeProperties: ["TargetType.IdRef", "PublishedAt"]
+            });
+
+            // Check if published to Staging (using IdRef)
+            const isPublishedToStaging = publishInfo.some(info => info.TargetType && info.TargetType.IdRef === stagingId);
+            // Check if published to Live (using IdRef)
+            const isPublishedToLive = publishInfo.some(info => info.TargetType && info.TargetType.IdRef === liveId);
+            context.log(\`  Staging: \${isPublishedToStaging}, Live: \${isPublishedToLive}\`);
+
+            // If published to Staging BUT NOT to Live, return details
+            if (isPublishedToStaging && !isPublishedToLive) {
+                context.log(\`  Condition MET. Getting page title...\`);
+                const page = await context.tools.getItem({ itemId: pageId, includeProperties: ["Title"] });
+                return { title: page.Title, id: page.Id };
+            }
+
+            // Otherwise, return null (will be filtered out later)
+            context.log('  Condition NOT MET.');
+            return null;
+        \`,
+        // Phase 3 (Reduce): Format the results
+        postProcessingScript: \`
+            context.log('Reduce: Filtering and formatting results...');
+            const pages = results.filter(r => r.status === 'success' && r.result !== null).map(r => r.result);
+            context.log(\`Found \${pages.length} pages matching criteria.\`);
+
+            if (pages.length === 0) {
+                return \`No pages found in '\${context.parameters.publicationTitle}' that are published to '\${context.parameters.stagingTargetTitle}' but not to '\${context.parameters.liveTargetTitle}'.\`;
+            }
+
+            let report = \`Found \${pages.length} pages published to '\${context.parameters.stagingTargetTitle}' but not '\${context.parameters.liveTargetTitle}':\\n\`;
+            for (const page of pages) {
+                report += \`- \${page.title} (\${page.id})\\n\`;
+            }
+            return report.trim();
+        \`
+    });
 `,
 
     // The 'input' property is now the plain object

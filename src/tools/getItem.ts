@@ -15,7 +15,7 @@ For versioned item types (Components, Component Templates, Pages, Page Templates
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the item."),
         useDynamicVersion: z.boolean().optional().default(false).describe("Set to true for versioned items to get the most recent saved data, including minor revisions since the last major version."),
-        includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details, e.g., ['BluePrintInfo', 'VersionInfo.RevisionDate', 'ActivityDefinitions']. 'Id', 'Title', and '$type' will always be included. Use this if you are sure how to reference the properties you are interested in for the requested item type.`)
+        includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details, e.g., ['BluePrintInfo', 'Schema.IdRef', 'VersionInfo.RevisionDate', 'VersionInfo.Revisor.IdRef', 'ActivityDefinition']. 'Id', 'Title', and '$type' will always be included. Use this if you are sure how to reference the properties you are interested in for the requested item type.`)
     },
     execute: async ({ itemId, useDynamicVersion = false, includeProperties }: { 
         itemId: string, 

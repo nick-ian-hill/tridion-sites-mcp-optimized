@@ -9,7 +9,7 @@ const getPublishInfoInputProperties = {
     includeProperties: z.array(z.string()).optional()
         .describe(`An array of property names to include in the response. 
 IMPORTANT: To avoid fetching large, unnecessary data (like User and TargetType details), always use this to specify only the properties you need (e.g., ["PublishedAt"]). 
-Use dot notation for nested properties (e.g., "TargetType.Title", "User.Description"). 
+Use dot notation for nested properties (e.g., "TargetType.IdRef", "TargetType.Title", "User.Description"). 
 '$type' will always be included.`),
 };
 
