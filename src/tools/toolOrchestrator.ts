@@ -93,7 +93,7 @@ const toolOrchestratorInputProperties = {
     preProcessingScript: z.string().optional()
         .describe("An optional first JavaScript string (as an async function body) that runs once *before* the main loop. It must return either a string[] of item IDs, or an object { itemIds: string[], context?: any } to pass data to subsequent scripts. This is the 'setup' phase, perfect for dynamically fetching or filtering items (e.g., by calling 'context.tools.search(...)') or for expensive, one-time lookups (e.g., getting Target Type IDs)."),
     mapScript: z.string()
-        .describe("A JavaScript string (as an async function body) to execute for each item. The mapScript has access to a 'context' object. This is the 'map' phase."),
+        .describe("A JavaScript string (as an async function body) to execute for each item. The mapScript has access to a 'context' object. This is the 'map' phase. NOTE: This script reuses the same script sandbox for all items for performance. Avoid using or relying on global variables, as they will persist between item executions."),
     postProcessingScript: z.string().optional()
         .describe("An optional second JavaScript string (as an async function body) that runs once after all items are processed. The script has access to predefined variables: `results` (an array of all execution results from the 'map' phase), `parameters` (the JSON object passed to the tool), and `preProcessingResult` (the 'context' object from the setup phase). Its return value becomes the final output of the tool. This is the 'reduce' phase."),
     parameters: z.record(z.any()).optional()
@@ -730,6 +730,25 @@ This script finds all Pages in a Publication, efficiently gets the required Targ
             debug
         } = input;
 
+        /**
+         * Helper function to extract a clear error message from various error types.
+         */
+        const extractErrorMessage = (e: any): string => {
+            try {
+                if (!e) return 'Unknown error';
+                if (typeof e === 'string') return e;
+                // Standard tool error
+                if (e.content && Array.isArray(e.content) && e.content[0]?.type === 'text') return e.content[0].text;
+                // Axios-like error
+                if (e.data && e.data.content && Array.isArray(e.data.content) && e.data.content[0]?.type === 'text') return e.data.content[0].text;
+                // Standard JS Error
+                if (e.message) return e.message;
+                return JSON.stringify(e);
+            } catch {
+                return String(e); // Fallback for circular structures or un-stringifiable errors
+            }
+        }
+
         if (!mcpContext.tools || typeof mcpContext.tools !== 'object') {
             return {
                 content: [{ type: "text", text: "Error: Tool execution context is missing. 'toolOrchestrator' cannot access other tools." }]
@@ -743,7 +762,11 @@ This script finds all Pages in a Publication, efficiently gets the required Targ
         // --- Create Tool Wrappers ---
         const toolWrappers: { [toolName: string]: (args: any) => Promise<any> } = {};
         for (const toolName in mcpContext.tools) {
+            // Add a wrapper that throws a clear error for disallowed tools.
             if (DISALLOWED_TOOLS.includes(toolName)) {
+                toolWrappers[toolName] = async (_args: any) => {
+                    throw new Error(`ToolError: The tool "${toolName}" is not permitted to be called from within the toolOrchestrator for security reasons.`);
+                };
                 continue;
             }
 
@@ -751,26 +774,29 @@ This script finds all Pages in a Publication, efficiently gets the required Targ
                 const originalToolExecute = mcpContext.tools[toolName].execute;
                 toolWrappers[toolName] = async (args: any) => {
                     const result = await originalToolExecute(args || {}, mcpContext);
-                    
-                    // Check if the result looks like a standard JSON text response
-                    if (result && result.content && Array.isArray(result.content) && 
-                        result.content[0] && result.content[0].type === 'text' && 
-                        result.content[0].text && 
-                        (result.content[0].text.startsWith('{') || result.content[0].text.startsWith('['))) 
+
+                    // Robust JSON parsing with trim() and try/catch
+                    if (result && result.content && Array.isArray(result.content) &&
+                        result.content[0] && result.content[0].type === 'text' &&
+                        typeof result.content[0].text === 'string')
                     {
-                        try {
-                            // If it looks like JSON, parse it and return the data directly
-                            return JSON.parse(result.content[0].text);
-                        } catch (e) {
-                            // It looked like JSON but failed to parse.
-                            // Fall through to return the original object.
+                        const maybeText = result.content[0].text.trim();
+                        if (maybeText.startsWith('{') || maybeText.startsWith('[')) {
+                            try {
+                                return JSON.parse(maybeText);
+                            } catch (err) {
+                                // Not valid JSON, fall through to return original result below
+                                return result;
+                            }
                         }
                     }
+
+                    // Fallback: if tool already returned a plain object (not a standard content wrapper), return it.
+                    if (result && typeof result === 'object' && !Array.isArray(result) && !result.content) {
+                        return result;
+                    }
                     
-                    // Fallback for:
-                    // - Non-JSON text responses (e.g., "Update successful.")
-                    // - Malformed JSON
-                    // - Non-text responses (e.g., error objects)
+                    // Default: return the raw result
                     return result;
                 };
             }
@@ -797,7 +823,7 @@ This script finds all Pages in a Publication, efficiently gets the required Targ
                 `, { filename: 'preProcessingScript.js' });
             } catch (error: any) {
                 return {
-                    content: [{ type: "text", text: `Pre-processing Script Compilation Error: ${error.message}` }]
+                    content: [{ type: "text", text: `Pre-processing Script Compilation Error: ${extractErrorMessage(error)}` }]
                 };
             }
             
@@ -828,16 +854,13 @@ This script finds all Pages in a Publication, efficiently gets the required Targ
                 const preScriptResult = await Promise.race([scriptPromise, timeoutPromise]);
 
                 if (Array.isArray(preScriptResult) && preScriptResult.every(item => typeof item === 'string')) {
-                    // Handle simple string[] return for backward compatibility
                     finalItemIds = preScriptResult;
                 } else if (typeof preScriptResult === 'object' && preScriptResult !== null && Array.isArray(preScriptResult.itemIds)) {
-                    // Handle the new object-based return { itemIds: [], context: {} }
                     finalItemIds = preScriptResult.itemIds;
                     if (preScriptResult.context) {
-                        preScriptContextData = Object.freeze(preScriptResult.context); // Freeze for security
+                        preScriptContextData = Object.freeze(preScriptResult.context); 
                     }
                 } else {
-                    // Invalid return type
                     const errorMsg = "Pre-processing script Error: The script must return a string[] or an object { itemIds: string[], context?: any }.";
                     logs.push(errorMsg);
                     return { content: [{ type: "text", text: errorMsg + `\nReceived: ${JSON.stringify(preScriptResult)}` }] };
@@ -846,11 +869,8 @@ This script finds all Pages in a Publication, efficiently gets the required Targ
                 logs.push(`Pre-processing script finished. Found ${finalItemIds.length} items to process.`);
 
             } catch (error: any) {
-                let errorMessage = `Pre-processing Script FAILED: ${String(error)}`;
-                if (error instanceof Error) {
-                    errorMessage = `Pre-processing Script FAILED: ${error.name}: ${error.message}`;
-                }
-                logs.push(errorMessage);
+                const errorMessage = extractErrorMessage(error);
+                logs.push(`Pre-processing Script FAILED: ${errorMessage}`);
                 return { content: [{ type: "text", text: `--- Execution Log ---\n${logs.join('\n')}` }] };
             }
         }
@@ -871,23 +891,20 @@ This script finds all Pages in a Publication, efficiently gets the required Targ
                 `, { filename: 'mapScript.js' });
             } catch (error: any) {
                 return {
-                    content: [{ type: "text", text: `Map Script Compilation Error: ${error.message}` }]
+                    content: [{ type: "text", text: `Map Script Compilation Error: ${extractErrorMessage(error)}` }]
                 };
             }
 
-            // Create a mutable context object that will be updated for each item
             const perItemContext: MapScriptContext = {
-                currentItemId: "", // Will be set by runTask
+                currentItemId: "", 
                 parameters: Object.freeze(parameters),
                 preProcessingResult: preScriptContextData,
                 tools: toolWrappers,
-                log: (message: string) => {} // Will be set by runTask
+                log: (message: string) => {} 
             };
 
-            // Create the single, reusable sandbox
             const sandboxContext = { ...baseSandbox };
             sandboxContext.context = perItemContext;
-            // We need a mutable console object for per-item logging
             sandboxContext.console = {
                 log: (message: string) => {},
                 error: (message: string) => {},
@@ -897,7 +914,6 @@ This script finds all Pages in a Publication, efficiently gets the required Targ
             const sandbox = vm.createContext(sandboxContext, {
                 codeGeneration: { strings: false, wasm: false }
             });
-            // --- End of single sandbox setup ---
 
 
             /**
@@ -907,17 +923,14 @@ This script finds all Pages in a Publication, efficiently gets the required Targ
             const runTask = async (itemId: string, index: number): Promise<void> => {
                 logs.push(`\n[${index + 1}/${finalItemIds.length}] Processing item: ${itemId}`);
                 
-                // --- Update the shared sandbox context ---
                 const perItemLog = (message: string) => logs.push(`[${itemId}] ${message}`);
                 perItemContext.currentItemId = itemId;
                 perItemContext.log = perItemLog;
                 sandboxContext.console.log = perItemLog;
                 sandboxContext.console.error = perItemLog;
                 sandboxContext.console.warn = perItemLog;
-                // --- Context is updated ---
 
                 try {
-                    // Run the script in the *same* sandbox
                     const scriptPromise = compiledMapScript.runInContext(sandbox, {
                         timeout: SYNC_SCRIPT_TIMEOUT_MS
                     });
@@ -935,17 +948,8 @@ This script finds all Pages in a Publication, efficiently gets the required Targ
                     logs.push(`[${itemId}] Success.`);
 
                 } catch (error: any) {
-                    let errorMessage: string;
-                    if (error && error.content && Array.isArray(error.content) && error.content[0]?.type === 'text') {
-                        errorMessage = error.content[0].text;
-                    } else if (error && error.data && error.data.content && Array.isArray(error.data.content) && error.data.content[0]?.type === 'text') {
-                         errorMessage = error.data.content[0].text;
-                    } else if (error instanceof Error) {
-                        errorMessage = `${error.name}: ${error.message}`;
-                    } else {
-                        errorMessage = String(error);
-                    }
-                    
+                    // Use the new helper function for clean, consistent error messages
+                    const errorMessage = extractErrorMessage(error);
                     logs.push(`[${itemId}] FAILED: ${errorMessage}`);
                     results.push({ itemId: itemId, status: "error", error: errorMessage });
                     hasFailed = true;
@@ -1002,37 +1006,31 @@ This script finds all Pages in a Publication, efficiently gets the required Targ
             
             let compiledPostScript: vm.Script;
             try {
-                // --- MODIFIED TO INJECT preProcessingResult ---
                 compiledPostScript = new vm.Script(`
                     (async () => {
                         "use strict";
                         // Make context vars available as global-like consts
-                        // for ease of use, as described in the documentation.
                         const results = context.results;
                         const parameters = context.parameters;
                         const preProcessingResult = context.preProcessingResult;
                         ${postProcessingScript}
                     })();
                 `, { filename: 'postProcessingScript.js' });
-                // --- END OF MODIFICATION ---
             } catch (error: any) {
                 return {
-                    content: [{ type: "text", text: `Post-processing Script Compilation Error: ${error.message}` }]
+                    content: [{ type: "text", text: `Post-processing Script Compilation Error: ${extractErrorMessage(error)}` }]
                 };
             }
 
             const postScriptLog = (message: string) => logs.push(`[PostScript] ${message}`);
             
-            // Create a dedicated sandbox
-            // --- MODIFIED TO INCLUDE preProcessingResult ---
             const sandboxContext = { ...baseSandbox };
             sandboxContext.context = {
                 results: Object.freeze(results),
                 parameters: Object.freeze(parameters),
-                preProcessingResult: preScriptContextData, // <-- ADDED
+                preProcessingResult: preScriptContextData, 
                 log: postScriptLog
             };
-            // --- END OF MODIFICATION ---
             sandboxContext.console = { log: postScriptLog, error: postScriptLog, warn: postScriptLog };
             const sandbox = vm.createContext(sandboxContext, {
                 codeGeneration: { strings: false, wasm: false }
@@ -1068,7 +1066,7 @@ This script finds all Pages in a Publication, efficiently gets the required Targ
 
             } catch (error: any)
             {
-                const errorMessage = (error instanceof Error) ? `${error.name}: ${error.message}` : String(error);
+                const errorMessage = extractErrorMessage(error);
                 logs.push(`Post-Processing Script FAILED: ${errorMessage}`);
                 // Return the log, even if post-processing fails
                 const summary = `--- Execution Log ---\n${logs.join('\n')}`;
