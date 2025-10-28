@@ -36,7 +36,7 @@ export const promoteItem = {
                 return {
                     content: [{
                         type: "text",
-                        text: `Successfully promoted item ${itemId} to ${destinationRepositoryId}.\n\n${JSON.stringify(response.data, null, 2)}`
+                        text: `Successfully promoted item ${itemId} to ${destinationRepositoryId}`
                     }],
                 };
             } else {

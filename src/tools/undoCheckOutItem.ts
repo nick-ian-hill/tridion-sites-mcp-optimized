@@ -26,11 +26,10 @@ export const undoCheckOutItem = {
             const response = await authenticatedAxios.post(`/items/${escapedItemId}/undoCheckOut`, requestModel);
 
             if (response.status === 200 || response.status === 204) {
-                const responseData = response.data ? `\n\n${JSON.stringify(response.data, null, 2)}` : " The operation returned no content.";
                 return {
                     content: [{
                         type: "text",
-                        text: `Successfully reverted check-out for item ${itemId}.${responseData}`
+                        text: `Successfully reverted check-out for item ${itemId}`
                     }],
                 };
             } else {

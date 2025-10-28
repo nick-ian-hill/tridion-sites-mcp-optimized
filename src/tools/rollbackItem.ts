@@ -37,14 +37,14 @@ export const rollbackItem = {
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(response.data, null, 2)
+                        text: `Successfully rolled back item ${itemId}`
                     }],
                 };
             } else {
                 return handleUnexpectedResponse(response);
             }
         } catch (error) {
-            return handleAxiosError(error, `Failed to roll back item '${itemId}'`);
+            return handleAxiosError(error, `Failed to roll back item ${itemId}`);
         }
     }
 };

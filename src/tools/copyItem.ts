@@ -29,11 +29,10 @@ export const copyItem = {
             const response = await authenticatedAxios.post(`/items/${escapedItemId}/copy/${escapedDestinationId}`);
 
             if (response.status === 200 || response.status === 204) {
-                const responseData = response.data ? `\n\n${JSON.stringify(response.data, null, 2)}` : " The operation returned no content.";
                 return {
                     content: [{
                         type: "text",
-                        text: `Successfully copied item ${itemId} to ${destinationId}.${responseData}`
+                        text: `Successfully copied item ${itemId} to ${destinationId}`
                     }],
                 };
             } else {

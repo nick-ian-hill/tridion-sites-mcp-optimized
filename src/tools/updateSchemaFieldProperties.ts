@@ -207,7 +207,7 @@ Example 3: Update a validation constraint on a field.
             const updatedItem = updateResponse.data;
 
             return {
-                content: [{ type: "text", text: `Successfully updated fields in Schema ${schemaId}.\n\n${JSON.stringify(updatedItem, null, 2)}` }],
+                content: [{ type: "text", text: `Successfully updated fields in Schema ${schemaId}` }],
             };
 
         } catch (error) {

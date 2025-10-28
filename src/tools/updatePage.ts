@@ -145,7 +145,7 @@ Example 4: Change the Metadata Schema and provide metadata for the new fields. S
             const updatedItem = updateResponse.data;
 
             return {
-                content: [{ type: "text", text: `Successfully updated Page ${itemId}.\n\n${JSON.stringify(updatedItem, null, 2)}` }],
+                content: [{ type: "text", text: `Successfully updated Page ${itemId}` }],
             };
 
         } catch (error) {

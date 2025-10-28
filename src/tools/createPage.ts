@@ -297,7 +297,7 @@ This example shows a two-column layout within the main content area.
 
             const createResponse = await authenticatedAxios.post('/items', payload);
             if (createResponse.status === 201) {
-                return { content: [{ type: "text", text: `Successfully created Page with ID ${createResponse.data.Id}.\n\n${JSON.stringify(createResponse.data, null, 2)}` }] };
+                return { content: [{ type: "text", text: `Successfully created Page with ID ${createResponse.data.Id}` }] };
             } else {
                 return handleUnexpectedResponse(createResponse);
             }

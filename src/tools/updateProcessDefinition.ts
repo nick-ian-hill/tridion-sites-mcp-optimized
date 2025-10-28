@@ -187,7 +187,7 @@ Example 2: Add a new 'Abort' step to an existing workflow.
             }
 
             return {
-                content: [{ type: "text", text: `Successfully updated Process Definition ${itemId}.\n\n${JSON.stringify(updateResponse.data, null, 2)}` }],
+                content: [{ type: "text", text: `Successfully updated Process Definition ${itemId}` }],
             };
 
         } catch (error) {

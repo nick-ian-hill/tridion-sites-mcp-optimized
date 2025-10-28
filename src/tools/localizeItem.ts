@@ -31,7 +31,7 @@ A common use case for localizing an item is to translate content inherited from 
                 return {
                     content: [{
                         type: "text",
-                        text: `Successfully localized item ${itemId}. A new local copy has been created.\n\n${JSON.stringify(response.data, null, 2)}`
+                        text: `Successfully localized item ${itemId}`
                     }],
                 };
             } else {

@@ -84,7 +84,7 @@ Example 2: Creates a root Structure Group with a title and applies metadata to i
                     content: [
                         {
                             type: "text",
-                            text: `Successfully created root Structure Group with ID ${createResponse.data.Id}.\n\n${JSON.stringify(createResponse.data, null, 2)}`
+                            text: `Successfully created root Structure Group with ID ${createResponse.data.Id}`
                         }
                     ],
                 };

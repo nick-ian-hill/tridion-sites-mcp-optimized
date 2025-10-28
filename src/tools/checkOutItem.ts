@@ -31,7 +31,7 @@ export const checkOutItem = {
                 return {
                     content: [{
                         type: "text",
-                        text: `Successfully checked out item ${itemId}.\n\n${JSON.stringify(response.data, null, 2)}`
+                        text: `Successfully checked out item ${itemId}`
                     }],
                 };
             } else {

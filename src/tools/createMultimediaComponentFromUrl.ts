@@ -159,7 +159,7 @@ export const createMultimediaComponentFromUrl = {
                 return {
                     content: [{
                         type: "text",
-                        text: `Successfully created multimedia component with ID ${createResponse.data.Id}.\n\n${JSON.stringify(createResponse.data, null, 2)}`
+                        text: `Successfully created multimedia component with ID ${createResponse.data.Id}`
                     }],
                 };
             } else {

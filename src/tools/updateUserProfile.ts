@@ -147,7 +147,7 @@ Example 2: Update the current user's language to German.
                 return {
                     content: [{
                         type: "text",
-                        text: `Successfully updated profile for user ${userId}.\n\n${JSON.stringify(updateResponse.data, null, 2)}`
+                        text: `Successfully updated profile for user ${userId}`
                     }],
                 };
             } else {

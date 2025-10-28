@@ -292,7 +292,7 @@ Example 2: Create a Folder for a campaign.
                     content: [
                         {
                             type: "text",
-                            text: `Successfully created ${itemType} with ID ${createResponse.data.Id}.\n\n${JSON.stringify(createResponse.data, null, 2)}`
+                            text: `Successfully created ${itemType} with ID ${createResponse.data.Id}`
                         }
                     ],
                 };

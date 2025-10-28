@@ -453,7 +453,7 @@ Example 12: Create an 'Embedded' Schema to be used within other Schemas.
                 return {
                     content: [{
                         type: "text",
-                        text: `Successfully created Schema with ID ${createResponse.data.Id}.\n\n${JSON.stringify(createResponse.data, null, 2)}`
+                        text: `Successfully created Schema with ID ${createResponse.data.Id}`
                     }],
                 };
             } else {

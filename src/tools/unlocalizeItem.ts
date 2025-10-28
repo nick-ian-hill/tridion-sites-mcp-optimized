@@ -46,7 +46,7 @@ The tool returns a confirmation that the item has been successfully unlocalized.
                 return {
                     content: [{
                         type: "text",
-                        text: `Successfully unlocalized item ${itemId}.\n\n${JSON.stringify(response.data, null, 2)}`
+                        text: `Successfully unlocalized item ${itemId}`
                     }],
                 };
             } else {

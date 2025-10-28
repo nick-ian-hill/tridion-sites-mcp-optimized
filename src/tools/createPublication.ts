@@ -134,7 +134,7 @@ Example 3: Creates a Publication and configures its default workflow processes.
                 return {
                     content: [{
                         type: "text",
-                        text: `Successfully created Publication with ID ${createResponse.data.Id}.\n\n${JSON.stringify(createResponse.data, null, 2)}`
+                        text: `Successfully created Publication with ID ${createResponse.data.Id}`
                     }],
                 };
             } else {

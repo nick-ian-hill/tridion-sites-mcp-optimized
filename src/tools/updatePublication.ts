@@ -101,7 +101,7 @@ Example 3: Update the default task process and enable workflow process associati
                 return {
                     content: [{
                         type: "text",
-                        text: `Successfully updated Publication ${itemId}.\n\n${JSON.stringify(updateResponse.data, null, 2)}`
+                        text: `Successfully updated Publication ${itemId}`
                     }],
                 };
             } else {

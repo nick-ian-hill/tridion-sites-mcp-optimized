@@ -97,7 +97,7 @@ Example 2: Updates the content of an embedded schema field.
             }
 
             return {
-                content: [{ type: "text", text: `Successfully updated component ${itemId}.` }],
+                content: [{ type: "text", text: `Successfully updated component ${itemId}` }],
             };
             
         } catch (error) {

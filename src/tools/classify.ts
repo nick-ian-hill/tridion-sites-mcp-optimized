@@ -57,20 +57,10 @@ export const classify = {
 
             // A 200 status code indicates the operation was successful.
             if (response.status === 200) {
-                let message = `Successfully updated classification for item ${itemId}.`;
-                if (keywordIdsToAdd.length > 0) {
-                    message += ` Added ${keywordIdsToAdd.length} keyword(s).`;
-                }
-                if (keywordIdsToRemove.length > 0) {
-                    message += ` Removed ${keywordIdsToRemove.length} keyword(s).`;
-                }
-                // The response body contains detailed classification info.
-                message += `\n\n${JSON.stringify(response.data, null, 2)}`;
-
                 return {
                     content: [{
                         type: "text",
-                        text: message
+                        text: `Successfully updated classification for item ${itemId}`
                     }],
                 };
             } else {

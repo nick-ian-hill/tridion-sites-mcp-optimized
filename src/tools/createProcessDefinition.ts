@@ -244,7 +244,7 @@ Example 5: Create a workflow with a timed delay. The script suspends the activit
                     content: [
                         {
                             type: "text",
-                            text: `Successfully created Process Definition with ID ${createResponse.data.Id}.\n\n${JSON.stringify(createResponse.data, null, 2)}`
+                            text: `Successfully created Process Definition with ID ${createResponse.data.Id}`
                         }
                     ],
                 };

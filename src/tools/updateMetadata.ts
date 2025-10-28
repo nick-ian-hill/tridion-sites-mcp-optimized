@@ -117,7 +117,7 @@ Example 2: Updates the metadata values for a 'Folder' with featuring a multi-val
             }
 
             return {
-                content: [{ type: "text", text: `Successfully updated metadata for item ${itemId}.` }],
+                content: [{ type: "text", text: `Successfully updated metadata for item ${itemId}` }],
             };
         } catch (error) {
             return handleAxiosError(error, "Failed to update item metadata");

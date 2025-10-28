@@ -290,7 +290,7 @@ Example 2: Change the Metadata Schema of a Folder and provide the mandatory valu
             const finalData = filterResponseData({ responseData: updatedItem, includeProperties });
 
             return {
-                content: [{ type: "text", text: `Successfully updated ${itemType} ${itemId}.\n\n${JSON.stringify(finalData, null, 2)}` }],
+                content: [{ type: "text", text: `Successfully updated ${itemType} ${itemId}` }],
             };
 
         } catch (error) {

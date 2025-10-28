@@ -38,7 +38,7 @@ IMPORTANT: The operation will fail if the item is used by other items in the sys
                 return {
                     content: [{
                         type: "text",
-                        text: `Successfully deleted item ${itemId}.`
+                        text: `Successfully deleted item ${itemId}`
                     }],
                 };
             } else {

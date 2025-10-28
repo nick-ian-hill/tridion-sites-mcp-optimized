@@ -35,7 +35,7 @@ Before using, it's recommended to understand the item's position in the hierarch
                 return {
                     content: [{
                         type: "text",
-                        text: `Successfully demoted item ${itemId} to ${destinationRepositoryId}.\n\n${JSON.stringify(response.data, null, 2)}`
+                        text: `Successfully demoted item ${itemId} to ${destinationRepositoryId}`
                     }],
                 };
             } else {
