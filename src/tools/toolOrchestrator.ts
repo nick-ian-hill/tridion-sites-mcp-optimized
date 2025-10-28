@@ -708,6 +708,116 @@ This script finds all Pages in a Publication, efficiently gets the required Targ
             return report.trim();
         \`
     });
+
+Example 9: Create a 'Diamond' BluePrint Hierarchy (Setup only)
+This script uses the 'preProcessingScript' to perform a complex, one-time setup: creating a full BluePrint hierarchy. It creates a Root Publication, adds the required Root Structure Group, and then creates a 'diamond' inheritance pattern (a Website inheriting from separate Schema and Content Publications). The 'mapScript' is skipped, and the 'postProcessingScript' returns a final summary.
+
+    const result = await tools.toolOrchestrator({
+        preProcessingScript: \`
+            // --- Helper function to extract ID from tool responses ---
+            // Creation tools return a text message like: "Successfully created... with ID tcm:0-1-1"
+            // The orchestrator does not parse this, so we must.
+            function extractId(response) {
+                if (response && response.content && response.content[0] && response.content[0].text) {
+                    // Match a 3-part TCM URI (e.g., tcm:0-1-1 or tcm:1-2-4)
+                    const match = response.content[0].text.match(/(tcm:\\d+-\\d+-\\d+)/);
+                    if (match) return match[1];
+                }
+                throw new Error(\`Could not extract ID from response: \${JSON.stringify(response)}\`);
+            }
+            
+            // --- Phase 1: Setup ---
+            context.log("Starting BluePrint 'Diamond Pattern' setup...");
+
+            // 1. Create Root Publication
+            const rootPubResponse = await context.tools.createPublication({
+                title: "010 Global Master (Root)",
+                publicationUrl: "/master",
+                locale: "en-US"
+            });
+            // We must parse the ID from the response text
+            const rootPubId = extractId(rootPubResponse);
+            context.log(\`Created Root Publication: \${rootPubId}\`);
+
+            // 2. Create Root Structure Group (REQUIRED for BluePrinting)
+            // A Publication must have a Root Structure Group to be a parent.
+            await context.tools.createRootStructureGroup({
+                title: "Root",
+                publicationId: rootPubId 
+            });
+            context.log(\`Created Root Structure Group in \${rootPubId}\`);
+
+            // 3. Create Schema Master (inherits from Root)
+            const schemaPubResponse = await context.tools.createPublication({
+                title: "020 Schema Master",
+                parentPublications: [rootPubId],
+                publicationType: "Content"
+            });
+            const schemaPubId = extractId(schemaPubResponse);
+            context.log(\`Created Schema Master Publication: \${schemaPubId}\`);
+
+            // 4. Create Content Master (inherits from Root)
+            const contentPubResponse = await context.tools.createPublication({
+                title: "030 Content Master",
+                parentPublications: [rootPubId],
+                publicationType: "Content"
+    
+            });
+            const contentPubId = extractId(contentPubResponse);
+            context.log(\`Created Content Master Publication: \${contentPubId}\`);
+
+            // 5. Create Website (inherits from Schema AND Content)
+            // This forms the 'diamond' shape.
+            const websitePubResponse = await context.tools.createPublication({
+                title: "100 Global Website",
+                parentPublications: [schemaPubId, contentPubId], // <-- Inherits from two parents
+                publicationUrl: "/global",
+                locale: "en-US",
+                publicationType: "Web"
+            });
+            const websitePubId = extractId(websitePubResponse);
+            context.log(\`Created Website Publication: \${websitePubId}\`);
+
+            context.log("Diamond BluePrint setup complete.");
+
+            // Return the IDs of the created publications, plus an empty itemIds
+            // so the map phase is skipped.
+            return {
+                itemIds: [], // <-- No items to map
+                context: { // <-- Pass data to post-processing
+                    root: rootPubId,
+                    schema: schemaPubId,
+                    content: contentPubId,
+                    website: websitePubId
+                }
+            };
+        \`,
+        mapScript: \`
+            // This script is intentionally empty.
+            // The pre-processing script performed all setup actions
+            // and returned an empty 'itemIds' list, so this phase is skipped.
+        \`,
+        postProcessingScript: \`
+            // The 'preProcessingResult' holds the 'context' object
+            // returned from the setup phase.
+            const createdIds = context.preProcessingResult;
+            
+            const summary = {
+                message: "Successfully created 'Diamond' BluePrint hierarchy.",
+                publications: [
+                    { role: "Root", id: createdIds.root },
+                    { role: "Schema Master", id: createdIds.schema },
+                    { role: "Content Master", id: createdIds.content },
+                    { role: "Website (Child)", id: createdIds.website }
+                ]
+            };
+
+            context.log(JSON.stringify(summary, null, 2));
+            
+            // The return value of this script is the final output.
+            return summary;
+        \`
+    });
 `,
 
     // The 'input' property is now the plain object
