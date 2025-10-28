@@ -20,10 +20,7 @@ const TOTAL_SCRIPT_TIMEOUT_MS = 60000; // 60 seconds
 const DISALLOWED_TOOLS: string[] = [
     "toolOrchestrator",
     "deleteItem",
-    "batchDelete",
-    "createMultimediaComponentFromPrompt",
-    "generateContentFromPrompt",
-    "updateMultimediaComponentFromPrompt",
+    "batchDeleteItems",
 ];
 
 /**
@@ -120,7 +117,16 @@ export const toolOrchestrator = {
     name: "toolOrchestrator",
     description: `Executes an advanced, multi-step JavaScript script. 
     
-    This is the recommended tool for any task involving many items, especially aggregate queries (like "find the most..." or "count all..."). Using this tool for aggregation (e.g., running 'search' in 'preProcessingScript' and processing the results in 'postProcessingScript') is far more scalable, token-efficient and reliable than calling 'search' alone and processing a massive JSON result in the context window.
+    This is the recommended tool for tasks involving repetitive actions on many items, especially aggregate queries (like "find the most..." or "count all...").
+    Using this tool for aggregation (e.g., running 'search' in 'preProcessingScript' and processing the results in 'postProcessingScript') is far more scalable, token-efficient and reliable than calling 'search' alone and processing a massive JSON result in the context window.
+    
+    RECOMMENDED STRATEGY
+    DO NOT USE this tool for orchestrating very complex one-shot tasks, like building an entire website.
+    Instead, break such complex tasks down into smaller steps, using separate toolOrchestrator calls for individual steps as appropriate.
+    For example, a single toolOrchestrator call could be used to create the Publications for a BluePrint hierarchy (see Example 9).
+    Next, after inspecting the created Publications for any necessary default items (e.g., 'TemplateBuildingBlocks', 'ComponentTemplates' etc.), individually crafted tool calls could be used to populate relevant Publications with any additional required templates and Schemas.
+    Following these individual tool calls, further discrete toolOrchestrator calls could be used for (a) generating content items, (b) classifying the created items, and (c) localizing and translating the content items in the relevant child publications.
+    Trying to combine multiple steps such as item creation, classification, and localization into a single toolOrchestrator call will very likely result in errors which require multiple iterations to debug, thereby reducing overall efficiency. 
     
     The tool supports up to three phases:
     
@@ -157,11 +163,29 @@ All scripts *must* be 'async' and can 'await' tool calls.
 All tool calls (e.g., 'await context.tools.getItem(...)') are automatically authenticated.
 For tools that return data (like 'getItem' or 'search'), the orchestrator will automatically parse the JSON response.
 You will receive the data object directly, not a string that needs to be parsed.
+
+// Example of correct usage inside toolOrchestrator:
+const item = await context.tools.getItem({ itemId: 'tcm:1-234-64' });
+if (item) {
+  context.log("Item title: " + item.Title); // Access directly
+}
+
 For tools that return a simple message (like 'updateContent'), you will receive the full response object (e.g., { content: [{ type: "text", text: "Update successful." }] }).
 
 To use the AI, call the 'generateContentFromPrompt' tool:
 const aiResult = await context.tools.generateContentFromPrompt({ prompt: '...' });
 const generatedText = aiResult.content[0].text;
+
+Note that calling one of the following tools in a toolOrchestrator script is disallowed and will result in an error:
+    - toolOrchestrator,
+    - deleteItem,
+    - batchDeleteItems
+
+Note on Script Limits:
+All scripts are sandboxed for security and stability.
+A single script is not allowed to run synchronous (blocking) code for more than 5 seconds,
+and no single script (including all its await calls) can run for more than 60 seconds.
+This is to prevent runaway scripts. For processing large numbers of items, always use the mapScript phase.
 
 Examples:
 
