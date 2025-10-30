@@ -32,10 +32,15 @@ Before using, it's recommended to understand the item's position in the hierarch
             const response = await authenticatedAxios.post(`/items/${escapedItemId}/demote`, requestModel);
 
             if (response.status === 201) {
+                const responseData = {
+                    $type: response.data['$type'],
+                    Id: response.data.Id,
+                    Message: `Successfully demoted ${response.data.Id}`
+                };
                 return {
                     content: [{
                         type: "text",
-                        text: `Successfully demoted item ${itemId} to ${destinationRepositoryId}`
+                        text: JSON.stringify(responseData, null, 2)
                     }],
                 };
             } else {

@@ -33,7 +33,7 @@ export const batchCheckOut = {
                 return {
                     content: [{
                         type: "text",
-                        text: `Batch check-out process started for ${itemIds.length} items.\n\n${JSON.stringify(response.data, null, 2)}`
+                        text: JSON.stringify(response.data, null, 2)
                     }],
                 };
             } else {

@@ -28,10 +28,18 @@ export const checkOutItem = {
             const response = await authenticatedAxios.post(`/items/${escapedItemId}/checkOut`, requestModel);
 
             if (response.status === 200) {
+                let responseData;
+                if (response.data) {
+                    responseData = {
+                        $type: response.data['$type'],
+                        Id: response.data.Id,
+                        Message:`Successfully checked out ${response.data.Id}`
+                    };
+                }
                 return {
                     content: [{
                         type: "text",
-                        text: `Successfully checked out item ${itemId}`
+                        text: JSON.stringify(responseData, null, 2)
                     }],
                 };
             } else {

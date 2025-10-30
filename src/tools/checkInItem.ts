@@ -33,10 +33,18 @@ export const checkInItem = {
             const response = await authenticatedAxios.post(`/items/${escapedItemId}/checkIn`, requestModel);
 
             if (response.status === 200) {
+                let responseData;
+                if (response.data) {
+                    responseData = {
+                        $type: response.data['$type'],
+                        Id: response.data.Id,
+                        Message:`Successfully checked in ${response.data.Id}`
+                    };
+                }
                 return {
                     content: [{
                         type: "text",
-                        text: `Successfully checked in item ${itemId}`
+                        text: JSON.stringify(responseData, null, 2)
                     }],
                 };
             } else {

@@ -30,10 +30,14 @@ export const getBatchOperationStatus = {
                 const batch = response.data;
 
                 if (typeof batch.TotalNumberOfOperations === 'undefined' || typeof batch.NumberOfDoneOperations === 'undefined') {
+                    const errorResponse = {
+                        $type: 'Error',
+                        Message: `Error: Item ${batchId} is not a valid batch operation object.`
+                    };
                     return {
                         content: [{
                             type: "text",
-                            text: `Error: Item ${batchId} is not a valid batch operation object.`
+                            text: JSON.stringify(errorResponse, null, 2)
                         }]
                     };
                 }
@@ -43,24 +47,26 @@ export const getBatchOperationStatus = {
                 const isCompleted = processed === total;
                 const operation = batch.Operations[0]?.Operation || 'N/A';
                 
-                let summary = `Batch Operation Status for ${batchId}: ${isCompleted ? 'Completed' : 'In Progress'}\n`;
-                summary += `Progress: ${processed} / ${total} items processed.\n`;
-                summary += `Operation: ${operation}`;
+                const itemStatuses = (batch.Operations[0]?.Statuses || []).map((s: any) => ({
+                    Id: s.SubjectId,
+                    Status: s.State,
+                    Details: s.Information || s.ErrorCode || 'OK'
+                }));
 
-                const statuses = batch.Operations[0]?.Statuses || [];
-                if (statuses.length > 0) {
-                    summary += "\n\n--- Item Statuses ---\n";
-                    const itemDetails = statuses.map((s: any) => {
-                        const details = s.Information || s.ErrorCode || 'OK';
-                        return `- Item: ${s.SubjectId}, Status: ${s.State}, Details: ${details}`;
-                    }).join('\n');
-                    summary += itemDetails;
-                }
+                const jsonResponse = {
+                    $type: "BatchStatus",
+                    Id: batchId,
+                    Operation: operation,
+                    IsCompleted: isCompleted,
+                    ItemsProcessed: processed,
+                    ItemsTotal: total,
+                    ItemStatuses: itemStatuses
+                };
 
                 return {
                     content: [{
                         type: "text",
-                        text: summary
+                        text: JSON.stringify(jsonResponse, null, 2)
                     }],
                 };
             } else {

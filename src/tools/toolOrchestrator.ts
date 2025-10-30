@@ -90,7 +90,7 @@ const toolOrchestratorInputProperties = {
     preProcessingScript: z.string().optional()
         .describe("An optional first JavaScript string (as an async function body) that runs once *before* the main loop. It must return either a string[] of item IDs, or an object { itemIds: string[], context?: any } to pass data to subsequent scripts. This is the 'setup' phase, perfect for dynamically fetching or filtering items (e.g., by calling 'context.tools.search(...)') or for expensive, one-time lookups (e.g., getting Target Type IDs)."),
     mapScript: z.string()
-        .describe("A JavaScript string (as an async function body) to execute for each item. The mapScript has access to a 'context' object. This is the 'map' phase. NOTE: This script reuses the same script sandbox for all items for performance. Avoid using or relying on global variables, as they will persist between item executions."),
+        .describe("A JavaScript string (as an async function body) to execute for each item. The mapScript has access to a 'context' object. This is the 'map' phase. NOTE: Each item is processed in an isolated sandbox. This means you can safely use await and write parallel code (maxConcurrency > 1) without worrying about tasks interfering with each other. The context object is unique and stable for each item."),
     postProcessingScript: z.string().optional()
         .describe("An optional second JavaScript string (as an async function body) that runs once after all items are processed. The script has access to predefined variables: `results` (an array of all execution results from the 'map' phase), `parameters` (the JSON object passed to the tool), and `preProcessingResult` (the 'context' object from the setup phase). Its return value becomes the final output of the tool. This is the 'reduce' phase."),
     parameters: z.record(z.any()).optional()
@@ -170,11 +170,13 @@ if (item) {
   context.log("Item title: " + item.Title); // Access directly
 }
 
-For tools that return a simple message (like 'updateContent'), you will receive the full response object (e.g., { content: [{ type: "text", text: "Update successful." }] }).
+For tools returning success messages (like 'updateContent'), the orchestrator attempts to parse the response as JSON.
+If successful (which is typical), you'll receive the parsed message object (e.g., { $type: 'Component', Id: 'tcm:5-123', Message: '...' }).
+If parsing fails, you'll receive the raw response structure.
 
 To use the AI, call the 'generateContentFromPrompt' tool:
 const aiResult = await context.tools.generateContentFromPrompt({ prompt: '...' });
-const generatedText = aiResult.content[0].text;
+const generatedText = aiResult.Content;
 
 Note that calling one of the following tools in a toolOrchestrator script is disallowed and will result in an error:
     - toolOrchestrator,
@@ -229,12 +231,13 @@ This script finds 'Old Product Name' and replaces it with 'New Product Name' in 
 
             // Save changes if any
             if (updated) {
-            // updateContent returns a standard wrapper, not JSON
+            // updateContent returns a JSON object with the update status
                 const updateResult = await context.tools.updateContent({
                     itemId: context.currentItemId,
                     content: content
                 });
-                context.log(updateResult.content[0].text);
+                // The JSON is automatically parsed, so we access its 'Message' property
+                context.log(updateResult.Message);
             } else {
                 context.log('No changes needed.');
             }
@@ -738,68 +741,62 @@ This script uses the 'preProcessingScript' to perform a complex, one-time setup:
 
     const result = await tools.toolOrchestrator({
         preProcessingScript: \`
-            // --- Helper function to extract ID from tool responses ---
-            // Creation tools return a text message like: "Successfully created... with ID tcm:0-1-1"
-            // The orchestrator does not parse this, so we must.
-            function extractId(response) {
-                if (response && response.content && response.content[0] && response.content[0].text) {
-                    // Match a 3-part TCM URI (e.g., tcm:0-1-1 or tcm:1-2-4)
-                    const match = response.content[0].text.match(/(tcm:\\d+-\\d+-\\d+)/);
-                    if (match) return match[1];
-                }
-                throw new Error(\`Could not extract ID from response: \${JSON.stringify(response)}\`);
-            }
-            
             // --- Phase 1: Setup ---
             context.log("Starting BluePrint 'Diamond Pattern' setup...");
 
             // 1. Create Root Publication
-            const rootPubResponse = await context.tools.createPublication({
+            // The orchestrator automatically parses the JSON response.
+            const rootPub = await context.tools.createPublication({
                 title: "010 Global Master (Root)",
                 publicationUrl: "/master",
                 locale: "en-US"
             });
-            // We must parse the ID from the response text
-            const rootPubId = extractId(rootPubResponse);
+            // We can access the 'Id' property directly from the returned object.
+            const rootPubId = rootPub.Id;
+            if (!rootPubId) throw new Error("Failed to create Root Publication.");
             context.log(\`Created Root Publication: \${rootPubId}\`);
 
             // 2. Create Root Structure Group (REQUIRED for BluePrinting)
             // A Publication must have a Root Structure Group to be a parent.
-            await context.tools.createRootStructureGroup({
+            // No need to capture the ID, but we check for success
+            const rootSg = await context.tools.createRootStructureGroup({
                 title: "Root",
                 publicationId: rootPubId 
             });
+            if (!rootSg.Id) throw new Error("Failed to create Root Structure Group.");
             context.log(\`Created Root Structure Group in \${rootPubId}\`);
 
             // 3. Create Schema Master (inherits from Root)
-            const schemaPubResponse = await context.tools.createPublication({
+            const schemaPub = await context.tools.createPublication({
                 title: "020 Schema Master",
                 parentPublications: [rootPubId],
                 publicationType: "Content"
             });
-            const schemaPubId = extractId(schemaPubResponse);
+            const schemaPubId = schemaPub.Id;
+            if (!schemaPubId) throw new Error("Failed to create Schema Master.");
             context.log(\`Created Schema Master Publication: \${schemaPubId}\`);
 
             // 4. Create Content Master (inherits from Root)
-            const contentPubResponse = await context.tools.createPublication({
+            const contentPub = await context.tools.createPublication({
                 title: "030 Content Master",
                 parentPublications: [rootPubId],
                 publicationType: "Content"
-    
             });
-            const contentPubId = extractId(contentPubResponse);
+            const contentPubId = contentPub.Id;
+            if (!contentPubId) throw new Error("Failed to create Content Master.");
             context.log(\`Created Content Master Publication: \${contentPubId}\`);
 
             // 5. Create Website (inherits from Schema AND Content)
             // This forms the 'diamond' shape.
-            const websitePubResponse = await context.tools.createPublication({
+            const websitePub = await context.tools.createPublication({
                 title: "100 Global Website",
                 parentPublications: [schemaPubId, contentPubId], // <-- Inherits from two parents
                 publicationUrl: "/global",
                 locale: "en-US",
                 publicationType: "Web"
             });
-            const websitePubId = extractId(websitePubResponse);
+            const websitePubId = websitePub.Id;
+            if (!websitePubId) throw new Error("Failed to create Website Publication.");
             context.log(\`Created Website Publication: \${websitePubId}\`);
 
             context.log("Diamond BluePrint setup complete.");
@@ -872,7 +869,17 @@ This script uses the 'preProcessingScript' to perform a complex, one-time setup:
                 if (!e) return 'Unknown error';
                 if (typeof e === 'string') return e;
                 // Standard tool error
-                if (e.content && Array.isArray(e.content) && e.content[0]?.type === 'text') return e.content[0].text;
+                if (e.content && Array.isArray(e.content) && e.content[0]?.type === 'text') {
+                    try {
+                        const errorObj = JSON.parse(e.content[0].text);
+                        if (errorObj && errorObj.Message) {
+                            return errorObj.Message;
+                        }
+                    } catch {
+                        return e.content[0].text;
+                    }
+                    return e.content[0].text;
+                }               
                 // Axios-like error
                 if (e.data && e.data.content && Array.isArray(e.data.content) && e.data.content[0]?.type === 'text') return e.data.content[0].text;
                 // Standard JS Error
@@ -1029,27 +1036,6 @@ This script uses the 'preProcessingScript' to perform a complex, one-time setup:
                 };
             }
 
-            const perItemContext: MapScriptContext = {
-                currentItemId: "", 
-                parameters: Object.freeze(parameters),
-                preProcessingResult: preScriptContextData,
-                tools: toolWrappers,
-                log: (message: string) => {} 
-            };
-
-            const sandboxContext = { ...baseSandbox };
-            sandboxContext.context = perItemContext;
-            sandboxContext.console = {
-                log: (message: string) => {},
-                error: (message: string) => {},
-                warn: (message: string) => {}
-            };
-            
-            const sandbox = vm.createContext(sandboxContext, {
-                codeGeneration: { strings: false, wasm: false }
-            });
-
-
             /**
              * A single, reusable function to run the script for one item
              * and handle logging, results, and errors.
@@ -1058,6 +1044,27 @@ This script uses the 'preProcessingScript' to perform a complex, one-time setup:
                 logs.push(`\n[${index + 1}/${finalItemIds.length}] Processing item: ${itemId}`);
                 
                 const perItemLog = (message: string) => logs.push(`[${itemId}] ${message}`);
+
+                const perItemContext: MapScriptContext = {
+                    currentItemId: itemId,
+                    parameters: Object.freeze(parameters),
+                    preProcessingResult: preScriptContextData,
+                    tools: toolWrappers,
+                    log: perItemLog
+                };
+
+                const sandboxContext = { ...baseSandbox };
+                sandboxContext.context = perItemContext;
+                sandboxContext.console = {
+                    log: perItemLog,
+                    error: perItemLog,
+                    warn: perItemLog
+                };
+                
+                const sandbox = vm.createContext(sandboxContext, {
+                    codeGeneration: { strings: false, wasm: false }
+                });
+
                 perItemContext.currentItemId = itemId;
                 perItemContext.log = perItemLog;
                 sandboxContext.console.log = perItemLog;

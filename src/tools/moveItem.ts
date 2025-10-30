@@ -31,11 +31,18 @@ export const moveItem = {
             const response = await authenticatedAxios.post(`/items/${escapedItemId}/move/${escapedDestinationId}`);
 
             if (response.status === 200 || response.status === 204) {
-                const responseData = response.data ? `\n\n${JSON.stringify(response.data, null, 2)}` : " The operation returned no content.";
+                let responseData;
+                if (response.data) {
+                    responseData = {
+                        $type: response.data['$type'],
+                        Id: response.data.Id,
+                        Message: `Successfully moved ${response.data.Id}`
+                    };
+                }
                 return {
                     content: [{
                         type: "text",
-                        text: `Successfully moved item ${itemId} to ${destinationId}.${responseData}`
+                        text: JSON.stringify(responseData, null, 2)
                     }],
                 };
             } else {

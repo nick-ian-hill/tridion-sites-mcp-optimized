@@ -10,7 +10,9 @@ export const createSchema = {
     name: "createSchema",
     description: `Creates a new Content Manager System (CMS) item of type 'Schema'. Schemas define the structure of content and metadata for other CMS items.
     
-A Schema with a purpose of 'Component' is defined by its content fields (specified via the 'fields' property) and metadata fields (specified via the 'metadataFields' property). For schemas with any other purpose (e.g., 'Metadata') ONLY specify fields using the 'metadataFields' property. Both of these properties are dictionaries where:
+A Schema with a purpose of 'Component' can have both content fields (specified via the 'fields' property) and metadata fields (specified via the 'metadataFields' property).
+The 'metadataFields' property is the ONLY way to define metafields for a Component (you cannot link a component to a standalone metadata schema).
+For schemas with any other purpose (e.g., 'Metadata') ONLY specify fields using the 'metadataFields' property. Both of these properties are dictionaries where:
   - The KEY is the field's machine name (a valid XML name without spaces, e.g., "articleTitle").
   - The VALUE is a Field Definition object that specifies the field's type and properties.
 
@@ -51,7 +53,7 @@ Certain top-level properties are only applicable when the Schema has a specific 
 
 Examples:
 
-Example 1: Create a simple Schema with a single, optional text field.
+Example 1: Create a simple component Schema with a single, optional text field.
     const result = await tools.createSchema({
         title: "Simple Text Schema",
         locationId: "tcm:1-2-2",
@@ -68,23 +70,7 @@ Example 1: Create a simple Schema with a single, optional text field.
         }
     });
 
-Example 2: Create a simple Metadata Schema. Note the 'purpose' is 'Metadata', there is no 'rootElementName', and the fields are defined in 'metadataFields'.
-    const result = await tools.createSchema({
-        title: "Simple Metadata Schema",
-        locationId: "tcm:1-2-2",
-        purpose: "Metadata",
-        metadataFields: {
-            "textField": {
-                "$type": "SingleLineTextFieldDefinition",
-                "Name": "textField",
-                "Description": "A single line of text",
-                "MaxOccurs": 1,
-                "MinOccurs": 0
-            }
-        }
-    });
-
-Example 3: Create a more complex 'Article' Schema with both content fields and metadata fields.
+Example 2: Create an 'Article' component Schema with both content fields and metadata fields.
     const result = await tools.createSchema({
         title: "Article",
         locationId: "tcm:1-2-2",
@@ -115,6 +101,22 @@ Example 3: Create a more complex 'Article' Schema with both content fields and m
                 "$type": "DateFieldDefinition",
                 "Name": "publishDate",
                 "Description": "The date the article was published."
+            }
+        }
+    });
+
+Example 3: Create a simple Metadata Schema. Note the 'purpose' is 'Metadata', there is no 'rootElementName', and the fields are defined in 'metadataFields'.
+    const result = await tools.createSchema({
+        title: "Simple Metadata Schema",
+        locationId: "tcm:1-2-2",
+        purpose: "Metadata",
+        metadataFields: {
+            "textField": {
+                "$type": "SingleLineTextFieldDefinition",
+                "Name": "textField",
+                "Description": "A single line of text",
+                "MaxOccurs": 1,
+                "MinOccurs": 0
             }
         }
     });
@@ -363,11 +365,13 @@ Example 12: Create an 'Embedded' Schema to be used within other Schemas.
         purpose: z.enum([
             "Component", "Multimedia", "Embedded",
             "Metadata", "Bundle", "Region"
-        ]).describe("The purpose of the Schema, which determines the item type(s) for which it can be used. When asked to create a metadata schema, be sure to set the purpose to 'Metadata' and use the 'metadataFields' parameter for defining the fields."),
+        ]).describe(`The purpose of the Schema, which determines the item type(s) for which it can be used.
+            When asked to create a metadata schema, be sure to set the purpose to 'Metadata' and use the 'metadataFields' property for defining the fields.
+            Similarly, when creating a schema for components, set purpose to 'Component' and use the 'fields' and 'metadataFields' properties to define the required content and metadata fields.`),
         rootElementName: xmlNameSchema.optional().describe("The name of the root element for the XML structure defined by the Schema. Only applies to component and embeddable schemas. When using two or more embeddable schemas in a schema (via embedded schema fields), this value needs to be unique between the embeddable schemas."),
         description: z.string().nonempty().describe("An mandatory description of the Schema."),
         fields: z.record(fieldDefinitionSchema).optional().describe("Only used for Component Schemas. A dictionary of field definitions for the schema's content fields. The keys of the dictionary are the machine names of the fields."),
-        metadataFields: z.record(fieldDefinitionSchema).optional().describe("A dictionary of metadata field definitions for the schema's metadata. The keys of the dictionary are the machine names of the metadata fields. You MUST use this property when defining METADATA fields regardless of schema purpose."),
+        metadataFields: z.record(fieldDefinitionSchema).optional().describe("A dictionary of metadata field definitions for the schema's metadata. The keys of the dictionary are the machine names of the metadata fields. You MUST use this property when defining METADATA fields for any schema type, including Component schemas."),
         allowedMultimediaTypes: z.array(z.string().regex(/^tcm:0-\d+-65544$/)).optional().describe("An array of TCM URIs for allowed Multimedia Types. Only applicable when 'purpose' is 'Multimedia'."),
         bundleProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of a Process Definition to associate as the Bundle Process."),
         componentProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of a Process Definition to associate as the Component Process for workflow."),
@@ -388,15 +392,20 @@ Example 12: Create an 'Embedded' Schema to be used within other Schemas.
             componentProcessId, deleteBundleOnProcessFinished, isIndexable,
             isPublishable, regionDefinition
         } = args;
+        
+        const createErrorResponse = (message: string) => {
+            const errorResponse = { $type: 'Error', Message: message };
+            return { content: [{ type: "text", text: JSON.stringify(errorResponse, null, 2) }], errors: [] };
+        };
 
         if (purpose !== 'Multimedia' && allowedMultimediaTypes) {
-            return { content: [{ type: "text", text: "'allowedMultimediaTypes' can only be set when the Schema 'purpose' is 'Multimedia'." }], errors: [] };
+            return createErrorResponse("'allowedMultimediaTypes' can only be set when the Schema 'purpose' is 'Multimedia'.");
         }
         if (purpose !== 'Bundle' && typeof deleteBundleOnProcessFinished === 'boolean') {
-            return { content: [{ type: "text", text: "'deleteBundleOnProcessFinished' can only be set when the Schema 'purpose' is 'Bundle'." }], errors: [] };
+            return createErrorResponse("'deleteBundleOnProcessFinished' can only be set when the Schema 'purpose' is 'Bundle'.");
         }
         if (purpose !== 'Region' && regionDefinition) {
-            return { content: [{ type: "text", text: "'regionDefinition' can only be set when the Schema 'purpose' is 'Region'." }], errors: [] };
+            return createErrorResponse("'regionDefinition' can only be set when the Schema 'purpose' is 'Region'.");
         }
 
         try {
@@ -407,13 +416,13 @@ Example 12: Create an 'Embedded' Schema to be used within other Schemas.
             let parsedRegionDefinition;
             if (regionDefinition) {
                 if (purpose !== 'Region') {
-                    return { content: [{ type: "text", text: "'regionDefinition' can only be set when the Schema 'purpose' is 'Region'." }], errors: [] };
+                    return createErrorResponse("'regionDefinition' can only be set when the Schema 'purpose' is 'Region'.");
                 }
                 try {
                     parsedRegionDefinition = JSON.parse(regionDefinition);
                 } catch (error) {
                     const errorMessage = error instanceof Error ? error.message : String(error);
-                    return { content: [{ type: "text", text: `Error: The 'regionDefinition' parameter is not a valid JSON string. Details: ${errorMessage}` }] };
+                    return createErrorResponse(`Error: The 'regionDefinition' parameter is not a valid JSON string. Details: ${errorMessage}`);
                 }
             }
 
@@ -450,10 +459,15 @@ Example 12: Create an 'Embedded' Schema to be used within other Schemas.
 
             const createResponse = await authenticatedAxios.post('/items', payload);
             if (createResponse.status === 201) {
+                const responseData = {
+                    $type: createResponse.data['$type'],
+                    Id: createResponse.data.Id,
+                    Message: `Successfully created ${createResponse.data.Id}`
+                };
                 return {
                     content: [{
                         type: "text",
-                        text: `Successfully created Schema with ID ${createResponse.data.Id}`
+                        text: JSON.stringify(responseData, null, 2)
                     }],
                 };
             } else {

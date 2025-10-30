@@ -115,9 +115,16 @@ Example 2: Updates the metadata values for a 'Folder' with featuring a multi-val
             if (updateResponse.status !== 200) {
                 return handleUnexpectedResponse(updateResponse);
             }
+            
+            const updatedItem = updateResponse.data;
+            const responseData = {
+                $type: updatedItem['$type'],
+                Id: updatedItem.Id,
+                Message: `Successfully updated ${updatedItem.Id}`
+            };
 
             return {
-                content: [{ type: "text", text: `Successfully updated metadata for item ${itemId}` }],
+                content: [{ type: "text", text: JSON.stringify(responseData, null, 2) }],
             };
         } catch (error) {
             return handleAxiosError(error, "Failed to update item metadata");

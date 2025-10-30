@@ -71,7 +71,12 @@ export const readTextFromPowerPointMultimediaComponent = {
 
             const slideFiles = zip.file(/ppt\/slides\/slide\d+\.xml/);
             if (slideFiles.length === 0) {
-                return { content: [{ type: "text", text: "Presentation contains no slides." }] };
+                const errorResponse = {
+                    $type: 'PowerPointText',
+                    Id: itemId,
+                    Content: "Presentation contains no slides.",
+                };
+                return { content: [{ type: "text", text: JSON.stringify(errorResponse, null, 2) }] };
             }
 
             slideFiles.sort((a, b) => {
@@ -82,19 +87,31 @@ export const readTextFromPowerPointMultimediaComponent = {
                 return aNum - bNum;
             });
             
-            const allSlidesTextPromises = slideFiles.map(async (slideFile, index) => {
+            const allSlidesData = await Promise.all(slideFiles.map(async (slideFile, index) => {
                 console.log(`Processing slide ${index + 1}: ${slideFile.name}`);
                 const slideXml = await slideFile.async("string");
                 const parsedXml = await xmlParser.parseStringPromise(slideXml);
                 const slideTexts = extractTextFromXmlObject(parsedXml);
-                return `--- Slide ${index + 1} ---\n${slideTexts.join("\n")}`;
-            });
-
-            const allSlidesTextArray = await Promise.all(allSlidesTextPromises);
+                return {
+                    SlideNumber: index + 1,
+                    Content: slideTexts.join("\n")
+                };
+            }));
             
             console.log("Parsing complete.");
+            
+            const fullTextContent = allSlidesData
+                .map(s => `--- Slide ${s.SlideNumber} ---\n${s.Content}`)
+                .join("\n\n");
+
+            const responseData = {
+                $type: "PowerPointText",
+                Id: itemId,
+                Content: fullTextContent.trim(),
+            };
+
             return {
-                content: [{ type: "text", text: allSlidesTextArray.join("\n\n").trim() }],
+                content: [{ type: "text", text: JSON.stringify(responseData, null, 2) }],
             };
 
         } catch (error) {

@@ -28,10 +28,14 @@ export const classify = {
         const { itemId, keywordIdsToAdd = [], keywordIdsToRemove = [] } = input;
 
         if (keywordIdsToAdd.length === 0 && keywordIdsToRemove.length === 0) {
+            const errorResponse = {
+                $type: 'Error',
+                Message: "Validation Error: You must provide at least one keyword to add or remove."
+            };
             return {
                 content: [{
                     type: "text",
-                    text: "Validation Error: You must provide at least one keyword to add or remove."
+                    text: JSON.stringify(errorResponse, null, 2)
                 }]
             };
         }
@@ -57,10 +61,18 @@ export const classify = {
 
             // A 200 status code indicates the operation was successful.
             if (response.status === 200) {
+                let responseData;
+                if (response.data) {
+                    responseData = {
+                        $type: response.data['$type'],
+                        Id: response.data.Id,
+                        Message:`Successfully classified ${response.data.Id}`
+                    };
+                }
                 return {
                     content: [{
                         type: "text",
-                        text: `Successfully updated classification for item ${itemId}`
+                        text: JSON.stringify(responseData, null, 2)
                     }],
                 };
             } else {

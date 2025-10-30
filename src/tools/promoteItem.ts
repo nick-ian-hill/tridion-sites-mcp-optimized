@@ -33,10 +33,15 @@ export const promoteItem = {
             const response = await authenticatedAxios.post(`/items/${escapedItemId}/promote`, requestModel);
 
             if (response.status === 201) {
+                const responseData = {
+                    $type: response.data['$type'],
+                    Id: response.data.Id,
+                    Message: `Successfully promoted ${response.data.Id}`
+                };
                 return {
                     content: [{
                         type: "text",
-                        text: `Successfully promoted item ${itemId} to ${destinationRepositoryId}`
+                        text: JSON.stringify(responseData, null, 2)
                     }],
                 };
             } else {

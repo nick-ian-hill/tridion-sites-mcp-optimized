@@ -152,6 +152,11 @@ This example shows a two-column layout within the main content area.
             title, locationId, fileName, pageTemplateId, metadataSchemaId,
             metadata, componentPresentations, regions
         } = args;
+        
+        const createErrorResponse = (message: string) => {
+            const errorResponse = { $type: 'Error', Message: message };
+            return { content: [{ type: "text", text: JSON.stringify(errorResponse, null, 2) }], errors: [] };
+        };
 
         try {
             // Parse string inputs into objects early to fail fast
@@ -161,7 +166,7 @@ This example shows a two-column layout within the main content area.
                     parsedComponentPresentations = JSON.parse(componentPresentations);
                 } catch (error) {
                     const errorMessage = error instanceof Error ? error.message : String(error);
-                    return { content: [{ type: "text", text: `Error: The 'componentPresentations' parameter is not a valid JSON string. Details: ${errorMessage}` }] };
+                    return createErrorResponse(`Error: The 'componentPresentations' parameter is not a valid JSON string. Details: ${errorMessage}`);
                 }
             }
 
@@ -171,7 +176,7 @@ This example shows a two-column layout within the main content area.
                     parsedRegions = JSON.parse(regions);
                 } catch (error) {
                     const errorMessage = error instanceof Error ? error.message : String(error);
-                    return { content: [{ type: "text", text: `Error: The 'regions' parameter is not a valid JSON string. Details: ${errorMessage}` }] };
+                    return createErrorResponse(`Error: The 'regions' parameter is not a valid JSON string. Details: ${errorMessage}`);
                 }
             }
 
@@ -286,7 +291,7 @@ This example shows a two-column layout within the main content area.
             if (contextualPageTemplateId) {
                 payload.Regions = await processRegions(parsedRegions, locationId, contextualPageTemplateId, authenticatedAxios);
             } else if (parsedRegions && parsedRegions.length > 0) {
-                return { content: [{ type: "text", text: `Error: Regions were provided, but no Page Template could be determined.` }] };
+                return createErrorResponse(`Error: Regions were provided, but no Page Template could be determined.`);
             } else {
                 payload.Regions = [];
             }
@@ -297,7 +302,17 @@ This example shows a two-column layout within the main content area.
 
             const createResponse = await authenticatedAxios.post('/items', payload);
             if (createResponse.status === 201) {
-                return { content: [{ type: "text", text: `Successfully created Page with ID ${createResponse.data.Id}` }] };
+                const responseData = {
+                    $type: createResponse.data['$type'],
+                    Id: createResponse.data.Id,
+                    Message: `Successfully created ${createResponse.data.Id}`
+                };
+                return { 
+                    content: [{ 
+                        type: "text", 
+                        text: JSON.stringify(responseData, null, 2) 
+                    }] 
+                };
             } else {
                 return handleUnexpectedResponse(createResponse);
             }

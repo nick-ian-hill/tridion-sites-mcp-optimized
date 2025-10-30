@@ -35,10 +35,15 @@ IMPORTANT: The operation will fail if the item is used by other items in the sys
             const response = await authenticatedAxios.delete(`/items/${escapedItemId}`);
 
             if (response.status === 204) {
+                const responseData = {
+                    $type: 'Success',
+                    Id: itemId,
+                    Message: `Successfully deleted ${itemId}`
+                };
                 return {
                     content: [{
                         type: "text",
-                        text: `Successfully deleted item ${itemId}`
+                        text: JSON.stringify(responseData, null, 2)
                     }],
                 };
             } else {

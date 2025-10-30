@@ -70,6 +70,12 @@ const setNestedProperty = (obj: any, path: string, value: any): void => {
     current[keys[0]] = value;
 };
 
+// Helper to create a JSON error response
+const createJsonError = (message: string) => {
+    const errorResponse = { $type: 'Error', Message: message };
+    return { content: [{ type: "text", text: JSON.stringify(errorResponse, null, 2) }] };
+};
+
 export const updateSchemaFieldProperties = {
     name: "updateSchemaFieldProperties",
     description: `Updates specific properties of one or more fields within a given Schema. For surgical updates, this is more efficient and robust than using the 'updateItemProperties' tool and replacing the entire fields collection.
@@ -153,36 +159,40 @@ Example 3: Update a validation constraint on a field.
                 const fieldCollection = fieldLocation === 'Content' ? itemToUpdate.Fields : itemToUpdate.MetadataFields;
 
                 if (!fieldCollection) {
-                    throw new Error(`Schema ${schemaId} does not have a '${fieldLocation}' fields definition.`);
+                    return createJsonError(`Schema ${schemaId} does not have a '${fieldLocation}' fields definition.`);
                 }
                 const fieldToUpdate = fieldCollection[fieldName];
                 if (!fieldToUpdate) {
-                    throw new Error(`Field '${fieldName}' not found in the '${fieldLocation}' definition of Schema ${schemaId}.`);
+                     return createJsonError(`Field '${fieldName}' not found in the '${fieldLocation}' definition of Schema ${schemaId}.`);
                 }
-
 
                 const fieldType = fieldToUpdate.$type as keyof typeof schemaTypeMap;
                 const zodSchemaForField = schemaTypeMap[fieldType];
 
                 if (!zodSchemaForField) {
-                    throw new Error(`Validation failed: Unknown field type '${fieldType}' for field '${fieldName}'.`);
+                     return createJsonError(`Validation failed: Unknown field type '${fieldType}' for field '${fieldName}'.`);
                 }
 
                 // 1. Validate the path
                 const pathParts = propertyToUpdate.split('.');
                 let currentValidator: any = zodSchemaForField;
-                for (const part of pathParts) {
-                    if (currentValidator.shape && part in currentValidator.shape) {
-                        currentValidator = currentValidator.shape[part];
-                    } else {
-                        throw new Error(`Validation failed: Property path '${propertyToUpdate}' is not valid for a field of type '${fieldType}'.`);
+                try {
+                    for (const part of pathParts) {
+                        if (currentValidator.shape && part in currentValidator.shape) {
+                            currentValidator = currentValidator.shape[part];
+                        } else {
+                            throw new Error(); // Path part not found in schema shape
+                        }
                     }
+                } catch {
+                     return createJsonError(`Validation failed: Property path '${propertyToUpdate}' is not valid for a field of type '${fieldType}'.`);
                 }
 
                 // 2. Validate the value against the final validator in the path
                 const validationResult = currentValidator.safeParse(newValue);
                 if (!validationResult.success) {
-                    throw new Error(`Validation failed for '${propertyToUpdate}': ${validationResult.error.errors.map((e: ZodIssue) => e.message).join(', ')}`);
+                    const errorMessages = validationResult.error.errors.map((e: ZodIssue) => e.message).join(', ');
+                    return createJsonError(`Validation failed for '${propertyToUpdate}': ${errorMessages}`);
                 }
                 
                 // If validation passes, perform the update
@@ -191,9 +201,10 @@ Example 3: Update a validation constraint on a field.
 
             const schemaLocationId = itemToUpdate.LocationInfo?.OrganizationalItem?.IdRef;
             if (!schemaLocationId) {
-                throw new Error(`Could not determine location for Schema ${schemaId} to process field updates.`);
+                return createJsonError(`Could not determine location for Schema ${schemaId} to process field updates.`);
             }
 
+            // Reprocess/Reorder fields after modification
             if (itemToUpdate.Fields) {
                 itemToUpdate.Fields = await processSchemaFieldDefinitions(itemToUpdate.Fields, schemaLocationId, authenticatedAxios);
             }
@@ -206,11 +217,20 @@ Example 3: Update a validation constraint on a field.
             if (updateResponse.status !== 200) return handleUnexpectedResponse(updateResponse);
             const updatedItem = updateResponse.data;
 
+            const responseData = {
+                $type: updatedItem['$type'],
+                Id: updatedItem.Id,
+                Message: `Successfully updated ${updatedItem.Id}`
+            };
+
             return {
-                content: [{ type: "text", text: `Successfully updated fields in Schema ${schemaId}` }],
+                content: [{ type: "text", text: JSON.stringify(responseData, null, 2) }],
             };
 
         } catch (error) {
+             if (error instanceof Error) {
+                return createJsonError(error.message);
+            }
             return handleAxiosError(error, `Failed to update fields for Schema ${schemaId}`);
         }
     }

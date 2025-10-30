@@ -32,7 +32,7 @@ This is a crucial check before using the 'createPage' or 'updatePage' tools. If 
                         type: "text",
                         text: JSON.stringify({
                             isComponentTemplateRequired: isRequired,
-                            message: message
+                            Message: message
                         }, null, 2)
                     }],
                 };

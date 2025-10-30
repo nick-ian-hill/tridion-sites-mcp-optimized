@@ -92,10 +92,19 @@ export const unpublish = {
             const response = await authenticatedAxios.post(endpoint, requestBody);
 
             if (response.status === successStatus) {
+                const transactionIds = response.data?.PublishTransactionIds || [];
+                const responseData = {
+                    $type: dryRun ? "UnpublishPreview" : "UnpublishResult",
+                    Message: dryRun
+                        ? `Unpublish preview generated. ${transactionIds.length} items would be processed.`
+                        : `Successfully started unpublish action. ${transactionIds.length} transaction(s) created.`,
+                    TransactionIds: transactionIds
+                };
+
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(response.data, null, 2)
+                        text: JSON.stringify(responseData, null, 2)
                     }],
                 };
             } else {

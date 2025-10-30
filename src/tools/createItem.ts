@@ -18,7 +18,7 @@ const createItemInputProperties = {
     schemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("Required for 'Component'. The TCM URI of the Schema. Use 'getSchemaLinks' to find available Schemas in the target Publication."),
     metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("Optional. The TCM URI of the Metadata Schema. Use 'getSchemaLinks' to find available Schemas."),
     content: z.record(fieldValueSchema).optional().describe("A JSON object for the item's content fields. The tool will automatically order the fields to match the Schema definition."),
-    metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields. The tool will automatically order the fields to match the Schema definition."),
+    metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields. For a 'Component', this requires the Component Schema to have fields defined in its 'metadataFields' property.The tool will automatically order the fields to match the Schema definition."),
     isAbstract: z.boolean().optional().describe("Only for 'Keyword' type. Set to true to create an abstract Keyword."),
     description: z.string().optional().describe("A description for the item. Applicable to Keyword, Category, Bundle, and Search Folder types."),
     key: z.string().optional().describe("A custom key for the Keyword."),
@@ -288,11 +288,19 @@ Example 2: Create a Folder for a campaign.
             // 3. Post the payload to create the item
             const createResponse = await authenticatedAxios.post('/items', payload);
             if (createResponse.status === 201) {
+                let responseData;
+                if (createResponse.data) {
+                    responseData = {
+                        $type: createResponse.data['$type'],
+                        Id: createResponse.data.Id,
+                        Message:`Successfully created ${createResponse.data.Id}`
+                    };
+                }
                 return {
                     content: [
                         {
                             type: "text",
-                            text: `Successfully created ${itemType} with ID ${createResponse.data.Id}`
+                            text: JSON.stringify(responseData, null, 2)
                         }
                     ],
                 };

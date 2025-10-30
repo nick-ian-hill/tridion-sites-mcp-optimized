@@ -53,10 +53,14 @@ export const createMultimediaComponentFromUrl = {
             const contentLength = headResponse.headers['content-length'];
 
             if (contentLength && parseInt(contentLength, 10) > MAX_FILE_SIZE_BYTES) {
+                const errorResponse = {
+                    $type: 'Error',
+                    Message: `Error: File size of ${contentLength} bytes exceeds the limit of ${MAX_FILE_SIZE_BYTES} bytes.`
+                };
                 return {
                    content: [{
                        type: "text",
-                       text: `Error: File size of ${contentLength} bytes exceeds the limit of ${MAX_FILE_SIZE_BYTES} bytes.`
+                       text: JSON.stringify(errorResponse, null, 2)
                    }],
                 };
             }
@@ -156,10 +160,18 @@ export const createMultimediaComponentFromUrl = {
 
             if (createResponse.status === 201) {
                 console.log(`Successfully created component with ID: ${createResponse.data.Id}`);
+                let responseData;
+                if (createResponse.data) {
+                    responseData = {
+                        $type: createResponse.data['$type'],
+                        Id: createResponse.data.Id,
+                        Message: `Successfully created ${createResponse.data.Id}`
+                    };
+                }
                 return {
                     content: [{
                         type: "text",
-                        text: `Successfully created multimedia component with ID ${createResponse.data.Id}`
+                        text: JSON.stringify(responseData, null, 2)
                     }],
                 };
             } else {

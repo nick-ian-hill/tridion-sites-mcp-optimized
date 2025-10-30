@@ -10,8 +10,17 @@ export const mapItemIdToContextPublication = {
     },
     execute: async ({ itemId, contextItemId }: { itemId: string, contextItemId: string }) => {
         const localizedId = convertItemIdToContextPublication(itemId, contextItemId);
+        const responseData = {
+            $type: "MappedItemId",
+            OriginalId: itemId,
+            ContextId: contextItemId,
+            MappedId: localizedId
+        };
         return {
-            localizedId: localizedId
+            content: [{
+                type: "text",
+                text: JSON.stringify(responseData, null, 2)
+            }],
         };
     }
 };

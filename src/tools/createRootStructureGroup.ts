@@ -80,11 +80,16 @@ Example 2: Creates a root Structure Group with a title and applies metadata to i
             const createResponse = await authenticatedAxios.post('/items', payload);
 
             if (createResponse.status === 201) {
+                const responseData = {
+                    $type: createResponse.data['$type'],
+                    Id: createResponse.data.Id,
+                    Message: `Successfully created ${createResponse.data.Id}`
+                };
                 return {
                     content: [
                         {
                             type: "text",
-                            text: `Successfully created root Structure Group with ID ${createResponse.data.Id}`
+                            text: JSON.stringify(responseData, null, 2)
                         }
                     ],
                 };

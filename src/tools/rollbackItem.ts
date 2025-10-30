@@ -34,10 +34,15 @@ export const rollbackItem = {
             const response = await authenticatedAxios.post(endpoint, cleanPayload);
 
             if (response.status === 200) {
+                const responseData = {
+                    $type: response.data['$type'],
+                    Id: response.data.Id,
+                    Message: `Successfully rolled back ${response.data.Id}`,
+                };
                 return {
                     content: [{
                         type: "text",
-                        text: `Successfully rolled back item ${itemId}`
+                        text: JSON.stringify(responseData, null, 2)
                     }],
                 };
             } else {

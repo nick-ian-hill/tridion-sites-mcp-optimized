@@ -48,8 +48,14 @@ export const readTextFromWordMultimediaComponent = {
 
             const { value: htmlContent } = await mammoth.convertToHtml({ buffer: wordFileBuffer }, mammothOptions);
 
+            const responseData = {
+                $type: "HtmlContent",
+                Id: itemId,
+                Content: htmlContent
+            };
+
             return {
-                content: [{ type: "text", text: htmlContent }],
+                content: [{ type: "text", text: JSON.stringify(responseData, null, 2) }],
             };
         } catch (error) {
             return handleAxiosError(error, `Failed to read text from Word file in multimedia component ${itemId}`);

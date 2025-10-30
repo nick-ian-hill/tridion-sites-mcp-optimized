@@ -41,7 +41,7 @@ To prevent failures, it's highly recommended to first check if an item is used b
                 return {
                     content: [{
                         type: "text",
-                        text: `Batch deletion process started for ${itemIds.length} items.\n\n${JSON.stringify(response.data, null, 2)}`
+                        text: JSON.stringify(response.data, null, 2)
                     }],
                 };
             } else {

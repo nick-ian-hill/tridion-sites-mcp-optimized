@@ -29,10 +29,14 @@ export const batchClassification = {
         const { itemIds, keywordIdsToAdd = [], keywordIdsToRemove = [] } = input;
 
         if (keywordIdsToAdd.length === 0 && keywordIdsToRemove.length === 0) {
+            const errorResponse = {
+                $type: 'Error',
+                Message: "Validation Error: You must provide at least one keyword to add or remove."
+            };
             return {
                 content: [{
                     type: "text",
-                    text: "Validation Error: You must provide at least one keyword to add or remove."
+                    text: JSON.stringify(errorResponse, null, 2)
                 }]
             };
         }
@@ -56,19 +60,10 @@ export const batchClassification = {
 
             // A 202 status code indicates the batch process was accepted and started.
             if (response.status === 202) {
-                let message = `Batch classification process started for ${itemIds.length} items.`;
-                if (keywordIdsToAdd.length > 0) {
-                    message += ` Adding ${keywordIdsToAdd.length} keyword(s).`;
-                }
-                if (keywordIdsToRemove.length > 0) {
-                    message += ` Removing ${keywordIdsToRemove.length} keyword(s).`;
-                }
-                message += `\n\n${JSON.stringify(response.data, null, 2)}`;
-
                 return {
                     content: [{
                         type: "text",
-                        text: message
+                        text: JSON.stringify(response.data, null, 2)
                     }],
                 };
             } else {

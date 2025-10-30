@@ -39,7 +39,7 @@ To find items that are localized and can be unlocalized, use the 'search' tool w
                 return {
                     content: [{
                         type: "text",
-                        text: `Batch unlocalization process started for ${itemIds.length} items.\n\n${JSON.stringify(response.data, null, 2)}`
+                        text: JSON.stringify(response.data, null, 2)
                     }],
                 };
             } else {

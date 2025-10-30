@@ -71,10 +71,15 @@ export const startWorkflow = {
 
             // A 201 status code indicates the workflow was successfully created.
             if (response.status === 201) {
+                const responseData = {
+                    $type: response.data['$type'],
+                    Id: response.data.Id,
+                    Message: `Successfully started ${response.data.Id}`,
+                };
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(response.data, null, 2)
+                        text: JSON.stringify(responseData, null, 2)
                     }],
                 };
             } else {

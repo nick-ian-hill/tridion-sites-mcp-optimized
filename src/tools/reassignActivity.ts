@@ -32,10 +32,16 @@ export const reassignActivity = {
             });
 
             if (response.status === 200) {
+                const responseData = {
+                    $type: "Success",
+                    Id: activityId,
+                    NewAssigneeId: newAssigneeId,
+                    Message: `Activity ${activityId} successfully reassigned to ${newAssigneeId}`
+                };
                 return {
                     content: [{
                         type: "text",
-                        text: `Activity ${activityId} successfully reassigned to ${newAssigneeId}`
+                        text: JSON.stringify(responseData, null, 2)
                     }],
                 };
             } else {

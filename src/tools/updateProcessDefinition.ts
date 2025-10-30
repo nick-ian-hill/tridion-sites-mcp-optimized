@@ -123,6 +123,11 @@ Example 2: Add a new 'Abort' step to an existing workflow.
         const restItemId = itemId.replace(':', '_');
         const authenticatedAxios = createAuthenticatedAxios(userSessionId);
 
+        const createErrorResponse = (message: string) => {
+            const errorResponse = { $type: 'Error', Message: message };
+            return { content: [{ type: "text", text: JSON.stringify(errorResponse, null, 2) }], errors: [] };
+        };
+
         try {
             const getItemResponse = await authenticatedAxios.get(`/items/${restItemId}`);
             if (getItemResponse.status !== 200) {
@@ -131,7 +136,7 @@ Example 2: Add a new 'Abort' step to an existing workflow.
             let itemToUpdate = getItemResponse.data;
 
             if (itemToUpdate.BluePrintInfo?.IsShared) {
-                return { content: [{ type: "text", text: `Error: Item ${itemId} is shared and cannot be updated directly. Please update its parent item: ${itemToUpdate.BluePrintInfo.PrimaryBluePrintParentItem.IdRef}` }] };
+                return createErrorResponse(`Error: Item ${itemId} is shared and cannot be updated directly. Please update its parent item: ${itemToUpdate.BluePrintInfo.PrimaryBluePrintParentItem.IdRef}`);
             }
 
             if (updates.title) itemToUpdate.Title = updates.title;
@@ -144,7 +149,7 @@ Example 2: Add a new 'Abort' step to an existing workflow.
                     if (ad.nextActivities) {
                         for (const nextTitle of ad.nextActivities) {
                             if (!activityTitles.has(nextTitle)) {
-                                throw new Error(`Validation Error: Next activity '${nextTitle}' is defined as a transition target but does not exist as an activity title in your provided list.`);
+                                return createErrorResponse(`Validation Error: Next activity '${nextTitle}' is defined as a transition target but does not exist as an activity title in your provided list.`);
                             }
                         }
                     }
@@ -185,9 +190,16 @@ Example 2: Add a new 'Abort' step to an existing workflow.
             if (updateResponse.status !== 200) {
                 return handleUnexpectedResponse(updateResponse);
             }
+            
+            const updatedItem = updateResponse.data;
+            const responseData = {
+                $type: updatedItem['$type'],
+                Id: updatedItem.Id,
+                Message: `Successfully updated ${updatedItem.Id}`
+            };
 
             return {
-                content: [{ type: "text", text: `Successfully updated Process Definition ${itemId}` }],
+                content: [{ type: "text", text: JSON.stringify(responseData, null, 2) }],
             };
 
         } catch (error) {

@@ -36,7 +36,7 @@ export const readImageDetailsFromMultimediaComponent = {
         const restItemId = itemId.replace(':', '_');
 
         if (!GEMINI_API_KEY) {
-            throw new Error("GEMINI_API_KEY environment variable is not set.");
+            return handleAxiosError(new Error("GEMINI_API_KEY environment variable is not set."), "Configuration Error");
         }
 
         try {
@@ -97,11 +97,17 @@ export const readImageDetailsFromMultimediaComponent = {
             });
             
             const text = (result.text ?? "").trim();
+            
+            const responseData = {
+                $type: "ImageAnalysis",
+                Id: itemId,
+                Description: text
+            };
 
             console.log("Successfully received response from Gemini.");
 
             return {
-                content: [{ type: "text", text: text }],
+                content: [{ type: "text", text: JSON.stringify(responseData, null, 2) }],
             };
 
         } catch (error) {

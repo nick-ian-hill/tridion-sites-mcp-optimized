@@ -114,10 +114,18 @@ export const createMultimediaComponentFromBase64 = {
 
             if (createResponse.status === 201) {
                 console.log(`Successfully created component with ID: ${createResponse.data.Id}`);
+                let responseData;
+                if (createResponse.data && createResponse.data.Id) {
+                    responseData = {
+                        $type: createResponse.data['$type'],
+                        Id: createResponse.data.Id,
+                        Message: `Successfully created ${createResponse.data.Id}`
+                    };
+                }
                 return {
                     content: [{
                         type: "text",
-                        text: `Successfully created multimedia component with ID ${createResponse.data.Id}`
+                        text: JSON.stringify(responseData, null, 2)
                     }],
                 };
             } else {

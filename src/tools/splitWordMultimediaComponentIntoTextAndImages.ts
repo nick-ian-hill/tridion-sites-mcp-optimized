@@ -45,7 +45,8 @@ export const splitWordMultimediaComponentIntoTextAndImages = {
             };
 
             let { value: htmlContent } = await mammoth.convertToHtml({ buffer: wordFileBuffer }, mammothOptions);
-            let summary = `Successfully split Word component ${itemId}.\n\n`;
+            
+            let createdImageComponents: any[] = [];
 
             if (images.length > 0) {
                 const createdImagePromises = images.map(async (img) => {
@@ -58,30 +59,47 @@ export const splitWordMultimediaComponentIntoTextAndImages = {
                     }, context);
                     
                     const resultText = result.content[0].text || "";
-                    const newIdMatch = resultText.match(/tcm:\d+-\d+/);
-                    if (newIdMatch) {
-                        img.newId = newIdMatch[0];
+                    let newId = 'FailedToCreate';
+                    
+                    try {
+                        const jsonResult = JSON.parse(resultText);
+                        newId = jsonResult.Id || 'FailedToParseId';
+                    } catch (e) {
+                        const newIdMatch = resultText.match(/tcm:\d+-\d+/);
+                         if (newIdMatch) newId = newIdMatch[0];
                     }
+                    
+                    img.newId = newId;
+                    return {
+                        OriginalName: img.placeholderSrc,
+                        ComponentId: newId
+                    };
                 });
-                await Promise.all(createdImagePromises);
+                
+                createdImageComponents = await Promise.all(createdImagePromises);
 
-                summary += '### Created Image Components\n';
                 images.forEach(img => {
-                    summary += `* Original: ${img.placeholderSrc}, Created Component: ${img.newId || 'Failed to create'}\n`;
-                    if (img.newId) {
-                        htmlContent = htmlContent.replace(`src="${img.placeholderSrc}"`, `src="${img.newId}" xlink:href="${img.newId}" xmlns:xlink="http://www.w3.org/1999/xlink"`);
+                    if (img.newId && img.newId.startsWith('tcm:')) {
+                        // Replace placeholder src with a valid CMS link structure for XHTML fields
+                        htmlContent = htmlContent.replace(
+                            `src="${img.placeholderSrc}"`, 
+                            `src="${img.newId}" xlink:href="${img.newId}" xmlns:xlink="http://www.w3.org/1999/xlink" xlink:title=""`
+                        );
                     }
                 });
-            } else {
-                summary += 'No images were found in the document.\n';
             }
             
-            summary += `\n### Extracted HTML Content\n${htmlContent}`;
+            const responseData = {
+                $type: "SplitWordDocResult",
+                Id: itemId,
+                CreatedImageComponents: createdImageComponents,
+                HtmlContent: htmlContent
+            };
 
             return {
                 content: [{
                     type: "text",
-                    text: summary
+                    text: JSON.stringify(responseData, null, 2)
                 }]
             };
         } catch (error) {

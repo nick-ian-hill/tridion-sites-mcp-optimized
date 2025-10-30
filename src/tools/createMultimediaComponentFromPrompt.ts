@@ -125,7 +125,11 @@ export const createMultimediaComponentFromPrompt = {
             console.log(contextMessage);
             if (error instanceof Error) {
                 console.log('Error', error.message);
-                return { content: [{ type: "text", text: `${contextMessage}: ${error.message}` }], errors: [], };
+                const errorResponse = {
+                    $type: 'Error',
+                    Message: `${contextMessage}: ${error.message}`
+                };
+                return { content: [{ type: "text", text: JSON.stringify(errorResponse, null, 2) }], errors: [], };
             }
             return handleAxiosError(error, contextMessage);
         }

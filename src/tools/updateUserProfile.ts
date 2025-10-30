@@ -41,6 +41,12 @@ const updateUserProfileInputSchema = z.object(updateUserProfileInputProperties).
 
 type UpdateUserProfileInput = z.infer<typeof updateUserProfileInputSchema>;
 
+// Helper to create a JSON error response
+const createJsonError = (message: string) => {
+    const errorResponse = { $type: 'Error', Message: message };
+    return { content: [{ type: "text", text: JSON.stringify(errorResponse, null, 2) }] };
+};
+
 export const updateUserProfile = {
     name: "updateUserProfile",
     description: `Updates a user's profile by modifying specific properties or replacing the entire profile. If 'userId' is not specified, the profile of the currently logged-in user will be updated.
@@ -82,12 +88,12 @@ Example 2: Update the current user's language to German.
                 } else if (whoAmIResponse.status !== 200) {
                     return handleUnexpectedResponse(whoAmIResponse);
                 } else {
-                    return { content: [{ type: "text", text: "Error: Could not determine the current user's ID from the whoAmI response." }], errors: [] };
+                    return createJsonError("Error: Could not determine the current user's ID from the whoAmI response.");
                 }
             }
             
             if (!userId) {
-                return { content: [{ type: "text", text: "Error: User ID could not be determined." }], errors: [] };
+                 return createJsonError("Error: User ID could not be determined.");
             }
 
             const restUserId = userId.replace(':', '_');
@@ -98,7 +104,7 @@ Example 2: Update the current user's language to German.
                     userProfilePayload = JSON.parse(userProfileJson);
                 } catch (e) {
                     const errorMessage = e instanceof Error ? e.message : String(e);
-                    throw new Error(`The 'userProfileJson' parameter is not a valid JSON string. Details: ${errorMessage}`);
+                    return createJsonError(`The 'userProfileJson' parameter is not a valid JSON string. Details: ${errorMessage}`);
                 }
             } else {
                 const getProfileResponse = await authenticatedAxios.get(`/items/${restUserId}/profile`);
@@ -144,10 +150,15 @@ Example 2: Update the current user's language to German.
 
             const updateResponse = await authenticatedAxios.put(`/items/${restUserId}/profile`, userProfilePayload);
             if (updateResponse.status === 200) {
+                 const responseData = {
+                    $type: "UserProfile", 
+                    Id: userId,
+                    Message: `Successfully updated profile for user ${userId}`,
+                };
                 return {
                     content: [{
                         type: "text",
-                        text: `Successfully updated profile for user ${userId}`
+                        text: JSON.stringify(responseData, null, 2)
                     }],
                 };
             } else {
@@ -155,6 +166,9 @@ Example 2: Update the current user's language to German.
             }
 
         } catch (error) {
+            if (error instanceof z.ZodError) {
+                return createJsonError(`Validation Error: ${error.errors.map(e => e.message).join('; ')}`);
+            }
             const userIdentifier = userId || "the current user";
             return handleAxiosError(error, `Failed to update profile for ${userIdentifier}`);
         }

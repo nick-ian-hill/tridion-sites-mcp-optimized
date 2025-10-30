@@ -39,7 +39,7 @@ export const batchCheckIn = {
                 return {
                     content: [{
                         type: "text",
-                        text: `Batch check-in process started for ${itemIds.length} items.\n\n${JSON.stringify(response.data, null, 2)}`
+                        text: JSON.stringify(response.data, null, 2)
                     }],
                 };
             } else {

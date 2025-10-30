@@ -52,6 +52,9 @@ export const updateMultimediaComponentFromPrompt = {
             let newImageBase64: string | undefined;
 
             // --- Gemini API Block ---
+            if (!GEMINI_API_KEY) {
+                return handleAxiosError(new Error("GEMINI_API_KEY environment variable is not set."), "Configuration Error");
+            }
             console.log(`Sending image and prompt to Gemini: "${prompt}"`);
             const ai = new GoogleGenAI({ vertexai: false, apiKey: GEMINI_API_KEY });
 
@@ -107,8 +110,15 @@ export const updateMultimediaComponentFromPrompt = {
             const updateResponse = await authenticatedAxios.put(`/items/${restItemId}`, itemToUpdate);
             if (updateResponse.status !== 200) return handleUnexpectedResponse(updateResponse);
             
+            const updatedItem = updateResponse.data;
+            const responseData = {
+                $type: updatedItem['$type'],
+                Id: updatedItem.Id,
+                Message: `Successfully updated ${updatedItem.Id}`
+            };
+
             return {
-                content: [{ type: "text", text: `Successfully updated multimedia component ${itemId} based on the prompt.` }],
+                content: [{ type: "text", text: JSON.stringify(responseData, null, 2) }],
             };
 
         } catch (error) {

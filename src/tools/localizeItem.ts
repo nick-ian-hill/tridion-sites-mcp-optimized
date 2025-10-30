@@ -28,10 +28,21 @@ A common use case for localizing an item is to translate content inherited from 
             const response = await authenticatedAxios.post(`/items/${escapedItemId}/localize`);
 
             if (response.status === 201) {
+                const responseData = response.data;
+                let resultData;
+
+                if (responseData) {
+                    resultData = {
+                        $type: responseData['$type'],
+                        Id: responseData.Id,
+                        Message: `Successfully localized ${response.data.Id}`
+                    };
+                }
+                
                 return {
                     content: [{
                         type: "text",
-                        text: `Successfully localized item ${itemId}`
+                        text: JSON.stringify(resultData, null, 2)
                     }],
                 };
             } else {

@@ -1,3 +1,5 @@
+import { handleAxiosError } from "../utils/errorUtils.js";
+
 export const getCurrentTime = {
     name: "getCurrentTime",
     description: "Returns the current date and time in ISO 8601 format. Use this to get the precise current time for time-sensitive calculations, especially in long-running conversations.",
@@ -5,17 +7,18 @@ export const getCurrentTime = {
     execute: async () => {
         try {
             const now = new Date().toISOString();
+            const response = {
+                $type: "CurrentTime",
+                ISOTime: now
+            };
             return {
                 content: [{
                     type: "text",
-                    text: `The current time is ${now}.`
+                    text: JSON.stringify(response, null, 2)
                 }],
             };
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            return {
-                content: [{ type: "text", text: `Error getting current time: ${errorMessage}` }],
-            };
+            return handleAxiosError(error, "Error getting current time");
         }
     }
 };

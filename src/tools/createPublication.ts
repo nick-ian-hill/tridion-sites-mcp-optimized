@@ -131,10 +131,15 @@ Example 3: Creates a Publication and configures its default workflow processes.
             const createResponse = await authenticatedAxios.post('/items', payload);
 
             if (createResponse.status === 201) {
+                const responseData = {
+                    $type: createResponse.data['$type'],
+                    Id: createResponse.data.Id,
+                    Message: `Successfully created ${createResponse.data.Id}`
+                };
                 return {
                     content: [{
                         type: "text",
-                        text: `Successfully created Publication with ID ${createResponse.data.Id}`
+                        text: JSON.stringify(responseData, null, 2)
                     }],
                 };
             } else {

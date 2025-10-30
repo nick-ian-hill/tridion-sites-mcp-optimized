@@ -23,10 +23,15 @@ export const startActivity = {
             const response = await authenticatedAxios.post(endpoint);
 
             if (response.status === 200) {
+                const responseData = {
+                    $type: response.data['$type'],
+                    Id: response.data.Id,
+                    Message: `Successfully started ${response.data.Id}`,
+                };
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(response.data, null, 2)
+                        text: JSON.stringify(responseData, null, 2)
                     }],
                 };
             } else {

@@ -85,8 +85,14 @@ export const readExcelFileFromMultimediaComponent = {
                 });
                 workbookData[worksheet.name] = sheetData;
             });
+
+            const responseData = {
+                $type: "ExcelData",
+                Id: itemId,
+                WorkbookData: workbookData
+            };
             
-            const jsonString = JSON.stringify(workbookData, null, 2);
+            const jsonString = JSON.stringify(responseData, null, 2);
             console.log("Parsing complete.");
 
             return {

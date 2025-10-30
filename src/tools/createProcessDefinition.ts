@@ -119,7 +119,7 @@ Example 3: Create a workflow that automatically publishes the item(s) in the wor
             {
                 "title": "Publish Content",
                 "description": "This activity automatically publishes the items.",
-                "script": "PublishInstructionData p=new PublishInstructionData();p.ResolveInstruction=new ResolveInstructionData{IncludeChildPublications=false,IncludeComponentLinks=true,IncludeDynamicVersion=true,IncludeWorkflow=true,StructureResolveOption=StructureResolveOption.OnlyItems};p.RenderInstruction=new RenderInstructionData();string[] i=ProcessInstance.Subjects.Select(s=>{int v=s.IdRef.LastIndexOf(\"-v\");return v>-1?s.IdRef.Substring(0,v):s.IdRef;}).ToArray();if(i.Length>0){string[] t=new string[]{\"tcm:0-3-65538\"};PublishTransactionData[] tx=SessionAwareCoreServiceClient.Publish(i,p,t,Tridion.ContentManager.CoreService.Client.PublishPriority.Normal,null);ProcessInstance.Variables.Add(\"PublishTransaction\",tx[0].Id);}SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id,new ActivityFinishData{Message=\"Content approved and sent to publisher.\"},null);"
+                "script": "PublishInstructionData p=new PublishInstructionData();p.ResolveInstruction=new ResolveInstructionData{IncludeChildPublications=false,IncludeComponentLinks=true,IncludeDynamicVersion=true,IncludeWorkflow=true,StructureResolveOption=StructureResolveOption.OnlyItems};p.RenderInstruction=new RenderInstructionData();string[] i=ProcessInstance.Subjects.Select(s=>{int v=s.IdRef.LastIndexOf(\\"-v\\");return v>-1?s.IdRef.Substring(0,v):s.IdRef;}).ToArray();if(i.Length>0){string[] t=new string[]{\\"tcm:0-3-65538\\"};PublishTransactionData[] tx=SessionAwareCoreServiceClient.Publish(i,p,t,Tridion.ContentManager.CoreService.Client.PublishPriority.Normal,null);ProcessInstance.Variables.Add(\\"PublishTransaction\\",tx[0].Id);}SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id,new ActivityFinishData{Message=\\"Content approved and sent to publisher.\\"},null);"
             }
         ]
     });
@@ -183,7 +183,11 @@ Example 5: Create a workflow with a timed delay. The script suspends the activit
             const allNextActivities = new Set(activityDefinitions.flatMap(a => a.nextActivities));
             for (const nextTitle of allNextActivities) {
                 if (!activityTitles.has(nextTitle)) {
-                    return { content: [{ type: "text", text: `Error: Next activity '${nextTitle}' is defined as a transition target but does not exist as an activity.` }] };
+                    const errorResponse = {
+                        $type: 'Error',
+                        Message: `Error: Next activity '${nextTitle}' is defined as a transition target but does not exist as an activity.`
+                    };
+                    return { content: [{ type: "text", text: JSON.stringify(errorResponse, null, 2) }] };
                 }
             }
 
@@ -240,11 +244,16 @@ Example 5: Create a workflow with a timed delay. The script suspends the activit
             const createResponse = await authenticatedAxios.post('/items', payload);
 
             if (createResponse.status === 201) {
+                const responseData = {
+                    $type: createResponse.data['$type'],
+                    Id: createResponse.data.Id,
+                    Message: `Successfully created ${createResponse.data.Id}`
+                };
                 return {
                     content: [
                         {
                             type: "text",
-                            text: `Successfully created Process Definition with ID ${createResponse.data.Id}`
+                            text: JSON.stringify(responseData, null, 2)
                         }
                     ],
                 };

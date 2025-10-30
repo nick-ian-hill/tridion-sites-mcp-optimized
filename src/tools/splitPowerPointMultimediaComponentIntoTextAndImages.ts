@@ -141,6 +141,7 @@ export const splitPowerPointMultimediaComponentIntoTextAndImages = {
             
             const uniqueImagePaths = [...new Set(allSlidesData.flatMap(s => s.imagePaths))];
             const imagePathToComponentIdMap = new Map<string, string>();
+            let createdImageComponents: any[] = [];
 
             if (uniqueImagePaths.length > 0) {
                  const createdImagesPromises = uniqueImagePaths.map(async (imagePath) => {
@@ -154,47 +155,57 @@ export const splitPowerPointMultimediaComponentIntoTextAndImages = {
                     const result = await createMultimediaComponentFromBase64.execute({
                         base64Content, title, fileName, locationId,
                     }, context);
-
+                    
                     const resultText = result.content[0].text || "";
-                    const newIdMatch = resultText.match(/tcm:\d+-\d+/);
-                    if (newIdMatch) {
-                        return { imagePath, newComponentId: newIdMatch[0] };
+                    let newComponentId = 'N/A';
+                    
+                    try {
+                        const jsonResult = JSON.parse(resultText);
+                        newComponentId = jsonResult.Id || 'FailedToParseId';
+                    } catch (e) {
+                         // Fallback for older format (if any)
+                        const newIdMatch = resultText.match(/tcm:\d+-\d+/);
+                        if (newIdMatch) newComponentId = newIdMatch[0];
                     }
-                    return null;
+
+                    return { imagePath, newComponentId, originalName: fileName };
                 });
                 
-                const createdImages = (await Promise.all(createdImagesPromises)).filter(Boolean) as { imagePath: string; newComponentId: string; }[];
-                createdImages.forEach(img => imagePathToComponentIdMap.set(img.imagePath, img.newComponentId));
-            }
-           
-            let formattedResponseText = `Successfully split the PowerPoint component ${itemId}.\n`;
-
-            if (allSlidesData.length === 0) {
-                 formattedResponseText += `No slides were found in the presentation.`;
-            } else {
-                 allSlidesData.forEach(slide => {
-                    formattedResponseText += `\n### Slide ${slide.slideNumber}\n`;
-                    if (slide.textContent.trim()) {
-                        formattedResponseText += `**Text:**\n${slide.textContent.trim()}\n`;
-                    } else {
-                        formattedResponseText += `No text content found on this slide.\n`;
-                    }
-
-                    if (slide.imagePaths.length > 0) {
-                        formattedResponseText += `**Images:**\n`;
-                        slide.imagePaths.forEach(path => {
-                            const componentId = imagePathToComponentIdMap.get(path);
-                            const originalName = path.split('/').pop();
-                            formattedResponseText += `* Original Name: ${originalName}, Created Component: ${componentId || 'N/A'}\n`;
-                        });
-                    }
+                const createdImages = (await Promise.all(createdImagesPromises)).filter(Boolean) as { imagePath: string; newComponentId: string; originalName: string }[];
+                
+                createdImages.forEach(img => {
+                    imagePathToComponentIdMap.set(img.imagePath, img.newComponentId);
+                    createdImageComponents.push({
+                        OriginalName: img.originalName,
+                        ComponentId: img.newComponentId
+                    });
                 });
             }
+           
+            const slidesSummary = allSlidesData.map(slide => {
+                return {
+                    SlideNumber: slide.slideNumber,
+                    TextContent: slide.textContent.trim(),
+                    Images: slide.imagePaths.map(path => {
+                        return {
+                            OriginalName: path.split('/').pop() || 'N/A',
+                            ComponentId: imagePathToComponentIdMap.get(path) || 'N/A'
+                        };
+                    })
+                };
+            });
+
+            const responseData = {
+                $type: "SplitPowerPointResult",
+                Id: itemId,
+                CreatedImageComponents: createdImageComponents,
+                Slides: slidesSummary
+            };
 
             return {
                 content: [{
                     type: "text",
-                    text: formattedResponseText.trim()
+                    text: JSON.stringify(responseData, null, 2)
                 }]
             };
 

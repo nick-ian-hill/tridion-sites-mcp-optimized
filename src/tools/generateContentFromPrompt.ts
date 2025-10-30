@@ -17,7 +17,11 @@ The generated text can then be used as input for other tools, such as the 'conte
         context: any
     ) {
         if (!GEMINI_API_KEY) {
-            return { content: [{ type: "text", text: "Error: GEMINI_API_KEY is not configured for this tool." }] };
+            const errorResponse = {
+                $type: 'Error',
+                Message: "Error: GEMINI_API_KEY is not configured for this tool."
+            };
+            return { content: [{ type: "text", text: JSON.stringify(errorResponse, null, 2) }] };
         }
 
         try {
@@ -59,17 +63,25 @@ ${contextualText}
 
             const generatedText = (result.text ?? "").trim();
 
+            const responseData = {
+                $type: "GeneratedContent",
+                Content: generatedText
+            };
             return {
                 content: [{
                     type: "text",
-                    text: generatedText
+                    text: JSON.stringify(responseData, null, 2)
                 }],
             };
 
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             console.error(`[generateContent] Error: ${errorMessage}`);
-            return { content: [{ type: "text", text: `Error generating content: ${errorMessage}` }] };
+            const errorResponse = {
+                $type: 'Error',
+                Message: `Error generating content: ${errorMessage}`
+            };
+            return { content: [{ type: "text", text: JSON.stringify(errorResponse, null, 2) }] };
         }
     }
 };

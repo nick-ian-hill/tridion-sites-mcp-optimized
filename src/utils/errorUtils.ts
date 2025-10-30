@@ -12,7 +12,8 @@ interface ToolResult {
 
 /**
  * Formats an error, especially from Axios, into a standardized object.
- * The formatted error message is placed in the `content` property.
+ * The formatted error message is placed in the `content` property
+ * as a JSON string.
  *
  * @param error - The error object caught in a try-catch block.
  * @param contextMessage - A descriptive message providing context for the error
@@ -31,10 +32,15 @@ export function handleAxiosError(error: unknown, contextMessage: string): ToolRe
     // Also log the full error for server-side debugging
     console.error(fullMessage, error);
 
+    const errorResponse = {
+        $type: 'Error',
+        Message: fullMessage
+    };
+
     return {
         content: [{
             type: "text",
-            text: fullMessage
+            text: JSON.stringify(errorResponse, null, 2)
         }],
         errors: [], // Keep the errors array empty as requested
     };
@@ -42,7 +48,7 @@ export function handleAxiosError(error: unknown, contextMessage: string): ToolRe
 
 /**
  * Creates a standardized error response for unexpected API status codes.
- * The error message is placed in the `content` property.
+ * The error message is placed in the `content` property as a JSON string.
  *
  * @param response - The Axios response object.
  * @returns A ToolResult object with the unexpected status message.
@@ -51,10 +57,15 @@ export function handleUnexpectedResponse(response: AxiosResponse): ToolResult {
     const message = `Unexpected response status: ${response.status}. Message: ${response.statusText}`;
     console.error(message, response.data);
 
+    const errorResponse = {
+        $type: 'Error',
+        Message: message
+    };
+
     return {
         content: [{
             type: "text",
-            text: message
+            text: JSON.stringify(errorResponse, null, 2)
         }],
         errors: [], // Keep the errors array empty as requested
     };

@@ -93,15 +93,21 @@ Example 3: Update the default task process and enable workflow process associati
             if (updates.componentTemplateProcessId) itemToUpdate.ComponentTemplateProcess = toLink(updates.componentTemplateProcessId);
             if (updates.defaultTaskProcessId) itemToUpdate.DefaultProcessDefinitions = toLinkArray([updates.defaultTaskProcessId]);
             if (updates.templateBundleProcess) itemToUpdate.TemplateBundleProcess = toLink(updates.templateBundleProcess);
-            if (updates.parentPublications) itemToUpdate.ParentPublications = toLinkArray(updates.parentPublications);
+            if (updates.parentPublications) itemToUpdate.Parents = toLinkArray(updates.parentPublications);
 
             const updateResponse = await authenticatedAxios.put(`/items/${restItemId}`, itemToUpdate);
 
             if (updateResponse.status === 200) {
+                 const updatedItem = updateResponse.data;
+                 const responseData = {
+                    $type: updatedItem['$type'],
+                    Id: updatedItem.Id,
+                    Message: `Successfully updated ${updatedItem.Id}`
+                };
                 return {
                     content: [{
                         type: "text",
-                        text: `Successfully updated Publication ${itemId}`
+                        text: JSON.stringify(responseData, null, 2)
                     }],
                 };
             } else {

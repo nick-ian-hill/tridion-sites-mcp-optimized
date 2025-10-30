@@ -5,9 +5,8 @@ import { generateSearchFolderXmlConfiguration } from "../utils/generateSearchFol
 import { toLink, toLinkArray } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldDefinitionSchema, fieldValueSchema } from "../schemas/fieldValueSchema.js";
-import { processSchemaFieldDefinitions, reorderFieldsBySchema } from "../utils/fieldReordering.js";
+import { convertLinksRecursively, processSchemaFieldDefinitions, reorderFieldsBySchema } from "../utils/fieldReordering.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
-import { filterResponseData } from "../utils/responseFiltering.js";
 
 const updateItemPropertiesInputProperties = {
     itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the CMS item to update."),
@@ -40,7 +39,6 @@ const updateItemPropertiesInputProperties = {
     outputFormat: z.string().optional().describe("For 'ComponentTemplate' type. The format of the rendered Component Presentation (e.g., 'HTML Fragment')."),
     priority: z.number().int().optional().describe("For 'ComponentTemplate' type. Priority used for resolving Component links."),
     relatedSchemaIds: z.array(z.string().regex(/^tcm:\d+-\d+-8$/)).optional().describe("For 'ComponentTemplate' type. An array of Schema TCM URIs to link to this template. Replaces any existing links."),
-    includeProperties: z.array(z.string()).optional().describe(`An array of property names to include in the response object. If omitted, the full object is returned. 'Id', 'Title', and '$type' are always included when this is used.`)
 };
 
 const updateItemPropertiesSchema = z.object(updateItemPropertiesInputProperties);
@@ -130,7 +128,7 @@ Example 2: Change the Metadata Schema of a Folder and provide the mandatory valu
         itemType: "Folder",
         metadataSchemaId: "tcm:5-322-8",
         metadata: {
-            "campaignYear": 2025,
+                    "campaignYear": 2025,
             "campaignManager": {
                 "name": "Jane Doe",
                 "email": "jane.doe@example.com"
@@ -161,7 +159,7 @@ Example 2: Change the Metadata Schema of a Folder and provide the mandatory valu
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
         const userSessionId = match ? match[1] : null;
 
-        const { itemId, itemType, includeProperties, ...updates } = params;
+        const { itemId, itemType, ...updates } = params;
         const restItemId = itemId.replace(':', '_');
         const authenticatedAxios = createAuthenticatedAxios(userSessionId);
 
@@ -229,6 +227,7 @@ Example 2: Change the Metadata Schema of a Folder and provide the mandatory valu
             if (updates.metadata) {
                 const schemaIdForMetadata = updates.metadataSchemaId || itemToUpdate.MetadataSchema?.IdRef;
                 if (!schemaIdForMetadata || schemaIdForMetadata === 'tcm:0-0-0') throw new Error(`Could not determine a valid Schema for metadata. Please specify a 'metadataSchemaId'.`);
+                convertLinksRecursively(updates.metadata, itemId);
                 const orderedMetadata = await reorderFieldsBySchema(updates.metadata, schemaIdForMetadata, 'metadata', authenticatedAxios);
                 itemToUpdate.Metadata = orderedMetadata;
             }
@@ -243,7 +242,7 @@ Example 2: Change the Metadata Schema of a Folder and provide the mandatory valu
                 itemToUpdate.Items = toLinkArray(updates.itemsInBundle);
             }
             if (itemType === 'SearchFolder' && updates.searchQuery) {
-                itemToUpdate.Configuration = generateSearchFolderXmlConfiguration(updates.searchQuery, updates.resultLimit);
+                itemToUpdate.Configuration = generateSearchFolderXmlConfiguration(updates.searchQuery, updates.resultLimit || itemToUpdate.ResultLimit);
             }
             if (itemType === 'Schema') {
                 const schemaLocationId = itemToUpdate.LocationInfo?.OrganizationalItem?.IdRef;
@@ -287,10 +286,14 @@ Example 2: Change the Metadata Schema of a Folder and provide the mandatory valu
             }
             const updatedItem = updateResponse.data;
 
-            const finalData = filterResponseData({ responseData: updatedItem, includeProperties });
+            const responseData = {
+                $type: updatedItem['$type'],
+                Id: updatedItem.Id,
+                Message: `Successfully updated ${updatedItem.Id}`
+            };
 
             return {
-                content: [{ type: "text", text: `Successfully updated ${itemType} ${itemId}` }],
+                content: [{ type: "text", text: JSON.stringify(responseData, null, 2) }],
             };
 
         } catch (error) {

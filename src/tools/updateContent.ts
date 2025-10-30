@@ -96,8 +96,15 @@ Example 2: Updates the content of an embedded schema field.
                 return handleUnexpectedResponse(updateResponse);
             }
 
+            const updatedItem = updateResponse.data;
+            const responseData = {
+                $type: updatedItem['$type'],
+                Id: updatedItem.Id,
+                Message: `Successfully updated ${updatedItem.Id}`
+            };
+
             return {
-                content: [{ type: "text", text: `Successfully updated component ${itemId}` }],
+                content: [{ type: "text", text: JSON.stringify(responseData, null, 2) }],
             };
             
         } catch (error) {

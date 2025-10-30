@@ -134,16 +134,26 @@ IMPORTANT: Requesting a high level of detail for many items can be slow. Prefer 
                 const dotString = convertGraphToDot(Array.from(nodes.values()), edges);
                 const viz = await instance();
                 const svgOutput = await viz.renderString(dotString, { format: "svg", engine: "dot" });
+                
+                const jsonResponse = {
+                    $type: "SvgImage",
+                    Id: itemId,
+                    SvgContent: svgOutput
+                };
 
                 return {
                     content: [{
                         type: "text",
-                        text: `Here is the SVG representation of the BluePrint hierarchy for ${itemId}:\n\`\`\`svg\n${svgOutput}\n\`\`\``
+                        text: JSON.stringify(jsonResponse, null, 2)
                     }],
                 };
             }
 
-            return { content: [{ type: "text", text: "Invalid output format specified." }], errors: [] };
+            const errorResponse = {
+                $type: 'Error',
+                Message: "Invalid output format specified."
+            };
+            return { content: [{ type: "text", text: JSON.stringify(errorResponse, null, 2) }], errors: [] };
 
         } catch (error) {
             return handleAxiosError(error, `Failed to process BluePrint hierarchy request for item ${itemId}`);

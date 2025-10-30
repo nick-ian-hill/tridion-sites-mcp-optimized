@@ -26,7 +26,7 @@ To find items that are shared and can be localized, use the 'search' tool with t
                 return {
                     content: [{
                         type: "text",
-                        text: `Batch localization process started for ${itemIds.length} items.\n\n${JSON.stringify(response.data, null, 2)}`
+                        text: JSON.stringify(response.data, null, 2)
                     }],
                 };
             } else {

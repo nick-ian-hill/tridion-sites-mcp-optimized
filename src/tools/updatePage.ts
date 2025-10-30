@@ -77,6 +77,11 @@ Example 4: Change the Metadata Schema and provide metadata for the new fields. S
         const { itemId, ...updates } = params;
         const restItemId = itemId.replace(':', '_');
         const authenticatedAxios = createAuthenticatedAxios(userSessionId);
+        
+        const createErrorResponse = (message: string) => {
+            const errorResponse = { $type: 'Error', Message: message };
+            return { content: [{ type: "text", text: JSON.stringify(errorResponse, null, 2) }], errors: [] };
+        };
 
         try {
             const getItemResponse = await authenticatedAxios.get(`/items/${restItemId}`, { params: { useDynamicVersion: true } });
@@ -120,7 +125,7 @@ Example 4: Change the Metadata Schema and provide metadata for the new fields. S
                     itemToUpdate.ComponentPresentations = processComponentPresentations(parsedCPs, itemId);
                 } catch (error) {
                     const errorMessage = error instanceof Error ? error.message : String(error);
-                    throw new Error(`The 'componentPresentations' parameter is not a valid JSON string. Details: ${errorMessage}`);
+                    return createErrorResponse(`The 'componentPresentations' parameter is not a valid JSON string. Details: ${errorMessage}`);
                 }
             }
 
@@ -134,7 +139,7 @@ Example 4: Change the Metadata Schema and provide metadata for the new fields. S
                     itemToUpdate.Regions = await processRegions(parsedRegions, itemId, pageTemplateId, authenticatedAxios);
                 } catch (error) {
                     const errorMessage = error instanceof Error ? error.message : String(error);
-                    throw new Error(`The 'regions' parameter is not a valid JSON string. Details: ${errorMessage}`);
+                    return createErrorResponse(`The 'regions' parameter is not a valid JSON string. Details: ${errorMessage}`);
                 }
             }
 
@@ -144,8 +149,14 @@ Example 4: Change the Metadata Schema and provide metadata for the new fields. S
             }
             const updatedItem = updateResponse.data;
 
+            const responseData = {
+                $type: updatedItem['$type'],
+                Id: updatedItem.Id,
+                Message: `Successfully updated ${updatedItem.Id}`
+            };
+
             return {
-                content: [{ type: "text", text: `Successfully updated Page ${itemId}` }],
+                content: [{ type: "text", text: JSON.stringify(responseData, null, 2) }],
             };
 
         } catch (error) {
