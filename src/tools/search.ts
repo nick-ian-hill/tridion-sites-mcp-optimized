@@ -102,6 +102,9 @@ Example: ["VersionInfo.Creator", "BluePrintInfo.OwningRepository", "LockInfo", "
                 const contextId = searchQuery.SearchIn;
 
                 if (searchQuery.BasedOnSchemas) {
+                    if (!searchQuery.SearchIn) {
+                        throw new Error("InvalidSearchQuery: The 'SearchIn' parameter is required when filtering by 'BasedOnSchemas'.");
+                    }
                     searchQuery.BasedOnSchemas = searchQuery.BasedOnSchemas.map(schemaFilter => ({
                         ...schemaFilter,
                         schemaUri: convertItemIdToContextPublication(schemaFilter.schemaUri, contextId)
@@ -109,16 +112,25 @@ Example: ["VersionInfo.Creator", "BluePrintInfo.OwningRepository", "LockInfo", "
                 }
 
                 if (searchQuery.UsedKeywords) {
+                    if (!searchQuery.SearchIn) {
+                        throw new Error("InvalidSearchQuery: The 'SearchIn' parameter is required when filtering by 'UsedKeywords'.");
+                    }
                     searchQuery.UsedKeywords = searchQuery.UsedKeywords.map(keywordUri =>
                         convertItemIdToContextPublication(keywordUri, contextId)
                     );
                 }
 
                 if (searchQuery.ActivityDefinition) {
+                    if (!searchQuery.SearchIn) {
+                        throw new Error("InvalidSearchQuery: The 'SearchIn' parameter is required when filtering by 'ActivityDefinition'.");
+                    }
                     searchQuery.ActivityDefinition = convertItemIdToContextPublication(searchQuery.ActivityDefinition, contextId);
                 }
 
                 if (searchQuery.ProcessDefinition) {
+                    if (!searchQuery.SearchIn) {
+                        throw new Error("InvalidSearchQuery: The 'SearchIn' parameter is required when filtering by 'ProcessDefinition'.");
+                    }
                     searchQuery.ProcessDefinition = convertItemIdToContextPublication(searchQuery.ProcessDefinition, contextId);
                 }
             }
