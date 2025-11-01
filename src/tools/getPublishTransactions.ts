@@ -43,7 +43,7 @@ const getPublishTransactionsInput = {
     details: z.enum(["IdAndTitle", "CoreDetails", "AllDetails"]).default("IdAndTitle").optional()
         .describe(`Specifies a predefined level of detail for the returned items. For custom property selection, use 'includeProperties' instead.`),
     includeProperties: z.array(z.string()).optional()
-        .describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include (e.g., ["ListInfo.PublishAction", "Creator.Descripton", "Items.Title"]). If used, 'details' is ignored. 'Id', 'Title', and '$type' are always included.`),
+        .describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include (e.g., ["PublishContexts.ProcessedItems.RenderTime", "Creator.Descripton", "Items.Title"]). If used, 'details' is ignored. 'Id', 'Title', and '$type' are always included.`),
 };
 
 const getPublishTransactionsSchema = z.object(getPublishTransactionsInput);
@@ -55,6 +55,41 @@ export const getPublishTransactions = {
 Strategy for tasks requiring post-processing or aggregation of results (e.g., "Find the Most...", "Count all...")
 When post-processing of data from a large set of items is required, do not use this tool directly.
 This approach is token-inefficient and will fail on large result sets. The correct, scalable method is to use the 'toolOrchestrator' with the 3-phase (setup-map-reduce) pattern.
+
+The key properties of a PublishTransaction have the following structure:
+{
+  "$type": "PublishTransaction",
+  "Id": "tcm:0-286-66560",
+  "Title": "Sitemap - published to Staging only",
+  "Creator": { ... },
+  "Items": [ { ... } ],
+  "Priority": "Normal",
+  "PublishContexts": [
+    {
+      "$type": "PublishContext",
+      "ProcessedItems": [
+        {
+          "$type": "ProcessedItem",
+          "RenderTime": "00:00:01.5959346",
+          "ResolvedItem": {
+            "$type": "ResolvedItem",
+            "Item": {
+              "$type": "Link",
+              "IdRef": "tcm:5-2108-64",
+              "Title": "Sitemap - published to Staging only"
+            },
+            "Template": { ... }
+          }
+        }
+      ],
+      "Publication": { ... }
+    }
+  ],
+  "State": "Success",
+  "RenderingTime": "00:00:02.1180000",
+  "TargetType": { ... }
+  "TotalExecutionTime": "00:00:09.2170000"
+}
 
 Example: Find all 'Failed' transactions and create a report of their error messages.
     const result = await tools.toolOrchestrator({
