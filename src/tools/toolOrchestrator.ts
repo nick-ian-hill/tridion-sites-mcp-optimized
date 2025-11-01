@@ -162,7 +162,7 @@ The optional 'postProcessingScript' receives a 'context' object with:
 - context.log(message) (function): A function to log progress.
 Note: context.tools is not available in the postProcessingScript.
 This script's return value is the final output of the tool.
-(For convenience, 'results', 'parameters', and 'preProcessingResult' are also available as global-like variables.)
+(For convenience, 'results', 'parameters', and 'preProcessingResult' are also available as global-like variables. Do not declare new variables with these names.)
 
 All scripts *must* be 'async' and can 'await' tool calls.
 All tool calls (e.g., 'await context.tools.getItem(...)') are automatically authenticated.
@@ -416,8 +416,8 @@ This script uses the 'setup' phase to find all Components based on a specific Sc
             context.log(\`Searching for Components based on Schema: \${context.parameters.schemaId}\`);
 
             // WARNING: tools.search() will NOT find changes that have not been checked-in, or items that do not yet have a major version.
-            // If you need to process ALL items, use
-            // context.tools.getItemsInContainer() instead.
+            // Therefore, when searching for versioned items (e.g., Components, Pages, Schemas), use the less efficient
+            // context.tools.getItemsInContainer() instead to guarantee no relevant items are missed.
             
             // The JSON is automatically parsed. 'items' is an array.
             const items = await context.tools.search({
