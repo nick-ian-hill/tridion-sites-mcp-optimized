@@ -6,7 +6,7 @@ import { filterResponseData } from "../utils/responseFiltering.js";
 export const bulkReadItems = {
     name: "bulkReadItems",
     description: `Retrieves read-only details for multiple Content Manager System (CMS) items using their IDs.
-This tool is more efficient than calling the 'getItem' tool for each item individually.
+This tool is the most efficient way to get 'Content', 'Metadata', or 'BinaryContent' properties for multiple items. To retrieve them, you use the 'includeProperties' parameter (e.g., ['Metadata', 'BinaryContent.Size']).
 The returned data is an 'IdentifiableObjectDictionary' type, which maps each item ID to its details.
 To control the amount of data returned, use the 'includeProperties' parameter for granular control, which is the most efficient method.
 The 'useDynamicVersion' parameter can be set to true to load the latest saved data for versioned items.
@@ -54,7 +54,7 @@ Expected JSON Output:
         itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)).describe("An array of unique IDs for the items to retrieve. Use tools like 'search' or 'getItemsInContainer' to find item IDs."),
         useDynamicVersion: z.boolean().optional().default(false).describe("When true, loads the latest revisions for versioned items. Defaults to false."),
         loadFullItems: z.boolean().optional().default(false).describe("When true, loads the full content and metadata for each item. This is ignored if 'includeProperties' is used."),
-        includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response (e.g., ['LocationInfo.Path', 'VersionInfo.CreationDate', 'BinaryContent.MimeType']). If used, 'loadFullItems' is ignored. 'Id', 'Title', and '$type' will always be included.`),
+        includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response (e.g., ['LocationInfo.Path', 'VersionInfo.CreationDate', 'Content', 'Metadata', 'BinaryContent.MimeType']). If used, 'loadFullItems' is ignored. 'Id', 'Title', and '$type' will always be included.`),
     },
     execute: async ({ itemIds, useDynamicVersion = false, loadFullItems = false, includeProperties }: { 
         itemIds: string[], 

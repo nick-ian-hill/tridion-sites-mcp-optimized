@@ -14,12 +14,13 @@ export const search = {
   For browsing a known folder structure, 'getItemsInContainer' is an alternative.
 
   ### Important: Retrieving Full Item Details
-  The search service is optimized for finding items, not for retrieving their full content or deep structural data. Properties like a Component's 'Content'/'Metadata' or a Schema's 'Fields'/'MetadataFields' are NEVER returned by this tool, regardless of the 'details' or 'includeProperties' settings.
-  When using 'FullTextQuery' to search for a substring, a leading/trailing asterisk or other wildcard may be necessary, e.g., "*ing", "?art*".
-
+  The search service is optimized for finding items, not for retrieving their full content or deep structural data. Properties like a Component's 'Content'/'Metadata' (the values), a Schema's 'Fields'/'MetadataFields', or a Multimedia Component's 'BinaryContent' (MimeType, Size) are **NEVER** returned by this tool, regardless of the 'details' or 'includeProperties' settings.
+ 
   For tasks requiring inspection of these properties, always use a two-step process:
   1.  Find: Use 'search' with the default 'details: "IdAndTitle"' to efficiently get a list of relevant item IDs.
-  2.  Fetch: Use 'bulkReadItems' with the resulting IDs and the 'includeProperties' parameter to retrieve only the specific fields you need (e.g., ['Fields', 'MetadataFields']). This is the most token-efficient and reliable method.
+  2.  Fetch: Use 'bulkReadItems' with the resulting IDs and the 'includeProperties' parameter to retrieve only the specific fields you need (e.g., ['Fields', 'MetadataFields', 'BinaryContent']). This is the most token-efficient and reliable method.
+
+  When using 'FullTextQuery' to search for a substring, a leading/trailing asterisk or other wildcard may be necessary, e.g., "*ing", "?art*".
 
   Strategy for Efficient Searching
   To avoid excessive token usage, follow this strategy when choosing how much detail to request:
@@ -47,8 +48,12 @@ export const search = {
 
   Examples:
  
-  Example 1: Find 'Multimedia Components' which have a field containing the text 'logo'. Since we cannot limit the results to only 'Multimedia Components', you will need to review the value of the 'ComponentType' property and select only those items for which the value is 'MultimediaComponent'.
-      const result = await tools.search({
+  Example 1: Find 'Multimedia Components' which have a field containing the text 'logo'.
+  NOTE: The 'search' tool cannot access 'BinaryContent' (for MimeType, Size, etc.) or 'Metadata' (for alt text). It also cannot filter by 'ComponentType' directly.
+  The correct way to perform this task is to search for 'ItemTypes: ['Component']' and then use the 'toolOrchestrator' to fetch and filter the results. See 'toolOrchestrator' Example 10.
+
+This query will find all Components, which you can then process further.
+    const result = await tools.search({
       searchQuery: {
         ItemTypes: ['Component'],
         FullTextQuery: 'logo'
@@ -80,7 +85,7 @@ Example 2: Find 'Multimedia Components' based on the 'Default Multimedia Schema'
         includeProperties: z.array(z.string()).optional().describe(`The strongly preferred method for retrieving specific details to minimize token usage. Provide an array of property names to include in the response, using dot notation for nested properties (e.g., "VersionInfo.Creator",  "ComponentType").
 If this parameter is used, the 'details' parameter is ignored. 'Id', 'Title', and '$type' are always included.
 
-Important: Search results are content-less. Properties like 'Content', 'Metadata', 'Fields', and 'MetadataFields' are never available via search. To retrieve them, first find the item ID using this tool, then use 'bulkReadItems' or 'getItem'.
+Important: Search results are content-less. Properties like 'Content', 'Metadata', 'Fields', 'MetadataFields', and 'BinaryContent' are never available via search. To retrieve them, first find the item ID using this tool, then use 'bulkReadItems' or 'getItem'.
 
 Available top-level properties in search results include, but are not limited to:
 - "LocationInfo": Information about the item's location (e.g., Path, ContextRepository, OrganizationalItem).

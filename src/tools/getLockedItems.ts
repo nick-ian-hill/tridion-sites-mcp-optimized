@@ -29,6 +29,7 @@ export const getLockedItems = {
     name: "getLockedItems",
 description: `Gets a list of new and locked items (e.g., checked-out, in workflow).
 This tool is ideal for finding items in specific states using AND/NOT logic.
+Note that this tool does NOT return properties such as 'Content', 'Metadata' (values), or 'BinaryContent' (MimeType, Size). To inspect those properties, you must use 'getItem' or 'bulkReadItems' on the returned IDs.
 
 Strategy for tasks requiring post-processing or aggregation of results (e.g., "Find the Most...", "Count all...")
 When post-processing of data from a large set of items is required, do not use this tool directly.

@@ -844,6 +844,190 @@ This script uses the 'preProcessingScript' to perform a complex, one-time setup:
             return summary;
         \`
     });
+
+Example 10: Generate "Missing Alt Text" Report for Images
+    This script finds all image components in a Publication, then "fetches" the full data for each one
+    to inspect its MimeType and Metadata fields for alt text.
+
+    const result = await tools.toolOrchestrator({
+        preProcessingScript: \`
+            // Phase 1 (Setup): Find ALL components in the Publication.
+            context.log('Finding ALL components in Publication tcm:0-5-1...');
+            const allItems = await context.tools.getItemsInContainer({
+                containerId: "tcm:0-5-1",
+                itemTypes: ["Component"],
+                recursive: true,
+                details: "IdAndTitle"
+            });
+            const itemIds = allItems.map(item => item.Id);
+            context.log(\`Found \${itemIds.length} total Components to check.\`);
+            return itemIds;
+        \`,
+        mapScript: \`
+            // Phase 2 (Map): Fetch and inspect EACH component.
+            const itemId = context.currentItemId;
+            context.log(\`Checking: \${itemId}\`);
+            
+            // 1. Fetch the full item data, including Metadata and BinaryContent
+            const item = await context.tools.getItem({ 
+                itemId: itemId,
+                // We MUST include these properties to check them
+                includeProperties: ["Title", "ComponentType", "BinaryContent.MimeType", "Metadata"]
+            });
+
+            // 2. Filter for Images
+            if (!item || item.ComponentType !== 'Multimedia') {
+                context.log("  -> Not a Multimedia Component. Skipping.");
+                return null;
+            }
+            const mimeType = item.BinaryContent ? item.BinaryContent.MimeType : '';
+            const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/bmp', 'image/webp'];
+            if (!allowedTypes.includes(mimeType)) {
+                context.log(\`  -> Not an image (MimeType: \${mimeType}). Skipping.\`);
+                return null;
+            }
+
+            // 3. Inspect Metadata for 'alt' or 'description'
+            const metadata = item.Metadata;
+            if (!metadata) {
+                context.log("  -> Is image, but has NO Metadata block. Adding to report.");
+                return { id: item.Id, title: item.Title, reason: "Missing Metadata block" };
+            }
+
+            // Find a field with 'alt' or 'description' in its name
+            const altFieldKey = Object.keys(metadata).find(key => 
+                key.toLowerCase().includes('alt') || key.toLowerCase().includes('description')
+            );
+
+            if (!altFieldKey) {
+                context.log("  -> Is image, but has NO field matching 'alt' or 'description'. Adding to report.");
+                return { id: item.Id, title: item.Title, reason: "No 'alt' or 'description' field" };
+            }
+
+            // Check if the found field is empty
+            const altValue = metadata[altFieldKey];
+            if (!altValue || (typeof altValue === 'string' && altValue.trim() === '')) {
+                context.log(\`  -> Is image, has field '\${altFieldKey}', but it is EMPTY. Adding to report.\`);
+                return { id: item.Id, title: item.Title, reason: \`Empty '\${altFieldKey}' field\` };
+            }
+
+            context.log(\`  -> OK: Found '\${altFieldKey}' with value.\`);
+            return null; // This item is compliant
+        \`,
+        postProcessingScript: \`
+            // Phase 3 (Reduce): Collect all non-compliant items
+            context.log('Aggregating report...');
+            const nonCompliantItems = results
+                .filter(r => r.status === 'success' && r.result !== null)
+                .map(r => r.result);
+
+            return {
+                totalChecked: results.length,
+                totalNonCompliant: nonCompliantItems.length,
+                itemsToFix: nonCompliantItems
+            };
+        \`
+    });
+
+Example 11: Find Large, Unused Multimedia Components
+    This script finds all Components, filters them by size, and then checks if they are used by any *published* Page.
+
+    const result = await tools.toolOrchestrator({
+        parameters: {
+            "minFileSizeMB": 10
+        },
+        preProcessingScript: \`
+            // Phase 1 (Setup): Find ALL components in the Publication.
+            context.log('Finding ALL components in Publication tcm:0-5-1...');
+            const allItems = await context.tools.getItemsInContainer({
+                containerId: "tcm:0-5-1",
+                itemTypes: ["Component"],
+                recursive: true,
+                details: "IdAndTitle"
+            });
+            const itemIds = allItems.map(item => item.Id);
+            context.log(\`Found \${itemIds.length} total Components to check.\`);
+            return itemIds;
+        \`,
+        mapScript: \`
+            const itemId = context.currentItemId;
+            const minBytes = context.parameters.minFileSizeMB * 1024 * 1024;
+
+            // 1. Fetch item data, including BinaryContent for FileSize
+            const item = await context.tools.getItem({ 
+                itemId: itemId,
+                includeProperties: ["Title", "ComponentType", "BinaryContent.Size"]
+            });
+
+            // 2. Filter for large Multimedia Components
+            if (!item || item.ComponentType !== 'Multimedia' || !item.BinaryContent) {
+                return null; // Not a multimedia component
+            }
+            if (item.BinaryContent.Size < minBytes) {
+                return null; // Too small
+            }
+            context.log(\`Found large file: \${item.Title} (\${item.BinaryContent.Size} bytes)\`);
+
+            // 3. Find all Pages that use this component
+            const graph = await context.tools.dependencyGraphForItem({
+                itemId: itemId,
+                direction: "UsedBy",
+                rloItemTypes: ["Page"], // Only care about Page usages
+                details: "IdAndTitle"
+            });
+
+            // Helper to flatten the graph into a list of Page IDs
+            function flattenPageIds(node) {
+                let ids = [];
+                if (!node || !node.Dependencies) return ids;
+                for (const child of node.Dependencies) {
+                    if (child.Item && child.Item.$type === 'Page') {
+                        ids.push(child.Item.Id);
+                    }
+                    ids = ids.concat(flattenPageIds(child));
+                }
+                return [...new Set(ids)]; // Return unique IDs
+            }
+            
+            const pageIds = flattenPageIds(graph);
+            if (pageIds.length === 0) {
+                context.log('  -> Unused by any Page. Adding to report.');
+                return { id: item.Id, title: item.Title, size: item.BinaryContent.Size, reason: "Unused by any Page" };
+            }
+            context.log(\`  -> Used by \${pageIds.length} Page(s). Checking if any are published...\`);
+
+            // 4. Check if ANY of the using Pages are published
+            for (const pageId of pageIds) {
+                const publishInfo = await context.tools.getPublishInfo({ 
+                    itemId: pageId, 
+                    includeProperties: ["PublishedAt"] 
+                });
+                
+                if (publishInfo && publishInfo.length > 0) {
+                    // This component is used by at least one published page. It's safe.
+                    context.log(\`  -> Used by published Page \${pageId}. Skipping.\`);
+                    return null;
+                }
+            }
+            
+            // 5. If loop finishes, it's used, but only by UNPUBLISHED pages
+            context.log('  -> Used only by UNPUBLISHED pages. Adding to report.');
+            return { id: item.Id, title: item.Title, size: item.BinaryContent.Size, reason: "Used only by unpublished Pages" };
+        \`,
+        postProcessingScript: \`
+            // Phase 3 (Reduce): Collect all items to delete
+            context.log('Aggregating report...');
+            const itemsToReport = results
+                .filter(r => r.status === 'success' && r.result !== null)
+                .map(r => r.result);
+
+            return {
+                totalChecked: results.length,
+                totalFilesToReview: itemsToReport.length,
+                filesToReview: itemsToReport
+            };
+        \`
+    });
 `,
 
     // The 'input' property is now the plain object

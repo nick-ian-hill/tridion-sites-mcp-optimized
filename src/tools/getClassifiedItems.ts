@@ -15,6 +15,7 @@ const getClassifiedItemsSchema = z.object(getClassifiedItemsInputProperties);
 export const getClassifiedItems = {
     name: "getClassifiedItems",
     description: `Gets a list of all items that are classified with a specified Keyword. 'Classified' means an item has a keyword field that contains the specified Keyword.
+    Note that this tool does NOT return properties like  'Content', 'Metadata' (values), or 'BinaryContent' (MimeType, Size). To inspect those properties, you must use 'getItem' or 'bulkReadItems' on the returned IDs.
 
   Strategy for tasks requiring post-processing or aggregation of results (e.g., "Find the Most...", "Count all...")
   When post-processing of data from a large set of items is required, do not use this tool directly.

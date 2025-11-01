@@ -18,6 +18,8 @@ Only select "AllDetails" if you absolutely need full details about the returned 
   - SecurityDescriptor
   - LoadInfo
 
+  Note: While this tool can return item details via 'includeProperties', it does not retrieve full 'Content', 'Metadata' (values), or 'BinaryContent' properties. To inspect those, use 'getItem' or 'bulkReadItems' on the item IDs found in the graph.
+
   Strategy for tasks requiring post-processing or aggregation of results (e.g., "Find the Most...", "Count all...")
   When post-processing of data from a large set of items is required, do not use this tool directly.
   This approach is token-inefficient and will fail on large result sets. The correct, scalable method is to use the 'toolOrchestrator', and supply a postProcessingScript to perform the aggregation on the server-side. See the 'toolOrchestrator' documentation for the recommended 3-phase (setup-map-reduce) pattern.
