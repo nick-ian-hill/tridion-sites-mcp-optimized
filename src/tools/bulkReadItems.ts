@@ -54,7 +54,7 @@ Expected JSON Output:
         itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)).describe("An array of unique IDs for the items to retrieve. Use tools like 'search' or 'getItemsInContainer' to find item IDs."),
         useDynamicVersion: z.boolean().optional().default(false).describe("When true, loads the latest revisions for versioned items. Defaults to false."),
         loadFullItems: z.boolean().optional().default(false).describe("When true, loads the full content and metadata for each item. This is ignored if 'includeProperties' is used."),
-        includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response (e.g., ["LocationInfo.Path", "VersionInfo.CreationDate"]). If used, 'loadFullItems' is ignored. 'Id', 'Title', and '$type' will always be included.`),
+        includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response (e.g., ['LocationInfo.Path', 'VersionInfo.CreationDate', 'BinaryContent.MimeType']). If used, 'loadFullItems' is ignored. 'Id', 'Title', and '$type' will always be included.`),
     },
     execute: async ({ itemIds, useDynamicVersion = false, loadFullItems = false, includeProperties }: { 
         itemIds: string[], 
