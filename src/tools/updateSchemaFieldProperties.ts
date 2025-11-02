@@ -163,7 +163,8 @@ Example 3: Update a validation constraint on a field.
                 }
                 const fieldToUpdate = fieldCollection[fieldName];
                 if (!fieldToUpdate) {
-                     return createJsonError(`Field '${fieldName}' not found in the '${fieldLocation}' definition of Schema ${schemaId}.`);
+                     return createJsonError(`Field '${fieldName}' not found in the '${fieldLocation}' definition of Schema ${schemaId}.
+                         Hint: This tool can only update properties of existing fields. To add a new field, you must use the 'updateItemProperties' tool and provide the complete, new 'fields' or 'metadataFields' collection.`);
                 }
 
                 const fieldType = fieldToUpdate.$type as keyof typeof schemaTypeMap;

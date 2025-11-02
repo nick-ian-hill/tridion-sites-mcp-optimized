@@ -31,7 +31,7 @@ Supported Field Types ('$type' values):
   - SingleLineTextFieldDefinition: A simple text input. XSD Schema properties like 'Pattern', 'MinLength', and 'MaxLength' can be used to restrict the allowed input values.
   - MultiLineTextFieldDefinition: A multi-line text area. Supports a 'Height' property for the UI.
   - XhtmlFieldDefinition: A rich-text (HTML) editor. Supports a 'Height' property for the UI. Can also include a 'FormattingFeatures' object to control the editor's toolbar.
-  - KeywordFieldDefinition: A link to a Keyword from a Category. This requires a 'Category' property with a Link object pointing to the desired Category (e.g., { "$type": "Link", "IdRef": "tcm:1-3-512" }).
+  - KeywordFieldDefinition: - A link to a Keyword from a Category. This requires a 'Category' property with a Link object. The Category you link to must exist in the same Publication as the Schema or in a Parent Publication. You cannot link to a Category in a child or sibling Publication.
   - NumberFieldDefinition: A field for numeric values. The 'MinInclusive', 'MaxExclusive', 'TotalDigits', and 'FractionDigits' properties can be used to restrict the range of values.
   - DateFieldDefinition: A field for date/time values. The date range can be restricted using properties like 'MinInclusive', 'MaxExclusive', etc.
   - ExternalLinkFieldDefinition: A field for a URL.
@@ -149,7 +149,7 @@ Example 4: Create a Schema with an XHTML field that has custom formatting featur
         }
     });
 
-Example 5: Create a Schema that uses an embeddable Schema for an embedded field. First, ensure you have an 'Embeddable' Schema created (e.g., an 'Author' Schema with TCM URI tcm:1-123-8). The embeddable Schema will be referenced via the 'EmbeddedSchema' property, the value of which should be a Link. There should also be an EmbeddedFields property, the value of which should be an empty object.
+Example 5: Create a Schema that uses an embeddable Schema for an embedded field. First, ensure you have an 'Embeddable' Schema created (e.g., an 'Author' Schema with TCM URI tcm:1-123-8). The embeddable Schema will be referenced via the 'EmbeddedSchema' property, the value of which should be a Link.
     const result = await tools.createSchema({
         title: "ArticleSchema",
         locationId: "tcm:11-4567-2",
@@ -173,8 +173,7 @@ Example 5: Create a Schema that uses an embeddable Schema for an embedded field.
                 "EmbeddedSchema": {
                     "$type": "Link",
                     "IdRef": "tcm:11-123-8"
-                },
-                "EmbeddedFields": {}
+                }
             }
         }
     });
@@ -371,7 +370,7 @@ Example 12: Create an 'Embedded' Schema to be used within other Schemas.
         rootElementName: xmlNameSchema.optional().describe("The name of the root element for the XML structure defined by the Schema. Only applies to component and embeddable schemas. When using two or more embeddable schemas in a schema (via embedded schema fields), this value needs to be unique between the embeddable schemas."),
         description: z.string().nonempty().describe("An mandatory description of the Schema."),
         fields: z.record(fieldDefinitionSchema).optional().describe("Only used for Component Schemas. A dictionary of field definitions for the schema's content fields. The keys of the dictionary are the machine names of the fields."),
-        metadataFields: z.record(fieldDefinitionSchema).optional().describe("A dictionary of metadata field definitions for the schema's metadata. The keys of the dictionary are the machine names of the metadata fields. You MUST use this property when defining METADATA fields for any schema type, including Component schemas."),
+        metadataFields: z.record(fieldDefinitionSchema).optional().describe("A dictionary of metadata field definitions for the schema's metadata. The keys of the dictionary are the machine names of the metadata fields. You MUST use this property when defining METADATA fields for any schema type. The ONLY way to create a component with metadata fields is to use a component schema for which this property is defined."),
         allowedMultimediaTypes: z.array(z.string().regex(/^tcm:0-\d+-65544$/)).optional().describe("An array of TCM URIs for allowed Multimedia Types. Only applicable when 'purpose' is 'Multimedia'."),
         bundleProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of a Process Definition to associate as the Bundle Process."),
         componentProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of a Process Definition to associate as the Component Process for workflow."),

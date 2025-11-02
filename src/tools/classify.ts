@@ -20,7 +20,8 @@ export const classify = {
     name: "classify",
     description: `Classifies, unclassifies, or reclassifies a single item by adding and/or removing specified keywords. This is a synchronous operation. 
     
-  Important: - Adding a Keyword is only possible if the item's Schema contains one or more 'KeywordFieldDefinition' fields that reference the Category the Keyword belongs to. 
+  Important:
+- Adding a Keyword is only possible if the item's Schema (in the fields or metadataFields property) contains one or more KeywordFieldDefinition fields that link to the Keyword's parent Category. If you receive a Warning: "No changes were made...", it almost always means the Component's Schema is missing a 'KeywordFieldDefinition' for that Category. You must use updateItemProperties to add one.
 - Any Keywords to add/remove for which there is no matching Keyword field will be ignored.
 - If a Keyword to be added is already present in all relevant fields, it will be ignored.
 - If a Keyword to be removed is not present in any relevant field, it will be ignored.

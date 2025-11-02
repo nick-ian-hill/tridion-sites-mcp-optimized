@@ -17,8 +17,8 @@ const createItemInputProperties = {
     locationId: z.string().regex(/^tcm:\d+-\d+-\d+$/).describe("The TCM URI of the parent container. Use 'search' or 'getItemsInContainer' to find a suitable container. For 'Keyword', the container must be a Category (use 'getCategories'). For 'Category', the container is a Publication (use 'getPublications')."),
     schemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("Required for 'Component'. The TCM URI of the Schema. Use 'getSchemaLinks' to find available Schemas in the target Publication. If the Schema does not exist in the target Publication, item creation will fail."),
     metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("Optional. The TCM URI of the Metadata Schema. Use 'getSchemaLinks' to find available Schemas."),
-    content: z.record(fieldValueSchema).optional().describe("A JSON object for the item's content fields. The tool will automatically order the fields to match the Schema definition."),
-    metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields. For a 'Component', this requires the Component Schema to have fields defined in its 'metadataFields' property.The tool will automatically order the fields to match the Schema definition."),
+    content: z.record(fieldValueSchema).optional().describe("A JSON object for the item's content fields. The order of keys in your JSON object does not matter - the tool will automatically order the fields to match the Schema definition."),
+    metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields. For a 'Component', this requires the Component Schema to have fields defined in its 'metadataFields' property. The order of keys in your JSON object does not matter - the tool will automatically order the fields to match the Schema definition."),
     isAbstract: z.boolean().optional().describe("Only for 'Keyword' type. Set to true to create an abstract Keyword."),
     description: z.string().optional().describe("A description for the item. Applicable to Keyword, Category, Bundle, and Search Folder types."),
     directory: z.string().optional().describe("Required for 'StructureGroup' type. The directory name used in the URL path (e.g., 'pages')."),
@@ -56,7 +56,15 @@ const createItemInputSchema = z.object(createItemInputProperties)
     })
     .refine(data => !((data.itemType === 'PageTemplate' || data.itemType === 'ComponentTemplate') && (!data.templateBuildingBlocks || data.templateBuildingBlocks.length === 0)), {
         message: "To create a 'PageTemplate' or 'ComponentTemplate', the 'templateBuildingBlocks' parameter must be provided and not be empty."
-    });
+    })
+    .refine(
+        (data) => !(data.itemType === 'Component' && data.metadataSchemaId),
+        {
+            message: "Validation Error: The 'metadataSchemaId' parameter cannot be used when `itemType` is 'Component'. " +
+                     "To add metadata to a Component, you must first define 'metadataFields' directly on the Component Schema (using `createSchema` or `updateItemProperties`) " +
+                     "and then provide the values using the 'metadata' parameter."
+        }
+    );
 
 type CreateItemInput = z.infer<typeof createItemInputSchema>;
 

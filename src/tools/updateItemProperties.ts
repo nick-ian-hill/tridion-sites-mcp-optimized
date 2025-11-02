@@ -28,7 +28,7 @@ const updateItemPropertiesInputProperties = {
     fields: z.record(fieldDefinitionSchema).optional().describe(`For Schema updates only. Replaces the entire collection of content fields.
     Use this for structural changes like adding, removing, or reordering fields.
     For modifying properties of existing fields (e.g., making a field optional), the 'updateSchemaFieldProperties' tool is strongly recommended as it is safer and more efficient.`),
-    metadataFields: z.record(fieldDefinitionSchema).optional().describe(`For Schema updates only. Replaces the entire collection of metadata fields.
+    metadataFields: z.record(fieldDefinitionSchema).optional().describe(`For Schema updates only. Replaces the entire collection of metadata fields. The ONLY way to create a component with metadata fields is to use a component schema for which this property is defined.
     Use this for structural changes like adding, removing, or reordering fields.
     For modifying properties of existing fields (e.g., changing a description), the 'updateSchemaFieldProperties' tool is strongly recommended as it is safer and more efficient.`),
     fileExtension: z.string().optional().describe("A new file extension for the Page Template. (Applicable to PageTemplate)"),
