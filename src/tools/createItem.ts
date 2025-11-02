@@ -21,6 +21,7 @@ const createItemInputProperties = {
     metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields. For a 'Component', this requires the Component Schema to have fields defined in its 'metadataFields' property.The tool will automatically order the fields to match the Schema definition."),
     isAbstract: z.boolean().optional().describe("Only for 'Keyword' type. Set to true to create an abstract Keyword."),
     description: z.string().optional().describe("A description for the item. Applicable to Keyword, Category, Bundle, and Search Folder types."),
+    directory: z.string().optional().describe("Required for 'StructureGroup' type. The directory name used in the URL path (e.g., 'pages')."),
     key: z.string().optional().describe("A custom key for the Keyword."),
     parentKeywords: z.array(z.string().regex(/^(tcm:\d+-\d+-1024|ecl:[a-zA-Z0-9-]+)$/)).optional().describe("An array of URIs for parent Keywords. Use 'getKeywordsForCategory' to find potential parent keywords."),
     relatedKeywords: z.array(z.string().regex(/^(tcm:\d+-\d+-1024|ecl:[a-zA-Z0-9-]+)$/)).optional().describe("An array of URIs for related Keywords. Use 'getKeywordsForCategory' to find keywords."),
@@ -40,6 +41,9 @@ const createItemInputProperties = {
 const createItemInputSchema = z.object(createItemInputProperties)
     .refine(data => !(data.itemType === 'Component' && !data.schemaId), {
         message: "To create a 'Component', the 'schemaId' parameter is required."
+    })
+    .refine(data => !(data.itemType === 'StructureGroup' && !data.directory), {
+        message: "To create a 'StructureGroup', the 'directory' parameter is required."
     })
     .refine(data => !(data.itemType === 'SearchFolder' && !data.searchQuery), {
         message: "To create a 'SearchFolder', the 'searchQuery' parameter is required."
@@ -178,7 +182,7 @@ Example 2: Create a Folder for a campaign.
             convertLinksRecursively(args.metadata, locationId);
         }
 
-        let { itemType, title, schemaId, metadataSchemaId, content, metadata, isAbstract, description, key, parentKeywords, relatedKeywords, itemsInBundle, searchQuery, resultLimit = 100, fileExtension, pageSchemaId, templateBuildingBlocks, allowOnPage, isRepositoryPublishable, outputFormat, priority, relatedSchemaIds } = args;
+        let { itemType, title, schemaId, metadataSchemaId, content, metadata, isAbstract, description, key, parentKeywords, relatedKeywords, itemsInBundle, searchQuery, resultLimit = 100, fileExtension, pageSchemaId, templateBuildingBlocks, allowOnPage, isRepositoryPublishable, outputFormat, priority, relatedSchemaIds, directory } = args;
 
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
@@ -233,6 +237,9 @@ Example 2: Create a Folder for a campaign.
                 payload.OutputFormat = outputFormat ?? "HTML Fragment";
                 payload.Priority = priority ?? 200;
                 if (relatedSchemaIds) payload.RelatedSchemas = toLinkArray(relatedSchemaIds);
+            }
+            if (itemType === 'StructureGroup' && directory) {
+                payload.Directory = directory;
             }
             if (itemType === 'Keyword') {
                 if (typeof isAbstract === 'boolean') payload.IsAbstract = isAbstract;
