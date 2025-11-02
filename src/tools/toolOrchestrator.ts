@@ -127,9 +127,9 @@ export const toolOrchestrator = {
     RECOMMENDED STRATEGY
     DO NOT USE this tool for orchestrating very complex one-shot tasks, like building an entire website.
     Instead, break such complex tasks down into smaller steps, using separate toolOrchestrator calls for individual steps as appropriate.
-    For example, a single toolOrchestrator call could be used to create the Publications for a BluePrint hierarchy (see Example 9).
-    Next, after inspecting the created Publications for any necessary default items (e.g., 'TemplateBuildingBlocks', 'ComponentTemplates' etc.), individually crafted tool calls could be used to populate relevant Publications with any additional required templates and Schemas.
-    Following these individual tool calls, further discrete toolOrchestrator calls could be used for (a) generating content items, (b) classifying the created items, and (c) localizing and translating the content items in the relevant child publications.
+    For example, a single toolOrchestrator call could be used to create the Publications for a BluePrint hierarchy (see Example 9). Note that Publication titles need to be globally unique, so it's recommended to call 'getPublications' to avoid name collisions before generating any BluePrint hierarchy creation scripts.
+    Next, after inspecting the created Publications for any necessary default items (e.g., 'TemplateBuildingBlocks', 'ComponentTemplates' etc.), individually crafted tool calls could be used to populate relevant Publications with any additional required templates, Schemas, content items (components), and pages.
+    Following these individual tool calls, further discrete toolOrchestrator calls utilizing AI-enabled tools like 'generateContentFromPrompt' could be used for (a) classifying the created items and (b) localizing and translating the content items and pages in the relevant child publications.
     Trying to combine multiple steps such as item creation, classification, and localization into a single toolOrchestrator call will very likely result in errors which require multiple iterations to debug, thereby reducing overall efficiency. 
     
     The tool supports up to three phases:
@@ -743,6 +743,7 @@ This script finds all Pages in a Publication, efficiently gets the required Targ
 
 Example 9: Create a 'Diamond' BluePrint Hierarchy (Setup only)
 This script uses the 'preProcessingScript' to perform a complex, one-time setup: creating a full BluePrint hierarchy. It creates a Root Publication, adds the required Root Structure Group, and then creates a 'diamond' inheritance pattern (a Website inheriting from separate Schema and Content Publications). The 'mapScript' is skipped, and the 'postProcessingScript' returns a final summary.
+Note: This script assumes the Publication titles are unique. Publication titles must be globally unique, and the script will fail with a 409 Conflict error if a Publication with one of these titles already exists. Verify uniqueness using getPublications before creating and running the script.
 
     const result = await tools.toolOrchestrator({
         preProcessingScript: \`

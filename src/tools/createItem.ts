@@ -15,7 +15,7 @@ const createItemInputProperties = {
     ]).describe("The type of CMS item to create."),
     title: z.string().describe("The title for the new item. Note that creation will fail if an item of the same type exists in the current container (e.g., 'Folder'), or in the inherited copy of the container in a child or descendent 'Publication'. In other words, for a given container and item type, the title needs to be unique across the BluePrint hierarchy."),
     locationId: z.string().regex(/^tcm:\d+-\d+-\d+$/).describe("The TCM URI of the parent container. Use 'search' or 'getItemsInContainer' to find a suitable container. For 'Keyword', the container must be a Category (use 'getCategories'). For 'Category', the container is a Publication (use 'getPublications')."),
-    schemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("Required for 'Component'. The TCM URI of the Schema. Use 'getSchemaLinks' to find available Schemas in the target Publication."),
+    schemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("Required for 'Component'. The TCM URI of the Schema. Use 'getSchemaLinks' to find available Schemas in the target Publication. If the Schema does not exist in the target Publicaiton, item creation will fail."),
     metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("Optional. The TCM URI of the Metadata Schema. Use 'getSchemaLinks' to find available Schemas."),
     content: z.record(fieldValueSchema).optional().describe("A JSON object for the item's content fields. The tool will automatically order the fields to match the Schema definition."),
     metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields. For a 'Component', this requires the Component Schema to have fields defined in its 'metadataFields' property.The tool will automatically order the fields to match the Schema definition."),
@@ -59,7 +59,7 @@ type CreateItemInput = z.infer<typeof createItemInputSchema>;
 export const createItem = {
     name: "createItem",
     description: `Creates a new Content Management System (CMS) item of a specified type. This is a general-purpose creation tool. For more specific creation tasks, consider using 'createPage', 'createPublication', 'createSchema', or 'createMultimediaComponentFromUrl'.
-The tool automatically handles different item types and their specific properties. The created item will be placed in the container (Folder, Structure Group, Category, or Publication) specified by 'locationId'. Any references to other items (e.g., a Schema, parent Keywords) must be in the same Publication as the container item.
+The tool automatically handles different item types and their specific properties. The created item will be placed in the container (Folder, Structure Group, Category, or Publication) specified by 'locationId'. Any references to other items (e.g., a Schema, parent Keywords) must be in the same Publication as the container item. Note that a Publication can only have one root Folder and one root Structure Group. A Folder/structure Group can contain arbitrarily many child Folders/Structure Groups.
 For a Category, the container is the Publication.   
 For items other than Publications, the first number in the ID identifies the Publication (e.g., for both tcm:5-127 and tcm:5-2002-2, the Publication is 5).  
 For Publications, the second number identifies the Publication (e.g., tcm:0-5-1 represents Publication 5).  
