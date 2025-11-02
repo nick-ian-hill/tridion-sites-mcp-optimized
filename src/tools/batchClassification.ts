@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
+import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 
 const batchClassificationInputProperties = {
     itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/))
@@ -18,7 +19,12 @@ const batchClassificationSchema = z.object(batchClassificationInputProperties);
 
 export const batchClassification = {
     name: "batchClassification",
-    description: `Starts an asynchronous process to classify, unclassify, or reclassify a batch of items. This single tool can add and/or remove specified keywords for all items in the batch, making it more efficient than individual operations with the 'classify' tool. The initial response includes a batch ID for monitoring the process status with the 'getBatchOperationStatus' tool.`,
+    description: `Starts an asynchronous process to classify, unclassify, or reclassify a batch of items. This single tool can add and/or remove specified keywords for all items in the batch. The initial response includes a batch ID for monitoring the process status with the 'getBatchOperationStatus' tool.
+
+  Important: - Adding a Keyword is only possible if an item's Schema contains one or more 'KeywordFieldDefinition' fields that reference the Category the Keyword belongs to. 
+- Any Keywords to add/remove for which there is no matching Keyword field will be ignored for that item.
+- If a Keyword to be added is already present in all relevant fields for an item, it will be ignored for that item.
+- If a Keyword to be removed is not present in any relevant field for an item, it will be ignored for that item.`,
     
     input: batchClassificationInputProperties,
 
@@ -48,12 +54,21 @@ export const batchClassification = {
 
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
+
+            // Map keywords to the publication context of the first item in the batch
+            const contextItemId = itemIds[0];
+            const finalKeywordIdsToAdd = keywordIdsToAdd.map(keywordId =>
+                convertItemIdToContextPublication(keywordId, contextItemId)
+            );
+            const finalKeywordIdsToRemove = keywordIdsToRemove.map(keywordId =>
+                convertItemIdToContextPublication(keywordId, contextItemId)
+            );
             
             const requestModel = { 
                 "$type": "BatchClassificationRequest",
                 "ItemIds": itemIds, 
-                "KeywordIdsToAdd": keywordIdsToAdd,
-                "KeywordIdsToRemove": keywordIdsToRemove
+                "KeywordIdsToAdd": finalKeywordIdsToAdd,
+                "KeywordIdsToRemove": finalKeywordIdsToRemove
             };
 
             const response = await authenticatedAxios.post('/batch/classification', requestModel);

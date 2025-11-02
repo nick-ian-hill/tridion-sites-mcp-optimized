@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
+import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 
 const classifyInputProperties = {
     itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)
@@ -17,7 +18,14 @@ const classifySchema = z.object(classifyInputProperties);
 
 export const classify = {
     name: "classify",
-    description: "Classifies, unclassifies, or reclassifies a single item by adding and/or removing specified keywords. This is a synchronous operation. For batch operations, use the 'batchClassification' tool.",
+    description: `Classifies, unclassifies, or reclassifies a single item by adding and/or removing specified keywords. This is a synchronous operation. 
+    
+  Important: - Adding a Keyword is only possible if the item's Schema contains one or more 'KeywordFieldDefinition' fields that reference the Category the Keyword belongs to. 
+- Any Keywords to add/remove for which there is no matching Keyword field will be ignored.
+- If a Keyword to be added is already present in all relevant fields, it will be ignored.
+- If a Keyword to be removed is not present in any relevant field, it will be ignored.
+
+The tool will return a warning if no changes were made. For batch operations, use the 'batchClassification' tool.`,
     
     input: classifyInputProperties,
 
@@ -47,12 +55,20 @@ export const classify = {
 
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
+
+            // Map keywords to the publication context of the target item
+            const finalKeywordIdsToAdd = keywordIdsToAdd.map(keywordId =>
+                convertItemIdToContextPublication(keywordId, itemId)
+            );
+            const finalKeywordIdsToRemove = keywordIdsToRemove.map(keywordId =>
+                convertItemIdToContextPublication(keywordId, itemId)
+            );
             
             // The request body for the single-item classification endpoint.
             const requestModel = { 
                 "$type": "ClassificationRequest",
-                "KeywordIdsToAdd": keywordIdsToAdd,
-                "KeywordIdsToRemove": keywordIdsToRemove
+                "KeywordIdsToAdd": finalKeywordIdsToAdd,
+                "KeywordIdsToRemove": finalKeywordIdsToRemove
             };
 
             // Escape the colon in the item ID for the URL path as per the spec.
@@ -61,20 +77,37 @@ export const classify = {
 
             // A 200 status code indicates the operation was successful.
             if (response.status === 200) {
-                let responseData;
-                if (response.data) {
-                    responseData = {
-                        $type: response.data['$type'],
-                        Id: response.data.Id,
-                        Message:`Successfully classified ${response.data.Id}`
+                // Check if the API response indicates that changes were actually made
+                if (response.data && response.data.Details && response.data.Details.length > 0 && response.data.Item) {
+                    // Changes were made, return success
+                    const responseData = {
+                        $type: response.data.Item['$type'],
+                        Id: response.data.Item.Id,
+                        Message:`Successfully classified ${response.data.Item.Id}`
                     };
+                    return {
+                        content: [{
+                            type: "text",
+                            text: JSON.stringify(responseData, null, 2)
+                        }],
+                    };
+                } else if (response.data && response.data.Item) {
+                    // No changes were made, return a warning
+                    const warningResponse = {
+                        $type: response.data.Item['$type'],
+                        Id: response.data.Item.Id,
+                        Message: `Warning: No changes were made to item ${response.data.Item.Id}. The keywords may already be applied/removed or may not be applicable to the item's schema.`
+                    };
+                    return {
+                        content: [{
+                            type: "text",
+                            text: JSON.stringify(warningResponse, null, 2)
+                        }],
+                    };
+                } else {
+                    // Fallback for unexpected 200 response structure
+                    return handleUnexpectedResponse(response);
                 }
-                return {
-                    content: [{
-                        type: "text",
-                        text: JSON.stringify(responseData, null, 2)
-                    }],
-                };
             } else {
                 return handleUnexpectedResponse(response);
             }
