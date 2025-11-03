@@ -10,15 +10,13 @@ import { reorderFieldsBySchema, convertLinksRecursively } from "../utils/fieldRe
 
 const createItemInputProperties = {
     itemType: z.enum([
-        "Component", "Folder", "StructureGroup", "Keyword",
-        "Category", "Bundle", "SearchFolder", "PageTemplate", "ComponentTemplate"
+        "Folder", "StructureGroup", "Keyword", "Category",
+        "Bundle", "SearchFolder", "PageTemplate", "ComponentTemplate"
     ]).describe("The type of CMS item to create."),
     title: z.string().describe("The title for the new item. Note that creation will fail if an item of the same type exists in the current container (e.g., 'Folder'), or in the inherited copy of the container in a child or descendent 'Publication'. In other words, for a given container and item type, the title needs to be unique across the BluePrint hierarchy."),
     locationId: z.string().regex(/^tcm:\d+-\d+-\d+$/).describe("The TCM URI of the parent container. Use 'search' or 'getItemsInContainer' to find a suitable container. For 'Keyword', the container must be a Category (use 'getCategories'). For 'Category', the container is a Publication (use 'getPublications')."),
-    schemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("Required for 'Component'. The TCM URI of the Schema. Use 'getSchemaLinks' to find available Schemas in the target Publication. If the Schema does not exist in the target Publication, item creation will fail."),
     metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("Optional. The TCM URI of the Metadata Schema. Use 'getSchemaLinks' to find available Schemas."),
-    content: z.record(fieldValueSchema).optional().describe("A JSON object for the item's content fields. The order of keys in your JSON object does not matter - the tool will automatically order the fields to match the Schema definition."),
-    metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields. For a 'Component', this requires the Component Schema to have fields defined in its 'metadataFields' property. The order of keys in your JSON object does not matter - the tool will automatically order the fields to match the Schema definition."),
+    metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields. The order of keys in your JSON object does not matter - the tool will automatically order the fields to match the Schema definition."),
     isAbstract: z.boolean().optional().describe("Only for 'Keyword' type. Set to true to create an abstract Keyword."),
     description: z.string().optional().describe("A description for the item. Applicable to Keyword, Category, Bundle, and Search Folder types."),
     directory: z.string().optional().describe("Required for 'StructureGroup' type. The directory name used in the URL path (e.g., 'pages')."),
@@ -39,9 +37,6 @@ const createItemInputProperties = {
 };
 
 const createItemInputSchema = z.object(createItemInputProperties)
-    .refine(data => !(data.itemType === 'Component' && !data.schemaId), {
-        message: "To create a 'Component', the 'schemaId' parameter is required."
-    })
     .refine(data => !(data.itemType === 'StructureGroup' && !data.directory), {
         message: "To create a 'StructureGroup', the 'directory' parameter is required."
     })
@@ -56,78 +51,41 @@ const createItemInputSchema = z.object(createItemInputProperties)
     })
     .refine(data => !((data.itemType === 'PageTemplate' || data.itemType === 'ComponentTemplate') && (!data.templateBuildingBlocks || data.templateBuildingBlocks.length === 0)), {
         message: "To create a 'PageTemplate' or 'ComponentTemplate', the 'templateBuildingBlocks' parameter must be provided and not be empty."
-    })
-    .refine(
-        (data) => !(data.itemType === 'Component' && data.metadataSchemaId),
-        {
-            message: "Validation Error: The 'metadataSchemaId' parameter cannot be used when `itemType` is 'Component'. " +
-                     "To add metadata to a Component, you must first define 'metadataFields' directly on the Component Schema (using `createSchema` or `updateItemProperties`) " +
-                     "and then provide the values using the 'metadata' parameter."
-        }
-    );
+    });
 
 type CreateItemInput = z.infer<typeof createItemInputSchema>;
 
 export const createItem = {
     name: "createItem",
-    description: `Creates a new Content Management System (CMS) item of a specified type. This is a general-purpose creation tool. For more specific creation tasks, consider using 'createPage', 'createPublication', 'createSchema', or 'createMultimediaComponentFromUrl'.
+    description: `Creates a new Content Manager System (CMS) item of a specified type.
+This is a general-purpose creation tool for Folders, Structure Groups, Keywords, Categories, Bundles, etc.
+To create a Component, use the dedicated 'createComponent' tool.
+To create a Multimedia Component, use 'createMultimediaComponentFromPrompt', 'createMultimediaComponentFromUrl', or 'createMultimediaComponentFromBase64'.
+
 The tool automatically handles different item types and their specific properties. The created item will be placed in the container (Folder, Structure Group, Category, or Publication) specified by 'locationId'. Any references to other items (e.g., a Schema, parent Keywords) must be in the same Publication as the container item. Note that a Publication can only have one root Folder and one root Structure Group. A Folder/structure Group can contain arbitrarily many child Folders/Structure Groups.
-For a Category, the container is the Publication.   
-For items other than Publications, the first number in the ID identifies the Publication (e.g., for both tcm:5-127 and tcm:5-2002-2, the Publication is 5).  
-For Publications, the second number identifies the Publication (e.g., tcm:0-5-1 represents Publication 5).  
-Therefore, when creating a Component in the Folder with ID tcm:10-4112-2, the Schema must have an ID in the form tcm:10-###-8.
-When providing values for an embedded schema field, the data structure is a flat JSON object (for a single-value field) or an array of flat objects (for a multi-value field).
+For a Category, the container is the Publication.
+For items other than Publications, the first number in the ID identifies the Publication (e.g., for both tcm:5-127 and tcm:5-2002-2, the Publication is 5).
+For Publications, the second number identifies the Publication (e.g., tcm:0-5-1 represents Publication 5).
+
+BluePrint Context & 404 Errors:
+The ID parameters you provide (e.g., 'metadataSchemaId', 'pageSchemaId', 'parentKeywords') MUST exist in the 'locationId' Publication or one of its parent Publications.
+
+If you get a 404 'Not Found' error on an item you expect to inherit (like a MetadataSchema, Page, or TBB):
+1.  It likely means the item is in a sibling or child Publication, not a parent.
+2.  To verify, call getItem on your current Publication URI (e.g., 'tcm:0-99-1') and set includeProperties to ['Parents'].
+3.  Inspect the 'Parents' array in the response.
+4.  This will show you your Publication's true parents. Any Schemas, TTBs, Components, etc. from a parent Publication can be used when creating/updating items in the current Publication. The tools automatically map Ids to the correct Publication context, you should not need to call mapItemToContextPublication.
 
 When populating a Component Link field (ComponentLinkFieldDefinition), the linked Component must be based on a Schema specified in that field's 'AllowedTargetSchemas' list. If you encounter a schema validation error on a component link field, use the following strategy:
 - Use 'getItem' to retrieve the main Schema's definition.
 - Inspect the AllowedTargetSchemas property for the specific field causing the error.
 - Use the 'search' tool with the BasedOnSchemas filter to find a valid Component URI to use in the link.
 
-To discover all available fields within an embedded schema, including optional ones, you must inspect the schema definition. Use the following strategy:
-- Use getItem to retrieve the main Schema's definition.
-- Locate the specific EmbeddedSchemaFieldDefinition within the Fields or MetadataFields.
-- Inspect the EmbeddedFields property of that definition. This property contains a dictionary of all the fields (both mandatory and optional) that you can populate.
-
 Important: Creation will fail with a '409 Conflict' error if an item of the same type and with the same title already exists in the target location or its BluePrint context (e.g. a child Publication).
 
 Examples:
 
-Example 1: Create a Component with content and metadata fields. The content field contains a single-value embedded schema field, "stories".
-    const result = await tools.createItem({
-        itemType: "Component",
-        locationId: "tcm:5-53-2",
-        title: "Community Spotlight",
-        schemaId: "tcm:5-74-8",
-        content: {
-            "headline": "Spotlight on Local Heroes",
-            "stories": {
-                "linkText": "Read their stories",
-                "internalLink": {
-                    "$type": "Link",
-                    "IdRef": "tcm:5-294"
-                },
-                "relatedArticles": [
-                    {
-                        "$type": "Link",
-                        "IdRef": "tcm:5-801"
-                    },
-                    {
-                        "$type": "Link",
-                        "IdRef": "tcm:5-802"
-                    }
-                ]
-            }
-        },
-        metadata: {
-            "contentType": {
-                "$type": "Link",
-                "IdRef": "tcm:5-189-1024"
-            },
-            "pageSize": 5
-        }
-    });
-
-Example 2: Create a Folder for a campaign.
+Example 1: Create a Folder for a campaign.
     const result = await tools.createItem({
         itemType: "Folder",
         locationId: "tcm:5-53-2",
@@ -146,6 +104,15 @@ Example 2: Create a Folder for a campaign.
             ]
         }
     });
+
+Example 2: Create a new Keyword.
+    const result = await tools.createItem({
+        itemType: "Keyword",
+        locationId: "tcm:5-123-512",
+        title: "New Product",
+        description: "Keyword for new products.",
+        key: "NEW_PRODUCT"
+    });
 `,
     input: createItemInputProperties,
 
@@ -158,9 +125,6 @@ Example 2: Create a Folder for a campaign.
         const userSessionId = match ? match[1] : null;
 
         const { locationId } = args;
-        if (args.schemaId) {
-            args.schemaId = convertItemIdToContextPublication(args.schemaId, locationId);
-        }
         if (args.metadataSchemaId) {
             args.metadataSchemaId = convertItemIdToContextPublication(args.metadataSchemaId, locationId);
         }
@@ -182,29 +146,19 @@ Example 2: Create a Folder for a campaign.
         if (args.relatedSchemaIds) {
             args.relatedSchemaIds = args.relatedSchemaIds.map(id => convertItemIdToContextPublication(id, locationId));
         }
-        // Recursively convert links in content and metadata
-        if (args.content) {
-            convertLinksRecursively(args.content, locationId);
-        }
         if (args.metadata) {
             convertLinksRecursively(args.metadata, locationId);
         }
 
-        let { itemType, title, schemaId, metadataSchemaId, content, metadata, isAbstract, description, key, parentKeywords, relatedKeywords, itemsInBundle, searchQuery, resultLimit = 100, fileExtension, pageSchemaId, templateBuildingBlocks, allowOnPage, isRepositoryPublishable, outputFormat, priority, relatedSchemaIds, directory } = args;
+        let { itemType, title, metadataSchemaId, metadata, isAbstract, description, key, parentKeywords, relatedKeywords, itemsInBundle, searchQuery, resultLimit = 100, fileExtension, pageSchemaId, templateBuildingBlocks, allowOnPage, isRepositoryPublishable, outputFormat, priority, relatedSchemaIds, directory } = args;
 
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
 
-            // Reorder content and metadata fields based on their respective schemas
-            if (content && schemaId) {
-                content = await reorderFieldsBySchema(content, schemaId, 'content', authenticatedAxios);
-            }
+            // Reorder metadata fields based on schema
             if (metadata) {
                 if (metadataSchemaId && metadataSchemaId !== 'tcm:0-0-0') {
                     metadata = await reorderFieldsBySchema(metadata, metadataSchemaId, 'metadata', authenticatedAxios);
-                }
-                else if (schemaId) {
-                    metadata = await reorderFieldsBySchema(metadata, schemaId, 'metadata', authenticatedAxios);
                 }
             }
 
@@ -221,9 +175,7 @@ Example 2: Create a Folder for a campaign.
 
             // 2. Customize the payload
             payload.Title = title;
-            if (schemaId) payload.Schema = { IdRef: schemaId };
             if (metadataSchemaId) payload.MetadataSchema = { IdRef: metadataSchemaId };
-            if (content) payload.Content = content;
             if (metadata) payload.Metadata = metadata;
 
             // Type-specific properties

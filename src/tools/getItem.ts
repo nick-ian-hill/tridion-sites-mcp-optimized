@@ -7,7 +7,7 @@ export const getItem = {
     name: "getItem",
     description: `Retrieves read-only details for a single Content Manager System (CMS) item. This is the primary tool for "fetching" the FULL data of an item, including its 'Content' and 'Metadata' (values), and 'BinaryContent' (MimeType, Size), after it has been "found" by a search or list tool.
 Common uses include:
-- Inspecting a Schema or Page Template's structure before using 'createItem' or 'createPage'.
+- Inspecting a Schema or Page Template's structure before using 'createComponent', 'createItem', or 'createPage'.
 - Checking an item's 'LockInfo' before attempting to update it with tools like 'updateContent' or 'updateMetadata'.
 - Checking an item's 'BluePrintInfo' before using BluePrinting tools like 'localizeItem' or 'promoteItem'.
 For retrieving multiple items, the 'bulkReadItems' tool is more efficient.

@@ -4,7 +4,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 export const getDefaultModel = {
     name: "getDefaultModel",
-    description: `Retrieves the default data model for a specified item type. This model serves as a template that can be modified and then used as the payload for a creation tool, such as 'createItem', 'createSchema', or 'createPage'. This is the recommended first step when programmatically creating a new item.
+    description: `Retrieves the default data model for a specified item type. This model serves as a template that can be modified and then used as the payload for a creation tool, such as 'createComponent', 'createItem', 'createSchema', or 'createPage'. This is the recommended first step when programmatically creating a new item.
         For the top-level (root) StructureGroup, and for a Category, the containerId should be the URI of the Publication.
     For a Keyword, the container must be a Category).
     For a Component, MultimediaComponent, Bundle, SearchFolder, or Folder, the container must be a Folder.

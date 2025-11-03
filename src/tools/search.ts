@@ -48,7 +48,7 @@ export const search = {
 
   Examples:
  
-  Example 1: Find 'Multimedia Components' which have a field containing the text 'logo'.
+  Example 1: Find all Components that use the text 'logo' and include their ComponentType for filtering.
   NOTE: The 'search' tool cannot access 'BinaryContent' (for MimeType, Size, etc.) or 'Metadata' (for alt text). It also cannot filter by 'ComponentType' directly.
   The correct way to perform this task is to search for 'ItemTypes: ['Component']' and then use the 'toolOrchestrator' to fetch and filter the results. See 'toolOrchestrator' Example 10.
 

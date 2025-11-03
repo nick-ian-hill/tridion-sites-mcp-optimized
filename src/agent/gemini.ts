@@ -199,9 +199,9 @@ export const determineNextStep = async (
 };
 
 export const MANDATORY_TOOLS = [
-        'bulkReadItems', 'getItem', 'createItem', 'createPage', 'createSchema', 
-        'search', 'getPublications', 'getCurrentTime', 'updateContent', 
-        'updateMetadata', 'updatePage', 'localizeItem'
+        'bulkReadItems', 'getItem', 'createItem', 'createPage', 'createSchema', 'createComponent',
+        'createComponentSchema', 'search', 'getPublications', 'getCurrentTime', 'updateContent',
+        'updateMetadata', 'updatePage', 'localizeItem', 'toolOrchestrator'
     ];
 
 export const selectRelevantTools = async (prompt: string, allTools: any[], maxTools: number): Promise<any[]> => {

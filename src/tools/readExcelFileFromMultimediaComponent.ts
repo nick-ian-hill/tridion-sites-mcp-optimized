@@ -13,7 +13,7 @@ const readExcelFileFromMultimediaComponentSchema = z.object(readExcelFileFromMul
 export const readExcelFileFromMultimediaComponent = {
     name: "readExcelFileFromMultimediaComponent",
     description: `Reads the content of an Excel file (.xlsx) from a multimedia component and returns its data as a JSON string.
-    This is useful for extracting structured data from an Excel sheet to be used for creating one or more new CMS items. FOr example, the JSON output can be looped through, with each object used to populate the content for a 'createItem' tool call.`,
+    This is useful for extracting structured data from an Excel sheet to be used for creating one or more new CMS items. For example, the JSON output can be looped through, with each object used to populate the content for a 'createComponent' tool call.`,
     input: readExcelFileFromMultimediaComponentInputProperties,
     async execute(input: z.infer<typeof readExcelFileFromMultimediaComponentSchema>, context: any) {
         const req = context?.request;

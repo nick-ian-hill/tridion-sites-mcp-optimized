@@ -3,7 +3,7 @@ import { convertItemIdToContextPublication } from "../utils/convertItemIdToConte
 
 export const mapItemIdToContextPublication = {
     name: "mapItemIdToContextPublication",
-    description: "Transforms an item ID (TCM URI) from one Publication context to another. Use this as the first step to recover from a BluePrint error like 'Cannot paste across Publications'. For example, if you have an item 'tcm:4-291' and your target context is in Publication 5 (e.g., folder 'tcm:5-123'), this tool will return 'tcm:5-291'. You can then use 'getItem' with this new ID to check if the localized item exists.",
+    description: "Transforms an item ID (TCM URI) from one Publication context to another. Use this as the first step to recover from a BluePrint error like 'Cannot paste across Publications'. For example, if you have an item 'tcm:4-291' and your target context is in Publication 5 (e.g., folder 'tcm:5-123'), this tool will return 'tcm:5-291'. You can then use 'getItem' with this new ID to check if the localized item exists. Note: there is no need to map IDs when creating or classifying items using the Tridion Sites MCP Server tools, the tools should perform the necessary mapping automatically.",
     input: {
         itemId: z.string().describe("The item ID to be transformed."),
         contextItemId: z.string().describe("An item ID that is in the target Publication context."),

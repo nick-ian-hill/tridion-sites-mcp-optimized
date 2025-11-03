@@ -41,7 +41,15 @@ const updateItemPropertiesInputProperties = {
     relatedSchemaIds: z.array(z.string().regex(/^tcm:\d+-\d+-8$/)).optional().describe("For 'ComponentTemplate' type. An array of Schema TCM URIs to link to this template. Replaces any existing links."),
 };
 
-const updateItemPropertiesSchema = z.object(updateItemPropertiesInputProperties);
+const updateItemPropertiesSchema = z.object(updateItemPropertiesInputProperties)
+    .refine(
+        (data) => !(data.itemType === 'Component' && data.metadataSchemaId),
+        {
+            message: `Validation Error: The 'metadataSchemaId' parameter cannot be used when 'itemType' is 'Component'.
+                     A Component's metadata fields are defined directly on the Component Schema (using 'createComponentSchema').
+                     To update metadata values, use the 'updateMetadata' tool.`
+        }
+    );
 
 type UpdateItemPropertiesInput = z.infer<typeof updateItemPropertiesSchema>;
 
@@ -62,6 +70,16 @@ Example use cases by item type:
 - PageTemplate/ComponentTemplate: update the associated 'templateBuildingBlocks' and other template-specific properties.
 
 When updating collection properties like 'fields', 'metadataFields', 'itemsInBundle', or 'relatedSchemaIds', the entire existing collection is replaced by the new value provided.
+
+BluePrint Context & 404 Errors:
+The ID parameters you provide (e.g., 'metadataSchemaId', 'parentKeywords', 'templateBuildingBlocks') MUST exist in the 'itemId's Publication or one of its parent Publications.
+
+If you get a 404 'Not Found' error on an item you expect to inherit (like a Schema or TBB):
+1.  It likely means the item is in a sibling or child Publication, not a parent.
+2.  To verify, call getItem on your current Publication URI (e.g., 'tcm:0-99-1') and set includeProperties to ['Parents'].
+3.  Inspect the 'Parents' array in the response.
+4.  This will show you your Publication's true parents. Any Schemas, TTBs, Components, etc. from a parent Publication can be used when creating/updating items in the current Publication. The tools automatically map Ids to the correct Publication context, you should not need to call mapItemToContextPublication.
+
 
 When providing a value for a Component Link field, the linked Component must be based on a Schema specified in that field's 'AllowedTargetSchemas' list. If you encounter a schema validation error on a component link field, use the following strategy:
 - Use 'getItem' to retrieve the main Schema's definition.

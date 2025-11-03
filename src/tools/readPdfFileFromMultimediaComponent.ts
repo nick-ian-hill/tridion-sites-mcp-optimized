@@ -13,7 +13,7 @@ export const readPdfFileFromMultimediaComponent = {
     name: "readPdfFileFromMultimediaComponent",
     description: `Reads the text content of a PDF file (.pdf) from a multimedia component and returns it as a string.
     This tool can be useful in cases where the user would like to import the contents of a PDF file into the CMS.
-    The extracted text can be used as the value for a content field in a call to 'createItem' or 'updateContent'.`,
+    The extracted text can be used as the value for a content field in a call to 'createComponent' or 'updateContent'.`,
     input: readPdfFileFromMultimediaComponentInputProperties,
     async execute(input: z.infer<typeof readPdfFileFromMultimediaComponentSchema>, context: any) {
         const req = context?.request;

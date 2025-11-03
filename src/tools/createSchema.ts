@@ -8,15 +8,17 @@ import { processSchemaFieldDefinitions } from "../utils/fieldReordering.js";
 
 export const createSchema = {
     name: "createSchema",
-    description: `Creates a new Content Manager System (CMS) item of type 'Schema'. Schemas define the structure of content and metadata for other CMS items.
+    description: `Creates a new Content Manager System (CMS) item of type 'Schema' for purposes other than 'Component'.
+    To create a Component Schema, please use the dedicated 'createComponentSchema' tool.
     
-A Schema with a purpose of 'Component' can have both content fields (specified via the 'fields' property) and metadata fields (specified via the 'metadataFields' property).
-The 'metadataFields' property is the ONLY way to define metafields for a Component (you cannot link a component to a standalone metadata schema).
-For schemas with any other purpose (e.g., 'Metadata') ONLY specify fields using the 'metadataFields' property. Both of these properties are dictionaries where:
+Schemas define the structure of content and metadata for other CMS items.
+Schemas with a purpose of 'Embedded' define their structure using the 'fields' property.
+Schemas with any other purpose (e.g., 'Metadata', 'Region', 'Bundle') define their structure using the 'metadataFields' property.
+Both of these properties are dictionaries where:
   - The KEY is the field's machine name (a valid XML name without spaces, e.g., "articleTitle").
   - The VALUE is a Field Definition object that specifies the field's type and properties.
 
-When creating fields that link to other items (e.g., ComponentLinkFieldDefinition, EmbeddedSchemaFieldDefinition), you will need the TCM URIs of the allowed target schemas. Use the 'getSchemaLinks' tool to find suitable schemas within the target Publication.
+When creating fields that link to other items (e.g., EmbeddedSchemaFieldDefinition), you will need the TCM URIs of the allowed target schemas. Use the 'getSchemaLinks' tool to find suitable schemas within the target Publication.
 
 Each Field Definition object MUST include a '$type' property to identify its type from the list below. Other common properties include:
   - Name: The machine name of the field (must match the key in the dictionary).
@@ -51,65 +53,23 @@ Certain top-level properties are only applicable when the Schema has a specific 
   - 'purpose' is 'Bundle': 'deleteBundleOnProcessFinished' can be used.
   - 'purpose' is 'Region': 'regionDefinition' can be used.
 
+BluePrint Context & 404 Errors:
+Any IDs you provide for parameters or fields (e.g., in a KeywordFieldDefinition or ComponentLinkDefinition) MUST exist in the 'locationId' Publication or one of its parent Publications.
+
+If you get a 404 'Not Found' error on an item you expect to inherit (like a Schema or TBB):
+1.  It likely means the item is in a sibling or child Publication, not a parent.
+2.  To verify, call getItem on your current Publication URI (e.g., 'tcm:0-99-1') and set includeProperties to ['Parents'].
+3.  Inspect the 'Parents' array in the response.
+4.  This will show you your Publication's true parents. Any Schemas, Keywords, Components, etc. from a parent Publication can be used when creating/updating items in the current Publication. The tools automatically map Ids to the correct Publication context, you should not need to call mapItemToContextPublication.
+
 Examples:
 
-Example 1: Create a simple component Schema with a single, optional text field.
-    const result = await tools.createSchema({
-        title: "Simple Text Schema",
-        locationId: "tcm:1-2-2",
-        purpose: "Component",
-        rootElementName: "Content",
-        fields: {
-            "textField": {
-                "$type": "SingleLineTextFieldDefinition",
-                "Name": "textField",
-                "Description": "A single line of text",
-                "MaxOccurs": 1,
-                "MinOccurs": 0
-            }
-        }
-    });
-
-Example 2: Create an 'Article' component Schema with both content fields and metadata fields.
-    const result = await tools.createSchema({
-        title: "Article",
-        locationId: "tcm:1-2-2",
-        purpose: "Component",
-        rootElementName: "Article",
-        fields: {
-            "title": {
-                "$type": "SingleLineTextFieldDefinition",
-                "Name": "title",
-                "Description": "The main title of the article.",
-                "MinOccurs": 1,
-                "MaxOccurs": 1
-            },
-            "body": {
-                "$type": "XhtmlFieldDefinition",
-                "Name": "body",
-                "Description": "The main content of the article, which can include rich text formatting.",
-                "Height": 10
-            }
-        },
-        metadataFields: {
-            "author": {
-                "$type": "SingleLineTextFieldDefinition",
-                "Name": "author",
-                "Description": "The author of the article."
-            },
-            "publishDate": {
-                "$type": "DateFieldDefinition",
-                "Name": "publishDate",
-                "Description": "The date the article was published."
-            }
-        }
-    });
-
-Example 3: Create a simple Metadata Schema. Note the 'purpose' is 'Metadata', there is no 'rootElementName', and the fields are defined in 'metadataFields'.
+Example 1: Create a simple Metadata Schema. Note the 'purpose' is 'Metadata', there is no 'rootElementName', and the fields are defined in 'metadataFields'.
     const result = await tools.createSchema({
         title: "Simple Metadata Schema",
         locationId: "tcm:1-2-2",
         purpose: "Metadata",
+        description: "A simple schema for metadata.",
         metadataFields: {
             "textField": {
                 "$type": "SingleLineTextFieldDefinition",
@@ -121,68 +81,12 @@ Example 3: Create a simple Metadata Schema. Note the 'purpose' is 'Metadata', th
         }
     });
 
-Example 4: Create a Schema with an XHTML field that has custom formatting features, disabling several toolbar buttons.
-    const result = await tools.createSchema({
-        title: "Rich Text Schema with Custom Formatting",
-        locationId: "tcm:1-234-2",
-        purpose: "Component",
-        rootElementName: "RichText",
-        fields: {
-            "formattedContent": {
-                "$type": "XhtmlFieldDefinition",
-                "Name": "formattedContent",
-                "Description": "Rich text content with a restricted toolbar.",
-                "Height": 15,
-                "FormattingFeatures": {
-                    "$type": "FormattingFeatures",
-                    "DocType": "Strict",
-                    "DisallowedActions": [
-                        "Strikethrough",
-                        "Subscript",
-                        "Superscript",
-                        "AlignLeft",
-                        "Center",
-                        "AlignRight"
-                    ]
-                }
-            }
-        }
-    });
-
-Example 5: Create a Schema that uses an embeddable Schema for an embedded field. First, ensure you have an 'Embeddable' Schema created (e.g., an 'Author' Schema with TCM URI tcm:1-123-8). The embeddable Schema will be referenced via the 'EmbeddedSchema' property, the value of which should be a Link.
-    const result = await tools.createSchema({
-        title: "ArticleSchema",
-        locationId: "tcm:11-4567-2",
-        purpose: "Component",
-        rootElementName: "ArticleRoot",
-        fields: {
-            "Title": {
-                "$type": "SingleLineTextFieldDefinition",
-                "Name": "Title",
-                "Description": "The title of the article."
-            },
-            "Abstract": {
-                "$type": "MultiLineTextFieldDefinition",
-                "Name": "Abstract",
-                "Description": "The abstract of the article."
-            },
-            "Author": {
-                "$type": "EmbeddedSchemaFieldDefinition",
-                "Name": "Author",
-                "Description": "An author of the article.",
-                "EmbeddedSchema": {
-                    "$type": "Link",
-                    "IdRef": "tcm:11-123-8"
-                }
-            }
-        }
-    });
-
-Example 6: Create a Metadata Schema with a multi-value checkbox field using a predefined list of dates.
+Example 2: Create a Metadata Schema with a multi-value checkbox field using a predefined list of dates.
     const result = await tools.createSchema({
         title: "Date Selection",
         locationId: "tcm:1-2-2",
         purpose: "Metadata",
+        description: "A metadata schema for selecting dates.",
         metadataFields: {
             "availableDates": {
                 "$type": "DateFieldDefinition",
@@ -202,51 +106,7 @@ Example 6: Create a Metadata Schema with a multi-value checkbox field using a pr
         }
     });
 
-Example 7: Create a Schema with a multi-value Component Link field. This allows linking to multiple other Components. The 'MaxOccurs' property is set to -1 for unlimited values.
-    const result = await tools.createSchema({
-        title: "Linked Articles",
-        locationId: "tcm:18-2-2",
-        purpose: "Component",
-        rootElementName: "Links",
-        fields: {
-            "relatedArticles": {
-                "$type": "ComponentLinkFieldDefinition",
-                "Name": "relatedArticles",
-                "Description": "Links to related articles.",
-                "MaxOccurs": -1,
-                "AllowedTargetSchemas": [
-                    {
-                        "$type": "Link",
-                        "IdRef": "tcm:18-103-8"
-                    }
-                ]
-            }
-        }
-    });
-
-Example 8: Create a Schema with a multi-value Multimedia Link field. This allows linking to multiple multimedia items like images or videos.
-    const result = await tools.createSchema({
-        title: "Image Gallery",
-        locationId: "tcm:1-2-2",
-        purpose: "Component",
-        rootElementName: "Gallery",
-        fields: {
-            "images": {
-                "$type": "MultimediaLinkFieldDefinition",
-                "Name": "images",
-                "Description": "Select multiple images for the gallery.",
-                "MaxOccurs": -1,
-                "AllowedTargetSchemas": [
-                    {
-                        "$type": "Link",
-                        "IdRef": "tcm:1-66-8"
-                    }
-                ]
-            }
-        }
-    });
-
-Example 9: Create a Region Schema with constraints on its Component Presentations. This region will allow up to 5 CPs that must use a specific Schema and Component Template.
+Example 3: Create a Region Schema with constraints on its Component Presentations. This region will allow up to 5 CPs that must use a specific Schema and Component Template.
     const result = await tools.createSchema({
         title: "Constrained Region Schema",
         locationId: "tcm:5-2-2",
@@ -268,72 +128,8 @@ Example 9: Create a Region Schema with constraints on its Component Presentation
             ]
         })
     });
-
-Example 10: Create a Schema with a Keyword field for classification. This field links to a Category, allowing editors to select from a predefined list of Keywords. Use 'getCategories' to find a suitable Category to link to.
-    const result = await tools.createSchema({
-        title: "Article With Classification",
-        locationId: "tcm:1-2-2",
-        purpose: "Component",
-        rootElementName: "Article",
-        fields: {
-            "title": {
-                "$type": "SingleLineTextFieldDefinition",
-                "Name": "title",
-                "Description": "The article title."
-            },
-            "category": {
-                "$type": "KeywordFieldDefinition",
-                "Name": "category",
-                "Description": "Classification for the article.",
-                "MinOccurs": 0,
-                "MaxOccurs": -1,
-                "Category": {
-                    "$type": "Link",
-                    "IdRef": "tcm:1-3-512"
-                },
-                "List": {
-                    "$type": "ListDefinition",
-                    "Height": 5,
-                    "Type": "Select"
-                }
-            }
-        }
-    });
-
-Example 11: Create a Schema with advanced constraints.
-    const result = await tools.createSchema({
-        title: "Data Schema With Constraints",
-        locationId: "tcm:1-2-2",
-        purpose: "Component",
-        rootElementName: "RestrictedContent",
-        description: "A Schema that uses various constraints for its fields.",
-        fields: {
-            "productCode": {
-                "$type": "SingleLineTextFieldDefinition",
-                "Name": "productCode",
-                "Description": "Product code must be 2 uppercase letters followed by 4 numbers.",
-                "MinOccurs": 1,
-                "Pattern": "[A-Z]{2}[0-9]{4}"
-            },
-            "rating": {
-                "$type": "NumberFieldDefinition",
-                "Name": "rating",
-                "Description": "Rating must be a number between 1 and 5 (inclusive).",
-                "MinOccurs": 1,
-                "MinInclusive": 1,
-                "MaxInclusive": 5
-            },
-            "price": {
-                "$type": "NumberFieldDefinition",
-                "Name": "price",
-                "Description": "Price with a maximum of 5 total digits and 2 decimal places.",
-                "TotalDigits": 5,
-                "FractionDigits": 2
-            }
-        }
-    });
     
-Example 12: Create an 'Embedded' Schema to be used within other Schemas.
+Example 4: Create an 'Embedded' Schema to be used within other Schemas.
     const result = await tools.createSchema({
         title: "Author Details",
         locationId: "tcm:20-1234-2",
@@ -362,18 +158,17 @@ Example 12: Create an 'Embedded' Schema to be used within other Schemas.
         title: z.string().nonempty().describe("The title for the new Schema."),
         locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new Schema will be created. Use 'search' or 'getItemsInContainer' to find a Folder."),
         purpose: z.enum([
-            "Component", "Multimedia", "Embedded",
+            "Multimedia", "Embedded",
             "Metadata", "Bundle", "Region"
         ]).describe(`The purpose of the Schema, which determines the item type(s) for which it can be used.
-            When asked to create a metadata schema, be sure to set the purpose to 'Metadata' and use the 'metadataFields' property for defining the fields.
-            Similarly, when creating a schema for components, set purpose to 'Component' and use the 'fields' and 'metadataFields' properties to define the required content and metadata fields.`),
-        rootElementName: xmlNameSchema.optional().describe("The name of the root element for the XML structure defined by the Schema. Only applies to component and embeddable schemas. When using two or more embeddable schemas in a schema (via embedded schema fields), this value needs to be unique between the embeddable schemas."),
+            To create a Component Schema, use the dedicated 'createComponentSchema' tool.
+            When asked to create a metadata schema, be sure to set the purpose to 'Metadata' and use the 'metadataFields' property for defining the fields.`),
+        rootElementName: xmlNameSchema.optional().describe("The name of the root element for the XML structure defined by the Schema. Only applies to 'Embedded' schemas. When using two or more embeddable schemas in a schema (via embedded schema fields), this value needs to be unique between the embeddable schemas."),
         description: z.string().nonempty().describe("An mandatory description of the Schema."),
-        fields: z.record(fieldDefinitionSchema).optional().describe("Only used for Component Schemas. A dictionary of field definitions for the schema's content fields. The keys of the dictionary are the machine names of the fields."),
-        metadataFields: z.record(fieldDefinitionSchema).optional().describe("A dictionary of metadata field definitions for the schema's metadata. The keys of the dictionary are the machine names of the metadata fields. You MUST use this property when defining METADATA fields for any schema type. The ONLY way to create a component with metadata fields is to use a component schema for which this property is defined."),
+        fields: z.record(fieldDefinitionSchema).optional().describe("Only used for 'Embedded' Schemas. A dictionary of field definitions for the schema's content fields. The keys of the dictionary are the machine names of the fields."),
+        metadataFields: z.record(fieldDefinitionSchema).optional().describe("A dictionary of metadata field definitions for the schema's metadata. The keys of the dictionary are the machine names of the metadata fields. You MUST use this property when defining fields for 'Metadata', 'Bundle', 'Multimedia', and 'Region' schemas."),
         allowedMultimediaTypes: z.array(z.string().regex(/^tcm:0-\d+-65544$/)).optional().describe("An array of TCM URIs for allowed Multimedia Types. Only applicable when 'purpose' is 'Multimedia'."),
         bundleProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of a Process Definition to associate as the Bundle Process."),
-        componentProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of a Process Definition to associate as the Component Process for workflow."),
         deleteBundleOnProcessFinished: z.boolean().optional().describe("If true, Bundles based on this Schema will be deleted when their workflow process finishes. Only applicable when 'purpose' is 'Bundle'."),
         isIndexable: z.boolean().optional().describe("Specifies whether Components based on this Schema will be indexed for searching."),
         isPublishable: z.boolean().optional().describe("Specifies whether Components based on this Schema can be resolved for data publishing."),
@@ -397,6 +192,9 @@ Example 12: Create an 'Embedded' Schema to be used within other Schemas.
             return { content: [{ type: "text", text: JSON.stringify(errorResponse, null, 2) }], errors: [] };
         };
 
+        if (purpose === 'Embedded' && (!rootElementName || rootElementName.trim() === '')) {
+            return createErrorResponse("Validation Error: The 'rootElementName' property is mandatory when the Schema 'purpose' is 'Embedded'.");
+        }
         if (purpose !== 'Multimedia' && allowedMultimediaTypes) {
             return createErrorResponse("'allowedMultimediaTypes' can only be set when the Schema 'purpose' is 'Multimedia'.");
         }
@@ -405,6 +203,9 @@ Example 12: Create an 'Embedded' Schema to be used within other Schemas.
         }
         if (purpose !== 'Region' && regionDefinition) {
             return createErrorResponse("'regionDefinition' can only be set when the Schema 'purpose' is 'Region'.");
+        }
+        if (purpose !== 'Embedded' && fields) {
+            return createErrorResponse("The 'fields' property can only be used when the Schema 'purpose' is 'Embedded'. For other types, use 'metadataFields'.");
         }
 
         try {
@@ -436,7 +237,7 @@ Example 12: Create an 'Embedded' Schema to be used within other Schemas.
             payload.Title = title;
             payload.Purpose = purpose;
 
-            if (purpose === 'Component' || purpose === 'Embedded') {
+            if (purpose === 'Embedded') {
                 payload.RootElementName = rootElementName;
             } else {
                 delete payload.RootElementName;

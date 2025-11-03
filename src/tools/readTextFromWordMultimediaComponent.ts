@@ -11,7 +11,7 @@ const readTextFromWordMultimediaComponentSchema = z.object(readTextFromWordMulti
 
 export const readTextFromWordMultimediaComponent = {
     name: "readTextFromWordMultimediaComponent",
-    description: "Reads the text content of a Word file (.docx) from a multimedia component and returns it as an HTML string, excluding any images. This HTML can be used to populate an XHTML field when creating or updating a Component with 'createItem' or 'updateContent'. For a more advanced function that also extracts images, use 'splitWordMultimediaComponentIntoTextAndImages'.",
+    description: "Reads the text content of a Word file (.docx) from a multimedia component and returns it as an HTML string, excluding any images. This HTML can be used to populate an XHTML field when creating or updating a Component with 'createComponent' or 'updateContent' tools. For a more advanced function that also extracts images, use 'splitWordMultimediaComponentIntoTextAndImages'.",
     input: readTextFromWordMultimediaComponentInputProperties,
     async execute(input: z.infer<typeof readTextFromWordMultimediaComponentSchema>, context: any) {
         const req = context?.request;

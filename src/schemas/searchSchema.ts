@@ -77,6 +77,19 @@ export const SearchQueryValidation = z.object({
   // --- Workflow ---
   ActivityDefinition: z.string().regex(/^tcm:\d+-\d+-131088$/).optional().describe("The TCM URI of an Activity Definition an item must be associated with. You must specify a value for 'SearchIn' when using this parameter."),
   ProcessDefinition: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of a Process Definition an item must be associated with. You must specify a value for 'SearchIn' when using this parameter."),
-});
+})
+.refine(
+    (data) => {
+        const needsSearchIn = (data.BasedOnSchemas?.length ?? 0) > 0 ||
+                            (data.UsedKeywords?.length ?? 0) > 0 ||
+                            !!data.ProcessDefinition ||
+                            !!data.ActivityDefinition;
+
+        return !needsSearchIn || !!data.SearchIn;
+    },
+    {
+        message: "The 'SearchIn' parameter is required when using 'BasedOnSchemas', 'UsedKeywords', 'ProcessDefinition', or 'ActivityDefinition'.",
+    }
+);
 
 export type SearchQuery = z.infer<typeof SearchQueryValidation>;
