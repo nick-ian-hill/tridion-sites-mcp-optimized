@@ -10,11 +10,21 @@ export function processComponentPresentations(
     contextId: string
 ): any[] {
     if (!cps) return [];
-    return cps.map(cp => ({
-        ...cp,
-        Component: toLink(convertItemIdToContextPublication(cp.Component.IdRef, contextId)),
-        ComponentTemplate: toLink(convertItemIdToContextPublication(cp.ComponentTemplate.IdRef, contextId)),
-    }));
+    return cps.map(cp => {
+        if (!cp.Component || !cp.Component.IdRef) {
+            throw new Error(
+                "Invalid Component Presentation data: A 'Component' link is missing or malformed."
+            );
+        }
+
+        const templateId = cp.ComponentTemplate?.IdRef;
+        
+        return {
+            ...cp,
+            Component: toLink(convertItemIdToContextPublication(cp.Component.IdRef, contextId)),
+            ComponentTemplate: toLink(templateId ? convertItemIdToContextPublication(templateId, contextId) : undefined),
+        };
+    });
 }
 
 export async function processRegions(
