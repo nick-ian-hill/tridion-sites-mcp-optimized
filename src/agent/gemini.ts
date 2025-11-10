@@ -201,7 +201,7 @@ export const determineNextStep = async (
 export const MANDATORY_TOOLS = [
         'bulkReadItems', 'getItem', 'createItem', 'createPage', 'createSchema', 'createComponent',
         'createComponentSchema', 'search', 'getPublications', 'getCurrentTime', 'updateContent',
-        'updateMetadata', 'updatePage', 'localizeItem', 'toolOrchestrator'
+        'updateMetadata', 'updatePage', 'localizeItem'
     ];
 
 export const selectRelevantTools = async (prompt: string, allTools: any[], maxTools: number): Promise<any[]> => {
