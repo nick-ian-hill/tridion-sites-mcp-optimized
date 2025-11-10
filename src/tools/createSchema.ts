@@ -54,13 +54,20 @@ Certain top-level properties are only applicable when the Schema has a specific 
   - 'purpose' is 'Region': 'regionDefinition' can be used.
 
 BluePrint Context & 404 Errors:
-Any IDs you provide for parameters or fields (e.g., in a KeywordFieldDefinition or ComponentLinkDefinition) MUST exist in the 'locationId' Publication or one of its parent Publications.
+Any IDs you provide for parameters or fields (e.g., in a KeywordFieldDefinition or ComponentLinkDefinition) MUST exist in the same Publication as 'locationId'.
+If any IDs reference items in a parent or other ancestor Publication, the items will be inherited by the context Publication, and the tool will map the IDs to the correct context automatically.
+For example, if you are in 'locationId' "tcm:107-..." (Child) and use a Category 'IdRef' "tcm:105-..." (Parent), the tool correctly maps this to the inherited ID "tcm:107-...".
+As a result of the automatic mapping, you do not need to use the 'mapItemToContextPublication' tool for mapping purposes.
 
-If you get a 404 'Not Found' error on an item you expect to inherit (like a Schema or TBB):
-1.  It likely means the item is in a sibling or child Publication, not a parent.
-2.  To verify, call getItem on your current Publication URI (e.g., 'tcm:0-99-1') and set includeProperties to ['Parents'].
-3.  Inspect the 'Parents' array in the response.
-4.  This will show you your Publication's true parents. Any Schemas, Keywords, Components, etc. from a parent Publication can be used when creating/updating items in the current Publication. The tools automatically map Ids to the correct Publication context, you should not need to call mapItemToContextPublication.
+If you get a 404 'Not Found' error for an item you trying to reference (e.g., a Category) it likely means the item is in a sibling or child Publication, not a parent or other ancestor.
+Items created in sibling/child Pubications are not inherited, and therefore the mapped ID will not correspond to a real item.
+
+In this scenario, you will either need to
+- find an alternative item that already exists in the context Publication,
+- create a new item in the context Publication or a parent/ancestor, or
+- promote the item(s) you are trying to reference to a parent or ancestor Publication using the 'promoteItem' tool.
+
+To find the parent Publications, call getItem on your current Publication URI (e.g., 'tcm:0-99-1') and set includeProperties to ['Parents'].
 
 Examples:
 

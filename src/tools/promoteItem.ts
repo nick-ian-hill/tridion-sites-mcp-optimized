@@ -6,7 +6,16 @@ export const promoteItem = {
     name: "promoteItem",
     description: `Promotes a primary item up the BluePrint hierarchy to a parent Publication. This action makes the item centrally manageable and reusable in child Publications. This is the opposite of the 'demoteItem' tool.
     Before using, it's recommended to understand the item's position in the hierarchy using the 'getBluePrintHierarchy' tool to identify a valid parent Publication to promote to.
-    To check whether an item is a primary item, use the 'getItem' tool and verify that BluePrintInfo.IsLocalized and BluePrintInfo.IsShared are both false.`,
+    To check whether an item is a primary item, use the 'getItem' tool and verify that BluePrintInfo.IsLocalized and BluePrintInfo.IsShared are both false.
+    
+    This tool can be useful when one or more items you would like to use were created in a sibling of the target Publication.
+    For example, suppose a Category and Keywords used for classification were created in a sibling Publication. To reference these items, you would need to
+    i. identify a common parent/ancestor Publication,
+    ii. promote the Category to the ancestor Publication,
+    iii. promote all the Keywords to the ancestor Publication. Note that the Category needs to be promoted before the Keywords.
+    
+    To find the parent Publications, call getItem on a Publication URI (e.g., 'tcm:0-99-1') and set includeProperties to ['Parents'].
+`,
     input: {
         itemId: z.string().regex(/^tcm:\d+-\d+(-\d+)?$/).describe("The unique ID (TCM URI) of the shared item to promote."),
         destinationRepositoryId: z.string().regex(/^tcm:\d+-\d+-1$/).describe("The TCM URI of the parent Publication to promote the item to. Use 'getBluePrintHierarchy' to find a valid parent Publication."),

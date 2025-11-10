@@ -772,7 +772,7 @@ Note: This script assumes the Publication titles are unique. Publication titles 
             if (!rootSg.Id) throw new Error("Failed to create Root Structure Group.");
             context.log(\`Created Root Structure Group in \${rootPubId}\`);
 
-            // 3. Create Schema Master (inherits from Root)
+            // 3. Create Schema Master (inherits from Root). Used for Component Schemas, Embedded Schemas, Categories, and Keywords.
             const schemaPub = await context.tools.createPublication({
                 title: "020 Schema Master",
                 parentPublications: [rootPubId],
@@ -782,21 +782,21 @@ Note: This script assumes the Publication titles are unique. Publication titles 
             if (!schemaPubId) throw new Error("Failed to create Schema Master.");
             context.log(\`Created Schema Master Publication: \${schemaPubId}\`);
 
-            // 4. Create Content Master (inherits from Root)
-            const contentPub = await context.tools.createPublication({
-                title: "030 Content Master",
+            // 4. Create Design Master (inherits from Root). Used for Component Templates, Page Templates, Template Building Blocks, and Region Schemas.
+            const designPub = await context.tools.createPublication({
+                title: "030 Design Master",
                 parentPublications: [rootPubId],
                 publicationType: "Content"
             });
-            const contentPubId = contentPub.Id;
-            if (!contentPubId) throw new Error("Failed to create Content Master.");
-            context.log(\`Created Content Master Publication: \${contentPubId}\`);
+            const designPubId = designPub.Id;
+            if (!designPubId) throw new Error("Failed to create Design Master.");
+            context.log(\`Created Design Master Publication: \${designPubId}\`);
 
-            // 5. Create Website (inherits from Schema AND Content)
+            // 5. Create Website (inherits from Schema AND Design)
             // This forms the 'diamond' shape.
             const websitePub = await context.tools.createPublication({
                 title: "100 Global Website",
-                parentPublications: [schemaPubId, contentPubId], // <-- Inherits from two parents
+                parentPublications: [schemaPubId, designPubId], // <-- Inherits from two parents
                 publicationUrl: "/global",
                 locale: "en-US",
                 publicationType: "Web"
@@ -814,7 +814,7 @@ Note: This script assumes the Publication titles are unique. Publication titles 
                 context: { // <-- Pass data to post-processing
                     root: rootPubId,
                     schema: schemaPubId,
-                    content: contentPubId,
+                    design: designPubId,
                     website: websitePubId
                 }
             };
@@ -834,7 +834,7 @@ Note: This script assumes the Publication titles are unique. Publication titles 
                 publications: [
                     { role: "Root", id: createdIds.root },
                     { role: "Schema Master", id: createdIds.schema },
-                    { role: "Content Master", id: createdIds.content },
+                    { role: "Design Master", id: createdIds.design },
                     { role: "Website (Child)", id: createdIds.website }
                 ]
             };

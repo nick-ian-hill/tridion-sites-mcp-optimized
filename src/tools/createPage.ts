@@ -34,6 +34,22 @@ A Page can hold content in two ways:
 
 If the user doesn't explicitly ask to create an empty page, you should ask if they would like to add content (Component Presentations) to the page or a region.
 
+BluePrint Context & 404 Errors:
+Any ID parameters you provide (e.g., 'pageTemplateId', 'metadataSchemaId) MUST exist in the same Publication as 'locationId'.
+If any IDs reference items in a parent or other ancestor Publication, the items will be inherited by the context Publication, and the tool will map the IDs to the correct context automatically.
+For example, if you are in 'locationId' "tcm:107-..." (Child) and reference a metadataSchema from "tcm:105-..." (Parent), the tool correctly maps this to the inherited ID "tcm:107-...".
+As a result of the automatic mapping, you do not need to use the 'mapItemToContextPublication' tool for mapping purposes.
+
+If you get a 404 'Not Found' error for an item you trying to reference (e.g., a Keyword) it likely means the item is in a sibling or child Publication, not a parent or other ancestor.
+Items created in sibling/child Pubications are not inherited, and therefore the mapped ID will not correspond to a real item.
+
+In this scenario, you will either need to
+- find an alternative item that already exists in the context Publication,
+- create a new item in the context Publication or a parent/ancestor, or
+- promote the item(s) you are trying to reference to a parent or ancestor Publication using the 'promoteItem' tool.
+
+To find the parent Publications, call getItem on your current Publication URI (e.g., 'tcm:0-99-1') and set includeProperties to ['Parents'].
+
 Examples:
 
 Example 1: Create a simple Page with its required 'Main' region left empty.

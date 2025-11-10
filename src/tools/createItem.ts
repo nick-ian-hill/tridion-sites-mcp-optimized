@@ -62,19 +62,31 @@ This is a general-purpose creation tool for Folders, Structure Groups, Keywords,
 To create a Component, use the dedicated 'createComponent' tool.
 To create a Multimedia Component, use 'createMultimediaComponentFromPrompt', 'createMultimediaComponentFromUrl', or 'createMultimediaComponentFromBase64'.
 
-The tool automatically handles different item types and their specific properties. The created item will be placed in the container (Folder, Structure Group, Category, or Publication) specified by 'locationId'. Any references to other items (e.g., a Schema, parent Keywords) must be in the same Publication as the container item. Note that a Publication can only have one root Folder and one root Structure Group. A Folder/structure Group can contain arbitrarily many child Folders/Structure Groups.
+The tool automatically handles different item types and their specific properties. The created item will be placed in the container (Folder, Structure Group, Category, or Publication) specified by 'locationId'. Note that a Publication can only have one root Folder and one root Structure Group. A Folder/structure Group can contain arbitrarily many child Folders/Structure Groups.
 For a Category, the container is the Publication.
 For items other than Publications, the first number in the ID identifies the Publication (e.g., for both tcm:5-127 and tcm:5-2002-2, the Publication is 5).
 For Publications, the second number identifies the Publication (e.g., tcm:0-5-1 represents Publication 5).
 
-BluePrint Context & 404 Errors:
-The ID parameters you provide (e.g., 'metadataSchemaId', 'pageSchemaId', 'parentKeywords') MUST exist in the 'locationId' Publication or one of its parent Publications.
+Notes on BluePrint structure in relation to content creation:
+You would typically not create content or design related items in the root Publication. Instead, content-related schemas (schemas with purpose 'Component' or 'Embedded') and Categories used for classifying content would typically be created in a direct child Publication of the root (e.g., 'Schema Master'). Creating Categories and content Schemas in the same Publication ensures that any 'KeywordFieldDefinition' fields can reference a relevant Catgory.
+Items related to how content is rendered (Component Templates, Page Templates, Template Building Blocks, and Region Schemas) are commonly created in a second direct child of the root Publication (e.g., 'Design Master'). As siblings, 'Schema Master' and 'Design Master' do not have access to each other's items.
+The main content Components would typically be created in a 'Content Master' Publication having both the 'Schema Master' and 'Design Master' Publications as parents. Items (Schemas, Templates etc.) from both Publications would be available (via inheritance) in 'Content Master'.
 
-If you get a 404 'Not Found' error on an item you expect to inherit (like a MetadataSchema, Page, or TBB):
-1.  It likely means the item is in a sibling or child Publication, not a parent.
-2.  To verify, call getItem on your current Publication URI (e.g., 'tcm:0-99-1') and set includeProperties to ['Parents'].
-3.  Inspect the 'Parents' array in the response.
-4.  This will show you your Publication's true parents. Any Schemas, TTBs, Components, etc. from a parent Publication can be used when creating/updating items in the current Publication. The tools automatically map Ids to the correct Publication context, you should not need to call mapItemToContextPublication.
+BluePrint Context & 404 Errors:
+Any ID parameters you provide (e.g., 'metadataSchemaId', 'pageSchemaId', 'parentKeywords') MUST exist in the same Publication as 'locationId'.
+If any IDs reference items in a parent or other ancestor Publication, the items will be inherited by the context Publication, and the tool will map the IDs to the correct context automatically.
+For example, if you are in 'locationId' "tcm:107-..." (Child) and reference a metadataSchema from "tcm:105-..." (Parent), the tool correctly maps this to the inherited ID "tcm:107-...".
+As a result of the automatic mapping, you do not need to use the 'mapItemToContextPublication' tool for mapping purposes.
+
+If you get a 404 'Not Found' error for an item you trying to reference (e.g., a Keyword) it likely means the item is in a sibling or child Publication, not a parent or other ancestor.
+Items created in sibling/child Pubications are not inherited, and therefore the mapped ID will not correspond to a real item.
+
+In this scenario, you will either need to
+- find an alternative item that already exists in the context Publication,
+- create a new item in the context Publication or a parent/ancestor, or
+- promote the item(s) you are trying to reference to a parent or ancestor Publication using the 'promoteItem' tool.
+
+To find the parent Publications, call getItem on your current Publication URI (e.g., 'tcm:0-99-1') and set includeProperties to ['Parents'].
 
 When populating a Component Link field (ComponentLinkFieldDefinition), the linked Component must be based on a Schema specified in that field's 'AllowedTargetSchemas' list. If you encounter a schema validation error on a component link field, use the following strategy:
 - Use 'getItem' to retrieve the main Schema's definition.
@@ -105,7 +117,15 @@ Example 1: Create a Folder for a campaign.
         }
     });
 
-Example 2: Create a new Keyword.
+Example 2: Create a new Category in a Publication. If used for classifying content, the selected publication should be the "master" content publication or one of its parents/ancestors.
+    const result = await tools.createItem({
+        itemType: "Category",
+        locationId: "tcm:0-5-1", // ID of the Publication
+        title: "News Categories",
+        description: "A category for classifying news articles."
+    });
+
+Example 3: Create a new Keyword.
     const result = await tools.createItem({
         itemType: "Keyword",
         locationId: "tcm:5-123-512",
