@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
+import { filterResponseData } from "../utils/responseFiltering.js";
 
 export const getUsers = {
     name: "getUsers",
@@ -38,10 +39,25 @@ export const getUsers = {
             });
 
             if (response.status === 200) {
+                const propertiesToInclude = ['Description'];
+
+                if (predefined === undefined) {
+                    propertiesToInclude.push('IsPredefined');
+                }
+
+                if (includeDisabled === true) {
+                    propertiesToInclude.push('IsEnabled');
+                }
+                
+                const finalData = filterResponseData({
+                    responseData: response.data,
+                    includeProperties: propertiesToInclude
+                });
+
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(response.data, null, 2)
+                        text: JSON.stringify(finalData, null, 2)
                     }],
                 };
             } else {
