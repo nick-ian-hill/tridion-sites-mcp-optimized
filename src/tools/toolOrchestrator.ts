@@ -121,8 +121,8 @@ export const toolOrchestrator = {
     name: "toolOrchestrator",
     description: `Executes an advanced, multi-step JavaScript script. 
     
-    This is the recommended tool for tasks involving repetitive actions on many items, especially aggregate queries (like "find the most..." or "count all...").
-    Using this tool for aggregation (e.g., running 'search' in 'preProcessingScript' and processing the results in 'postProcessingScript') is far more scalable, token-efficient and reliable than calling 'search' alone and processing a massive JSON result in the context window.
+    This is the recommended tool for tasks involving repetitive actions on many items, especially aggregate queries (like "find the most...", "count all...", or "tabulate...").
+    Using this tool for aggregation (e.g., running 'search' in 'preProcessingScript' and processing the results in 'postProcessingScript') is far more scalable, token-efficient and reliable than calling 'search', 'getActivities', 'getItemsInContainer', etc. directly and processing a massive JSON result in the context window.
     
     RECOMMENDED STRATEGY
     DO NOT USE this tool for orchestrating very complex one-shot tasks, like building an entire website.
