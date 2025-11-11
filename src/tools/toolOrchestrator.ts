@@ -98,7 +98,7 @@ const toolOrchestratorInputProperties = {
     postProcessingScript: z.string().optional()
         .describe("An optional second JavaScript string (as an async function body) that runs once after all items are processed. The script has access to predefined variables: `results` (an array of all execution results from the 'map' phase), `parameters` (the JSON object passed to the tool), and `preProcessingResult` (the 'context' object from the setup phase). Its return value becomes the final output of the tool. This is the 'reduce' phase."),
     parameters: z.record(z.any()).optional()
-        .describe("An optional JSON object of parameters to pass into both the 'preProcessingScript' and the main 'mapScript'. Use this for static values like search queries or find/replace strings."),
+        .describe("An optional JSON object of parameters to pass into all scripts. Use this for simple, static values like search queries, find/replace strings, or target TCM URIs. Note: Complex objects (like data from other tools) passed as parameters are treated as literal values. If you pass a stringified JSON object, you must manually call JSON.parse() on it inside your script."),
     stopOnError: z.boolean().optional().default(true)
         .describe("If true (default), the entire operation stops if any single item fails during the 'map' phase. If false, it logs the error and continues to the next item."),
     maxConcurrency: z.number().int().min(1).max(10).optional().default(5)
@@ -193,6 +193,10 @@ All scripts are sandboxed for security and stability.
 A single script is not allowed to run synchronous (blocking) code for more than 5 seconds,
 and no single script (including all its await calls) can run for more than 60 seconds.
 This is to prevent runaway scripts. For processing large numbers of items, always use the mapScript phase.
+
+Best practice for passing complex Data (like Excel/Search Results):
+DO NOT pass large JSON strings via the parameters object. This is inefficient and requires manual JSON.parse(), which can lead to errors.
+The correct method is to fetch the data inside the preProcessingScript and pass the parsed object to the other scripts via the context return value.
 
 Examples:
 

@@ -32,7 +32,7 @@ Supported Field Types ('$type' values):
   - SingleLineTextFieldDefinition: A simple text input. XSD Schema properties like 'Pattern', 'MinLength', and 'MaxLength' can be used to restrict the allowed input values.
   - MultiLineTextFieldDefinition: A multi-line text area. Supports a 'Height' property for the UI.
   - XhtmlFieldDefinition: A rich-text (HTML) editor. Supports a 'Height' property for the UI. Can also include a 'FormattingFeatures' object to control the editor's toolbar.
-  - KeywordFieldDefinition: - A link to a Keyword from a Category. This requires a 'Category' property with a Link object. The Category you link to must exist in the same Publication as the Schema or in a Parent Publication. You cannot link to a Category in a child or sibling Publication.
+  - KeywordFieldDefinition: - A link to a Keyword from a Category. This requires a 'Category' property with a Link object. This field type also requires a 'List' property (e.g., { "$type": "ListDefinition", "Type": "Select" }) to define how the Keywords are displayed. The Category you link to must exist in the same Publication as the Schema or in a Parent Publication. You cannot link to a Category in a child or sibling Publication.
   - NumberFieldDefinition: A field for numeric values. The 'MinInclusive', 'MaxExclusive', 'TotalDigits', and 'FractionDigits' properties can be used to restrict the range of values.
   - DateFieldDefinition: A field for date/time values. The date range can be restricted using properties like 'MinInclusive', 'MaxExclusive', etc.
   - ExternalLinkFieldDefinition: A field for a URL.

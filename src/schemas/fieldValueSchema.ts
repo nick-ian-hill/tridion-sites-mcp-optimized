@@ -88,7 +88,7 @@ export const keywordFieldSchema = z.object({
     IsIndexable: z.boolean().optional().describe("Whether the field value is included when performing a search."),
     IsLocalizable: z.boolean().optional().describe("Whether the field value can be changed in localized items."),
     IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing."),
-    List: listDefinitionSchema.optional(),
+    List: listDefinitionSchema.describe("The UI control for the Keyword list (e.g., Select, Radio). This property is MANDATORY for KeywordFieldDefinition."),
     Category: linkSchema.describe("A Link to the Category from which Keywords can be selected."),
     AllowAutoClassification: z.boolean().optional().describe("Whether to allow automatic classification for this Keyword field.")
 });
