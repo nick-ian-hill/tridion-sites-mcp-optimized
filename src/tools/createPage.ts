@@ -24,7 +24,7 @@ type CreatePageInput = z.infer<typeof createPageInputSchema>;
 
 export const createPage = {
     name: "createPage",
-    description: `Creates a new Page in the Content Management System (CMS). A Page is a container for content that is structured by a Page Template.
+    description: `Creates a new Page in the Content Management System (CMS). A Page is a container for content that is structured by a Page Template. Note that pages are contained in Structure Groups (e.g., tcm:5-5-4) not Folders (e.g., tcm:5-1-2).
 
 IMPORTANT: Before creating a Page with regions, you MUST first use the 'getItem' tool to inspect the 'pageTemplateId'. This will reveal the required region names, whether they are repeatable, and the schemas for their metadata, which is crucial for correctly formatting the 'regions' parameter.
 
