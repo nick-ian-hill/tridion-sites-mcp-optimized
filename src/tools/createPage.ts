@@ -14,7 +14,7 @@ const createPageInputProperties = {
     pageTemplateId: z.string().regex(/^tcm:\d+-\d+-128$/).optional().describe("The TCM URI of the Page Template to be associated with the Page. Use 'search' or 'getItemsInContainer' to find available templates. If not provided, the page will use the Page Template defined by the parent Structure Group."),
     metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of a Schema for the Page's metadata. Use 'getSchemaLinks' to find available schemas. If the Page Template defines a Region Schema, that Region Schema can be used here."),
     metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the Page's metadata fields as defined by the schema with URI metadataSchemaId."),
-    componentPresentations: z.string().optional().describe("A JSON string representing an array of Component Presentation objects. Each object must have '$type', 'Component', and 'ComponentTemplate'. Use the 'search' tool to find available Components and Component Templates. Use the 'getIsComponentTemplateRequired' tool to check if a Component Template is mandatory."),
+    componentPresentations: z.string().optional().describe("A JSON string representing an array of Component Presentation objects to be placed directly on the Page, outside of any Regions. To add CPs inside a specific Region, you must add them to the 'ComponentPresentations' array within that Region object (passed via the 'regions' property). Each object must have '$type': 'ComponentPresentation', a 'Component' property (a Link), and an optional 'ComponentTemplate' property (a Link). Use the 'search' tool to find available Components and Component Templates. Use the 'getIsComponentTemplateRequired' tool to check if a Component Template is mandatory."),
     regions: z.string().optional().describe("A JSON string representing an array of Region objects. The RegionName for each region must match a region defined in the Page Template. To discover the correct region names and structure, first use the 'getItem' tool to inspect the 'pageTemplateId'.")
 };
 
@@ -28,10 +28,11 @@ export const createPage = {
 
 IMPORTANT: Before creating a Page with regions, you MUST first use the 'getItem' tool to inspect the 'pageTemplateId'. This will reveal the required region names, whether they are repeatable, and the schemas for their metadata, which is crucial for correctly formatting the 'regions' parameter.
 
-A Page can hold content in two ways:
-1.  componentPresentations: An array of Component-plus-Component-Template pairs. Use the 'getIsComponentTemplateRequired' tool to determine if the 'ComponentTemplate' is mandatory.
-2.  regions: A structured way to organize content, defined by the Page Template. The Component Presentations added to a region must comply with any constraints defined in the region's schema.
+A Page holds content using Component Presentations (CPs). These CPs can be placed in two locations:
+1.  Directly on the Page: Use the top-level 'componentPresentations' property for this. These CPs are not associated with any specific Region.
+2.  Inside a Region: Use the 'regions' property. Each Region object within the 'regions' array can have its own 'ComponentPresentations' array.
 
+You can use either method or both simultaneously (as shown in Example 3). When adding CPs (in either location), use the 'getIsComponentTemplateRequired' tool to determine if the 'ComponentTemplate' is mandatory. CPs added to a region must comply with any constraints defined in that region's schema.
 If the user doesn't explicitly ask to create an empty page, you should ask if they would like to add content (Component Presentations) to the page or a region.
 
 BluePrint Context & 404 Errors:
