@@ -125,12 +125,14 @@ export const toolOrchestrator = {
     Using this tool for aggregation (e.g., running 'search' in 'preProcessingScript' and processing the results in 'postProcessingScript') is far more scalable, token-efficient and reliable than calling 'search', 'getActivities', 'getItemsInContainer', etc. directly and processing a massive JSON result in the context window.
     
     RECOMMENDED STRATEGY
-    DO NOT USE this tool for orchestrating complex one-shot tasks, like building an entire website or creating schemas and components in a single call. Such scripts will likely fail and will be difficult to debug.
-    Instead, break such complex tasks down into smaller steps, using separate toolOrchestrator calls for individual steps as appropriate.
-    For example, a single toolOrchestrator call could be used to create the Publications for a BluePrint hierarchy (see Example 9). Note that Publication titles need to be globally unique, so it's recommended to call 'getPublications' to avoid name collisions before generating any BluePrint hierarchy creation scripts.
-    Next, after inspecting the created Publications for any necessary default items (e.g., 'TemplateBuildingBlocks', 'ComponentTemplates' etc.), individually crafted tool calls could be used to populate relevant Publications with any additional required templates, Schemas, content items (components), and pages.
-    Following these individual tool calls, further discrete toolOrchestrator calls utilizing AI-enabled tools like 'generateContentFromPrompt' could be used for (a) classifying the created items and (b) localizing and translating the content items and pages in the relevant child publications.
-    Trying to combine multiple steps such as item creation, classification, and localization into a single toolOrchestrator call will very likely result in errors which require multiple iterations to debug, thereby reducing overall efficiency. 
+    For complex, multi-stage tasks (like bulk-importing relational data from an Excel file), it is highly recommended to break the operation into separate, sequential 'toolOrchestrator' calls.
+    For example:
+    1.  Call 1: Create all shared prerequisites (Schemas, Folders, etc.) and all unique *dependencies* (e.g., all "Article" Components).
+    2.  Call 2: Take the results of Call 1 (e.g., the map of created Component IDs) and create the *consumers* (e.g., all the "Pages") in parallel, linking to the items from Call 1.
+    
+    This 'multi-call' pattern (demonstrated in Example 12) is the most robust strategy. It avoids script timeouts by parallelizing work in the 'map' phase, and it prevents race conditions by creating all shared dependencies before they are consumed.
+    
+    Trying to create both dependencies and consumers in a single, parallel 'mapScript' is an advanced technique that can lead to race conditions (e.g., two scripts trying to create the same component) and is not recommended.
     
     The tool supports up to three phases:
     
@@ -1028,6 +1030,201 @@ Example 11: Find Large, Unused Multimedia Components
             };
         \`
     });
+
+Example 12: Robust Relational Import (e.g., Articles & Pages)
+This example shows the recommended multi-stage pattern to import relational data (e.g., from an Excel file) while avoiding timeouts and race conditions.
+This pattern uses *two sequential 'toolOrchestrator' calls*:
+1.  Call 1 (Create Dependencies): Creates all the unique 'Article' components in parallel.
+2.  Call 2 (Create Consumers): Creates all the 'Pages' in parallel, safely linking to the components created in Call 1.
+
+// --- Call 1: Create all prerequisite items AND all unique Article Components ---
+// (This first call assumes schemas, folders, etc., are created in the preProcessingScript,
+// as shown in the previous agent attempts. For brevity, this example focuses on
+// creating components from a pre-defined 'articlesSheet'.)
+
+const result1 = await tools.toolOrchestrator({
+    parameters: {
+        // This 'prerequisites' object would be the result of a *previous* setup step
+        // or could be constructed by reading the Excel file in the preProcessingScript.
+        "prerequisites": {
+            "articleSchemaId": "tcm:5-3574-8",
+            "componentsFolderId": "tcm:5-637-2",
+            "tagNameKeywordIdMap": { "AI": "tcm:5-3532-1024", /* ... */ },
+            "articlesSheet": [ { "uniqueKey": "ai-001", "headline": "The Future of AI", "bodyText": "...", "tags": "AI;Future" } /*, ... */ ],
+            "authorsSheet": [ { "articleKey": "ai-001", "firstName": "Jane" } /*, ... */ ],
+            "pageMapSheet": [ { "pageTitle": "Home", "articleKey": "ai-001" } /*, ... */ ],
+            "presentationTypeToTemplateIdMap": { "Hero": "tcm:5-3576-32" /*, ... */ },
+            "pageTemplateId": "tcm:5-3581-128",
+            "structureGroupId": "tcm:5-638-4"
+        }
+    },
+    // 'preProcessingScript' just reads the data and passes the *article keys* as itemIds
+    preProcessingScript: \`
+        context.log("Phase 1: Starting Article Component creation...");
+        const articles = context.parameters.prerequisites.articlesSheet;
+        if (!articles) throw new Error("articlesSheet is missing from parameters.");
+        
+        // Return one 'itemId' for each article to be created
+        return {
+            itemIds: articles.map(a => a.uniqueKey),
+            preProcessingResult: {
+                // Pass all data through to the map/post scripts
+                ...context.parameters.prerequisites
+            }
+        };
+    \`,
+    // 'mapScript' creates ONE component. This can run with high concurrency.
+    mapScript: \`
+        const articleKey = context.currentItemId;
+        context.log(\`Creating component for article: \${articleKey}\`);
+
+        const { 
+            articlesSheet, authorsSheet,
+            articleSchemaId, componentsFolderId, tagNameKeywordIdMap
+        } = context.preProcessingResult;
+
+        const article = articlesSheet.find(a => a.uniqueKey === articleKey);
+        if (!article) throw new Error(\`Article data for \${articleKey} not found.\`);
+
+        const authorsForArticle = authorsSheet
+            .filter(a => a.articleKey === article.uniqueKey)
+            .map(a => ({ firstName: a.firstName, lastName: a.lastName, bio: a.bio }));
+        
+        const tagsForArticle = article.tags.split(';')
+            .map(tagName => ({ "$type": "Link", "IdRef": tagNameKeywordIdMap[tagName] }))
+            .filter(tag => tag.IdRef);
+
+        const component = await context.tools.createComponent({
+            title: article.headline,
+            locationId: componentsFolderId,
+            schemaId: articleSchemaId,
+            content: {
+                "headline": article.headline,
+                "body": \`<p>\${article.bodyText}</p>\`,
+                "authors": authorsForArticle,
+                "tags": tagsForArticle
+            }
+        });
+
+        // Return a key-value pair for the post-script
+        return {
+            key: articleKey,
+            id: component.Id,
+            title: component.Title
+        };
+    \`,
+    // 'postProcessingScript' collects the results into a map for the next stage
+    postProcessingScript: \`
+        context.log("Phase 1 Complete: Aggregating created components...");
+        
+        // Convert the array of {key, id} objects into a simple Map
+        const articleKeyToComponentIdMap = new Map(
+            successes.map(s => [s.result.key, s.result.id])
+        );
+
+        // Return all the data needed for the *next* tool call
+        return {
+            summary: \`Created \${successes.length} components.\`,
+            articleKeyToComponentIdMap: Object.fromEntries(articleKeyToComponentIdMap),
+            
+            // Pass the other prerequisite data along
+            pageMapSheet: context.preProcessingResult.pageMapSheet,
+            presentationTypeToTemplateIdMap: context.preProcessingResult.presentationTypeToTemplateIdMap,
+            pageTemplateId: context.preProcessingResult.pageTemplateId,
+            structureGroupId: context.preProcessingResult.structureGroupId
+        };
+    \`
+});
+
+// --- Call 2: Create all Pages in Parallel ---
+// 'result1' holds the output from the first call.
+// We parse its JSON and pass it as a parameter to the second call.
+const pageCreationParams = JSON.parse(result1.content[0].text);
+
+const result2 = await tools.toolOrchestrator({
+    parameters: {
+        "pageCreationParams": pageCreationParams
+    },
+    // Use 'preProcessingScript' to find all *unique page titles*
+    preProcessingScript: \`
+        context.log("Phase 2: Starting Page creation...");
+        const pageMap = context.parameters.pageCreationParams.pageMapSheet;
+        const uniquePageTitles = [...new Set(pageMap.map(p => p.pageTitle))];
+        context.log(\`Found \${uniquePageTitles.length} unique pages to create.\`);
+        
+        return {
+            itemIds: uniquePageTitles,
+            preProcessingResult: context.parameters.pageCreationParams
+        };
+    \`,
+    // 'mapScript' creates ONE page. This is now safe to run in parallel.
+    mapScript: \`
+        const pageTitle = context.currentItemId;
+        context.log(\`Assembling page: \${pageTitle}\`);
+        
+        const {
+            pageMapSheet,
+            articleKeyToComponentIdMap,
+            presentationTypeToTemplateIdMap,
+            pageTemplateId,
+            structureGroupId
+        } = context.preProcessingResult;
+
+        // Find all rows in the Excel sheet for this specific page
+        const pageEntries = pageMapSheet.filter(row => row.pageTitle === pageTitle);
+        if (pageEntries.length === 0) throw new Error(\`No data for page \${pageTitle}\`);
+        
+        const fileName = pageEntries[0].fileName;
+        const regions = {};
+
+        // Assemble all component presentations for this page
+        for (const entry of pageEntries) {
+            const regionName = entry.regionName;
+            if (!regions[regionName]) regions[regionName] = [];
+
+            // SAFELY LOOKUP the component ID (no race condition)
+            const componentId = articleKeyToComponentIdMap[entry.articleKey];
+            const templateId = presentationTypeToTemplateIdMap[entry.presentationType];
+
+            if (!componentId) {
+                context.log(\`WARN: Skipping component '\${entry.articleKey}' (ID not found).\`);
+                continue;
+            }
+
+            regions[regionName].push({
+                "$type": "ComponentPresentation",
+                "Component": { "$type": "Link", "IdRef": componentId },
+                "ComponentTemplate": { "$type": "Link", "IdRef": templateId }
+            });
+        }
+
+        const regionsForPage = Object.keys(regions).map(regionName => ({
+            "$type": "EmbeddedRegion",
+            "RegionName": regionName,
+            "ComponentPresentations": regions[regionName]
+        }));
+
+        // Create the page
+        const page = await context.tools.createPage({
+            title: pageTitle,
+            locationId: structureGroupId,
+            fileName: fileName,
+            pageTemplateId: pageTemplateId,
+            regions: JSON.stringify(regionsForPage)
+        });
+
+        return { id: page.Id, title: page.Title };
+    \`,
+    // 'postProcessingScript' provides the final summary
+    postProcessingScript: \`
+        context.log("Phase 2 Complete: Summarizing page creation.");
+        return {
+            message: \`Successfully created \${successes.length} pages.\`,
+            createdPages: successes.map(s => s.result),
+            errors: failures.map(f => ({ page: f.itemId, error: f.error }))
+        };
+    \`
+});
 `,
 
     // The 'input' property is now the plain object
