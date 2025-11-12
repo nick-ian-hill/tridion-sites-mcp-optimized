@@ -160,6 +160,46 @@ Example 4: Create an 'Embedded' Schema to be used within other Schemas.
             }
         }
     });
+
+Example 5: Create an advanced Region Schema with constraints and a nested region. This 'News Page' region allows 3 CPs based on the 'Article' template and includes a mandatory nested 'Article' region that links to another Region Schema ('tcm:2-181-8').
+    const result = await tools.createSchema({
+        title: "News Page Region",
+        locationId: "tcm:2-18-2",
+        purpose: "Region",
+        description: "Region Schema for a News Page, including a nested region for the main article.",
+        regionDefinition: JSON.stringify({
+            "$type": "RegionDefinition",
+            "ComponentPresentationConstraints": [
+                {
+                    "$type": "OccurrenceConstraint",
+                    "MaxOccurs": 3,
+                    "MinOccurs": 0
+                },
+                {
+                    "$type": "TypeConstraint",
+                    "BasedOnComponentTemplate": {
+                        "$type": "Link",
+                        "IdRef": "tcm:2-105-32"
+                    },
+                    "BasedOnSchema": {
+                        $type: "Link",
+                        "IdRef": "tcm:2-104-8"
+                    }
+                }
+            ],
+            "NestedRegions": [
+                {
+                    "$type": "NestedRegion",
+                    "RegionName": "Article",
+                    "IsMandatory": true,
+                    "RegionSchema": {
+                        "$type": "Link",
+                        "IdRef": "tcm:2-181-8"
+                    }
+                }
+            ]
+        })
+    });
     `,
     input: {
         title: z.string().nonempty().describe("The title for the new Schema."),
