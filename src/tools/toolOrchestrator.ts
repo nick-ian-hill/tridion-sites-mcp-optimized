@@ -1113,10 +1113,16 @@ Example 11: Find Large, Unused Multimedia Components
                         const maybeText = result.content[0].text.trim();
                         if (maybeText.startsWith('{') || maybeText.startsWith('[')) {
                             try {
-                                return JSON.parse(maybeText);
+                                const parsedObject = JSON.parse(maybeText);
+                                // Check if the successfully parsed object is actually an error.
+                                if (parsedObject && parsedObject.$type === 'Error' && parsedObject.Message) {
+                                    throw new Error(parsedObject.Message);
+                                }
+
+                                return parsedObject; // Return the successful object
+                                
                             } catch (err) {
-                                // Not valid JSON, fall through to return original result below
-                                return result;
+                                throw err; 
                             }
                         }
                     }
