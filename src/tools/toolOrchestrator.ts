@@ -96,7 +96,7 @@ const toolOrchestratorInputProperties = {
     mapScript: z.string()
         .describe("A JavaScript string (as an async function body) to execute for each item. The mapScript has access to a 'context' object. This is the 'map' phase. NOTE: Each item is processed in an isolated sandbox. This means you can safely use await and write parallel code (maxConcurrency > 1) without worrying about tasks interfering with each other. The context object is unique and stable for each item."),
     postProcessingScript: z.string().optional()
-        .describe("An optional second JavaScript string (as an async function body) that runs once after all items are processed. The script has access to predefined variables: `results` (an array of all execution results from the 'map' phase), `parameters` (the JSON object passed to the tool), and `preProcessingResult` (the 'context' object from the setup phase). Its return value becomes the final output of the tool. This is the 'reduce' phase."),
+        .describe("An optional second JavaScript string (as an async function body) that runs once after all items are processed. The script has access to predefined variables: `results` (an array of all execution results from the 'map' phase), `successes`, `failures`, `parameters` (the JSON object passed to the tool), and `preProcessingResult` (the 'context' object from the setup phase). Its return value becomes the final output of the tool. This is the 'reduce' phase."),
     parameters: z.record(z.any()).optional()
         .describe("An optional JSON object of parameters to pass into all scripts. Use this for simple, static values like search queries, find/replace strings, or target TCM URIs. Note: Complex objects (like data from other tools) passed as parameters are treated as literal values. If you pass a stringified JSON object, you must manually call JSON.parse() on it inside your script."),
     stopOnError: z.boolean().optional().default(true)
@@ -157,12 +157,14 @@ The mandatory 'mapScript' receives a 'context' object with:
 
 The optional 'postProcessingScript' receives a 'context' object with:
 - context.results (array): The read-only array of all results from the 'map' phase.
+- context.successes (array): A pre-filtered array of all successful results ({ status: 'success', ... }).
+- context.failures (array): A pre-filtered array of all failed results ({ status: 'error', ... }).
 - context.parameters (object): The JavaScript object you passed to the 'parameters' input.
 - context.preProcessingResult (any): The live JavaScript object returned by the preProcessingScript (if any). No JSON.parse() is needed.
 - context.tools (object): A dictionary of all available tools (e.g., context.tools.getItem, context.tools.updateContent).
 - context.log(message) (function): A function to log progress.
 This script's return value is the final output of the tool.
-(For convenience, 'results', 'parameters', and 'preProcessingResult' are also available as global-like variables. Do not declare new variables with these names.)
+(For convenience, 'results', 'successes', 'failures', 'parameters', and 'preProcessingResult' are also available as global-like variables in the postProcessingScript. Do not declare new variables with these names.)
 
 All scripts *must* be 'async' and can 'await' tool calls.
 All tool calls (e.g., 'await context.tools.getItem(...)') are automatically authenticated.
@@ -355,23 +357,18 @@ This script first gets the version count for each component, then the post-proce
         \`,
         postProcessingScript: \`
             // Phase 3 (Reduce): Find the single best item from ALL results.
-            context.log(\`Processing \${results.length} total results.\`);
+            context.log(\`Processing \${results.length} total results (\${successes.length} success, \${failures.length} fail).\`);
 
-            // 1. Separate successes from failures
-            const successfulResults = results.filter(r => r.status === 'success');
-            const failedResults = results.filter(r => r.status === 'error');
-
-            // 2. Report on failures
-            if (failedResults.length > 0) {
-                context.log(\`Warning: \${failedResults.length} items failed to process.\`);
+            if (failures.length > 0) {
+                context.log(\`Warning: \${failures.length} items failed to process.\`);
                 // You could even log the specific errors
-                // for (const failure of failedResults) {
+                // for (const failure of failures) {
                 //    context.log(\`  - \${failure.itemId}: \${failure.error}\`);
                 // }
             }
 
             // 3. Check if there are ANY successes to process
-            if (successfulResults.length === 0) {
+            if (successes.length === 0) {
                 context.log("No items were processed successfully.");
                 
                 // Return a meaningful error object instead of a default value
@@ -379,17 +376,17 @@ This script first gets the version count for each component, then the post-proce
                     message: "Could not determine component with most versions: All item operations failed.",
                     totalItems: results.length,
                     successCount: 0,
-                    failureCount: failedResults.length,
+                    failureCount: failures.length,
                     // Optionally include the specific failure details
-                    failures: failedResults.map(f => ({ item: f.itemId, error: f.error }))
+                    failures: failures.map(f => ({ item: f.itemId, error: f.error }))
                 };
             }
             
             // 4. If we are here, we have at least one success.
             //    We can now safely run the 'reduce' logic.
-            context.log(\`Finding max versions from \${successfulResults.length} successful items.\`);
+            context.log(\`Finding max versions from \${successes.length} successful items.\`);
 
-            const componentWithMostVersions = successfulResults
+            const componentWithMostVersions = successes
                 .reduce((max, current) => {
                     // Get counts, with a fallback for safety
                     const currentVersions = current.result?.versionCount || 0;
@@ -598,8 +595,9 @@ This is the most robust and accurate way to find stale content.
         \`,
         postProcessingScript: \`
             context.log(\`Aggregating \${results.length} results.\`);
-            const modifiedItems = results
-                .filter(r => r.status === 'success' && r.result !== null)
+            // Use the pre-filtered 'successes' array
+            const modifiedItems = successes
+                .filter(r => r.result !== null)
                 .map(r => r.result);
 
             return {
@@ -627,15 +625,13 @@ This script attempts to delete a list of items. It uses 'stopOnError: false' to 
         \`,
         postProcessingScript: \`
             // Phase 3 (Reduce): Summarize successes and failures.
-            // We can now just check the 'status' property set by the orchestrator.
-            const successes = results.filter(r => r.status === 'success').length;
-            const failures = results.filter(r => r.status === 'error').length;
+            const successCount = successes.length;
+            const failureCount = failures.length;
 
-            context.log(\`Batch complete with \${successes} successes and \${failures} failures.\`);
+            context.log(\`Batch complete with \${successCount} successes and \${failureCount} failures.\`);
 
             // Collect details for the failed items
-            const failedItems = results
-                .filter(r => r.status === 'error')
+            const failedItems = failures
                 .map(r => ({ 
                     item: r.itemId, 
                     error: r.error // 'error' is automatically populated by the orchestrator
@@ -643,9 +639,9 @@ This script attempts to delete a list of items. It uses 'stopOnError: false' to 
 
             // Return a final JSON summary object
             return {
-                message: \`Batch delete complete. \${successes} succeeded, \${failures} failed.\`,
-                successCount: successes,
-                failureCount: failures,
+                message: \`Batch delete complete. \${successCount} succeeded, \${failureCount} failed.\`,
+                successCount: successCount,
+                failureCount: failureCount,
                 failedItems: failedItems
             };
         \`
@@ -730,7 +726,9 @@ This script finds all Pages in a Publication, efficiently gets the required Targ
         // Phase 3 (Reduce): Format the results
         postProcessingScript: \`
             context.log('Reduce: Filtering and formatting results...');
-            const pages = results.filter(r => r.status === 'success' && r.result !== null).map(r => r.result);
+            const pages = successes
+                .filter(r => r.result !== null)
+                .map(r => r.result);
             context.log(\`Found \${pages.length} pages matching criteria.\`);
 
             if (pages.length === 0) {
@@ -922,8 +920,8 @@ Example 10: Generate "Missing Alt Text" Report for Images
         postProcessingScript: \`
             // Phase 3 (Reduce): Collect all non-compliant items
             context.log('Aggregating report...');
-            const nonCompliantItems = results
-                .filter(r => r.status === 'success' && r.result !== null)
+            const nonCompliantItems = successes
+                .filter(r => r.result !== null)
                 .map(r => r.result);
 
             return {
@@ -1022,8 +1020,8 @@ Example 11: Find Large, Unused Multimedia Components
         postProcessingScript: \`
             // Phase 3 (Reduce): Collect all items to delete
             context.log('Aggregating report...');
-            const itemsToReport = results
-                .filter(r => r.status === 'success' && r.result !== null)
+            const itemsToReport = successes
+                .filter(r => r.result !== null)
                 .map(r => r.result);
 
             return {
@@ -1338,6 +1336,10 @@ Example 11: Find Large, Unused Multimedia Components
         // --- Phase 3: Post-Processing Logic (Reduce Phase) ---
         if (postProcessingScript) {
             logs.push("\nStarting post-processing script (reduce phase)...");
+
+            // Pre-filter results for the post-script
+            const successes = results.filter(r => r.status === 'success');
+            const failures = results.filter(r => r.status === 'error');
             
             let compiledPostScript: vm.Script;
             try {
@@ -1346,6 +1348,8 @@ Example 11: Find Large, Unused Multimedia Components
                         "use strict";
                         // Make context vars available as global-like consts
                         const results = context.results;
+                        const successes = context.successes;
+                        const failures = context.failures;
                         const parameters = context.parameters;
                         const preProcessingResult = context.preProcessingResult;
                         ${postProcessingScript}
@@ -1362,6 +1366,8 @@ Example 11: Find Large, Unused Multimedia Components
             const sandboxContext = { ...baseSandbox };
             sandboxContext.context = {
                 results: Object.freeze(results),
+                successes: Object.freeze(successes),
+                failures: Object.freeze(failures),
                 parameters: Object.freeze(parameters),
                 preProcessingResult: preScriptContextData,
                 tools: toolWrappers,
@@ -1405,8 +1411,8 @@ Example 11: Find Large, Unused Multimedia Components
                 const errorMessage = extractErrorMessage(error);
                 logs.push(`Post-Processing Script FAILED: ${errorMessage}`);
 
-                const successCount = results.filter(r => r.status === 'success').length;
-                const errorCount = results.filter(r => r.status === 'error').length;
+                const successCount = successes.length;
+                const errorCount = failures.length;
 
                 // Create a small, safe JSON error object.
                 const finalErrorSummary = {
