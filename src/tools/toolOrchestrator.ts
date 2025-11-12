@@ -78,7 +78,7 @@ interface MapScriptContext {
     currentItemId: string;
     /** The JSON object passed to the 'parameters' input of the toolOrchestrator tool. */
     parameters: Record<string, any>;
-    /** The 'context' object returned by the 'preProcessingScript' (if any). */
+    /** The 'preProcessingResult' object returned by the 'preProcessingScript' (if any). */
     preProcessingResult: any;
     /** A dictionary of all available tools, wrapped for execution (e.g., `tools.getItem`, `tools.updateContent`). */
     tools: { [toolName: string]: (args: any) => Promise<any> };
@@ -92,7 +92,7 @@ const toolOrchestratorInputProperties = {
         .optional()
         .describe("An array of unique IDs (TCM URIs) for the items to be processed. This is required *unless* a 'preProcessingScript' is provided to generate the list."),
     preProcessingScript: z.string().optional()
-        .describe("An optional first JavaScript string (as an async function body) that runs once *before* the main loop. It must return either a string[] of item IDs, or an object { itemIds: string[], context?: any } to pass data to subsequent scripts. This is the 'setup' phase, perfect for dynamically fetching or filtering items (e.g., by calling 'context.tools.search(...)') or for expensive, one-time lookups (e.g., getting Target Type IDs)."),
+        .describe("An optional first JavaScript string (as an async function body) that runs once *before* the main loop. It must return either a string[] of item IDs, or an object { itemIds: string[], preProcessingResult?: any } to pass data to subsequent scripts. This is the 'setup' phase, perfect for dynamically fetching or filtering items (e.g., by calling 'context.tools.search(...)') or for expensive, one-time lookups (e.g., getting Target Type IDs)."),
     mapScript: z.string()
         .describe("A JavaScript string (as an async function body) to execute for each item. The mapScript has access to a 'context' object. This is the 'map' phase. NOTE: Each item is processed in an isolated sandbox. This means you can safely use await and write parallel code (maxConcurrency > 1) without worrying about tasks interfering with each other. The context object is unique and stable for each item."),
     postProcessingScript: z.string().optional()
@@ -141,24 +141,24 @@ export const toolOrchestrator = {
     By default, up to 5 scripts can run in parallel in the 'map' phase. Setting a higher 'maxConcurrency' value can increase speed at the cost of overall server load. Only use a value of 1 when debugging a script or when explicitly requested by the user.
     
 The 'preProcessingScript' receives a 'context' object with:
-- context.parameters (object): The JSON object you passed to the 'parameters' input.
+- context.parameters (object): The JavaScript object you passed to the 'parameters' input.
 - context.tools (object): A dictionary of all available tools (e.g., context.tools.search).
 - context.log(message) (function): A function to log progress.
 This script *must* return either:
 1. An array of item ID strings (string[]).
-2. An object: { itemIds: string[], context?: any }. The 'context' object will be passed to the 'map' and 'post' scripts as 'context.preProcessingResult'.
+2. An object: { itemIds: string[], preProcessingResult?: any }. The preProcessingResult object is passed to the 'map' and 'post' scripts as context.preProcessingResult. Any data or objects you add to preProcessingResult (e.g., preProcessingResult: { myData: [...] }) are passed as live JavaScript objects. You can access them directly (e.g., context.preProcessingResult.myData) with no JSON.parse() required.
 
 The mandatory 'mapScript' receives a 'context' object with:
 - context.currentItemId (string): The ID of the item currently being processed.
-- context.parameters (object): The JSON object you passed to the 'parameters' input.
-- context.preProcessingResult (any): The 'context' object returned by the 'preProcessingScript' (if any).
+- context.parameters (object): The JavaScript object you passed to the 'parameters' input.
+- context.preProcessingResult (any): The live JavaScript object returned by the preProcessingScript (if any). No JSON.parse() is needed.
 - context.tools (object): A dictionary of all available tools (e.g., context.tools.getItem, context.tools.updateContent).
 - context.log(message) (function): A function to log progress.
 
 The optional 'postProcessingScript' receives a 'context' object with:
 - context.results (array): The read-only array of all results from the 'map' phase.
-- context.parameters (object): The JSON object you passed to the 'parameters' input.
-- context.preProcessingResult (any): The 'context' object returned by the 'preProcessingScript' (if any).
+- context.parameters (object): The JavaScript object you passed to the 'parameters' input.
+- context.preProcessingResult (any): The live JavaScript object returned by the preProcessingScript (if any). No JSON.parse() is needed.
 - context.tools (object): A dictionary of all available tools (e.g., context.tools.getItem, context.tools.updateContent).
 - context.log(message) (function): A function to log progress.
 This script's return value is the final output of the tool.
@@ -689,7 +689,7 @@ This script finds all Pages in a Publication, efficiently gets the required Targ
             // Return object containing itemIds and the target IDs for the map script
             return {
                 itemIds: pageIds,
-                context: { // <-- This 'context' property is required
+                preProcessingResult: { // <-- This object is passed to map/post scripts
                     stagingTargetId: stagingTarget.Id,
                     liveTargetId: liveTarget.Id
                 }
@@ -700,7 +700,7 @@ This script finds all Pages in a Publication, efficiently gets the required Targ
             const pageId = context.currentItemId;
             context.log(\`Map: Checking publish info for Page \${pageId}...\`);
 
-            // Access Target IDs passed from the setup phase's 'context' object
+            // Access Target IDs passed from the setup phase's 'preProcessingResult' object
             const stagingId = context.preProcessingResult.stagingTargetId;
             const liveId = context.preProcessingResult.liveTargetId;
 
@@ -815,7 +815,7 @@ Note: This script assumes the Publication titles are unique. Publication titles 
             // so the map phase is skipped.
             return {
                 itemIds: [], // <-- No items to map
-                context: { // <-- Pass data to post-processing
+                preProcessingResult: { // <-- Pass data to post-processing
                     root: rootPubId,
                     schema: schemaPubId,
                     design: designPubId,
@@ -829,8 +829,8 @@ Note: This script assumes the Publication titles are unique. Publication titles 
             // and returned an empty 'itemIds' list, so this phase is skipped.
         \`,
         postProcessingScript: \`
-            // The 'preProcessingResult' holds the 'context' object
-            // returned from the setup phase.
+            // 'context.preProcessingResult' holds the object returned from the setup phase
+            // (which in this case contains the new Publication IDs).
             const createdIds = context.preProcessingResult;
             
             const summary = {
@@ -1192,11 +1192,11 @@ Example 11: Find Large, Unused Multimedia Components
                     finalItemIds = preScriptResult;
                 } else if (typeof preScriptResult === 'object' && preScriptResult !== null && Array.isArray(preScriptResult.itemIds)) {
                     finalItemIds = preScriptResult.itemIds;
-                    if (preScriptResult.context) {
-                        preScriptContextData = Object.freeze(preScriptResult.context); 
+                    if (preScriptResult.preProcessingResult) {
+                        preScriptContextData = Object.freeze(preScriptResult.preProcessingResult); 
                     }
                 } else {
-                    const errorMsg = "Pre-processing script Error: The script must return a string[] or an object { itemIds: string[], context?: any }.";
+                    const errorMsg = "Pre-processing script Error: The script must return a string[] or an object { itemIds: string[], preProcessingResult?: any }.";
                     logs.push(errorMsg);
                     return { content: [{ type: "text", text: errorMsg + `\nReceived: ${JSON.stringify(preScriptResult)}` }] };
                 }
