@@ -98,7 +98,7 @@ const toolOrchestratorInputProperties = {
     postProcessingScript: z.string().optional()
         .describe("An optional second JavaScript string (as an async function body) that runs once after all items are processed. The script has access to predefined variables: `results` (an array of all execution results from the 'map' phase), `successes`, `failures`, `parameters` (the JSON object passed to the tool), and `preProcessingResult` (the 'context' object from the setup phase). Its return value becomes the final output of the tool. This is the 'reduce' phase."),
     parameters: z.record(z.any()).optional()
-        .describe("An optional JSON object of parameters to pass into all scripts. Use this for simple, static values like search queries, find/replace strings, or target TCM URIs. Note: Complex objects (like data from other tools) passed as parameters are treated as literal values. If you pass a stringified JSON object, you must manually call JSON.parse() on it inside your script."),
+        .describe("An optional JSON object of parameters to pass into all scripts. Use this for simple, static values like search queries, find/replace strings, or target TCM URIs. Note: Complex objects (like data from other tools) passed as parameters are treated as literal values. If you pass a stringified JSON object as a parameter value, you must manually call JSON.parse() on it inside your script. (Note: this only applies to input parameters, not to the responses from tool calls, which are always auto-parsed)."),
     stopOnError: z.boolean().optional().default(true)
         .describe("If true (default), the entire operation stops if any single item fails during the 'map' phase. If false, it logs the error and continues to the next item."),
     maxConcurrency: z.number().int().min(1).max(10).optional().default(5)
@@ -166,20 +166,17 @@ The optional 'postProcessingScript' receives a 'context' object with:
 This script's return value is the final output of the tool.
 (For convenience, 'results', 'successes', 'failures', 'parameters', and 'preProcessingResult' are also available as global-like variables in the postProcessingScript. Do not declare new variables with these names.)
 
-All scripts *must* be 'async' and can 'await' tool calls.
+All scripts must be 'async' and can 'await' tool calls.
 All tool calls (e.g., 'await context.tools.getItem(...)') are automatically authenticated.
-For tools that return data (like 'getItem' or 'search'), the orchestrator will automatically parse the JSON response.
-You will receive the data object directly, not a string that needs to be parsed.
+
+Automatic JSON parsing
+All tools have their JSON string responses automatically parsed into JavaScript objects. You do not need to parse tool responses in a script.
 
 // Example of correct usage inside toolOrchestrator:
 const item = await context.tools.getItem({ itemId: 'tcm:1-234-64' });
 if (item) {
   context.log("Item title: " + item.Title); // Access directly
 }
-
-For tools returning success messages (like 'updateContent'), the orchestrator attempts to parse the response as JSON.
-If successful (which is typical), you'll receive the parsed message object (e.g., { $type: 'Component', Id: 'tcm:5-123', Message: '...' }).
-If parsing fails, you'll receive the raw response structure.
 
 To use the AI, call the 'generateContentFromPrompt' tool:
 const aiResult = await context.tools.generateContentFromPrompt({ prompt: '...' });

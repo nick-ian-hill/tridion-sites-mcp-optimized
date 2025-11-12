@@ -12,8 +12,47 @@ const readExcelFileFromMultimediaComponentSchema = z.object(readExcelFileFromMul
 
 export const readExcelFileFromMultimediaComponent = {
     name: "readExcelFileFromMultimediaComponent",
-    description: `Reads the content of an Excel file (.xlsx) from a multimedia component and returns its data as a JSON string.
-    This is useful for extracting structured data from an Excel sheet to be used for creating one or more new CMS items. For example, the JSON output can be looped through, with each object used to populate the content for a 'createComponent' tool call.`,
+    description: `Reads an Excel file (.xlsx) from a multimedia component and returns its data as an object.
+    
+    NOTE: When called from 'toolOrchestrator', the JSON string is automatically parsed. You receive the object directly.
+    
+    The returned object is NOT an array. It is a wrapper containing all sheets from the workbook. You must access a specific sheet to get the array of rows.
+    
+    Example Return Object Shape:
+    {
+      "$type": "ExcelData",
+      "Id": "tcm:5-124",
+      "WorkbookData": {
+        "Sheet1": [
+          { "header1": "valueA", "header2": "valueB" },
+          { "header1": "valueC", "header2": "valueD" }
+        ],
+        "AnotherSheet": [
+          // ...
+        ]
+      }
+    }
+    
+    Correct Usage in 'toolOrchestrator':
+    // 1. Get the full result object
+    const excelResult = await context.tools.readExcelFileFromMultimediaComponent({ ... });
+    
+    // 2. Get the array of rows from the first sheet
+    const sheetNames = Object.keys(excelResult.WorkbookData);
+    if (sheetNames.length === 0) {
+      throw new Error("Excel file contains no sheets.");
+    }
+    const excelRows = excelResult.WorkbookData[sheetNames[0]];
+    
+    // 3. Now you can use the array
+    context.log(\`Found \${excelRows.length} rows in sheet '\${sheetNames[0]}'.\`);
+    return {
+        itemIds: excelRows.map((_, index) => index.toString()),
+        preProcessingResult: {
+            excelRows: excelRows // Pass the actual array
+        }
+    };
+    `,
     input: readExcelFileFromMultimediaComponentInputProperties,
     async execute(input: z.infer<typeof readExcelFileFromMultimediaComponentSchema>, context: any) {
         const req = context?.request;
