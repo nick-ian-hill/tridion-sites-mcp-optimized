@@ -96,7 +96,7 @@ const toolOrchestratorInputProperties = {
     mapScript: z.string()
         .describe("A JavaScript string (as an async function body) to execute for each item. The mapScript has access to a 'context' object. This is the 'map' phase. NOTE: Each item is processed in an isolated sandbox. This means you can safely use await and write parallel code (maxConcurrency > 1) without worrying about tasks interfering with each other. The context object is unique and stable for each item."),
     postProcessingScript: z.string().optional()
-        .describe("An optional second JavaScript string (as an async function body) that runs once after all items are processed. The script has access to predefined variables: `results` (an array of all execution results from the 'map' phase), `successes`, `failures`, `parameters` (the JSON object passed to the tool), and `preProcessingResult` (the 'context' object from the setup phase). Its return value becomes the final output of the tool. This is the 'reduce' phase."),
+        .describe("An optional second JavaScript string (as an async function body) that runs once after all items are processed. The script has access to a 'context' object containing: `results` (an array of all execution results from the 'map' phase), `successes`, `failures`, `parameters` (the JSON object passed to the tool), and `preProcessingResult` (the 'context' object from the setup phase). Its return value becomes the final output of the tool. This is the 'reduce' phase."),
     parameters: z.record(z.any()).optional()
         .describe("An optional JSON object of parameters to pass into all scripts. Use this for simple, static values like search queries, find/replace strings, or target TCM URIs. Note: Complex objects (like data from other tools) passed as parameters are treated as literal values. If you pass a stringified JSON object as a parameter value, you must manually call JSON.parse() on it inside your script. (Note: this only applies to input parameters, not to the responses from tool calls, which are always auto-parsed)."),
     stopOnError: z.boolean().optional().default(true)
@@ -166,7 +166,6 @@ The optional 'postProcessingScript' receives a 'context' object with:
 - context.tools (object): A dictionary of all available tools (e.g., context.tools.getItem, context.tools.updateContent).
 - context.log(message) (function): A function to log progress.
 This script's return value is the final output of the tool.
-(For convenience, 'results', 'successes', 'failures', 'parameters', and 'preProcessingResult' are also available as global-like variables in the postProcessingScript. Do not declare new variables with these names.)
 
 All scripts must be 'async' and can 'await' tool calls.
 All tool calls (e.g., 'await context.tools.getItem(...)') are automatically authenticated.
@@ -356,36 +355,36 @@ This script first gets the version count for each component, then the post-proce
         \`,
         postProcessingScript: \`
             // Phase 3 (Reduce): Find the single best item from ALL results.
-            context.log(\`Processing \${results.length} total results (\${successes.length} success, \${failures.length} fail).\`);
+            context.log(\`Processing \${context.results.length} total results (\${context.successes.length} success, \${context.failures.length} fail).\`);
 
-            if (failures.length > 0) {
-                context.log(\`Warning: \${failures.length} items failed to process.\`);
+            if (context.failures.length > 0) {
+                context.log(\`Warning: \${context.failures.length} items failed to process.\`);
                 // You could even log the specific errors
-                // for (const failure of failures) {
+                // for (const failure of context.failures) {
                 //    context.log(\`  - \${failure.itemId}: \${failure.error}\`);
                 // }
             }
 
             // 3. Check if there are ANY successes to process
-            if (successes.length === 0) {
+            if (context.successes.length === 0) {
                 context.log("No items were processed successfully.");
                 
                 // Return a meaningful error object instead of a default value
                 return {
                     message: "Could not determine component with most versions: All item operations failed.",
-                    totalItems: results.length,
+                    totalItems: context.results.length,
                     successCount: 0,
-                    failureCount: failures.length,
+                    failureCount: context.failures.length,
                     // Optionally include the specific failure details
-                    failures: failures.map(f => ({ item: f.itemId, error: f.error }))
+                    failures: context.failures.map(f => ({ item: f.itemId, error: f.error }))
                 };
             }
             
             // 4. If we are here, we have at least one success.
             //    We can now safely run the 'reduce' logic.
-            context.log(\`Finding max versions from \${successes.length} successful items.\`);
+            context.log(\`Finding max versions from \${context.successes.length} successful items.\`);
 
-            const componentWithMostVersions = successes
+            const componentWithMostVersions = context.successes
                 .reduce((max, current) => {
                     // Get counts, with a fallback for safety
                     const currentVersions = current.result?.versionCount || 0;
@@ -593,14 +592,14 @@ This is the most robust and accurate way to find stale content.
             return null; // Not stale on any target
         \`,
         postProcessingScript: \`
-            context.log(\`Aggregating \${results.length} results.\`);
+            context.log(\`Aggregating \${context.results.length} results.\`);
             // Use the pre-filtered 'successes' array
-            const modifiedItems = successes
+            const modifiedItems = context.successes
                 .filter(r => r.result !== null)
                 .map(r => r.result);
 
             return {
-                totalChecked: results.length,
+                totalChecked: context.results.length,
                 totalStalePages: modifiedItems.length,
                 stalePages: modifiedItems
             };
@@ -624,13 +623,13 @@ This script attempts to delete a list of items. It uses 'stopOnError: false' to 
         \`,
         postProcessingScript: \`
             // Phase 3 (Reduce): Summarize successes and failures.
-            const successCount = successes.length;
-            const failureCount = failures.length;
+            const successCount = context.successes.length;
+            const failureCount = context.failures.length;
 
             context.log(\`Batch complete with \${successCount} successes and \${failureCount} failures.\`);
 
             // Collect details for the failed items
-            const failedItems = failures
+            const failedItems = context.failures
                 .map(r => ({ 
                     item: r.itemId, 
                     error: r.error // 'error' is automatically populated by the orchestrator
@@ -725,7 +724,7 @@ This script finds all Pages in a Publication, efficiently gets the required Targ
         // Phase 3 (Reduce): Format the results
         postProcessingScript: \`
             context.log('Reduce: Filtering and formatting results...');
-            const pages = successes
+            const pages = context.successes
                 .filter(r => r.result !== null)
                 .map(r => r.result);
             context.log(\`Found \${pages.length} pages matching criteria.\`);
@@ -919,12 +918,12 @@ Example 10: Generate "Missing Alt Text" Report for Images
         postProcessingScript: \`
             // Phase 3 (Reduce): Collect all non-compliant items
             context.log('Aggregating report...');
-            const nonCompliantItems = successes
+            const nonCompliantItems = context.successes
                 .filter(r => r.result !== null)
                 .map(r => r.result);
 
             return {
-                totalChecked: results.length,
+                totalChecked: context.results.length,
                 totalNonCompliant: nonCompliantItems.length,
                 itemsToFix: nonCompliantItems
             };
@@ -1019,12 +1018,12 @@ Example 11: Find Large, Unused Multimedia Components
         postProcessingScript: \`
             // Phase 3 (Reduce): Collect all items to delete
             context.log('Aggregating report...');
-            const itemsToReport = successes
+            const itemsToReport = context.successes
                 .filter(r => r.result !== null)
                 .map(r => r.result);
 
             return {
-                totalChecked: results.length,
+                totalChecked: context.results.length,
                 totalFilesToReview: itemsToReport.length,
                 filesToReview: itemsToReport
             };
@@ -1119,12 +1118,12 @@ const result1 = await tools.toolOrchestrator({
         
         // Convert the array of {key, id} objects into a simple Map
         const articleKeyToComponentIdMap = new Map(
-            successes.map(s => [s.result.key, s.result.id])
+            context.successes.map(s => [s.result.key, s.result.id])
         );
 
         // Return all the data needed for the *next* tool call
         return {
-            summary: \`Created \${successes.length} components.\`,
+            summary: \`Created \${context.successes.length} components.\`,
             articleKeyToComponentIdMap: Object.fromEntries(articleKeyToComponentIdMap),
             
             // Pass the other prerequisite data along
@@ -1219,9 +1218,9 @@ const result2 = await tools.toolOrchestrator({
     postProcessingScript: \`
         context.log("Phase 2 Complete: Summarizing page creation.");
         return {
-            message: \`Successfully created \${successes.length} pages.\`,
-            createdPages: successes.map(s => s.result),
-            errors: failures.map(f => ({ page: f.itemId, error: f.error }))
+            message: \`Successfully created \${context.successes.length} pages.\`,
+            createdPages: context.successes.map(s => s.result),
+            errors: context.failures.map(f => ({ page: f.itemId, error: f.error }))
         };
     \`
 });
@@ -1361,6 +1360,8 @@ const result2 = await tools.toolOrchestrator({
             }
             
             const preScriptLog = (message: string) => logs.push(`[PreScript] ${message}`);
+            const preScriptErrorLog = (message: string) => logs.push(`[PreScript] [ERROR] ${message}`);
+            const preScriptWarnLog = (message: string) => logs.push(`[PreScript] [WARN] ${message}`);
             const preScriptContext: PreScriptContext = {
                 parameters: Object.freeze(parameters), // Freeze parameters for security
                 tools: toolWrappers,
@@ -1370,7 +1371,7 @@ const result2 = await tools.toolOrchestrator({
             // Create a dedicated sandbox for this script
             const sandboxContext = { ...baseSandbox };
             sandboxContext.context = preScriptContext;
-            sandboxContext.console = { log: preScriptLog, error: preScriptLog, warn: preScriptLog };
+            sandboxContext.console = { log: preScriptLog, error: preScriptErrorLog, warn: preScriptWarnLog };
             const sandbox = vm.createContext(sandboxContext, {
                 codeGeneration: { strings: false, wasm: false }
             });
@@ -1436,6 +1437,8 @@ const result2 = await tools.toolOrchestrator({
                 logs.push(`\n[${index + 1}/${finalItemIds.length}] Processing item: ${itemId}`);
                 
                 const perItemLog = (message: string) => logs.push(`[${itemId}] ${message}`);
+                const perItemErrorLog = (message: string) => logs.push(`[${itemId}] [ERROR] ${message}`);
+                const perItemWarnLog = (message: string) => logs.push(`[${itemId}] [WARN] ${message}`);
 
                 const perItemContext: MapScriptContext = {
                     currentItemId: itemId,
@@ -1449,19 +1452,13 @@ const result2 = await tools.toolOrchestrator({
                 sandboxContext.context = perItemContext;
                 sandboxContext.console = {
                     log: perItemLog,
-                    error: perItemLog,
-                    warn: perItemLog
+                    error: perItemErrorLog,
+                    warn: perItemWarnLog
                 };
                 
                 const sandbox = vm.createContext(sandboxContext, {
                     codeGeneration: { strings: false, wasm: false }
                 });
-
-                perItemContext.currentItemId = itemId;
-                perItemContext.log = perItemLog;
-                sandboxContext.console.log = perItemLog;
-                sandboxContext.console.error = perItemLog;
-                sandboxContext.console.warn = perItemLog;
 
                 try {
                     const scriptPromise = compiledMapScript.runInContext(sandbox, {
@@ -1546,12 +1543,6 @@ const result2 = await tools.toolOrchestrator({
                 compiledPostScript = new vm.Script(`
                     (async () => {
                         "use strict";
-                        // Make context vars available as global-like consts
-                        const results = context.results;
-                        const successes = context.successes;
-                        const failures = context.failures;
-                        const parameters = context.parameters;
-                        const preProcessingResult = context.preProcessingResult;
                         ${postProcessingScript}
                     })();
                 `, { filename: 'postProcessingScript.js' });
@@ -1562,6 +1553,8 @@ const result2 = await tools.toolOrchestrator({
             }
 
             const postScriptLog = (message: string) => logs.push(`[PostScript] ${message}`);
+            const postScriptErrorLog = (message: string) => logs.push(`[PostScript] [ERROR] ${message}`);
+            const postScriptWarnLog = (message: string) => logs.push(`[PostScript] [WARN] ${message}`);
             
             const sandboxContext = { ...baseSandbox };
             sandboxContext.context = {
@@ -1573,7 +1566,7 @@ const result2 = await tools.toolOrchestrator({
                 tools: toolWrappers,
                 log: postScriptLog
             };
-            sandboxContext.console = { log: postScriptLog, error: postScriptLog, warn: postScriptLog };
+            sandboxContext.console = { log: postScriptLog, error: postScriptErrorLog, warn: postScriptWarnLog };
             const sandbox = vm.createContext(sandboxContext, {
                 codeGeneration: { strings: false, wasm: false }
             });
@@ -1593,9 +1586,18 @@ const result2 = await tools.toolOrchestrator({
                 let responsePayload: any = finalResult;
 
                 if (debug) {
+                    // Truncate the log to the first 25 and last 25 lines
+                    let logOutput = logs;
+                    if (logs.length > 50) {
+                        logOutput = [
+                            ...logs.slice(0, 25),
+                            `\n... (log truncated - ${logs.length - 50} lines hidden) ...\n`,
+                            ...logs.slice(-25)
+                        ];
+                    }
                     responsePayload = {
                         result: finalResult,
-                        executionLog: logs.join('\n')
+                        executionLog: logOutput.join('\n')
                     };
                 }
 
