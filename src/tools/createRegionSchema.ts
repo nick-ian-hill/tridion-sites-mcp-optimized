@@ -15,7 +15,6 @@ const occurrenceConstraintSchema = z.object({
     MinOccurs: z.number().int().describe("Minimum number of Component Presentations allowed in this Region.")
 });
 
-// This schema correctly uses the standard 'linkSchema'
 const typeConstraintSchema = z.object({
     "$type": z.literal("TypeConstraint"),
     BasedOnSchema: linkSchema.optional().describe("A Link to a Schema. Only Components based on this Schema are allowed."),
@@ -27,7 +26,6 @@ const componentPresentationConstraintSchema = z.union([
     typeConstraintSchema
 ]);
 
-// CORRECTED: This schema now uses 'expandableLinkSchema' for the 'RegionSchema' property
 const nestedRegionSchema = z.object({
     "$type": z.literal("NestedRegion"),
     RegionName: z.string().describe("The machine name of the nested Region."),
@@ -37,7 +35,6 @@ const nestedRegionSchema = z.object({
 
 const regionDefinitionSchema = z.object({
     "$type": z.literal("RegionDefinition"),
-    IsLocalizable: z.boolean().optional().describe("If set to false, Component Presentations in this Region cannot be changed in a local (child) copy of a Page. Defaults to true."),
     ComponentPresentationConstraints: z.array(componentPresentationConstraintSchema).optional()
         .describe("An array of constraints (OccurrenceConstraint, TypeConstraint) for Component Presentations in this Region."),
     NestedRegions: z.array(nestedRegionSchema).optional()
@@ -120,25 +117,6 @@ Note the use of "$type": "ExpandableLink" for the 'RegionSchema' property inside
                         "$type": "ExpandableLink",
                         "IdRef": "tcm:2-181-8"
                     }
-                }
-            ]
-        }
-    });
-
-Example 3: Create a non-localizable Region Schema.
-Component Presentations placed in this Region on a Page cannot be modified in child Publications.
-    const result = await tools.createRegionSchema({
-        title: "Non-Localizable Header Region",
-        locationId: "tcm:5-2-2",
-        description: "A Region for a global header that should not be changed in local sites.",
-        regionDefinition: {
-            "$type": "RegionDefinition",
-            "IsLocalizable": false,
-            "ComponentPresentationConstraints": [
-                {
-                    "$type": "OccurrenceConstraint",
-                    "MaxOccurs": 1,
-                    "MinOccurs": 1
                 }
             ]
         }
