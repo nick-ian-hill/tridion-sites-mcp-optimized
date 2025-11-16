@@ -7,43 +7,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 import { fieldDefinitionSchema, fieldValueSchema } from "../schemas/fieldValueSchema.js";
 import { convertLinksRecursively, processSchemaFieldDefinitions, reorderFieldsBySchema, sanitizeAgentJson } from "../utils/fieldReordering.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
-import { linkSchema } from "../schemas/linkSchema.js";
-import { expandableLinkSchema } from "../schemas/expandableLinkSchema.js";
-
-const occurrenceConstraintSchema = z.object({
-    "$type": z.literal("OccurrenceConstraint"),
-    MaxOccurs: z.number().int().describe("Maximum number of Component Presentations allowed in this Region."),
-    MinOccurs: z.number().int().describe("Minimum number of Component Presentations allowed in this Region.")
-});
-
-const typeConstraintSchema = z.object({
-    "$type": z.literal("TypeConstraint"),
-    BasedOnSchema: linkSchema.optional().describe("A Link to a Schema. Only Components based on this Schema are allowed."),
-    BasedOnComponentTemplate: linkSchema.optional().describe("A Link to a Component Template. Only CPs with this template are allowed.")
-});
-
-const componentPresentationConstraintSchema = z.union([
-    occurrenceConstraintSchema,
-    typeConstraintSchema
-]);
-
-const nestedRegionSchema: z.ZodTypeAny = z.lazy(() => z.object({
-    "$type": z.literal("NestedRegion"),
-    RegionName: z.string().describe("The machine name of the nested Region."),
-    IsMandatory: z.boolean().optional().describe("Whether this nested Region is mandatory."),
-    RegionSchema: expandableLinkSchema.describe("A Link to another Region Schema that defines this nested Region. Must be an ExpandableLink."),
-    Regions: z.array(nestedRegionSchema).optional().describe("Deeper nested regions, if the schema supports it.")
-}));
-
-const regionDefinitionSchema = z.object({
-    "$type": z.literal("RegionDefinition"),
-    // 'IsLocalizable' is included here, as 'update' is the correct way to set it.
-    IsLocalizable: z.boolean().optional().describe("If set to false, Component Presentations in this Region cannot be changed in a local (child) copy of a Page. Defaults to true."),
-    ComponentPresentationConstraints: z.array(componentPresentationConstraintSchema).optional()
-        .describe("An array of constraints (OccurrenceConstraint, TypeConstraint) for Component Presentations in this Region."),
-    NestedRegions: z.array(nestedRegionSchema).optional()
-        .describe("An array of nested Region definitions.")
-}).describe("A JSON object defining the Region's constraints and nested regions.");
+import { regionDefinitionSchema } from "../schemas/regionDefinitionSchemas.js";
 
 const updateItemPropertiesInputProperties = {
     itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the CMS item to update."),
@@ -208,14 +172,13 @@ Example 2: Change the Metadata Schema of a Folder and provide the mandatory valu
         }
     });
 
-Example 3: Update a Region Schema to add constraints, nested regions, and set 'IsLocalizable: false'.
+Example 3: Update a Region Schema to add constraints and nested regions.
 This example updates a basic Region Schema (e.g., 'tcm:5-3875-8') to make it non-localizable, add constraints, and link two nested region schemas ('tcm:5-3873-8' and 'tcm:5-3874-8').
     const result = await tools.updateItemProperties({
         itemId: "tcm:5-3875-8",
         itemType: "Schema",
         regionDefinition: {
             "$type": "RegionDefinition",
-            "IsLocalizable": false,
             "ComponentPresentationConstraints": [
                 {
                     "$type": "OccurrenceConstraint",

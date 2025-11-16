@@ -4,44 +4,7 @@ import { toLink } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
 import { convertLinksRecursively, processSchemaFieldDefinitions, sanitizeAgentJson } from "../utils/fieldReordering.js";
-import { linkSchema } from "../schemas/linkSchema.js";
-import { expandableLinkSchema } from "../schemas/expandableLinkSchema.js";
-
-// --- Zod Schemas for Region Definition ---
-
-const occurrenceConstraintSchema = z.object({
-    "$type": z.literal("OccurrenceConstraint"),
-    MaxOccurs: z.number().int().describe("Maximum number of Component Presentations allowed in this Region."),
-    MinOccurs: z.number().int().describe("Minimum number of Component Presentations allowed in this Region.")
-});
-
-const typeConstraintSchema = z.object({
-    "$type": z.literal("TypeConstraint"),
-    BasedOnSchema: linkSchema.optional().describe("A Link to a Schema. Only Components based on this Schema are allowed."),
-    BasedOnComponentTemplate: linkSchema.optional().describe("A Link to a Component Template. Only CPs with this template are allowed.")
-});
-
-const componentPresentationConstraintSchema = z.union([
-    occurrenceConstraintSchema,
-    typeConstraintSchema
-]);
-
-const nestedRegionSchema = z.object({
-    "$type": z.literal("NestedRegion"),
-    RegionName: z.string().describe("The machine name of the nested Region."),
-    IsMandatory: z.boolean().optional().describe("Whether this nested Region is mandatory."),
-    RegionSchema: expandableLinkSchema.describe("A Link to another Region Schema that defines this nested Region. Must be an ExpandableLink.")
-});
-
-const regionDefinitionSchema = z.object({
-    "$type": z.literal("RegionDefinition"),
-    ComponentPresentationConstraints: z.array(componentPresentationConstraintSchema).optional()
-        .describe("An array of constraints (OccurrenceConstraint, TypeConstraint) for Component Presentations in this Region."),
-    NestedRegions: z.array(nestedRegionSchema).optional()
-        .describe("An array of nested Region definitions.")
-}).describe("A JSON object defining the Region's constraints and nested regions.");
-
-// --- Tool Definition ---
+import { regionDefinitionSchema } from "../schemas/regionDefinitionSchemas.js";
 
 export const createRegionSchema = {
     name: "createRegionSchema",
@@ -54,7 +17,6 @@ A Region Schema can define:
 1.  Constraints on the Component Presentations that can be placed within it (using '$type: "Link"').
 2.  A set of nested Regions, each linking to its own Region Schema (using '$type: "ExpandableLink"').
 3.  A set of metadata fields for the Region itself.
-4.  Whether the Region is localizable (i.e., if its content can be overridden in child Publications).
 
 This tool accepts the 'regionDefinition' as a direct JSON object, making it much easier to define constraints and nested regions.
 
