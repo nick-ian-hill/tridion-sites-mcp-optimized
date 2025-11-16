@@ -37,6 +37,7 @@ const nestedRegionSchema = z.object({
 
 const regionDefinitionSchema = z.object({
     "$type": z.literal("RegionDefinition"),
+    IsLocalizable: z.boolean().optional().describe("If set to false, Component Presentations in this Region cannot be changed in a local (child) copy of a Page. Defaults to true."),
     ComponentPresentationConstraints: z.array(componentPresentationConstraintSchema).optional()
         .describe("An array of constraints (OccurrenceConstraint, TypeConstraint) for Component Presentations in this Region."),
     NestedRegions: z.array(nestedRegionSchema).optional()
@@ -56,14 +57,15 @@ A Region Schema can define:
 1.  Constraints on the Component Presentations that can be placed within it (using '$type: "Link"').
 2.  A set of nested Regions, each linking to its own Region Schema (using '$type: "ExpandableLink"').
 3.  A set of metadata fields for the Region itself.
+4.  Whether the Region is localizable (i.e., if its content can be overridden in child Publications).
 
 This tool accepts the 'regionDefinition' as a direct JSON object, making it much easier to define constraints and nested regions.
 
-***IMPORTANT***
-- When defining a 'TypeConstraint', the 'BasedOnSchema' and 'BasedOnComponentTemplate' properties must be a **Link**:
-  \`{ "$type": "Link", "IdRef": "tcm:1-2-8" }\`
-- When defining a 'NestedRegion', the 'RegionSchema' property must be an **ExpandableLink**:
-  \`{ "$type": "ExpandableLink", "IdRef": "tcm:1-3-8" }\`
+IMPORTANT
+- When defining a 'TypeConstraint', the 'BasedOnSchema' and 'BasedOnComponentTemplate' properties must be a Link:
+  { "$type": "Link", "IdRef": "tcm:1-2-8" }
+- When defining a 'NestedRegion', the 'RegionSchema' property must be an ExpandableLink:
+  { "$type": "ExpandableLink", "IdRef": "tcm:1-3-8" }
 
 Examples:
 
@@ -122,13 +124,32 @@ Note the use of "$type": "ExpandableLink" for the 'RegionSchema' property inside
             ]
         }
     });
+
+Example 3: Create a non-localizable Region Schema.
+Component Presentations placed in this Region on a Page cannot be modified in child Publications.
+    const result = await tools.createRegionSchema({
+        title: "Non-Localizable Header Region",
+        locationId: "tcm:5-2-2",
+        description: "A Region for a global header that should not be changed in local sites.",
+        regionDefinition: {
+            "$type": "RegionDefinition",
+            "IsLocalizable": false,
+            "ComponentPresentationConstraints": [
+                {
+                    "$type": "OccurrenceConstraint",
+                    "MaxOccurs": 1,
+                    "MinOccurs": 1
+                }
+            ]
+        }
+    });
     `,
     input: {
         title: z.string().nonempty().describe("The title for the new Region Schema."),
         locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new Schema will be created."),
         description: z.string().nonempty().describe("A mandatory description of the Schema."),
         metadataFields: z.record(fieldDefinitionSchema).optional().describe("A dictionary of metadata field definitions for the Region Schema itself."),
-        regionDefinition: regionDefinitionSchema.optional().describe("A JSON object defining the Region's constraints and nested regions."),
+        regionDefinition: regionDefinitionSchema.optional().describe("A JSON object defining the Region's constraints, nested regions, and localizability."),
         isIndexable: z.boolean().optional().describe("Specifies whether metadata values are indexed for searching."),
         isPublishable: z.boolean().optional().describe("Specifies whether metadata values are published.")
     },
