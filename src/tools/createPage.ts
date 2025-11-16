@@ -4,8 +4,9 @@ import { toLink } from "../utils/links.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
-import { reorderFieldsBySchema, convertLinksRecursively } from "../utils/fieldReordering.js";
+import { reorderFieldsBySchema, convertLinksRecursively, sanitizeAgentJson } from "../utils/fieldReordering.js";
 import { processComponentPresentations, processRegions } from "../utils/pageUtils.js";
+import { componentPresentationSchemaForTyping, regionSchemaForTyping } from "../schemas/pageSchemas.js";
 
 const createPageInputProperties = {
     title: z.string().nonempty().describe("The title for the new Page."),
@@ -14,8 +15,8 @@ const createPageInputProperties = {
     pageTemplateId: z.string().regex(/^tcm:\d+-\d+-128$/).optional().describe("The TCM URI of the Page Template to be associated with the Page. Use 'search' or 'getItemsInContainer' to find available templates. If not provided, the page will use the Page Template defined by the parent Structure Group."),
     metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of a Schema for the Page's metadata. Use 'getSchemaLinks' to find available schemas. If the Page Template defines a Region Schema, that Region Schema can be used here."),
     metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the Page's metadata fields as defined by the schema with URI metadataSchemaId."),
-    componentPresentations: z.string().optional().describe("A JSON string representing an array of Component Presentation objects to be placed directly on the Page, outside of any Regions. To add CPs inside a specific Region, you must add them to the 'ComponentPresentations' array within that Region object (passed via the 'regions' property). Each object must have '$type': 'ComponentPresentation', a 'Component' property (a Link), and an optional 'ComponentTemplate' property (a Link). Use the 'search' tool to find available Components and Component Templates. Use the 'getIsComponentTemplateRequired' tool to check if a Component Template is mandatory."),
-    regions: z.string().optional().describe("A JSON string representing an array of Region objects. The RegionName for each region must match a region defined in the Page Template. To discover the correct region names and structure, first use the 'getItem' tool to inspect the 'pageTemplateId'.")
+    componentPresentations: z.array(componentPresentationSchemaForTyping).optional().describe("An array of Component Presentation objects to be placed directly on the Page, outside of any Regions. Each object must have '$type': 'ComponentPresentation', a 'Component' property (a Link), and an optional 'ComponentTemplate' property (a Link)."),
+    regions: z.array(regionSchemaForTyping).optional().describe("An array of Region objects. The RegionName for each region must match a region defined in the Page Template. To discover the correct region names and structure, first use the 'getItem' tool to inspect the 'pageTemplateId'.")
 };
 
 const createPageInputSchema = z.object(createPageInputProperties);
@@ -60,9 +61,9 @@ This is a common pattern, as many Page Templates require at least one region to 
         locationId: "tcm:1-1-4",
         fileName: "contact.html",
         pageTemplateId: "tcm:1-15-128",
-        regions: JSON.stringify([
+        regions: [
             { "$type": "EmbeddedRegion", "RegionName": "Main" }
-        ])
+        ]
     });
 
 Example 2: Create a Page with a Component Presentation on the page and an empty 'Main' region.
@@ -71,16 +72,16 @@ Example 2: Create a Page with a Component Presentation on the page and an empty 
         locationId: "tcm:1-1-4",
         fileName: "index.html",
         pageTemplateId: "tcm:1-20-128",
-        componentPresentations: JSON.stringify([
+        componentPresentations: [
             {
                 "$type": "ComponentPresentation",
                 "Component": { "$type": "Link", "IdRef": "tcm:1-101-16" },
                 "ComponentTemplate": { "$type": "Link", "IdRef": "tcm:1-102-32" }
             }
-        ]),
-        regions: JSON.stringify([
+        ],
+        regions: [
             { "$type": "EmbeddedRegion", "RegionName": "Main" }
-        ])
+        ]
     });
 
 Example 3: Create a page with content on the page and in a region.
@@ -90,14 +91,14 @@ This demonstrates a mixed content model.
         locationId: "tcm:1-1-4",
         fileName: "mixed.html",
         pageTemplateId: "tcm:1-25-128",
-        componentPresentations: JSON.stringify([
+        componentPresentations: [
             {
                 "$type": "ComponentPresentation",
                 "Component": { "$type": "Link", "IdRef": "tcm:1-101-16" },
                 "ComponentTemplate": { "$type": "Link", "IdRef": "tcm:1-102-32" }
             }
-        ]),
-        regions: JSON.stringify([
+        ],
+        regions: [
             {
                 "$type": "EmbeddedRegion",
                 "RegionName": "Main",
@@ -109,7 +110,7 @@ This demonstrates a mixed content model.
                     }
                 ]
             }
-        ])
+        ]
     });
 
 Example 4: Create a complex Page with page-level metadata and nested regions.
@@ -124,7 +125,7 @@ This example shows a two-column layout within the main content area.
             "seoTitle": "My Awesome Landing Page",
             "seoDescription": "This page is full of great content."
         },
-        "regions": JSON.stringify([
+        "regions": [
             {
                 "$type": "EmbeddedRegion",
                 "RegionName": "MainContent",
@@ -153,13 +154,14 @@ This example shows a two-column layout within the main content area.
                     }
                 ]
             }
-        ])
+        ]
     });`,
     input: createPageInputProperties,
 
     execute: async (args: CreatePageInput,
         context: any
     ) => {
+        sanitizeAgentJson(args);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -176,26 +178,8 @@ This example shows a two-column layout within the main content area.
         };
 
         try {
-            // Parse string inputs into objects early to fail fast
-            let parsedComponentPresentations;
-            if (componentPresentations) {
-                try {
-                    parsedComponentPresentations = JSON.parse(componentPresentations);
-                } catch (error) {
-                    const errorMessage = error instanceof Error ? error.message : String(error);
-                    return createErrorResponse(`Error: The 'componentPresentations' parameter is not a valid JSON string. Details: ${errorMessage}`);
-                }
-            }
-
-            let parsedRegions;
-            if (regions) {
-                try {
-                    parsedRegions = JSON.parse(regions);
-                } catch (error) {
-                    const errorMessage = error instanceof Error ? error.message : String(error);
-                    return createErrorResponse(`Error: The 'regions' parameter is not a valid JSON string. Details: ${errorMessage}`);
-                }
-            }
+            let parsedComponentPresentations = componentPresentations;
+            let parsedRegions = regions;
 
             // Fetch the default model to use as a base
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
