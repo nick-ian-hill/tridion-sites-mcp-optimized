@@ -3,6 +3,7 @@ import FormData from "form-data";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
+import { sanitizeAgentJson } from "../utils/fieldReordering.js";
 
 const createMultimediaComponentFromBase64InputProperties = {
     base64Content: z.string().describe("The base64 encoded content of the file to upload."),
@@ -22,6 +23,7 @@ export const createMultimediaComponentFromBase64 = {
     async execute(input: z.infer<typeof createMultimediaComponentFromBase64Schema>,
         context: any
     ) {
+        sanitizeAgentJson(input);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);

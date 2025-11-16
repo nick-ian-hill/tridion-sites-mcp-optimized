@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
-import { reorderFieldsBySchema, convertLinksRecursively } from "../utils/fieldReordering.js";
+import { reorderFieldsBySchema, convertLinksRecursively, sanitizeAgentJson } from "../utils/fieldReordering.js";
 
 export const updateMetadata = {
     name: "updateMetadata",
@@ -79,6 +79,7 @@ Example 2: Updates the metadata values for a 'Folder' with featuring a multi-val
         metadata: z.record(fieldValueSchema).describe("A JSON object containing the item's metadata fields. The tool will automatically order the fields to match the Metadata Schema definition."),
     },
     execute: async ({ itemId, metadata }: { itemId: string, metadata: Record<string, any> }, context: any) => {
+        sanitizeAgentJson(metadata);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);

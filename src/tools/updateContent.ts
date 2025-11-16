@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
-import { reorderFieldsBySchema, convertLinksRecursively } from "../utils/fieldReordering.js";
+import { reorderFieldsBySchema, convertLinksRecursively, sanitizeAgentJson } from "../utils/fieldReordering.js";
 
 export const updateContent = {
     name: "updateContent",
@@ -66,6 +66,7 @@ Example 2: Updates the content of an embedded schema field.
         content: z.record(fieldValueSchema).describe("A JSON object containing the Component's content fields. The tool will automatically order the fields to match the Schema definition."),
     },
     execute: async ({ itemId, content }: { itemId: string, content: Record<string, any> }, context: any) => {
+        sanitizeAgentJson(content);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);

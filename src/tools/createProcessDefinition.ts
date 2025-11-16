@@ -3,6 +3,7 @@ import { createAuthenticatedAxios } from "../utils/axios.js";
 import { toLink } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { activityDefinitionSchema } from "../schemas/activityDefinitionSchema.js";
+import { sanitizeAgentJson } from "../utils/fieldReordering.js";
 
 // Main input properties for the tool.
 const createProcessDefinitionInputProperties = {
@@ -169,6 +170,7 @@ Example 5: Create a workflow with a timed delay. The script suspends the activit
     });`,
     input: createProcessDefinitionInputProperties,
     execute: async (args: z.infer<typeof createProcessDefinitionInputSchema>, context: any) => {
+        sanitizeAgentJson(args);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);

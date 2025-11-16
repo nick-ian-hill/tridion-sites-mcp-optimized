@@ -3,7 +3,7 @@ import { createAuthenticatedAxios } from "../utils/axios.js";
 import { toLink, toLinkArray } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
-import { processSchemaFieldDefinitions } from "../utils/fieldReordering.js";
+import { processSchemaFieldDefinitions, sanitizeAgentJson } from "../utils/fieldReordering.js";
 
 export const createMultimediaSchema = {
     name: "createMultimediaSchema",
@@ -51,6 +51,7 @@ Example 1: Create a simple Multimedia Schema for images.
         isPublishable: z.boolean().optional().describe("Specifies whether metadata values are published.")
     },
     execute: async (args: any, context: any) => {
+        sanitizeAgentJson(args);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);

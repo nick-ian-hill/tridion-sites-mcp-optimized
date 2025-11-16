@@ -3,7 +3,7 @@ import { createAuthenticatedAxios } from "../utils/axios.js";
 import { toLink } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
-import { processSchemaFieldDefinitions } from "../utils/fieldReordering.js";
+import { convertLinksRecursively, processSchemaFieldDefinitions, sanitizeAgentJson } from "../utils/fieldReordering.js";
 import { linkSchema } from "../schemas/linkSchema.js";
 import { expandableLinkSchema } from "../schemas/expandableLinkSchema.js";
 
@@ -154,6 +154,7 @@ Component Presentations placed in this Region on a Page cannot be modified in ch
         isPublishable: z.boolean().optional().describe("Specifies whether metadata values are published.")
     },
     execute: async (args: any, context: any) => {
+        sanitizeAgentJson(args);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -168,16 +169,13 @@ Component Presentations placed in this Region on a Page cannot be modified in ch
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const processedMetadataFields = metadataFields ? await processSchemaFieldDefinitions(metadataFields, locationId, authenticatedAxios) : undefined;
 
-            // --- Blueprint Context Mapping ---
-            // Map links inside metadata fields
             if (processedMetadataFields) {
                 convertLinksRecursively(processedMetadataFields, locationId);
             }
-            // Map links inside region definition
+
             if (regionDefinition) {
                 convertLinksRecursively(regionDefinition, locationId);
             }
-            // --- End Context Mapping ---
 
             const defaultModelResponse = await authenticatedAxios.get('/item/defaultModel/Schema', {
                 params: { containerId: locationId }
@@ -222,39 +220,3 @@ Component Presentations placed in this Region on a Page cannot be modified in ch
         }
     }
 };
-
-// Helper function to recursively find and convert all Link/ExpandableLink IdRefs
-// This function should exist in a shared utility file, like 'fieldReordering.ts'
-function convertLinksRecursively(currentObject: any, contextId: string): void {
-    if (!currentObject || typeof currentObject !== 'object') return;
-    
-    if (Array.isArray(currentObject)) {
-        currentObject.forEach(item => convertLinksRecursively(item, contextId));
-    } else {
-        // Check if it's a Link or ExpandableLink
-        if ((currentObject.$type === "Link" || currentObject.$type === "ExpandableLink") && 
-            typeof currentObject.IdRef === 'string') {
-            
-            // Import convertItemIdToContextPublication from your utils
-            // currentObject.IdRef = convertItemIdToContextPublication(currentObject.IdRef, contextId);
-            
-            // Placeholder for the conversion logic
-            const uriRegex = /^(tcm|ecl):(\d+)-(.+)$/;
-            const contextMatch = contextId.match(uriRegex);
-            if (contextMatch) {
-                 const contextPubId = contextMatch[2];
-                 const itemMatch = currentObject.IdRef.match(uriRegex);
-                 if (itemMatch) {
-                     currentObject.IdRef = `${itemMatch[1]}:${contextPubId}-${itemMatch[3]}`;
-                 }
-            }
-        }
-        
-        // Recurse into properties
-        for (const key in currentObject) {
-            if (Object.prototype.hasOwnProperty.call(currentObject, key)) {
-                convertLinksRecursively(currentObject[key], contextId);
-            }
-        }
-    }
-}

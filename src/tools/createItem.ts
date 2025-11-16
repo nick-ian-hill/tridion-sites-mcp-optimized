@@ -6,7 +6,7 @@ import { toLinkArray } from "../utils/links.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
-import { reorderFieldsBySchema, convertLinksRecursively } from "../utils/fieldReordering.js";
+import { reorderFieldsBySchema, convertLinksRecursively, sanitizeAgentJson } from "../utils/fieldReordering.js";
 
 const createItemInputProperties = {
     itemType: z.enum([
@@ -142,6 +142,7 @@ Example 3: Create a new Keyword.
     execute: async (args: CreateItemInput,
         context: any
     ) => {
+        sanitizeAgentJson(args);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);

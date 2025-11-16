@@ -4,7 +4,7 @@ import { toLink } from "../utils/links.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
-import { reorderFieldsBySchema, convertLinksRecursively } from "../utils/fieldReordering.js";
+import { reorderFieldsBySchema, convertLinksRecursively, sanitizeAgentJson } from "../utils/fieldReordering.js";
 
 const createComponentInputProperties = {
     title: z.string().nonempty().describe("The title for the new Component. Note that creation will fail if a Component with the same title already exists in the target Folder."),
@@ -90,6 +90,7 @@ Example 2: Create a Component with both content fields and metadata fields.
     execute: async (args: CreateComponentInput,
         context: any
     ) => {
+        sanitizeAgentJson(args);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);

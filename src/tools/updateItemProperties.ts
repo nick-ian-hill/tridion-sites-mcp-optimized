@@ -5,7 +5,7 @@ import { generateSearchFolderXmlConfiguration } from "../utils/generateSearchFol
 import { toLink, toLinkArray } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldDefinitionSchema, fieldValueSchema } from "../schemas/fieldValueSchema.js";
-import { convertLinksRecursively, processSchemaFieldDefinitions, reorderFieldsBySchema } from "../utils/fieldReordering.js";
+import { convertLinksRecursively, processSchemaFieldDefinitions, reorderFieldsBySchema, sanitizeAgentJson } from "../utils/fieldReordering.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 
 const updateItemPropertiesInputProperties = {
@@ -172,6 +172,7 @@ Example 2: Change the Metadata Schema of a Folder and provide the mandatory valu
 `,
     input: updateItemPropertiesInputProperties,
     execute: async (params: UpdateItemPropertiesInput, context: any) => {
+        sanitizeAgentJson(params);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);

@@ -4,6 +4,7 @@ import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 import { handleAxiosError } from "../utils/errorUtils.js";
 import { GoogleGenAI } from "@google/genai";
 import { createAuthenticatedAxios } from "../utils/axios.js";
+import { sanitizeAgentJson } from "../utils/fieldReordering.js";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 
@@ -26,6 +27,7 @@ export const createMultimediaComponentFromPrompt = {
     async execute(input: z.infer<typeof createMultimediaComponentFromPromptSchema>,
         context: any
     ) {
+        sanitizeAgentJson(input);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);

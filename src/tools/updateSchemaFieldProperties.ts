@@ -1,7 +1,7 @@
 import { z, ZodIssue } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
-import { processSchemaFieldDefinitions } from "../utils/fieldReordering.js";
+import { processSchemaFieldDefinitions, sanitizeAgentJson } from "../utils/fieldReordering.js";
 
 import {
     singleLineTextFieldSchema,
@@ -140,6 +140,7 @@ Example 3: Update a validation constraint on a field.
         params: z.infer<typeof updateSchemaFieldPropertiesSchema>, 
         context: any
     ) => {
+        sanitizeAgentJson(params);
         const { schemaId, fieldUpdates } = params;
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';

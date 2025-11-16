@@ -4,7 +4,7 @@ import { toLink } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { xmlNameSchema } from "../schemas/xmlNameSchema.js";
 import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
-import { processSchemaFieldDefinitions } from "../utils/fieldReordering.js";
+import { processSchemaFieldDefinitions, sanitizeAgentJson } from "../utils/fieldReordering.js";
 
 export const createComponentSchema = {
     name: "createComponentSchema",
@@ -293,6 +293,7 @@ Example 8: Create a Schema with advanced constraints.
         isPublishable: z.boolean().optional().describe("Specifies whether Components based on this Schema can be resolved for data publishing."),
     },
     execute: async (args: any, context: any) => {
+        sanitizeAgentJson(args);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);

@@ -4,7 +4,7 @@ import { toLink } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { xmlNameSchema } from "../schemas/xmlNameSchema.js";
 import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
-import { processSchemaFieldDefinitions } from "../utils/fieldReordering.js";
+import { processSchemaFieldDefinitions, sanitizeAgentJson } from "../utils/fieldReordering.js";
 
 export const createEmbeddedSchema = {
     name: "createEmbeddedSchema",
@@ -51,6 +51,7 @@ This schema can then be used inside other schemas (like an 'Article' schema) to 
         isPublishable: z.boolean().optional().describe("Specifies whether field values are published.")
     },
     execute: async (args: any, context: any) => {
+        sanitizeAgentJson(args);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);

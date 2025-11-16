@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
+import { sanitizeAgentJson } from "../utils/fieldReordering.js";
 
 const resolveInstructionSchema = z.object({
     includeChildPublications: z.boolean().optional().default(false)
@@ -44,6 +45,7 @@ export const unpublish = {
     input: unpublishInputProperties,
 
     execute: async (input: z.infer<typeof unpublishSchema>, context: any) => {
+        sanitizeAgentJson(input);
         const {
             itemIds,
             targetIdsOrPurposes,

@@ -3,7 +3,7 @@ import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
-import { convertLinksRecursively } from "../utils/fieldReordering.js";
+import { convertLinksRecursively, sanitizeAgentJson } from "../utils/fieldReordering.js";
 
 export const createRootStructureGroup = {
     name: "createRootStructureGroup",
@@ -39,6 +39,7 @@ Example 2: Creates a root Structure Group with a title and applies metadata to i
     execute: async (args: { title: string; publicationId: string; metadataSchemaId?: string; metadata?: Record<string, any>
      },
     context: any) => {
+        sanitizeAgentJson(args);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
