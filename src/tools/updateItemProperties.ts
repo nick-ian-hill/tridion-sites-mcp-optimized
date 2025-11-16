@@ -7,6 +7,43 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 import { fieldDefinitionSchema, fieldValueSchema } from "../schemas/fieldValueSchema.js";
 import { convertLinksRecursively, processSchemaFieldDefinitions, reorderFieldsBySchema, sanitizeAgentJson } from "../utils/fieldReordering.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
+import { linkSchema } from "../schemas/linkSchema.js";
+import { expandableLinkSchema } from "../schemas/expandableLinkSchema.js";
+
+const occurrenceConstraintSchema = z.object({
+    "$type": z.literal("OccurrenceConstraint"),
+    MaxOccurs: z.number().int().describe("Maximum number of Component Presentations allowed in this Region."),
+    MinOccurs: z.number().int().describe("Minimum number of Component Presentations allowed in this Region.")
+});
+
+const typeConstraintSchema = z.object({
+    "$type": z.literal("TypeConstraint"),
+    BasedOnSchema: linkSchema.optional().describe("A Link to a Schema. Only Components based on this Schema are allowed."),
+    BasedOnComponentTemplate: linkSchema.optional().describe("A Link to a Component Template. Only CPs with this template are allowed.")
+});
+
+const componentPresentationConstraintSchema = z.union([
+    occurrenceConstraintSchema,
+    typeConstraintSchema
+]);
+
+const nestedRegionSchema: z.ZodTypeAny = z.lazy(() => z.object({
+    "$type": z.literal("NestedRegion"),
+    RegionName: z.string().describe("The machine name of the nested Region."),
+    IsMandatory: z.boolean().optional().describe("Whether this nested Region is mandatory."),
+    RegionSchema: expandableLinkSchema.describe("A Link to another Region Schema that defines this nested Region. Must be an ExpandableLink."),
+    Regions: z.array(nestedRegionSchema).optional().describe("Deeper nested regions, if the schema supports it.")
+}));
+
+const regionDefinitionSchema = z.object({
+    "$type": z.literal("RegionDefinition"),
+    // 'IsLocalizable' is included here, as 'update' is the correct way to set it.
+    IsLocalizable: z.boolean().optional().describe("If set to false, Component Presentations in this Region cannot be changed in a local (child) copy of a Page. Defaults to true."),
+    ComponentPresentationConstraints: z.array(componentPresentationConstraintSchema).optional()
+        .describe("An array of constraints (OccurrenceConstraint, TypeConstraint) for Component Presentations in this Region."),
+    NestedRegions: z.array(nestedRegionSchema).optional()
+        .describe("An array of nested Region definitions.")
+}).describe("A JSON object defining the Region's constraints and nested regions.");
 
 const updateItemPropertiesInputProperties = {
     itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the CMS item to update."),
@@ -31,6 +68,7 @@ const updateItemPropertiesInputProperties = {
     metadataFields: z.record(fieldDefinitionSchema).optional().describe(`For Schema updates only. Replaces the entire collection of metadata fields. The ONLY way to create a component with metadata fields is to use a component schema for which this property is defined.
     Use this for structural changes like adding, removing, or reordering fields.
     For modifying properties of existing fields (e.g., changing a description), the 'updateSchemaFieldProperties' tool is strongly recommended as it is safer and more efficient.`),
+    regionDefinition: regionDefinitionSchema.optional().describe(`For Region Schema updates only. Replaces the entire 'RegionDefinition' block.`),
     fileExtension: z.string().optional().describe("A new file extension for the Page Template. (Applicable to PageTemplate)"),
     pageSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("A new Page Schema URI for the Page Template. (Applicable to PageTemplate)"),
     templateBuildingBlocks: z.array(z.string().regex(/^tcm:\d+-\d+-2048$/)).optional().describe("A new array of Template Building Block URIs. Replaces existing TBBs. (Applicable to PageTemplate/ComponentTemplate)"),
@@ -64,7 +102,7 @@ To update a Workflow Process Definition, use the dedicated 'updateProcessDefinit
 
 Example use cases by item type:
 - All types: update 'title', 'description', and 'metadataSchemaId'. The 'metadata' can also be provided at the same time.
-- Schema: update the content and metadata field definitions using the 'fields' and 'metadataFields' properties.
+- Schema: update the content and metadata field definitions using the 'fields' and 'metadataFields' properties. Can also update the 'regionDefinition' for Region Schemas.
 - Keyword: update 'isAbstract', 'key', 'parentKeywords', and 'relatedKeywords'.
 - Bundle: update the list of 'itemsInBundle'.
 - PageTemplate/ComponentTemplate: update the associated 'templateBuildingBlocks' and other template-specific properties.
@@ -165,6 +203,46 @@ Example 2: Change the Metadata Schema of a Folder and provide the mandatory valu
                         "IdRef": "tcm:5-802"
                     },
                     "promoText": "Limited time offer."
+                }
+            ]
+        }
+    });
+
+Example 3: Update a Region Schema to add constraints, nested regions, and set 'IsLocalizable: false'.
+This example updates a basic Region Schema (e.g., 'tcm:5-3875-8') to make it non-localizable, add constraints, and link two nested region schemas ('tcm:5-3873-8' and 'tcm:5-3874-8').
+    const result = await tools.updateItemProperties({
+        itemId: "tcm:5-3875-8",
+        itemType: "Schema",
+        regionDefinition: {
+            "$type": "RegionDefinition",
+            "IsLocalizable": false,
+            "ComponentPresentationConstraints": [
+                {
+                    "$type": "OccurrenceConstraint",
+                    "MaxOccurs": 10,
+                    "MinOccurs": 0
+                },
+                {
+                    "$type": "TypeConstraint",
+                    "BasedOnSchema": { "$type": "Link", "IdRef": "tcm:5-103-8" }
+                }
+            ],
+            "NestedRegions": [
+                {
+                    "$type": "NestedRegion",
+                    "RegionName": "LeftColumn",
+                    "RegionSchema": {
+                        "$type": "ExpandableLink",
+                        "IdRef": "tcm:5-3873-8"
+                    }
+                },
+                {
+                    "$type": "NestedRegion",
+                    "RegionName": "RightColumn",
+                    "RegionSchema": {
+                        "$type": "ExpandableLink",
+                        "IdRef": "tcm:5-3874-8"
+                    }
                 }
             ]
         }
@@ -275,6 +353,11 @@ Example 2: Change the Metadata Schema of a Folder and provide the mandatory valu
                 if (updates.metadataFields) {
                     const processedMetadataFields = await processSchemaFieldDefinitions(updates.metadataFields, schemaLocationId, authenticatedAxios);
                     itemToUpdate.MetadataFields = { "$type": "FieldsDefinitionDictionary", ...processedMetadataFields };
+                }
+                
+                if (updates.regionDefinition) {
+                    convertLinksRecursively(updates.regionDefinition, itemId);
+                    itemToUpdate.RegionDefinition = updates.regionDefinition;
                 }
             }
             if (itemType === 'PageTemplate' || itemType === 'ComponentTemplate') {
