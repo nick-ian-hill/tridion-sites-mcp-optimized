@@ -64,6 +64,9 @@ To create a Multimedia Component, use 'createMultimediaComponentFromPrompt', 'cr
 
 The tool automatically handles different item types and their specific properties. The created item will be placed in the container (Folder, Structure Group, Category, or Publication) specified by 'locationId'. Note that a Publication can only have one root Folder and one root Structure Group. A Folder/structure Group can contain arbitrarily many child Folders/Structure Groups.
 For a Category, the container is the Publication.
+For Keywords, the container must be a Category.
+For Folders, Bundles, SearchFolders, PageTemplates and ComponentTemplates the container must be a Folder.
+For StructureGroups the container must be another StructureGroup.
 For items other than Publications, the first number in the ID identifies the Publication (e.g., for both tcm:5-127 and tcm:5-2002-2, the Publication is 5).
 For Publications, the second number identifies the Publication (e.g., tcm:0-5-1 represents Publication 5).
 
@@ -144,7 +147,53 @@ Example 3: Create a new Keyword.
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
         const userSessionId = match ? match[1] : null;
 
-        const { locationId } = args;
+        const { locationId, itemType } = args;
+
+        const locationTypeSuffix = locationId.split('-').pop();
+
+        const typeMap: { [key: string]: string } = {
+            '1': 'Publication',
+            '2': 'Folder',
+            '4': 'StructureGroup',
+            '512': 'Category',
+            '1024': 'Keyword'
+        };
+        const locationType = typeMap[locationTypeSuffix ?? ''] || `Unknown (suffix: -${locationTypeSuffix})`;
+
+        const containerMustBeFolder = [
+            "Folder", "Bundle", "SearchFolder",
+            "PageTemplate", "ComponentTemplate"
+        ];
+
+        let validationError: string | null = null;
+
+        if (containerMustBeFolder.includes(itemType)) {
+            if (locationTypeSuffix !== '2') {
+                validationError = `To create a '${itemType}', the 'locationId' must be a Folder (-2). The provided 'locationId' (${locationId}) is a '${locationType}'.`;
+            }
+        } else if (itemType === 'StructureGroup') {
+            if (locationTypeSuffix !== '4') {
+                validationError = `To create a 'StructureGroup', the 'locationId' must be another Structure Group (-4). The provided 'locationId' (${locationId}) is a '${locationType}'.`;
+            }
+        } else if (itemType === 'Category') {
+            if (locationTypeSuffix !== '1') {
+                validationError = `To create a 'Category', the 'locationId' must be a Publication (-1). The provided 'locationId' (${locationId}) is a '${locationType}'.`;
+            }
+        } else if (itemType === 'Keyword') {
+            if (locationTypeSuffix !== '512') {
+                validationError = `To create a 'Keyword', the 'locationId' must be a Category (-512). The provided 'locationId' (${locationId}) is a '${locationType}'.`;
+            }
+        }
+
+        if (validationError) {
+            return {
+                content: [{
+                    type: "text",
+                    text: `Validation Error: ${validationError}`
+                }],
+            };
+        }
+
         if (args.metadataSchemaId) {
             args.metadataSchemaId = convertItemIdToContextPublication(args.metadataSchemaId, locationId);
         }
@@ -170,7 +219,7 @@ Example 3: Create a new Keyword.
             convertLinksRecursively(args.metadata, locationId);
         }
 
-        let { itemType, title, metadataSchemaId, metadata, isAbstract, description, key, parentKeywords, relatedKeywords, itemsInBundle, searchQuery, resultLimit = 100, fileExtension, pageSchemaId, templateBuildingBlocks, allowOnPage, isRepositoryPublishable, outputFormat, priority, relatedSchemaIds, directory } = args;
+        let { title, metadataSchemaId, metadata, isAbstract, description, key, parentKeywords, relatedKeywords, itemsInBundle, searchQuery, resultLimit = 100, fileExtension, pageSchemaId, templateBuildingBlocks, allowOnPage, isRepositoryPublishable, outputFormat, priority, relatedSchemaIds, directory } = args;
 
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
