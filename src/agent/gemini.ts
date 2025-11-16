@@ -199,7 +199,7 @@ export const determineNextStep = async (
 };
 
 export const MANDATORY_TOOLS = [
-        'bulkReadItems', 'getItem', 'createItem', 'createPage', 'createSchema', 'createComponent',
+        'bulkReadItems', 'getItem', 'createItem', 'createPage', 'createRegionSchema', 'createComponent',
         'createComponentSchema', 'search', 'getPublications', 'getCurrentTime', 'updateContent',
         'updateMetadata', 'updatePage', 'localizeItem'
     ];
