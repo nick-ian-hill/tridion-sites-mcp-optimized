@@ -46,7 +46,7 @@ Example 1: Create a simple Multimedia Schema for images.
         locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new Schema will be created."),
         description: z.string().nonempty().describe("A mandatory description of the Schema."),
         metadataFields: z.record(fieldDefinitionSchema).optional().describe("A dictionary of metadata field definitions for the schema."),
-        allowedMultimediaTypes: z.array(z.string().regex(/^tcm:0-\d+-65544$/)).optional().describe("An array of TCM URIs for allowed Multimedia Types. Use 'getMultimediaTypes' to find available types."),
+        allowedMultimediaTypes: z.array(z.string().regex(/^tcm:0-\d+-65544$/)).describe("An array of TCM URIs for allowed Multimedia Types. Use 'getMultimediaTypes' to find available types."),
         isIndexable: z.boolean().optional().describe("Specifies whether metadata values are indexed for searching."),
         isPublishable: z.boolean().optional().describe("Specifies whether metadata values are published.")
     },
