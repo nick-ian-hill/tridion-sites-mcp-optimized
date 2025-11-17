@@ -5,7 +5,7 @@ import { linkSchema } from "./linkSchema.js";
 export const componentPresentationSchemaForTyping = z.object({
     "type": z.literal("ComponentPresentation"),
     Component: linkSchema,
-    ComponentTemplate: linkSchema
+    ComponentTemplate: linkSchema.optional()
 });
 
 export type RegionForTyping = {

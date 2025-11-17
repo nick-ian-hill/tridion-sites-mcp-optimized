@@ -18,11 +18,12 @@ export function processComponentPresentations(
         }
 
         const templateId = cp.ComponentTemplate?.IdRef;
+        const effectiveTemplateId = templateId ? convertItemIdToContextPublication(templateId, contextId) : "tcm:0-0-0";
         
         return {
             ...cp,
             Component: toLink(convertItemIdToContextPublication(cp.Component.IdRef, contextId)),
-            ComponentTemplate: toLink(templateId ? convertItemIdToContextPublication(templateId, contextId) : undefined),
+            ComponentTemplate: toLink(effectiveTemplateId),
         };
     });
 }
@@ -30,34 +31,55 @@ export function processComponentPresentations(
 export async function processRegions(
     regions: RegionForTyping[] | undefined,
     contextId: string,
-    parentSchemaId: string,
+    pageTemplateId: string,
     axiosInstance: AxiosInstance
 ): Promise<any[]> {
     if (!regions) return [];
 
+    // First, get the Page Template to find its Region Schema
+    let pageTemplate: any;
+    try {
+        pageTemplate = (await axiosInstance.get(`/items/${pageTemplateId.replace(':', '_')}`)).data;
+    } catch (e) {
+        throw new Error(`Failed to load Page Template ${pageTemplateId} to process regions: ${String(e)}`);
+    }
+
+    // Get the main Region Schema linked from the Page Template
+    let mainRegionSchema: any;
+    const regionSchemaId = pageTemplate.PageSchema?.IdRef;
+    if (regionSchemaId) {
+        try {
+            mainRegionSchema = (await axiosInstance.get(`/items/${regionSchemaId.replace(':', '_')}`)).data;
+        } catch (e) {
+            console.warn(`Could not load main Region Schema ${regionSchemaId} for page ${contextId}.`);
+        }
+    }
+
     const processSingleRegion = async (regionData: RegionForTyping): Promise<any> => {
         const name = regionData.RegionName;
-        let processedMetadata = regionData.Metadata;
+        const agentProvidedMetadata = regionData.Metadata;
+        let finalMetadataPayload: any = undefined;
         let regionSchemaIdRef: string | undefined;
 
-        try {
-            const parentSchemaResponse = await axiosInstance.get(`/items/${parentSchemaId.replace(':', '_')}`);
-            const parentSchema = parentSchemaResponse.data;
-            const regionSchemaContainer = parentSchema.RegionSchema
-                ? (await axiosInstance.get(`/items/${parentSchema.RegionSchema.IdRef.replace(':', '_')}`)).data
-                : parentSchema;
-            const regionDef = regionSchemaContainer.Regions?.find((r: any) => r.SchemaName === name);
+        if (mainRegionSchema?.RegionDefinition?.NestedRegions) {
+            const regionDef = mainRegionSchema.RegionDefinition.NestedRegions.find(
+                (r: any) => r.RegionName === name
+            );
             if (regionDef?.RegionSchema?.IdRef) {
                 regionSchemaIdRef = regionDef.RegionSchema.IdRef;
             }
-        } catch (e) {
-            console.warn(`Could not fetch schema info from parent ${parentSchemaId} to process Region '${name}'.`);
         }
 
-        if (regionSchemaIdRef && processedMetadata) {
-            processedMetadata = await reorderFieldsBySchema(processedMetadata, regionSchemaIdRef, 'content', axiosInstance);
+        if (regionSchemaIdRef) {
+            if (agentProvidedMetadata) {
+                finalMetadataPayload = await reorderFieldsBySchema(agentProvidedMetadata, regionSchemaIdRef, 'content', axiosInstance);
+            } else {
+                finalMetadataPayload = { "$type": "FieldsValueDictionary" };
+            }
+        } else if (agentProvidedMetadata) {
+            throw new Error(`Metadata provided for Region '${name}', but that Region has no RegionSchema defined on the Page Template.`);
         }
-
+        
         let nestedRegions: any[] = [];
         if (regionSchemaIdRef && regionData.Regions) {
             nestedRegions = await processRegions(regionData.Regions, contextId, regionSchemaIdRef, axiosInstance);
@@ -66,7 +88,7 @@ export async function processRegions(
         const regionPayload: any = {
             "$type": "EmbeddedRegion",
             RegionName: name,
-            Metadata: processedMetadata,
+            Metadata: finalMetadataPayload,
             ComponentPresentations: processComponentPresentations(regionData.ComponentPresentations, contextId),
             Regions: nestedRegions
         };
