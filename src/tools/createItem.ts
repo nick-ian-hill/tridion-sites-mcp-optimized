@@ -187,10 +187,16 @@ Example 3: Create a new Keyword.
         }
 
         if (validationError) {
+            const errorResponse = {
+                type: "Error",
+                Message: `Validation Error: ${validationError}`
+            };
+
+            const formattedError = formatForAgent(errorResponse);
             return {
                 content: [{
                     type: "text",
-                    text: `Validation Error: ${validationError}`
+                    text: JSON.stringify(formattedError, null, 2)
                 }],
             };
         }
@@ -330,7 +336,7 @@ Example 3: Create a new Keyword.
                     responseData = {
                         $type: createResponse.data['$type'],
                         Id: createResponse.data.Id,
-                        Message:`Successfully created ${createResponse.data.Id}`
+                        Message: `Successfully created ${createResponse.data.Id}`
                     };
                 }
                 const formattedResponseData = formatForAgent(responseData);
