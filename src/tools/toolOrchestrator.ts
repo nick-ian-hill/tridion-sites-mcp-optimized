@@ -1509,7 +1509,17 @@ This script would first be run by following the "Debugging Strategies" (test on 
             } catch (error: any) {
                 const errorMessage = extractErrorMessage(error);
                 logs.push(`Pre-processing Script FAILED: ${errorMessage}`);
-                return { content: [{ type: "text", text: `--- Execution Log ---\n${logs.join('\n')}` }] };
+                const finalErrorSummary = {
+                    summary: "ToolOrchestrator FAILED",
+                    phase: "pre-processing",
+                    error: `Pre-processing Script FAILED: ${errorMessage}`,
+                    executionLog: debug ? logs.join('\n') : undefined 
+                };
+
+                const formattedFinalErrorSummary = formatForAgent(finalErrorSummary);
+                return {
+                    content: [{ type: "text", text: JSON.stringify(formattedFinalErrorSummary, null, 2) }],
+                };
             }
         }
 
