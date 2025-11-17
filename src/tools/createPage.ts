@@ -285,6 +285,8 @@ This example shows a two-column layout within the main content area.
                     processedMetadata = await reorderFieldsBySchema(processedMetadata, contextualMetadataSchemaId, 'metadata', authenticatedAxios);
                 }
                 payload.Metadata = processedMetadata;
+            } else if (contextualMetadataSchemaId) {
+                payload.Metadata = { "$type": "FieldsValueDictionary" };
             }
 
             payload.ComponentPresentations = processComponentPresentations(parsedComponentPresentations, locationId);
