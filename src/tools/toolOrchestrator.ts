@@ -34,7 +34,7 @@ const DISALLOWED_TOOLS: string[] = [
  */
 const createBaseSandbox = (): any => {
     const sandbox = Object.create(null);
-    
+
     // Add back safe, standard JS globals
     sandbox.Object = Object;
     sandbox.Array = Array;
@@ -51,7 +51,7 @@ const createBaseSandbox = (): any => {
     sandbox.Set = Set;
     sandbox.URL = URL;
     sandbox.URLSearchParams = URLSearchParams;
-    
+
     // Common Error types
     sandbox.TypeError = TypeError;
     sandbox.SyntaxError = SyntaxError;
@@ -1338,14 +1338,14 @@ This script would first be run by following the "Debugging Strategies" (test on 
         mcpContext: any
     ) => {
         formatForApi(input);
-        const { 
-            itemIds: initialItemIds, 
-            preProcessingScript, 
-            mapScript, 
-            postProcessingScript, 
-            parameters = {}, 
-            stopOnError, 
-            maxConcurrency, 
+        const {
+            itemIds: initialItemIds,
+            preProcessingScript,
+            mapScript,
+            postProcessingScript,
+            parameters = {},
+            stopOnError,
+            maxConcurrency,
             includeScriptResults,
             debug
         } = input;
@@ -1370,7 +1370,7 @@ This script would first be run by following the "Debugging Strategies" (test on 
                         return e.content[0].text;
                     }
                     return e.content[0].text;
-                }               
+                }
                 // Axios-like error
                 if (e.data && e.data.content && Array.isArray(e.data.content) && e.data.content[0]?.type === 'text') return e.data.content[0].text;
                 return JSON.stringify(e);
@@ -1388,7 +1388,7 @@ This script would first be run by following the "Debugging Strategies" (test on 
         const results: any[] = [];
         const logs: string[] = [];
         const log = (message: string) => logs.push(message);
-        
+
         // --- Create Tool Wrappers ---
         const toolWrappers: { [toolName: string]: (args: any) => Promise<any> } = {};
         for (const toolName in mcpContext.tools) {
@@ -1401,15 +1401,38 @@ This script would first be run by following the "Debugging Strategies" (test on 
             }
 
             if (mcpContext.tools[toolName] && mcpContext.tools[toolName].execute) {
-                const originalToolExecute = mcpContext.tools[toolName].execute;
+                const originalTool = mcpContext.tools[toolName];
+                const originalToolExecute = originalTool.execute;
+                const toolInputProperties = originalTool.input;
+
                 toolWrappers[toolName] = async (args: any) => {
-                    const result = await originalToolExecute(args || {}, mcpContext);
+
+                    let validatedArgs = args || {};
+
+                    // Check if the tool has a non-null input object
+                    if (toolInputProperties && typeof toolInputProperties === 'object') {
+
+                        // Dynamically create a Zod schema from the tool's input properties
+                        const toolInputSchema = z.object(toolInputProperties);
+
+                        // Now, run safeParse on the schema we just built
+                        const validationResult = toolInputSchema.safeParse(validatedArgs);
+
+                        if (!validationResult.success) {
+                            // Throw a clear Zod error that the script can catch
+                            throw new Error(`Invalid arguments for tool '${toolName}': ${validationResult.error.message}`);
+                        }
+                        // Use the validated (and possibly transformed) args
+                        validatedArgs = validationResult.data;
+                    }
+
+                    // Pass the validated args to the execute function
+                    const result = await originalToolExecute(validatedArgs, mcpContext);
 
                     // Robust JSON parsing with trim() and try/catch
                     if (result && result.content && Array.isArray(result.content) &&
                         result.content[0] && result.content[0].type === 'text' &&
-                        typeof result.content[0].text === 'string')
-                    {
+                        typeof result.content[0].text === 'string') {
                         const maybeText = result.content[0].text.trim();
                         if (maybeText.startsWith('{') || maybeText.startsWith('[')) {
                             try {
@@ -1420,9 +1443,9 @@ This script would first be run by following the "Debugging Strategies" (test on 
                                 }
 
                                 return parsedObject; // Return the successful object
-                                
+
                             } catch (err) {
-                                throw err; 
+                                throw err;
                             }
                         }
                     }
@@ -1431,7 +1454,7 @@ This script would first be run by following the "Debugging Strategies" (test on 
                     if (result && typeof result === 'object' && !Array.isArray(result) && !result.content) {
                         return result;
                     }
-                    
+
                     // Default: return the raw result
                     return result;
                 };
@@ -1448,7 +1471,7 @@ This script would first be run by following the "Debugging Strategies" (test on 
         // --- Phase 1: Pre-Processing Logic (Setup Phase) ---
         if (preProcessingScript) {
             logs.push("Starting pre-processing script (setup phase)...");
-            
+
             let compiledPreScript: vm.Script;
             try {
                 compiledPreScript = new vm.Script(`
@@ -1462,7 +1485,7 @@ This script would first be run by following the "Debugging Strategies" (test on 
                     content: [{ type: "text", text: `Pre-processing Script Compilation Error: ${extractErrorMessage(error)}` }]
                 };
             }
-            
+
             const preScriptLog = (message: string) => logs.push(`[PreScript] ${message}`);
             const preScriptErrorLog = (message: string) => logs.push(`[PreScript] [ERROR] ${message}`);
             const preScriptWarnLog = (message: string) => logs.push(`[PreScript] [WARN] ${message}`);
@@ -1471,7 +1494,7 @@ This script would first be run by following the "Debugging Strategies" (test on 
                 tools: toolWrappers,
                 log: preScriptLog
             };
-            
+
             // Create a dedicated sandbox for this script
             const sandboxContext = { ...baseSandbox };
             sandboxContext.context = preScriptContext;
@@ -1496,7 +1519,7 @@ This script would first be run by following the "Debugging Strategies" (test on 
                 } else if (typeof preScriptResult === 'object' && preScriptResult !== null && Array.isArray(preScriptResult.itemIds)) {
                     finalItemIds = preScriptResult.itemIds;
                     if (preScriptResult.preProcessingResult) {
-                        preScriptContextData = Object.freeze(preScriptResult.preProcessingResult); 
+                        preScriptContextData = Object.freeze(preScriptResult.preProcessingResult);
                     }
                 } else {
                     const errorMsg = "Pre-processing script Error: The script must return a string[] or an object { itemIds: string[], preProcessingResult?: any }.";
@@ -1513,7 +1536,7 @@ This script would first be run by following the "Debugging Strategies" (test on 
                     summary: "ToolOrchestrator FAILED",
                     phase: "pre-processing",
                     error: `Pre-processing Script FAILED: ${errorMessage}`,
-                    executionLog: debug ? logs.join('\n') : undefined 
+                    executionLog: debug ? logs.join('\n') : undefined
                 };
 
                 const formattedFinalErrorSummary = formatForAgent(finalErrorSummary);
@@ -1527,7 +1550,7 @@ This script would first be run by following the "Debugging Strategies" (test on 
         log(`\nStarting map phase for ${finalItemIds.length} items with maxConcurrency: ${maxConcurrency}`);
 
         if (finalItemIds.length > 0) {
-            
+
             // --- Create ONE reusable sandbox for the entire Map phase ---
             let compiledMapScript: vm.Script;
             try {
@@ -1549,7 +1572,7 @@ This script would first be run by following the "Debugging Strategies" (test on 
              */
             const runTask = async (itemId: string, index: number): Promise<void> => {
                 logs.push(`\n[${index + 1}/${finalItemIds.length}] Processing item: ${itemId}`);
-                
+
                 const perItemLog = (message: string) => logs.push(`[${itemId}] ${message}`);
                 const perItemErrorLog = (message: string) => logs.push(`[${itemId}] [ERROR] ${message}`);
                 const perItemWarnLog = (message: string) => logs.push(`[${itemId}] [WARN] ${message}`);
@@ -1569,7 +1592,7 @@ This script would first be run by following the "Debugging Strategies" (test on 
                     error: perItemErrorLog,
                     warn: perItemWarnLog
                 };
-                
+
                 const sandbox = vm.createContext(sandboxContext, {
                     codeGeneration: { strings: false, wasm: false }
                 });
@@ -1578,7 +1601,7 @@ This script would first be run by following the "Debugging Strategies" (test on 
                     const scriptPromise = compiledMapScript.runInContext(sandbox, {
                         timeout: SYNC_SCRIPT_TIMEOUT_MS
                     });
-                    
+
                     const timeoutPromise = new Promise((_, reject) =>
                         setTimeout(() => reject(new Error(`Script timed out after ${TOTAL_SCRIPT_TIMEOUT_MS}ms`)), TOTAL_SCRIPT_TIMEOUT_MS)
                     );
@@ -1614,27 +1637,27 @@ This script would first be run by following the "Debugging Strategies" (test on 
                 log(`Running in parallel mode with ${maxConcurrency} workers.`);
                 const workerPool = new Set<Promise<void>>();
                 let index = 0;
-                
+
                 for (const itemId of finalItemIds) {
                     if (stopOnError && hasFailed) {
                         logs.push("\nOperation stopping due to error. No new tasks will be started.");
                         break;
                     }
-                    
+
                     while (workerPool.size >= maxConcurrency) {
                         await Promise.race(workerPool);
                     }
-                    
+
                     const taskPromise = runTask(itemId, index++);
-                    
+
                     const onFinally = () => {
                         workerPool.delete(taskPromise);
                     };
-                    
+
                     taskPromise.then(onFinally, onFinally);
                     workerPool.add(taskPromise);
                 }
-                
+
                 await Promise.allSettled(Array.from(workerPool));
             }
         } else {
@@ -1643,7 +1666,7 @@ This script would first be run by following the "Debugging Strategies" (test on 
         // --- End of Map Phase ---
 
         logs.push("\nMap phase finished.");
-        
+
         // --- Phase 3: Post-Processing Logic (Reduce Phase) ---
         if (postProcessingScript) {
             logs.push("\nStarting post-processing script (reduce phase)...");
@@ -1651,7 +1674,7 @@ This script would first be run by following the "Debugging Strategies" (test on 
             // Pre-filter results for the post-script
             const successes = results.filter(r => r.status === 'success');
             const failures = results.filter(r => r.status === 'error');
-            
+
             let compiledPostScript: vm.Script;
             try {
                 compiledPostScript = new vm.Script(`
@@ -1669,7 +1692,7 @@ This script would first be run by following the "Debugging Strategies" (test on 
             const postScriptLog = (message: string) => logs.push(`[PostScript] ${message}`);
             const postScriptErrorLog = (message: string) => logs.push(`[PostScript] [ERROR] ${message}`);
             const postScriptWarnLog = (message: string) => logs.push(`[PostScript] [WARN] ${message}`);
-            
+
             const sandboxContext = { ...baseSandbox };
             sandboxContext.context = {
                 results: Object.freeze(results),
@@ -1693,7 +1716,7 @@ This script would first be run by following the "Debugging Strategies" (test on 
                 const timeoutPromise = new Promise((_, reject) =>
                     setTimeout(() => reject(new Error(`Script timed out after ${TOTAL_SCRIPT_TIMEOUT_MS}ms`)), TOTAL_SCRIPT_TIMEOUT_MS)
                 );
-                
+
                 const finalResult = await Promise.race([scriptPromise, timeoutPromise]);
                 logs.push("Post-processing script finished successfully.");
 
@@ -1722,8 +1745,7 @@ This script would first be run by following the "Debugging Strategies" (test on 
                     }],
                 };
 
-            } catch (error: any)
-            {
+            } catch (error: any) {
                 const errorMessage = extractErrorMessage(error);
                 logs.push(`Post-Processing Script FAILED: ${errorMessage}`);
 
@@ -1750,7 +1772,7 @@ This script would first be run by following the "Debugging Strategies" (test on 
                 };
             }
         }
-        
+
         // --- Final Summary (if no post-processing) ---
         const successCount = results.filter(r => r.status === 'success').length;
         const errorCount = results.filter(r => r.status === 'error').length;
@@ -1762,7 +1784,7 @@ This script would first be run by following the "Debugging Strategies" (test on 
             succeeded: successCount,
             failed: errorCount
         };
-        
+
         if (errorCount > 0) {
             summaryObject.errors = results
                 .filter(r => r.status === 'error')
