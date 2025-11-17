@@ -19,7 +19,7 @@ export function processComponentPresentations(
 
         const templateId = cp.ComponentTemplate?.IdRef;
         const effectiveTemplateId = templateId ? convertItemIdToContextPublication(templateId, contextId) : "tcm:0-0-0";
-        
+
         return {
             ...cp,
             Component: toLink(convertItemIdToContextPublication(cp.Component.IdRef, contextId)),
@@ -71,15 +71,21 @@ export async function processRegions(
         }
 
         if (regionSchemaIdRef) {
+            // Case 1: Region is defined on the schema.
             if (agentProvidedMetadata) {
                 finalMetadataPayload = await reorderFieldsBySchema(agentProvidedMetadata, regionSchemaIdRef, 'content', axiosInstance);
             } else {
+                // Add empty metadata, as required by the schema.
                 finalMetadataPayload = { "$type": "FieldsValueDictionary" };
             }
         } else if (agentProvidedMetadata) {
+            // Case 2: Region is not defined, but agent sent metadata. This is an error.
             throw new Error(`Metadata provided for Region '${name}', but that Region has no RegionSchema defined on the Page Template.`);
+        } else {
+            // Case 3: Region is not defined (ad-hoc), and agent sent no metadata.
+            finalMetadataPayload = { "$type": "FieldsValueDictionary" };
         }
-        
+
         let nestedRegions: any[] = [];
         if (regionSchemaIdRef && regionData.Regions) {
             nestedRegions = await processRegions(regionData.Regions, contextId, regionSchemaIdRef, axiosInstance);
