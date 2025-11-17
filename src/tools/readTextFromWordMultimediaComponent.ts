@@ -49,7 +49,7 @@ export const readTextFromWordMultimediaComponent = {
             const { value: htmlContent } = await mammoth.convertToHtml({ buffer: wordFileBuffer }, mammothOptions);
 
             const responseData = {
-                $type: "HtmlContent",
+                type: "HtmlContent",
                 Id: itemId,
                 Content: htmlContent
             };

@@ -4,7 +4,7 @@ import { toLink } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { xmlNameSchema } from "../schemas/xmlNameSchema.js";
 import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
-import { processSchemaFieldDefinitions, sanitizeAgentJson } from "../utils/fieldReordering.js";
+import { processSchemaFieldDefinitions, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
 
 export const createComponentSchema = {
     name: "createComponentSchema",
@@ -19,7 +19,7 @@ Both of these properties are dictionaries where:
 
 When creating fields that link to other items (e.g., ComponentLinkFieldDefinition, EmbeddedSchemaFieldDefinition), you will need the TCM URIs of the allowed target schemas. Use the 'getSchemaLinks' tool to find suitable schemas within the target Publication.
 
-Each Field Definition object MUST include a '$type' property to identify its type from the list below. Other common properties include:
+Each Field Definition object MUST include a 'type' property to identify its type from the list below. Other common properties include:
   - Name: The machine name of the field (must match the key in the dictionary).
   - Description: A human-readable description of the field's purpose. This is mandatory.
   - MinOccurs: The minimum number of times the field can occur (e.g., 0 for optional, 1 for mandatory).
@@ -28,20 +28,20 @@ Each Field Definition object MUST include a '$type' property to identify its typ
   - IsLocalizable (Default: true): Whether the field value can be changed in localized items.
   - IsPublishable (Default: true): Whether the field value is included when publishing.
 
-Supported Field Types ('$type' values):
+Supported Field Types ('type' values):
   - SingleLineTextFieldDefinition: A simple text input. XSD Schema properties like 'Pattern', 'MinLength', and 'MaxLength' can be used to restrict the allowed input values.
   - MultiLineTextFieldDefinition: A multi-line text area. Supports a 'Height' property for the UI.
   - XhtmlFieldDefinition: A rich-text (HTML) editor. Supports a 'Height' property for the UI. Can also include a 'FormattingFeatures' object to control the editor's toolbar.
-  - KeywordFieldDefinition: - A link to a Keyword from a Category. This requires a 'Category' property with a Link object. This field type also requires a 'List' property (e.g., { "$type": "ListDefinition", "Type": "Select" }) to define how the Keywords are displayed. The Category you link to must exist in the same Publication as the Schema or in a Parent Publication. You cannot link to a Category in a child or sibling Publication.
+  - KeywordFieldDefinition: - A link to a Keyword from a Category. This requires a 'Category' property with a Link object. This field type also requires a 'List' property (e.g., { "type": "ListDefinition", "Type": "Select" }) to define how the Keywords are displayed. The Category you link to must exist in the same Publication as the Schema or in a Parent Publication. You cannot link to a Category in a child or sibling Publication.
   - NumberFieldDefinition: A field for numeric values. The 'MinInclusive', 'MaxExclusive', 'TotalDigits', and 'FractionDigits' properties can be used to restrict the range of values.
   - DateFieldDefinition: A field for date/time values. The date range can be restricted using properties like 'MinInclusive', 'MaxExclusive', etc.
   - ExternalLinkFieldDefinition: A field for a URL.
   - ComponentLinkFieldDefinition: A link to another Component. Can use 'AllowedTargetSchemas' to restrict which types of Components can be linked.
   - MultimediaLinkFieldDefinition: A link to a multimedia item (e.g., image, video). Can use 'AllowedTargetSchemas' to restrict which types of multimedia can be linked.
-  - EmbeddedSchemaFieldDefinition: Allows embedding fields from another Schema (which must have a purpose of 'Embedded'). Requires an 'EmbeddedSchema' property with a Link object (e.g., { "$type": "Link", "IdRef": "tcm:1-123-8" }). Ensure a suitable embedded schema is available before trying to create a schema that links to one.
+  - EmbeddedSchemaFieldDefinition: Allows embedding fields from another Schema (which must have a purpose of 'Embedded'). Requires an 'EmbeddedSchema' property with a Link object (e.g., { "type": "Link", "IdRef": "tcm:1-123-8" }). Ensure a suitable embedded schema is available before trying to create a schema that links to one.
 
 Some field types can be configured as lists to provide a selection of predefined values. This is done by adding a 'List' property to the field definition.
-  - Supported List '$type' values: ListDefinition (for Keywords), SingleLineTextListDefinition, NumberListDefinition, DateListDefinition.
+  - Supported List 'type' values: ListDefinition (for Keywords), SingleLineTextListDefinition, NumberListDefinition, DateListDefinition.
   - List Properties:
       - Type: The UI control for the list ('Select', 'Radio', 'Checkbox', 'Tree').
       - Height: The height of the list control in the UI.
@@ -73,7 +73,7 @@ Example 1: Create a simple component Schema with a single, optional text field.
         description: "A simple schema with one text field.",
         fields: {
             "textField": {
-                "$type": "SingleLineTextFieldDefinition",
+                "type": "SingleLineTextFieldDefinition",
                 "Name": "textField",
                 "Description": "A single line of text",
                 "MaxOccurs": 1,
@@ -90,14 +90,14 @@ Example 2: Create an 'Article' component Schema with both content fields and met
         description: "Schema for news articles.",
         fields: {
             "title": {
-                "$type": "SingleLineTextFieldDefinition",
+                "type": "SingleLineTextFieldDefinition",
                 "Name": "title",
                 "Description": "The main title of the article.",
                 "MinOccurs": 1,
                 "MaxOccurs": 1
             },
             "body": {
-                "$type": "XhtmlFieldDefinition",
+                "type": "XhtmlFieldDefinition",
                 "Name": "body",
                 "Description": "The main content of the article, which can include rich text formatting.",
                 "Height": 10
@@ -105,12 +105,12 @@ Example 2: Create an 'Article' component Schema with both content fields and met
         },
         metadataFields: {
             "author": {
-                "$type": "SingleLineTextFieldDefinition",
+                "type": "SingleLineTextFieldDefinition",
                 "Name": "author",
                 "Description": "The author of the article."
             },
             "publishDate": {
-                "$type": "DateFieldDefinition",
+                "type": "DateFieldDefinition",
                 "Name": "publishDate",
                 "Description": "The date the article was published."
             }
@@ -125,12 +125,12 @@ Example 3: Create a Schema with an XHTML field that has custom formatting featur
         description: "Schema for rich text with a limited toolbar.",
         fields: {
             "formattedContent": {
-                "$type": "XhtmlFieldDefinition",
+                "type": "XhtmlFieldDefinition",
                 "Name": "formattedContent",
                 "Description": "Rich text content with a restricted toolbar.",
                 "Height": 15,
                 "FormattingFeatures": {
-                    "$type": "FormattingFeatures",
+                    "type": "FormattingFeatures",
                     "DocType": "Strict",
                     "DisallowedActions": [
                         "Strikethrough",
@@ -153,21 +153,21 @@ Example 4: Create a Schema that uses an embeddable Schema for an embedded field.
         description: "Schema for an article with an embedded author.",
         fields: {
             "Title": {
-                "$type": "SingleLineTextFieldDefinition",
+                "type": "SingleLineTextFieldDefinition",
                 "Name": "Title",
                 "Description": "The title of the article."
             },
             "Abstract": {
-                "$type": "MultiLineTextFieldDefinition",
+                "type": "MultiLineTextFieldDefinition",
                 "Name": "Abstract",
                 "Description": "The abstract of the article."
             },
             "Author": {
-                "$type": "EmbeddedSchemaFieldDefinition",
+                "type": "EmbeddedSchemaFieldDefinition",
                 "Name": "Author",
                 "Description": "An author of the article.",
                 "EmbeddedSchema": {
-                    "$type": "Link",
+                    "type": "Link",
                     "IdRef": "tcm:11-123-8"
                 }
             }
@@ -182,13 +182,13 @@ Example 5: Create a Schema with a multi-value Component Link field. This allows 
         description: "Schema for linking to related articles.",
         fields: {
             "relatedArticles": {
-                "$type": "ComponentLinkFieldDefinition",
+                "type": "ComponentLinkFieldDefinition",
                 "Name": "relatedArticles",
                 "Description": "Links to related articles.",
                 "MaxOccurs": -1,
                 "AllowedTargetSchemas": [
                     {
-                        "$type": "Link",
+                        "type": "Link",
                         "IdRef": "tcm:18-103-8"
                     }
                 ]
@@ -204,13 +204,13 @@ Example 6: Create a Schema with a multi-value Multimedia Link field. This allows
         description: "Schema for an image gallery.",
         fields: {
             "images": {
-                "$type": "MultimediaLinkFieldDefinition",
+                "type": "MultimediaLinkFieldDefinition",
                 "Name": "images",
                 "Description": "Select multiple images for the gallery.",
                 "MaxOccurs": -1,
                 "AllowedTargetSchemas": [
                     {
-                        "$type": "Link",
+                        "type": "Link",
                         "IdRef": "tcm:1-66-8"
                     }
                 ]
@@ -226,22 +226,22 @@ Example 7: Create a Schema with a Keyword field for classification. This field l
         description: "Schema for an article with a keyword category.",
         fields: {
             "title": {
-                "$type": "SingleLineTextFieldDefinition",
+                "type": "SingleLineTextFieldDefinition",
                 "Name": "title",
                 "Description": "The article title."
             },
             "category": {
-                "$type": "KeywordFieldDefinition",
+                "type": "KeywordFieldDefinition",
                 "Name": "category",
                 "Description": "Classification for the article.",
                 "MinOccurs": 0,
                 "MaxOccurs": -1,
                 "Category": {
-                    "$type": "Link",
+                    "type": "Link",
                     "IdRef": "tcm:1-3-512"
                 },
                 "List": {
-                    "$type": "ListDefinition",
+                    "type": "ListDefinition",
                     "Height": 5,
                     "Type": "Select"
                 }
@@ -257,14 +257,14 @@ Example 8: Create a Schema with advanced constraints.
         description: "A Schema that uses various constraints for its fields.",
         fields: {
             "productCode": {
-                "$type": "SingleLineTextFieldDefinition",
+                "type": "SingleLineTextFieldDefinition",
                 "Name": "productCode",
                 "Description": "Product code must be 2 uppercase letters followed by 4 numbers.",
                 "MinOccurs": 1,
                 "Pattern": "[A-Z]{2}[0-9]{4}"
             },
             "rating": {
-                "$type": "NumberFieldDefinition",
+                "type": "NumberFieldDefinition",
                 "Name": "rating",
                 "Description": "Rating must be a number between 1 and 5 (inclusive).",
                 "MinOccurs": 1,
@@ -272,7 +272,7 @@ Example 8: Create a Schema with advanced constraints.
                 "MaxInclusive": 5
             },
             "price": {
-                "$type": "NumberFieldDefinition",
+                "type": "NumberFieldDefinition",
                 "Name": "price",
                 "Description": "Price with a maximum of 5 total digits and 2 decimal places.",
                 "TotalDigits": 5,
@@ -293,7 +293,7 @@ Example 8: Create a Schema with advanced constraints.
         isPublishable: z.boolean().optional().describe("Specifies whether Components based on this Schema can be resolved for data publishing."),
     },
     execute: async (args: any, context: any) => {
-        sanitizeAgentJson(args);
+        formatForApi(args);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -340,10 +340,11 @@ Example 8: Create a Schema with advanced constraints.
                     Id: createResponse.data.Id,
                     Message: `Successfully created ${createResponse.data.Id}`
                 };
+                const formattedResponseData = formatForAgent(responseData);
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(responseData, null, 2)
+                        text: JSON.stringify(formattedResponseData, null, 2)
                     }],
                 };
             } else {

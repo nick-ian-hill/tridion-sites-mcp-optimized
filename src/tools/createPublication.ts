@@ -132,7 +132,7 @@ Example 3: Creates a Publication and configures its default workflow processes.
 
             if (createResponse.status === 201) {
                 const responseData = {
-                    $type: createResponse.data['$type'],
+                    type: createResponse.data['$type'],
                     Id: createResponse.data.Id,
                     Message: `Successfully created ${createResponse.data.Id}`
                 };

@@ -36,7 +36,7 @@ export const checkInItem = {
                 let responseData;
                 if (response.data) {
                     responseData = {
-                        $type: response.data['$type'],
+                        type: response.data['$type'],
                         Id: response.data.Id,
                         Message:`Successfully checked in ${response.data.Id}`
                     };

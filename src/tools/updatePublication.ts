@@ -100,7 +100,7 @@ Example 3: Update the default task process and enable workflow process associati
             if (updateResponse.status === 200) {
                  const updatedItem = updateResponse.data;
                  const responseData = {
-                    $type: updatedItem['$type'],
+                    type: updatedItem['$type'],
                     Id: updatedItem.Id,
                     Message: `Successfully updated ${updatedItem.Id}`
                 };

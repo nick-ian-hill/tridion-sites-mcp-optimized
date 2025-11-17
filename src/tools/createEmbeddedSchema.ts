@@ -4,7 +4,7 @@ import { toLink } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { xmlNameSchema } from "../schemas/xmlNameSchema.js";
 import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
-import { processSchemaFieldDefinitions, sanitizeAgentJson } from "../utils/fieldReordering.js";
+import { processSchemaFieldDefinitions, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
 
 export const createEmbeddedSchema = {
     name: "createEmbeddedSchema",
@@ -25,14 +25,14 @@ This schema can then be used inside other schemas (like an 'Article' schema) to 
         description: "An embeddable schema for author information.",
         fields: {
             "name": {
-                "$type": "SingleLineTextFieldDefinition",
+                "type": "SingleLineTextFieldDefinition",
                 "Name": "name",
                 "Description": "The author's full name.",
                 "MinOccurs": 1,
                 "MaxOccurs": 1
             },
             "biography": {
-                "$type": "MultiLineTextFieldDefinition",
+                "type": "MultiLineTextFieldDefinition",
                 "Name": "biography",
                 "Description": "A short biography of the author.",
                 "Height": 5,
@@ -51,7 +51,7 @@ This schema can then be used inside other schemas (like an 'Article' schema) to 
         isPublishable: z.boolean().optional().describe("Specifies whether field values are published.")
     },
     execute: async (args: any, context: any) => {
-        sanitizeAgentJson(args);
+        formatForApi(args);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -94,10 +94,11 @@ This schema can then be used inside other schemas (like an 'Article' schema) to 
                     Id: createResponse.data.Id,
                     Message: `Successfully created ${createResponse.data.Id}`
                 };
+                const formattedResponseData = formatForAgent(responseData);
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(responseData, null, 2)
+                        text: JSON.stringify(formattedResponseData, null, 2)
                     }],
                 };
             } else {

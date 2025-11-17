@@ -4,7 +4,7 @@ import { toLink } from "../utils/links.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
-import { reorderFieldsBySchema, convertLinksRecursively, sanitizeAgentJson } from "../utils/fieldReordering.js";
+import { reorderFieldsBySchema, convertLinksRecursively, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
 import { processComponentPresentations, processRegions } from "../utils/pageUtils.js";
 import { componentPresentationSchemaForTyping, regionSchemaForTyping } from "../schemas/pageSchemas.js";
 
@@ -15,7 +15,7 @@ const createPageInputProperties = {
     pageTemplateId: z.string().regex(/^tcm:\d+-\d+-128$/).optional().describe("The TCM URI of the Page Template to be associated with the Page. Use 'search' or 'getItemsInContainer' to find available templates. If not provided, the page will use the Page Template defined by the parent Structure Group."),
     metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of a Schema for the Page's metadata. Use 'getSchemaLinks' to find available schemas. If the Page Template defines a Region Schema, that Region Schema can be used here."),
     metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the Page's metadata fields as defined by the schema with URI metadataSchemaId."),
-    componentPresentations: z.array(componentPresentationSchemaForTyping).optional().describe("An array of Component Presentation objects to be placed directly on the Page, outside of any Regions. Each object must have '$type': 'ComponentPresentation', a 'Component' property (a Link), and an optional 'ComponentTemplate' property (a Link)."),
+    componentPresentations: z.array(componentPresentationSchemaForTyping).optional().describe("An array of Component Presentation objects to be placed directly on the Page, outside of any Regions. Each object must have 'type': 'ComponentPresentation', a 'Component' property (a Link), and an optional 'ComponentTemplate' property (a Link)."),
     regions: z.array(regionSchemaForTyping).optional().describe("An array of Region objects. The RegionName for each region must match a region defined in the Page Template. To discover the correct region names and structure, first use the 'getItem' tool to inspect the 'pageTemplateId'.")
 };
 
@@ -62,7 +62,7 @@ This is a common pattern, as many Page Templates require at least one region to 
         fileName: "contact.html",
         pageTemplateId: "tcm:1-15-128",
         regions: [
-            { "$type": "EmbeddedRegion", "RegionName": "Main" }
+            { "type": "EmbeddedRegion", "RegionName": "Main" }
         ]
     });
 
@@ -74,13 +74,13 @@ Example 2: Create a Page with a Component Presentation on the page and an empty 
         pageTemplateId: "tcm:1-20-128",
         componentPresentations: [
             {
-                "$type": "ComponentPresentation",
-                "Component": { "$type": "Link", "IdRef": "tcm:1-101-16" },
-                "ComponentTemplate": { "$type": "Link", "IdRef": "tcm:1-102-32" }
+                "type": "ComponentPresentation",
+                "Component": { "type": "Link", "IdRef": "tcm:1-101-16" },
+                "ComponentTemplate": { "type": "Link", "IdRef": "tcm:1-102-32" }
             }
         ],
         regions: [
-            { "$type": "EmbeddedRegion", "RegionName": "Main" }
+            { "type": "EmbeddedRegion", "RegionName": "Main" }
         ]
     });
 
@@ -93,20 +93,20 @@ This demonstrates a mixed content model.
         pageTemplateId: "tcm:1-25-128",
         componentPresentations: [
             {
-                "$type": "ComponentPresentation",
-                "Component": { "$type": "Link", "IdRef": "tcm:1-101-16" },
-                "ComponentTemplate": { "$type": "Link", "IdRef": "tcm:1-102-32" }
+                "type": "ComponentPresentation",
+                "Component": { "type": "Link", "IdRef": "tcm:1-101-16" },
+                "ComponentTemplate": { "type": "Link", "IdRef": "tcm:1-102-32" }
             }
         ],
         regions: [
             {
-                "$type": "EmbeddedRegion",
+                "type": "EmbeddedRegion",
                 "RegionName": "Main",
                 "ComponentPresentations": [
                     {
-                        "$type": "ComponentPresentation",
-                        "Component": { "$type": "Link", "IdRef": "tcm:1-203-16" },
-                        "ComponentTemplate": { "$type": "Link", "IdRef": "tcm:1-204-32" }
+                        "type": "ComponentPresentation",
+                        "Component": { "type": "Link", "IdRef": "tcm:1-203-16" },
+                        "ComponentTemplate": { "type": "Link", "IdRef": "tcm:1-204-32" }
                     }
                 ]
             }
@@ -127,28 +127,28 @@ This example shows a two-column layout within the main content area.
         },
         "regions": [
             {
-                "$type": "EmbeddedRegion",
+                "type": "EmbeddedRegion",
                 "RegionName": "MainContent",
                 "Regions": [
                     {
-                        "$type": "EmbeddedRegion",
+                        "type": "EmbeddedRegion",
                         "RegionName": "ColumnLeft",
                         "ComponentPresentations": [
                             {
-                                "$type": "ComponentPresentation",
-                                "Component": { "$type": "Link", "IdRef": "tcm:1-301-16" },
-                                "ComponentTemplate": { "$type": "Link", "IdRef": "tcm:1-302-32" }
+                                "type": "ComponentPresentation",
+                                "Component": { "type": "Link", "IdRef": "tcm:1-301-16" },
+                                "ComponentTemplate": { "type": "Link", "IdRef": "tcm:1-302-32" }
                             }
                         ]
                     },
                     {
-                        "$type": "EmbeddedRegion",
+                        "type": "EmbeddedRegion",
                         "RegionName": "ColumnRight",
                         "ComponentPresentations": [
                             {
-                                "$type": "ComponentPresentation",
-                                "Component": { "$type": "Link", "IdRef": "tcm:1-303-16" },
-                                "ComponentTemplate": { "$type": "Link", "IdRef": "tcm:1-304-32" }
+                                "type": "ComponentPresentation",
+                                "Component": { "type": "Link", "IdRef": "tcm:1-303-16" },
+                                "ComponentTemplate": { "type": "Link", "IdRef": "tcm:1-304-32" }
                             }
                         ]
                     }
@@ -161,7 +161,7 @@ This example shows a two-column layout within the main content area.
     execute: async (args: CreatePageInput,
         context: any
     ) => {
-        sanitizeAgentJson(args);
+        formatForApi(args);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -308,10 +308,11 @@ This example shows a two-column layout within the main content area.
                     Id: createResponse.data.Id,
                     Message: `Successfully created ${createResponse.data.Id}`
                 };
+                const formattedResponseData = formatForAgent(responseData);
                 return { 
                     content: [{ 
                         type: "text", 
-                        text: JSON.stringify(responseData, null, 2) 
+                        text: JSON.stringify(formattedResponseData, null, 2) 
                     }] 
                 };
             } else {

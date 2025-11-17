@@ -3,7 +3,7 @@ import { createAuthenticatedAxios } from "../utils/axios.js";
 import { toLink } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
-import { convertLinksRecursively, processSchemaFieldDefinitions, sanitizeAgentJson } from "../utils/fieldReordering.js";
+import { convertLinksRecursively, processSchemaFieldDefinitions, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
 import { regionDefinitionSchema } from "../schemas/regionDefinitionSchemas.js";
 
 export const createRegionSchema = {
@@ -14,17 +14,17 @@ Region Schemas are used by Page Templates to define the layout and content areas
 This tool is the correct choice for creating the "Page Schema" that a Page Template links to.
 
 A Region Schema can define:
-1.  Constraints on the Component Presentations that can be placed within it (using '$type: "Link"').
-2.  A set of nested Regions, each linking to its own Region Schema (using '$type: "ExpandableLink"').
+1.  Constraints on the Component Presentations that can be placed within it (using 'type: "Link"').
+2.  A set of nested Regions, each linking to its own Region Schema (using 'type: "ExpandableLink"').
 3.  A set of metadata fields for the Region itself.
 
 This tool accepts the 'regionDefinition' as a direct JSON object, making it much easier to define constraints and nested regions.
 
 IMPORTANT
 - When defining a 'TypeConstraint', the 'BasedOnSchema' and 'BasedOnComponentTemplate' properties must be a Link:
-  { "$type": "Link", "IdRef": "tcm:1-2-8" }
+  { "type": "Link", "IdRef": "tcm:1-2-8" }
 - When defining a 'NestedRegion', the 'RegionSchema' property must be an ExpandableLink:
-  { "$type": "ExpandableLink", "IdRef": "tcm:1-3-8" }
+  { "type": "ExpandableLink", "IdRef": "tcm:1-3-8" }
 
 Examples:
 
@@ -34,49 +34,49 @@ Example 1: Create a Region Schema with constraints on its Component Presentation
         locationId: "tcm:5-2-2",
         description: "A Region that constrains what can be put inside it.",
         regionDefinition: {
-            "$type": "RegionDefinition",
+            "type": "RegionDefinition",
             "ComponentPresentationConstraints": [
                 {
-                    "$type": "OccurrenceConstraint",
+                    "type": "OccurrenceConstraint",
                     "MaxOccurs": 5,
                     "MinOccurs": 0
                 },
                 {
-                    "$type": "TypeConstraint",
-                    "BasedOnSchema": { "$type": "Link", "IdRef": "tcm:5-103-8" },
-                    "BasedOnComponentTemplate": { "$type": "Link", "IdRef": "tcm:5-105-32" }
+                    "type": "TypeConstraint",
+                    "BasedOnSchema": { "type": "Link", "IdRef": "tcm:5-103-8" },
+                    "BasedOnComponentTemplate": { "type": "Link", "IdRef": "tcm:5-105-32" }
                 }
             ]
         }
     });
     
 Example 2: Create an advanced Region Schema with a nested region.
-Note the use of "$type": "ExpandableLink" for the 'RegionSchema' property inside 'NestedRegions'.
+Note the use of "type": "ExpandableLink" for the 'RegionSchema' property inside 'NestedRegions'.
     const result = await tools.createRegionSchema({
         title: "News Page Region",
         locationId: "tcm:2-18-2",
         description: "Region Schema for a News Page, including a nested region for the main article.",
         regionDefinition: {
-            "$type": "RegionDefinition",
+            "type": "RegionDefinition",
             "ComponentPresentationConstraints": [
                 {
-                    "$type": "OccurrenceConstraint",
+                    "type": "OccurrenceConstraint",
                     "MaxOccurs": 3,
                     "MinOccurs": 0
                 },
                 {
-                    "$type": "TypeConstraint",
-                    "BasedOnComponentTemplate": { "$type": "Link", "IdRef": "tcm:2-105-32" },
-                    "BasedOnSchema": { "$type": "Link", "IdRef": "tcm:2-104-8" }
+                    "type": "TypeConstraint",
+                    "BasedOnComponentTemplate": { "type": "Link", "IdRef": "tcm:2-105-32" },
+                    "BasedOnSchema": { "type": "Link", "IdRef": "tcm:2-104-8" }
                 }
             ],
             "NestedRegions": [
                 {
-                    "$type": "NestedRegion",
+                    "type": "NestedRegion",
                     "RegionName": "Article",
                     "IsMandatory": true,
                     "RegionSchema": {
-                        "$type": "ExpandableLink",
+                        "type": "ExpandableLink",
                         "IdRef": "tcm:2-181-8"
                     }
                 }
@@ -94,7 +94,7 @@ Note the use of "$type": "ExpandableLink" for the 'RegionSchema' property inside
         isPublishable: z.boolean().optional().describe("Specifies whether metadata values are published.")
     },
     execute: async (args: any, context: any) => {
-        sanitizeAgentJson(args);
+        formatForApi(args);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -146,10 +146,11 @@ Note the use of "$type": "ExpandableLink" for the 'RegionSchema' property inside
                     Id: createResponse.data.Id,
                     Message: `Successfully created ${createResponse.data.Id}`
                 };
+                const formattedResponseData = formatForAgent(responseData);
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(responseData, null, 2)
+                        text: JSON.stringify(formattedResponseData, null, 2)
                     }],
                 };
             } else {

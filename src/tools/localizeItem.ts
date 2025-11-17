@@ -33,7 +33,7 @@ A common use case for localizing an item is to translate content inherited from 
 
                 if (responseData) {
                     resultData = {
-                        $type: responseData['$type'],
+                        type: responseData['$type'],
                         Id: responseData.Id,
                         Message: `Successfully localized ${response.data.Id}`
                     };

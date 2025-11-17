@@ -33,7 +33,7 @@ Before using, it's recommended to understand the item's position in the hierarch
 
             if (response.status === 201) {
                 const responseData = {
-                    $type: response.data['$type'],
+                    type: response.data['$type'],
                     Id: response.data.Id,
                     Message: `Successfully demoted ${response.data.Id}`
                 };

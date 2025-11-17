@@ -29,13 +29,13 @@ export const undoCheckOutItem = {
                 let responseData;
                 if (response.data && response.data.Id && response.data['$type']) {
                     responseData = {
-                        $type: response.data['$type'],
+                        type: response.data['$type'],
                         Id: response.data.Id,
                         Message: `Successfully reverted ${response.data.Id}`
                     };
                 } else {
                     responseData = {
-                        $type: 'Success',
+                        type: 'Success',
                         Id: itemId,
                         Message: `Successfully reverted ${itemId}`
                     };

@@ -34,7 +34,7 @@ export const moveItem = {
                 let responseData;
                 if (response.data) {
                     responseData = {
-                        $type: response.data['$type'],
+                        type: response.data['$type'],
                         Id: response.data.Id,
                         Message: `Successfully moved ${response.data.Id}`
                     };

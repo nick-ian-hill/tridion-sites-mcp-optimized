@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { filterResponseData } from "../utils/responseFiltering.js";
+import { formatForAgent } from "../utils/fieldReordering.js";
 
 export const bulkReadItems = {
     name: "bulkReadItems",
@@ -23,7 +24,7 @@ When post-processing of data from a large set of items is required, do not use t
 This approach is token-inefficient and will fail on large result sets. The correct, scalable method is to use the 'toolOrchestrator', and supply a postProcessingScript to perform the aggregation on the server-side. See the 'toolOrchestrator' documentation for the recommended 3-phase (setup-map-reduce) pattern.
 
 Example: Retrieve a specific nested property for multiple items.
-This example gets the revision date for two Components. The output includes the base 'Id', 'Title', and '$type' properties, plus a 'VersionInfo' object containing only the requested 'RevisionDate'.
+This example gets the revision date for two Components. The output includes the base 'Id', 'Title', and 'type' properties, plus a 'VersionInfo' object containing only the requested 'RevisionDate'.
 
     const result = await tools.bulkReadItems({
         itemIds: ["tcm:5-320", "tcm:5-175"],
@@ -35,7 +36,7 @@ Expected JSON Output:
   "tcm:5-320": {
     "Id": "tcm:5-320-v0",
     "Title": "Sitemap2",
-    "$type": "Component",
+    "type": "Component",
     "VersionInfo": {
       "RevisionDate": "2025-08-11T05:36:08.65Z"
     }
@@ -43,7 +44,7 @@ Expected JSON Output:
   "tcm:5-175": {
     "Id": "tcm:5-175",
     "Title": "Navigation Configuration",
-    "$type": "Component",
+    "type": "Component",
     "VersionInfo": {
       "RevisionDate": "2025-08-14T11:20:56.17Z"
     }
@@ -54,7 +55,7 @@ Expected JSON Output:
         itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)).describe("An array of unique IDs for the items to retrieve. Use tools like 'search' or 'getItemsInContainer' to find item IDs."),
         useDynamicVersion: z.boolean().optional().default(false).describe("When true, loads the latest revisions for versioned items. Defaults to false."),
         loadFullItems: z.boolean().optional().default(false).describe("When true, loads the full content and metadata for each item (where applicable), and BinaryContent for Multimedia Components (components with 'ComponentType' = 'Multimedia'). This is ignored if 'includeProperties' is used."),
-        includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response (e.g., ['LocationInfo.Path', 'VersionInfo.CreationDate', 'Content', 'Metadata', 'BinaryContent.MimeType']). If used, 'loadFullItems' is ignored. 'Id', 'Title', and '$type' will always be included.`),
+        includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response (e.g., ['LocationInfo.Path', 'VersionInfo.CreationDate', 'Content', 'Metadata', 'BinaryContent.MimeType']). If used, 'loadFullItems' is ignored. 'Id', 'Title', and 'type' will always be included.`),
     },
     execute: async ({ itemIds, useDynamicVersion = false, loadFullItems = false, includeProperties }: { 
         itemIds: string[], 
@@ -86,12 +87,13 @@ Expected JSON Output:
 
             if (response.status === 200) {
                 const finalData = filterResponseData({ responseData: response.data, includeProperties });
-                
+                const formattedData = formatForAgent(finalData);
+
                 return {
                     content: [
                         {
                             type: "text",
-                            text: JSON.stringify(finalData, null, 2)
+                            text: JSON.stringify(formattedData, null, 2)
                         }
                     ],
                 };

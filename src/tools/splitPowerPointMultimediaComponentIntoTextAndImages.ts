@@ -196,7 +196,7 @@ export const splitPowerPointMultimediaComponentIntoTextAndImages = {
             });
 
             const responseData = {
-                $type: "SplitPowerPointResult",
+                type: "SplitPowerPointResult",
                 Id: itemId,
                 CreatedImageComponents: createdImageComponents,
                 Slides: slidesSummary

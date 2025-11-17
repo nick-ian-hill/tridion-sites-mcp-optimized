@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { filterResponseData } from "../utils/responseFiltering.js";
+import { formatForAgent } from "../utils/fieldReordering.js";
 
 export const getItemsInContainer = {
     name: "getItemsInContainer",
@@ -27,10 +28,10 @@ This approach is token-inefficient and will fail on large result sets. The corre
         useDynamicVersion: z.boolean().optional().default(true).describe("The default setting of `true` ensures that the latest data is returned for versioned items and that the response includes new items."),
         itemTypes: z.array(z.string()).optional().describe("An array of item types to filter the results, e.g., ['Component', 'Page', 'Folder']. If omitted, all item types are returned."),
         details: z.enum(["IdAndTitle", "CoreDetails", "AllDetails"]).default("IdAndTitle").optional().describe(`Specifies a predefined level of detail. For custom property selection, use 'includeProperties' instead.
-- "IdAndTitle": Returns the ID, Title, and $type of each item. This is the recommended default.
+- "IdAndTitle": Returns the ID, Title, and type of each item. This is the recommended default.
 - "CoreDetails": Returns the main properties, excluding verbose security and link-related information. This may be slow or fail if the container holds many items.
 - "AllDetails": Returns all available properties for each item. This is likely to fail if the container holds many items.`),
-        includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response. If used, the 'details' parameter is ignored. 'Id', 'Title', and '$type' will always be included.`),
+        includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response. If used, the 'details' parameter is ignored. 'Id', 'Title', and 'type' will always be included.`),
     },
     execute: async ({ containerId, recursive = false, useDynamicVersion = true, itemTypes, details = "IdAndTitle", includeProperties }: { 
         containerId: string, 
@@ -65,10 +66,11 @@ This approach is token-inefficient and will fail on large result sets. The corre
 
             if (response.status === 200) {
                 const finalData = filterResponseData({ responseData: response.data, details, includeProperties });
+                const formattedFinalData = formatForAgent(finalData);
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(finalData, null, 2)
+                        text: JSON.stringify(formattedFinalData, null, 2)
                     }],
                 };
             } else {

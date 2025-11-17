@@ -43,7 +43,7 @@ export const promoteItem = {
 
             if (response.status === 201) {
                 const responseData = {
-                    $type: response.data['$type'],
+                    type: response.data['$type'],
                     Id: response.data.Id,
                     Message: `Successfully promoted ${response.data.Id}`
                 };

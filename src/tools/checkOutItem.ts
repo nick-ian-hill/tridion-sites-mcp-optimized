@@ -31,7 +31,7 @@ export const checkOutItem = {
                 let responseData;
                 if (response.data) {
                     responseData = {
-                        $type: response.data['$type'],
+                        type: response.data['$type'],
                         Id: response.data.Id,
                         Message:`Successfully checked out ${response.data.Id}`
                     };

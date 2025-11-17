@@ -8,7 +8,7 @@ export const getCurrentTime = {
         try {
             const now = new Date().toISOString();
             const response = {
-                $type: "CurrentTime",
+                type: "CurrentTime",
                 ISOTime: now
             };
             return {

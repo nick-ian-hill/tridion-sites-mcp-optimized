@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { getLanguageId } from "../utils/languageUtils.js";
-import { sanitizeAgentJson } from "../utils/fieldReordering.js";
+import { formatForApi } from "../utils/fieldReordering.js";
 
 const updateUserProfileInputProperties = {
     userId: z.string().regex(/^tcm:0-\d+-65552$/).optional().describe("The TCM URI of the user whose profile is to be updated (e.g., 'tcm:0-20-65552'). If not provided, it defaults to the currently logged-in user."),
@@ -44,7 +44,7 @@ type UpdateUserProfileInput = z.infer<typeof updateUserProfileInputSchema>;
 
 // Helper to create a JSON error response
 const createJsonError = (message: string) => {
-    const errorResponse = { $type: 'Error', Message: message };
+    const errorResponse = { type: 'Error', Message: message };
     return { content: [{ type: "text", text: JSON.stringify(errorResponse, null, 2) }] };
 };
 
@@ -103,7 +103,7 @@ Example 2: Update the current user's language to German.
             if (userProfileJson) {
                 try {
                     userProfilePayload = JSON.parse(userProfileJson);
-                    sanitizeAgentJson(userProfilePayload);
+                    formatForApi(userProfilePayload);
                 } catch (e) {
                     const errorMessage = e instanceof Error ? e.message : String(e);
                     return createJsonError(`The 'userProfileJson' parameter is not a valid JSON string. Details: ${errorMessage}`);
@@ -153,7 +153,7 @@ Example 2: Update the current user's language to German.
             const updateResponse = await authenticatedAxios.put(`/items/${restUserId}/profile`, userProfilePayload);
             if (updateResponse.status === 200) {
                  const responseData = {
-                    $type: "UserProfile", 
+                    type: "UserProfile", 
                     Id: userId,
                     Message: `Successfully updated profile for user ${userId}`,
                 };

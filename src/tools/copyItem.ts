@@ -32,7 +32,7 @@ export const copyItem = {
                 let responseData;
                 if (response.data) {
                     responseData = {
-                        $type: response.data['$type'],
+                        type: response.data['$type'],
                         Id: response.data.Id,
                         Message:`Successfully copied ${response.data.Id}`
                     };

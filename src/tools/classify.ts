@@ -38,7 +38,7 @@ The tool will return a warning if no changes were made. For batch operations, us
 
         if (keywordIdsToAdd.length === 0 && keywordIdsToRemove.length === 0) {
             const errorResponse = {
-                $type: 'Error',
+                type: 'Error',
                 Message: "Validation Error: You must provide at least one keyword to add or remove."
             };
             return {
@@ -82,7 +82,7 @@ The tool will return a warning if no changes were made. For batch operations, us
                 if (response.data && response.data.Details && response.data.Details.length > 0 && response.data.Item) {
                     // Changes were made, return success
                     const responseData = {
-                        $type: response.data.Item['$type'],
+                        type: response.data.Item['$type'],
                         Id: response.data.Item.Id,
                         Message:`Successfully classified ${response.data.Item.Id}`
                     };
@@ -95,7 +95,7 @@ The tool will return a warning if no changes were made. For batch operations, us
                 } else if (response.data && response.data.Item) {
                     // No changes were made, return a warning
                     const warningResponse = {
-                        $type: response.data.Item['$type'],
+                        type: response.data.Item['$type'],
                         Id: response.data.Item.Id,
                         Message: `Warning: No changes were made to item ${response.data.Item.Id}. The keywords may already be applied/removed or may not be applicable to the item's schema.`
                     };

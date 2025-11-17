@@ -35,7 +35,7 @@ If this tool returns a 404 error, it means the mapped item does not exist in the
 
             // If the HEAD request succeeds (204 No Content), the item exists.
             const responseData = {
-                $type: "MappedItemId",
+                type: "MappedItemId",
                 OriginalId: itemId,
                 ContextId: contextItemId,
                 MappedId: mappedId,

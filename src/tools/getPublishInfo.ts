@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { filterResponseData } from "../utils/responseFiltering.js";
+import { formatForAgent } from "../utils/fieldReordering.js";
 
 const getPublishInfoInputProperties = {
     itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)
@@ -10,7 +11,7 @@ const getPublishInfoInputProperties = {
         .describe(`An array of property names to include in the response. 
 IMPORTANT: To avoid fetching large, unnecessary data (like User and TargetType details), always use this to specify only the properties you need (e.g., ["PublishedAt"]). 
 Use dot notation for nested properties (e.g., "TargetType.IdRef", "TargetType.Title", "User.Description"). 
-'$type' will always be included.`),
+'type' will always be included.`),
 };
 
 const getPublishInfoSchema = z.object(getPublishInfoInputProperties);
@@ -45,10 +46,12 @@ export const getPublishInfo = {
                     includeProperties 
                 });
 
+                const formattedFinalData = formatForAgent(finalData);
+
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(finalData, null, 2)
+                        text: JSON.stringify(formattedFinalData, null, 2)
                     }],
                 };
             } else {

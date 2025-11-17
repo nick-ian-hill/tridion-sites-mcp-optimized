@@ -33,7 +33,7 @@ export const reassignActivity = {
 
             if (response.status === 200) {
                 const responseData = {
-                    $type: "Success",
+                    type: "Success",
                     Id: activityId,
                     NewAssigneeId: newAssigneeId,
                     Message: `Activity ${activityId} successfully reassigned to ${newAssigneeId}`

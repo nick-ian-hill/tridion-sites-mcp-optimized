@@ -4,7 +4,7 @@ import { toLink } from "../utils/links.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
-import { reorderFieldsBySchema, convertLinksRecursively, sanitizeAgentJson } from "../utils/fieldReordering.js";
+import { reorderFieldsBySchema, convertLinksRecursively, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
 
 const createComponentInputProperties = {
     title: z.string().nonempty().describe("The title for the new Component. Note that creation will fail if a Component with the same title already exists in the target Folder."),
@@ -78,7 +78,7 @@ Example 2: Create a Component with both content fields and metadata fields.
         },
         metadata: {
             "category": {
-                "$type": "Link",
+                "type": "Link",
                 "IdRef": "tcm:5-189-1024"
             },
             "seoKeywords": "AI, Technology, Breakthrough"
@@ -90,7 +90,7 @@ Example 2: Create a Component with both content fields and metadata fields.
     execute: async (args: CreateComponentInput,
         context: any
     ) => {
-        sanitizeAgentJson(args);
+        formatForApi(args);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -155,11 +155,12 @@ Example 2: Create a Component with both content fields and metadata fields.
                         Message:`Successfully created ${createResponse.data.Id}`
                     };
                 }
+                const formattedResponseData = formatForAgent(responseData);
                 return {
                     content: [
                         {
                             type: "text",
-                            text: JSON.stringify(responseData, null, 2)
+                            text: JSON.stringify(formattedResponseData, null, 2)
                         }
                     ],
                 };

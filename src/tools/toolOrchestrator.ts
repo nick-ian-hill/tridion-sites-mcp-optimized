@@ -1,5 +1,6 @@
 import { z } from "zod";
 import * as vm from 'vm';
+import { formatForAgent, formatForApi } from "../utils/fieldReordering.js";
 
 // --- Security Configuration ---
 /**
@@ -187,7 +188,7 @@ All tools have their JSON string responses automatically parsed into JavaScript 
 // Example of correct usage inside toolOrchestrator:
 const item = await context.tools.getItem({ itemId: 'tcm:1-234-64' });
 if (item) {
-  context.log("Item title: " + item.Title); // Access directly
+  context.log("Item title: " + item.Title + ", type: " + item.type);
 }
 
 To use the AI, call the 'generateContentFromPrompt' tool:
@@ -993,7 +994,7 @@ Example 11: Find Large, Unused Multimedia Components
                 let ids = [];
                 if (!node || !node.Dependencies) return ids;
                 for (const child of node.Dependencies) {
-                    if (child.Item && child.Item.$type === 'Page') {
+                    if (child.Item && child.Item.type === 'Page') {
                         ids.push(child.Item.Id);
                     }
                     ids = ids.concat(flattenPageIds(child));
@@ -1101,7 +1102,7 @@ const result1 = await tools.toolOrchestrator({
             .map(a => ({ firstName: a.firstName, lastName: a.lastName, bio: a.bio }));
         
         const tagsForArticle = article.tags.split(';')
-            .map(tagName => ({ "$type": "Link", "IdRef": tagNameKeywordIdMap[tagName] }))
+            .map(tagName => ({ "type": "Link", "IdRef": tagNameKeywordIdMap[tagName] }))
             .filter(tag => tag.IdRef);
 
         const component = await context.tools.createComponent({
@@ -1202,14 +1203,14 @@ const result2 = await tools.toolOrchestrator({
             }
 
             regions[regionName].push({
-                "$type": "ComponentPresentation",
-                "Component": { "$type": "Link", "IdRef": componentId },
-                "ComponentTemplate": { "$type": "Link", "IdRef": templateId }
+                "type": "ComponentPresentation",
+                "Component": { "type": "Link", "IdRef": componentId },
+                "ComponentTemplate": { "type": "Link", "IdRef": templateId }
             });
         }
 
         const regionsForPage = Object.keys(regions).map(regionName => ({
-            "$type": "EmbeddedRegion",
+            "type": "EmbeddedRegion",
             "RegionName": regionName,
             "ComponentPresentations": regions[regionName]
         }));
@@ -1336,6 +1337,7 @@ This script would first be run by following the "Debugging Strategies" (test on 
         input: z.infer<typeof toolOrchestratorSchema>,
         mcpContext: any
     ) => {
+        formatForApi(input);
         const { 
             itemIds: initialItemIds, 
             preProcessingScript, 
@@ -1360,8 +1362,9 @@ This script would first be run by following the "Debugging Strategies" (test on 
                 if (e.content && Array.isArray(e.content) && e.content[0]?.type === 'text') {
                     try {
                         const errorObj = JSON.parse(e.content[0].text);
-                        if (errorObj && errorObj.Message) {
-                            return errorObj.Message;
+                        const formattedError = formatForAgent(errorObj);
+                        if (formattedError && formattedError.Message) {
+                            return JSON.stringify(formattedError);
                         }
                     } catch {
                         return e.content[0].text;
@@ -1412,7 +1415,7 @@ This script would first be run by following the "Debugging Strategies" (test on 
                             try {
                                 const parsedObject = JSON.parse(maybeText);
                                 // Check if the successfully parsed object is actually an error.
-                                if (parsedObject && parsedObject.$type === 'Error' && parsedObject.Message) {
+                                if (parsedObject && parsedObject.type === 'Error' && parsedObject.Message) {
                                     throw new Error(parsedObject.Message);
                                 }
 
@@ -1731,8 +1734,9 @@ This script would first be run by following the "Debugging Strategies" (test on 
                     logSample: logs.slice(-10).join('\n')
                 };
 
+                const formattedFinalErrorSummary = formatForAgent(finalErrorSummary);
                 return {
-                    content: [{ type: "text", text: JSON.stringify(finalErrorSummary, null, 2) }],
+                    content: [{ type: "text", text: JSON.stringify(formattedFinalErrorSummary, null, 2) }],
                 };
             }
         }

@@ -27,25 +27,25 @@ Find all items that have ever used the Component "tcm:5-292" in any of their ver
 Expected JSON Output:
 [
   {
-    "$type": "Page",
+    "type": "Page",
     "Id": "tcm:5-263-64",
     "Title": "000 Home",
     "Versions": [ 12, 13, 14, 15 ]
   },
   {
-    "$type": "Component",
+    "type": "Component",
     "Id": "tcm:5-321",
     "Title": "Footer",
     "Versions": [ 1 ]
   },
   {
-    "$type": "Page",
+    "type": "Page",
     "Id": "tcm:5-336-64",
     "Title": "Sitemap",
     "Versions": [ 1, 2, 3 ]
   },
   {
-    "$type": "Bundle",
+    "type": "Bundle",
     "Id": "tcm:5-407-8192",
     "Title": "Neu: Paket",
     "Versions": []
@@ -82,7 +82,7 @@ Expected JSON Output:
             if (response.status === 200) {
                 const rawData: any[] = response.data;
                 const processedData = rawData.map((item: any) => ({
-                    "$type": item.$type,
+                    "type": item.$type,
                     "Id": item.Id,
                     "Title": item.Title,
                     "Versions": item.ListInfo?.Versions || []

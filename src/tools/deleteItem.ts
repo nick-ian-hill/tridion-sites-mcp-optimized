@@ -36,7 +36,7 @@ IMPORTANT: The operation will fail if the item is used by other items in the sys
 
             if (response.status === 204) {
                 const responseData = {
-                    $type: 'Success',
+                    type: 'Success',
                     Id: itemId,
                     Message: `Successfully deleted ${itemId}`
                 };

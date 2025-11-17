@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { filterResponseData } from "../utils/responseFiltering.js";
+import { formatForAgent } from "../utils/fieldReordering.js";
 
 export const getUsers = {
     name: "getUsers",
@@ -54,10 +55,12 @@ export const getUsers = {
                     includeProperties: propertiesToInclude
                 });
 
+                const formattedFinalData = formatForAgent(finalData);
+
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(finalData, null, 2)
+                        text: JSON.stringify(formattedFinalData, null, 2)
                     }],
                 };
             } else {

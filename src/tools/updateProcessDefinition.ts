@@ -3,7 +3,7 @@ import { createAuthenticatedAxios } from "../utils/axios.js";
 import { toLink } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { activityDefinitionSchema } from "../schemas/activityDefinitionSchema.js";
-import { sanitizeAgentJson } from "../utils/fieldReordering.js";
+import { formatForApi } from "../utils/fieldReordering.js";
 
 const updateProcessDefinitionInputProperties = {
     itemId: z.string().regex(/^tcm:\d+-\d+-131074$/, { message: "itemId must be a valid Process Definition URI (e.g., 'tcm:5-1-131074')." }),
@@ -115,7 +115,7 @@ Example 2: Add a new 'Abort' step to an existing workflow.
 `,
     input: updateProcessDefinitionInputProperties,
     execute: async (params: UpdateProcessDefinitionInput, context: any) => {
-        sanitizeAgentJson(params);
+        formatForApi(params);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -195,7 +195,7 @@ Example 2: Add a new 'Abort' step to an existing workflow.
             
             const updatedItem = updateResponse.data;
             const responseData = {
-                $type: updatedItem['$type'],
+                type: updatedItem['$type'],
                 Id: updatedItem.Id,
                 Message: `Successfully updated ${updatedItem.Id}`
             };

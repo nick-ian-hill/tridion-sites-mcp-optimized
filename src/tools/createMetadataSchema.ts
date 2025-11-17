@@ -3,7 +3,7 @@ import { createAuthenticatedAxios } from "../utils/axios.js";
 import { toLink } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
-import { processSchemaFieldDefinitions, sanitizeAgentJson } from "../utils/fieldReordering.js";
+import { processSchemaFieldDefinitions, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
 
 export const createMetadataSchema = {
     name: "createMetadataSchema",
@@ -23,7 +23,7 @@ Example 1: Create a simple Metadata Schema for Folders.
         description: "A simple schema for folder metadata.",
         metadataFields: {
             "owner": {
-                "$type": "SingleLineTextFieldDefinition",
+                "type": "SingleLineTextFieldDefinition",
                 "Name": "owner",
                 "Description": "The owner of the folder.",
                 "MaxOccurs": 1,
@@ -39,12 +39,12 @@ Example 2: Create a Metadata Schema with a multi-value checkbox field using a pr
         description: "A metadata schema for selecting dates.",
         metadataFields: {
             "availableDates": {
-                "$type": "DateFieldDefinition",
+                "type": "DateFieldDefinition",
                 "Name": "availableDates",
                 "Description": "Select your preferred dates.",
                 "MaxOccurs": -1,
                 "List": {
-                    "$type": "DateListDefinition",
+                    "type": "DateListDefinition",
                     "Type": "Checkbox",
                     "Entries": [
                         "2025-10-15T00:00:00",
@@ -65,7 +65,7 @@ Example 2: Create a Metadata Schema with a multi-value checkbox field using a pr
         isPublishable: z.boolean().optional().describe("Specifies whether metadata values are published.")
     },
     execute: async (args: any, context: any) => {
-        sanitizeAgentJson(args);
+        formatForApi(args);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -108,10 +108,11 @@ Example 2: Create a Metadata Schema with a multi-value checkbox field using a pr
                     Id: createResponse.data.Id,
                     Message: `Successfully created ${createResponse.data.Id}`
                 };
+                const formattedResponseData = formatForAgent(responseData);
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(responseData, null, 2)
+                        text: JSON.stringify(formattedResponseData, null, 2)
                     }],
                 };
             } else {

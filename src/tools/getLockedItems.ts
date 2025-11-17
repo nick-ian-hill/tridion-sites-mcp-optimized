@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { filterResponseData } from "../utils/responseFiltering.js";
+import { formatForAgent } from "../utils/fieldReordering.js";
 
 const LockStateEnum = z.enum([
     "None", "CheckedOut", "Permanent", "NewItem", "InWorkflow", "Reserved"
@@ -19,7 +20,7 @@ const getLockedItemsInput = {
         .describe("Simple Filter: EXCLUDES any item that has AT LEAST ONE of these lock states (e.g., ['Permanent']). Use this to filter out unwanted states."),
     maxResults: z.number().int().optional().default(500)
         .describe("Specifies the maximum number of results to return."),
-    includeProperties: z.array(z.string()).optional().describe(`An array of property names to include in the response, reducing the amount of data returned. 'Id', 'Title', and '$type' are always included.
+    includeProperties: z.array(z.string()).optional().describe(`An array of property names to include in the response, reducing the amount of data returned. 'Id', 'Title', and 'type' are always included.
 Use dot notation for nested properties (e.g., "VersionInfo.Creator", "LockInfo.LockUser", "LocationInfo.Path"). This is useful for focusing on specific details without retrieving the full item data.`),
 };
 
@@ -127,10 +128,11 @@ Example 4: Find all items that do NOT have the 'CheckedOut' state.
 
             if (response.status === 200) {
                 const finalData = filterResponseData({ responseData: response.data, includeProperties });
+                const formattedFinalData = formatForAgent(finalData);
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(finalData, null, 2)
+                        text: JSON.stringify(formattedFinalData, null, 2)
                     }],
                 };
             } else {

@@ -8,7 +8,7 @@ import * as crypto from 'crypto';
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
-import { sanitizeAgentJson } from "../utils/fieldReordering.js";
+import { formatForAgent, formatForApi } from "../utils/fieldReordering.js";
 
 const createMultimediaComponentFromUrlInputProperties = {
     mediaUrl: z.string().url().describe("The public URL of the file that will be used for the multimedia component. Must be a fully qualified URL including http:// or https://."),
@@ -28,7 +28,7 @@ export const createMultimediaComponentFromUrl = {
     async execute(input: z.infer<typeof createMultimediaComponentFromUrlSchema>,
         context: any
     ) {
-        sanitizeAgentJson(input);
+        formatForApi(input);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -56,7 +56,7 @@ export const createMultimediaComponentFromUrl = {
 
             if (contentLength && parseInt(contentLength, 10) > MAX_FILE_SIZE_BYTES) {
                 const errorResponse = {
-                    $type: 'Error',
+                    type: 'Error',
                     Message: `Error: File size of ${contentLength} bytes exceeds the limit of ${MAX_FILE_SIZE_BYTES} bytes.`
                 };
                 return {
@@ -170,10 +170,11 @@ export const createMultimediaComponentFromUrl = {
                         Message: `Successfully created ${createResponse.data.Id}`
                     };
                 }
+                const formattedResponseData = formatForAgent(responseData);
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(responseData, null, 2)
+                        text: JSON.stringify(formattedResponseData, null, 2)
                     }],
                 };
             } else {

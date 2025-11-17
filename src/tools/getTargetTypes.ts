@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { filterResponseData } from "../utils/responseFiltering.js";
+import { formatForAgent } from "../utils/fieldReordering.js";
 
 const getTargetTypesInputProperties = {
     businessProcessTypeId: z.string().regex(/^tcm:\d+-\d+-4096$/, "Invalid Business Process Type ID. Expected 'tcm:X-X-4096'.").optional()
@@ -9,7 +10,7 @@ const getTargetTypesInputProperties = {
     details: z.enum(["IdAndTitle", "CoreDetails", "AllDetails"]).default("IdAndTitle").optional()
         .describe(`Specifies a predefined level of detail. 'IdAndTitle' is fastest. For custom properties, use 'includeProperties'.`),
     includeProperties: z.array(z.string()).optional()
-        .describe(`The PREFERRED method for retrieving specific details. Provide property names (e.g., ["Purpose", "BusinessProcessType.Title"]). If used, 'details' is ignored. 'Id', 'Title', and '$type' are always included.`),
+        .describe(`The PREFERRED method for retrieving specific details. Provide property names (e.g., ["Purpose", "BusinessProcessType.Title"]). If used, 'details' is ignored. 'Id', 'Title', and 'type' are always included.`),
 };
 
 const getTargetTypesSchema = z.object(getTargetTypesInputProperties);
@@ -60,10 +61,12 @@ export const getTargetTypes = {
                     includeProperties 
                 });
 
+                const formattedFinalData = formatForAgent(finalData);
+
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(finalData, null, 2)
+                        text: JSON.stringify(formattedFinalData, null, 2)
                     }],
                 };
             } else {

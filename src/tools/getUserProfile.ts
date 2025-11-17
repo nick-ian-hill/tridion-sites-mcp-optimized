@@ -3,6 +3,7 @@ import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { filterResponseData } from "../utils/responseFiltering.js";
 import { getLanguageName } from "../utils/languageUtils.js";
+import { formatForAgent } from "../utils/fieldReordering.js";
 
 export const getUserProfile = {
     name: "getUserProfile",
@@ -40,10 +41,12 @@ export const getUserProfile = {
                 }
                 
                 const finalData = filterResponseData({ responseData: profileData, includeProperties });
+                const formattedFinalData = formatForAgent(finalData);
+
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(finalData, null, 2)
+                        text: JSON.stringify(formattedFinalData, null, 2)
                     }],
                 };
             } else {

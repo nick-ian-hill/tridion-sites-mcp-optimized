@@ -5,7 +5,7 @@ import { toLink, toLinkArray } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 import { filterResponseData } from "../utils/responseFiltering.js";
-import { sanitizeAgentJson } from "../utils/fieldReordering.js";
+import { formatForAgent, formatForApi } from "../utils/fieldReordering.js";
 
 export const search = {
     name: "search",
@@ -84,7 +84,7 @@ Example 2: Find 'Multimedia Components' based on the 'Default Multimedia Schema'
 - "CoreDetails": Returns the main properties of each item, excluding verbose security, link-related, and content/field-related information.
 - "AllDetails": Returns all available properties for each item, excluding content/field data.`),
         includeProperties: z.array(z.string()).optional().describe(`The strongly preferred method for retrieving specific details to minimize token usage. Provide an array of property names to include in the response, using dot notation for nested properties (e.g., "VersionInfo.Creator",  "ComponentType").
-If this parameter is used, the 'details' parameter is ignored. 'Id', 'Title', and '$type' are always included.
+If this parameter is used, the 'details' parameter is ignored. 'Id', 'Title', and 'type' are always included.
 
 Important: Search results are content-less. Properties like 'Content', 'Metadata', 'Fields', 'MetadataFields', and 'BinaryContent' are never available via search. To retrieve them, first find the item ID using this tool, then use 'bulkReadItems' or 'getItem'.
 
@@ -97,7 +97,7 @@ Available top-level properties in search results include, but are not limited to
 Example: ["VersionInfo.Creator", "BluePrintInfo.OwningRepository", "LockInfo", "ComponentType"]`),
     },
     execute: async ({ searchQuery, resultLimit = 100, details = "IdAndTitle", includeProperties }: { searchQuery?: z.infer<typeof SearchQueryValidation>, resultLimit: number, details?: "IdAndTitle" | "CoreDetails" | "AllDetails", includeProperties?: string[] }, context: any) => {
-        sanitizeAgentJson(searchQuery);
+        formatForApi(searchQuery);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -218,12 +218,13 @@ Example: ["VersionInfo.Creator", "BluePrintInfo.OwningRepository", "LockInfo", "
 
             if (response.status === 200) {
                 const finalData = filterResponseData({ responseData: response.data, details, includeProperties });
-                console.log(JSON.stringify(finalData, null, 2));
+                const formattedFinalData = formatForAgent(finalData);
+                console.log(JSON.stringify(formattedFinalData, null, 2));
                 return {
                     content: [
                         {
                             type: "text",
-                            text: JSON.stringify(finalData, null, 2)
+                            text: JSON.stringify(formattedFinalData, null, 2)
                         }
                     ],
                 };

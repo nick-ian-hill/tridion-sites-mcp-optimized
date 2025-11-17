@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
+import { formatForAgent } from "../utils/fieldReordering.js";
 
 export const batchUnlocalizeItems = {
     name: "batchUnlocalizeItems",
@@ -36,10 +37,11 @@ To find items that are localized and can be unlocalized, use the 'search' tool w
             const response = await authenticatedAxios.post('/batch/unlocalize', requestModel);
 
             if (response.status === 202) {
+                const formattedResponse = formatForAgent(response.data);
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(response.data, null, 2)
+                        text: JSON.stringify(formattedResponse, null, 2)
                     }],
                 };
             } else {

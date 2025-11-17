@@ -18,10 +18,14 @@ export const getPublicationTypes = {
             if (response.status === 200) {
                 const publicationTypes = response.data;
                 const titles = publicationTypes.map((type: { Title: string }) => type.Title);
+                const responseData = {
+                    type: "PublicationTypeList",
+                    PublicationTypes: titles
+                };
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(titles, null, 2)
+                        text: JSON.stringify(responseData, null, 2)
                     }],
                 };
             } else {

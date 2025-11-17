@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { filterResponseData } from "../utils/responseFiltering.js";
+import { formatForAgent } from "../utils/fieldReordering.js";
 
 export const getMultimediaTypes = {
     name: "getMultimediaTypes",
@@ -17,7 +18,7 @@ Find all multimedia types and return only their file extensions and MIME types.
 Expected JSON Output for a single item in the result array:
 [
   {
-    "$type": "MultimediaType",
+    "type": "MultimediaType",
     "Id": "tcm:0-4-65544",
     "Title": "Word document",
     "FileExtensions": [
@@ -30,7 +31,7 @@ Expected JSON Output for a single item in the result array:
         maxId: z.number().int().optional().default(200)
             .describe("The maximum ID to scan for. The tool will check for Multimedia Types with IDs from tcm:0-1-65544 up to this value."),
         includeProperties: z.array(z.string()).optional()
-            .describe("An array of property names to include in the response for each Multimedia Type. 'Id', 'Title', and '$type' will always be included. Common useful properties are 'FileExtensions' and 'MimeType'."),
+            .describe("An array of property names to include in the response for each Multimedia Type. 'Id', 'Title', and 'type' will always be included. Common useful properties are 'FileExtensions' and 'MimeType'."),
     },
     execute: async ({ maxId = 200, includeProperties }: { 
         maxId?: number; 
@@ -69,12 +70,13 @@ Expected JSON Output for a single item in the result array:
 
                 // Apply property filtering if requested.
                 const finalData = filterResponseData({ responseData: foundItems, includeProperties });
+                const formattedFinalData = formatForAgent(finalData);
                 
                 return {
                     content: [
                         {
                             type: "text",
-                            text: JSON.stringify(finalData, null, 2)
+                            text: JSON.stringify(formattedFinalData, null, 2)
                         }
                     ],
                 };

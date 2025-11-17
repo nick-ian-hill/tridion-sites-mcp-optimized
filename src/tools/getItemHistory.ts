@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
+import { formatForAgent } from "../utils/fieldReordering.js";
 
 export const getItemHistory = {
     name: "getItemHistory",
@@ -23,10 +24,11 @@ export const getItemHistory = {
             const response = await authenticatedAxios.get(endpoint);
 
             if (response.status === 200) {
+                const formattedResponseData = formatForAgent(response.data);
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(response.data, null, 2)
+                        text: JSON.stringify(formattedResponseData, null, 2)
                     }],
                 };
             } else {

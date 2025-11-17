@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
+import { formatForAgent } from "../utils/fieldReordering.js";
 
 export const batchDeleteItems = {
     name: "batchDeleteItems",
@@ -38,10 +39,11 @@ To prevent failures, it's highly recommended to first check if an item is used b
 
             // A 202 status code indicates the batch process was accepted and started.
             if (response.status === 202) {
+                const formattedResponse = formatForAgent(response.data);
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(response.data, null, 2)
+                        text: JSON.stringify(formattedResponse, null, 2)
                     }],
                 };
             } else {

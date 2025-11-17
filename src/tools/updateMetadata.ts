@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
-import { reorderFieldsBySchema, convertLinksRecursively, sanitizeAgentJson } from "../utils/fieldReordering.js";
+import { reorderFieldsBySchema, convertLinksRecursively, formatForApi } from "../utils/fieldReordering.js";
 
 export const updateMetadata = {
     name: "updateMetadata",
@@ -42,30 +42,30 @@ Example 2: Updates the metadata values for a 'Folder' with featuring a multi-val
             "Products": [
                 {
                     "Description": {
-                        $type: "Link",
+                        type: "Link",
                         IdRef: "tcm:4-101"
                     },
                     "AvailableFrom": "2025-10-02T00:00:00",
                     "relatedProducts": [
                         {
-                            "$type": "Link",
+                            "type": "Link",
                             "IdRef": "tcm:4-801"
                         },
                         {
-                            "$type": "Link",
+                            "type": "Link",
                             "IdRef": "tcm:4-802"
                         }
                     ]
                 },
                 {
                     "Description": {
-                        $type: "Link",
+                        type: "Link",
                         IdRef: "tcm:4-102"
                     },
                     "AvailableFrom": "2025-10-02T00:00:00",
                     "relatedProducts": [
                         {
-                            "$type": "Link",
+                            "type": "Link",
                             "IdRef": "tcm:4-803"
                         }
                     ]
@@ -79,7 +79,7 @@ Example 2: Updates the metadata values for a 'Folder' with featuring a multi-val
         metadata: z.record(fieldValueSchema).describe("A JSON object containing the item's metadata fields. The tool will automatically order the fields to match the Metadata Schema definition."),
     },
     execute: async ({ itemId, metadata }: { itemId: string, metadata: Record<string, any> }, context: any) => {
-        sanitizeAgentJson(metadata);
+        formatForApi(metadata);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -119,7 +119,7 @@ Example 2: Updates the metadata values for a 'Folder' with featuring a multi-val
             
             const updatedItem = updateResponse.data;
             const responseData = {
-                $type: updatedItem['$type'],
+                type: updatedItem['$type'],
                 Id: updatedItem.Id,
                 Message: `Successfully updated ${updatedItem.Id}`
             };

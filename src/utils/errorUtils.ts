@@ -1,9 +1,8 @@
 import axios, { AxiosResponse } from "axios";
+import { formatForAgent } from "./fieldReordering.js";
 
 /**
  * The standard return structure for a tool's execute function.
- * Per your request, error messages are passed in the 'content' property
- * to be compatible with Gemini CLI and Gemini Code Assist.
  */
 interface ToolResult {
     content: { type: "text"; text: string }[];
@@ -37,10 +36,12 @@ export function handleAxiosError(error: unknown, contextMessage: string): ToolRe
         Message: fullMessage
     };
 
+    const formattedError = formatForAgent(errorResponse);
+
     return {
         content: [{
             type: "text",
-            text: JSON.stringify(errorResponse, null, 2)
+            text: JSON.stringify(formattedError, null, 2)
         }],
         errors: [], // Keep the errors array empty as requested
     };
@@ -62,10 +63,12 @@ export function handleUnexpectedResponse(response: AxiosResponse): ToolResult {
         Message: message
     };
 
+    const formattedError = formatForAgent(errorResponse);
+
     return {
         content: [{
             type: "text",
-            text: JSON.stringify(errorResponse, null, 2)
+            text: JSON.stringify(formattedError, null, 2)
         }],
         errors: [], // Keep the errors array empty as requested
     };

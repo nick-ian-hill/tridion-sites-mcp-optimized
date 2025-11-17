@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
+import { formatForAgent } from "../utils/fieldReordering.js";
 
 const getClassifiedItemsInputProperties = {
     keywordId: z.string().regex(/^(tcm:\d+-\d+-1024?|ecl:[a-zA-Z0-9-]+)$/).describe("The TCM URI of the Keyword to search for. To find a keyword, first use 'getCategories' to find a Category, then 'getKeywordsForCategory' to list its keywords."),
@@ -46,10 +47,11 @@ export const getClassifiedItems = {
             });
 
             if (response.status === 200) {
+                const formattedResponseData = formatForAgent(response.data);
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(response.data, null, 2)
+                        text: JSON.stringify(formattedResponseData, null, 2)
                     }],
                 };
             } else {

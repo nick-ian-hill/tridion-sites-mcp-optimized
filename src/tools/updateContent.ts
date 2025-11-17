@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
-import { reorderFieldsBySchema, convertLinksRecursively, sanitizeAgentJson } from "../utils/fieldReordering.js";
+import { reorderFieldsBySchema, convertLinksRecursively, formatForApi } from "../utils/fieldReordering.js";
 
 export const updateContent = {
     name: "updateContent",
@@ -49,11 +49,11 @@ Example 2: Updates the content of an embedded schema field.
                 "publication": "Science Today",
                 "relatedArticles": [
                     {
-                        "$type": "Link",
+                        "type": "Link",
                         "IdRef": "tcm:5-801"
                     },
                     {
-                        "$type": "Link",
+                        "type": "Link",
                         "IdRef": "tcm:5-802"
                     }
                 ]
@@ -66,7 +66,7 @@ Example 2: Updates the content of an embedded schema field.
         content: z.record(fieldValueSchema).describe("A JSON object containing the Component's content fields. The tool will automatically order the fields to match the Schema definition."),
     },
     execute: async ({ itemId, content }: { itemId: string, content: Record<string, any> }, context: any) => {
-        sanitizeAgentJson(content);
+        formatForApi(content);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -99,7 +99,7 @@ Example 2: Updates the content of an embedded schema field.
 
             const updatedItem = updateResponse.data;
             const responseData = {
-                $type: updatedItem['$type'],
+                type: updatedItem['$type'],
                 Id: updatedItem.Id,
                 Message: `Successfully updated ${updatedItem.Id}`
             };

@@ -4,7 +4,7 @@ import { toLink } from "../utils/links.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
-import { reorderFieldsBySchema, convertLinksRecursively, sanitizeAgentJson } from "../utils/fieldReordering.js";
+import { reorderFieldsBySchema, convertLinksRecursively, formatForApi } from "../utils/fieldReordering.js";
 import { processComponentPresentations, processRegions } from "../utils/pageUtils.js";
 import { componentPresentationSchemaForTyping, regionSchemaForTyping } from "../schemas/pageSchemas.js";
 
@@ -54,11 +54,11 @@ Example 3: Reorder Component Presentations in a specific Region.
         itemId: "tcm:1-123-64",
         regions: [
             {
-                "$type": "EmbeddedRegion",
+                "type": "EmbeddedRegion",
                 "RegionName": "Main",
                 "ComponentPresentations": [
-                    { "$type": "ComponentPresentation", "Component": { "$type": "Link", "IdRef": "tcm:1-201-16" }, "ComponentTemplate": { "$type": "Link", "IdRef": "tcm:1-202-32" } },
-                    { "$type": "ComponentPresentation", "Component": { "$type": "Link", "IdRef": "tcm:1-101-16" }, "ComponentTemplate": { "$type": "Link", "IdRef": "tcm:1-102-32" } }
+                    { "type": "ComponentPresentation", "Component": { "type": "Link", "IdRef": "tcm:1-201-16" }, "ComponentTemplate": { "type": "Link", "IdRef": "tcm:1-202-32" } },
+                    { "type": "ComponentPresentation", "Component": { "type": "Link", "IdRef": "tcm:1-101-16" }, "ComponentTemplate": { "type": "Link", "IdRef": "tcm:1-102-32" } }
                 ]
             }
         ]
@@ -77,7 +77,7 @@ Example 4: Change the Metadata Schema and provide metadata for the new fields. S
     input: updatePageInputProperties,
     
     execute: async (params: UpdatePageInput, context: any) => {
-        sanitizeAgentJson(params);
+        formatForApi(params);
         
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
@@ -158,7 +158,7 @@ Example 4: Change the Metadata Schema and provide metadata for the new fields. S
             const updatedItem = updateResponse.data;
 
             const responseData = {
-                $type: updatedItem['$type'],
+                type: updatedItem['$type'],
                 Id: updatedItem.Id,
                 Message: `Successfully updated ${updatedItem.Id}`
             };

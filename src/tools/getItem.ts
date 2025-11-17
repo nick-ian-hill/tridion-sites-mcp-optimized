@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { filterResponseData } from "../utils/responseFiltering.js";
+import { formatForAgent } from "../utils/fieldReordering.js";
 
 export const getItem = {
     name: "getItem",
@@ -15,7 +16,7 @@ For versioned item types (Components, Component Templates, Pages, Page Templates
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the item."),
         useDynamicVersion: z.boolean().optional().default(false).describe("Set to true for versioned items to get the most recent saved data, including minor revisions since the last major version."),
-        includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details, e.g., ['BluePrintInfo', 'IsPublishedInContext', 'Schema.IdRef', 'VersionInfo.RevisionDate', 'VersionInfo.Revisor.IdRef', 'ActivityDefinition', 'Content', 'Metadata', 'BinaryContent.MimeType']. 'Id', 'Title', and '$type' will always be included. Use this if you are sure how to reference the properties you are interested in for the requested item type.`)
+        includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details, e.g., ['BluePrintInfo', 'IsPublishedInContext', 'Schema.IdRef', 'VersionInfo.RevisionDate', 'VersionInfo.Revisor.IdRef', 'ActivityDefinition', 'Content', 'Metadata', 'BinaryContent.MimeType']. 'Id', 'Title', and 'type' will always be included. Use this if you are sure how to reference the properties you are interested in for the requested item type.`)
     },
     execute: async ({ itemId, useDynamicVersion = false, includeProperties }: { 
         itemId: string, 
@@ -40,10 +41,11 @@ For versioned item types (Components, Component Templates, Pages, Page Templates
 
             if (response.status === 200) {
                 const finalData = filterResponseData({ responseData: response.data, includeProperties });
+                const formattedFinalData = formatForAgent(finalData);
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(finalData, null, 2)
+                        text: JSON.stringify(formattedFinalData, null, 2)
                     }],
                 };
             } else {

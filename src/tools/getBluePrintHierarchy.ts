@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { filterResponseData } from "../utils/responseFiltering.js";
+import { formatForAgent } from "../utils/fieldReordering.js";
 
 const escapeHTML = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, '\\"');
 const convertGraphToDot = (nodes: any[], edges: any[]): string => {
@@ -82,7 +83,8 @@ IMPORTANT: Requesting a high level of detail for many items can be slow. Prefer 
 
             if (outputFormat === "Raw") {
                 const finalData = filterResponseData({ responseData: response.data, details, includeProperties });
-                return { content: [{ type: "text", text: JSON.stringify(finalData, null, 2) }] };
+                const formattedFinalData = formatForAgent(finalData);
+                return { content: [{ type: "text", text: JSON.stringify(formattedFinalData, null, 2) }] };
             }
 
             const rawData = response.data;
@@ -136,7 +138,7 @@ IMPORTANT: Requesting a high level of detail for many items can be slow. Prefer 
                 const svgOutput = await viz.renderString(dotString, { format: "svg", engine: "dot" });
                 
                 const jsonResponse = {
-                    $type: "SvgImage",
+                    type: "SvgImage",
                     Id: itemId,
                     SvgContent: svgOutput
                 };
@@ -150,7 +152,7 @@ IMPORTANT: Requesting a high level of detail for many items can be slow. Prefer 
             }
 
             const errorResponse = {
-                $type: 'Error',
+                type: 'Error',
                 Message: "Invalid output format specified."
             };
             return { content: [{ type: "text", text: JSON.stringify(errorResponse, null, 2) }], errors: [] };

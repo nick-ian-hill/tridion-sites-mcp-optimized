@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
+import { formatForAgent } from "../utils/fieldReordering.js";
 
 const batchClassificationInputProperties = {
     itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/))
@@ -36,7 +37,7 @@ export const batchClassification = {
 
         if (keywordIdsToAdd.length === 0 && keywordIdsToRemove.length === 0) {
             const errorResponse = {
-                $type: 'Error',
+                type: 'Error',
                 Message: "Validation Error: You must provide at least one keyword to add or remove."
             };
             return {
@@ -75,10 +76,11 @@ export const batchClassification = {
 
             // A 202 status code indicates the batch process was accepted and started.
             if (response.status === 202) {
+                const formattedResponse = formatForAgent(response.data);
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(response.data, null, 2)
+                        text: JSON.stringify(formattedResponse, null, 2)
                     }],
                 };
             } else {

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { linkSchema } from "./linkSchema.js";
 
 const formattingFeaturesSchema = z.object({
-  "$type": z.literal("FormattingFeatures"),
+  "type": z.literal("FormattingFeatures"),
   AccessibilityLevel: z.number().int().optional().describe("Gets or sets the Web Content Accessibility Guidelines (WCAG) setting that you choose, shows or hides buttons for the various WCAG levels."),
   DisallowedActions: z.array(z.string()).optional().describe("Gets or sets the formatting actions that a user can not perform on text within the format area."),
   DisallowedStyles: z.array(z.string()).optional().describe("Gets or sets the styles that a user can not apply to text within a format area."),
@@ -12,27 +12,27 @@ const formattingFeaturesSchema = z.object({
 const flexibleDateTimeSchema = z.string().regex(
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|([+-]\d{2}:\d{2}))?$/);
 
-export const listDefinitionSchema = z.discriminatedUnion("$type", [
+export const listDefinitionSchema = z.discriminatedUnion("type", [
   z.object({
-    "$type": z.literal("ListDefinition"),
+    "type": z.literal("ListDefinition"),
     Type: z.enum(["Select", "Radio", "Checkbox", "Tree"]),
     Height: z.number().int().optional().describe("The height of the list control in the UI."),
     Entries: z.array(linkSchema).optional()
   }),
   z.object({
-    "$type": z.literal("NumberListDefinition"),
+    "type": z.literal("NumberListDefinition"),
     Type: z.enum(["Select", "Radio", "Checkbox"]),
     Height: z.number().int().optional().describe("The height of the list control in the UI."),
     Entries: z.array(z.number()).optional()
   }),
   z.object({
-    "$type": z.literal("DateListDefinition"),
+    "type": z.literal("DateListDefinition"),
     Type: z.enum(["Select", "Radio", "Checkbox"]),
     Height: z.number().int().optional().describe("The height of the list control in the UI."),
     Entries: z.array(flexibleDateTimeSchema).optional().describe("A list of dates in ISO 8601 format.")
   }),
   z.object({
-    "$type": z.literal("SingleLineTextListDefinition"),
+    "type": z.literal("SingleLineTextListDefinition"),
     Type: z.enum(["Select", "Radio", "Checkbox"]),
     Height: z.number().int().optional().describe("The height of the list control in the UI."),
     Entries: z.array(z.string()).optional()
@@ -40,7 +40,7 @@ export const listDefinitionSchema = z.discriminatedUnion("$type", [
 ]);
 
 export const singleLineTextFieldSchema = z.object({
-    "$type": z.literal("SingleLineTextFieldDefinition"),
+    "type": z.literal("SingleLineTextFieldDefinition"),
     Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
     Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),
     MinOccurs: z.number().int().optional().describe("The minimum number of times the field can occur (e.g., 0 for optional, 1 for mandatory)."),
@@ -55,7 +55,7 @@ export const singleLineTextFieldSchema = z.object({
 });
 
 export const multiLineTextFieldSchema = z.object({
-    "$type": z.literal("MultiLineTextFieldDefinition"),
+    "type": z.literal("MultiLineTextFieldDefinition"),
     Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
     Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),
     MinOccurs: z.number().int().optional().describe("The minimum number of times the field can occur (e.g., 0 for optional, 1 for mandatory)."),
@@ -67,7 +67,7 @@ export const multiLineTextFieldSchema = z.object({
 });
 
 export const xhtmlFieldSchema = z.object({
-    "$type": z.literal("XhtmlFieldDefinition"),
+    "type": z.literal("XhtmlFieldDefinition"),
     Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
     Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),
     MinOccurs: z.number().int().optional().describe("The minimum number of times the field can occur (e.g., 0 for optional, 1 for mandatory)."),
@@ -80,7 +80,7 @@ export const xhtmlFieldSchema = z.object({
 });
 
 export const keywordFieldSchema = z.object({
-    "$type": z.literal("KeywordFieldDefinition"),
+    "type": z.literal("KeywordFieldDefinition"),
     Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
     Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),
     MinOccurs: z.number().int().optional().describe("The minimum number of times the field can occur (e.g., 0 for optional, 1 for mandatory)."),
@@ -94,7 +94,7 @@ export const keywordFieldSchema = z.object({
 });
 
 export const numberFieldSchema = z.object({
-    "$type": z.literal("NumberFieldDefinition"),
+    "type": z.literal("NumberFieldDefinition"),
     Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
     Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),
     MinOccurs: z.number().int().optional().describe("The minimum number of times the field can occur (e.g., 0 for optional, 1 for mandatory)."),
@@ -112,7 +112,7 @@ export const numberFieldSchema = z.object({
 });
 
 export const dateFieldSchema = z.object({
-    "$type": z.literal("DateFieldDefinition"),
+    "type": z.literal("DateFieldDefinition"),
     Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
     Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),
     MinOccurs: z.number().int().optional().describe("The minimum number of times the field can occur (e.g., 0 for optional, 1 for mandatory)."),
@@ -128,7 +128,7 @@ export const dateFieldSchema = z.object({
 });
 
 export const externalLinkFieldSchema = z.object({
-    "$type": z.literal("ExternalLinkFieldDefinition"),
+    "type": z.literal("ExternalLinkFieldDefinition"),
     Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
     Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),
     MinOccurs: z.number().int().optional().describe("The minimum number of times the field can occur (e.g., 0 for optional, 1 for mandatory)."),
@@ -139,7 +139,7 @@ export const externalLinkFieldSchema = z.object({
 });
 
 export const componentLinkFieldSchema = z.object({
-    "$type": z.literal("ComponentLinkFieldDefinition"),
+    "type": z.literal("ComponentLinkFieldDefinition"),
     Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
     Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),
     MinOccurs: z.number().int().optional().describe("The minimum number of times the field can occur (e.g., 0 for optional, 1 for mandatory)."),
@@ -151,7 +151,7 @@ export const componentLinkFieldSchema = z.object({
 });
 
 export const multimediaLinkFieldSchema = z.object({
-    "$type": z.literal("MultimediaLinkFieldDefinition"),
+    "type": z.literal("MultimediaLinkFieldDefinition"),
     Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
     Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),
     MinOccurs: z.number().int().optional().describe("The minimum number of times the field can occur (e.g., 0 for optional, 1 for mandatory)."),
@@ -163,7 +163,7 @@ export const multimediaLinkFieldSchema = z.object({
 });
 
 export const embeddedSchemaFieldSchema = z.object({
-    "$type": z.literal("EmbeddedSchemaFieldDefinition"),
+    "type": z.literal("EmbeddedSchemaFieldDefinition"),
     Name: z.string().nonempty().describe("The machine name of the field (must match the key in the dictionary)."),
     Description: z.string().nonempty().describe("A human-readable description of the field's purpose. This field is required."),
     MinOccurs: z.number().int().optional().describe("The minimum number of times the field can occur (e.g., 0 for optional, 1 for mandatory)."),
@@ -176,7 +176,7 @@ export const embeddedSchemaFieldSchema = z.object({
 });
 
 // The master schema for any valid field definition, using a discriminated union
-export const fieldDefinitionSchema = z.discriminatedUnion("$type", [
+export const fieldDefinitionSchema = z.discriminatedUnion("type", [
     singleLineTextFieldSchema,
     multiLineTextFieldSchema,
     xhtmlFieldSchema,

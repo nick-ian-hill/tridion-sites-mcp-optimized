@@ -6,7 +6,7 @@ import { toLinkArray } from "../utils/links.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
-import { reorderFieldsBySchema, convertLinksRecursively, sanitizeAgentJson } from "../utils/fieldReordering.js";
+import { reorderFieldsBySchema, convertLinksRecursively, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
 
 const createItemInputProperties = {
     itemType: z.enum([
@@ -109,11 +109,11 @@ Example 1: Create a Folder for a campaign.
         metadata: {
             "Regions": [
                 {
-                    "$type": "Link",
+                    "type": "Link",
                     "IdRef": "tcm:5-1200-1024",
                 },
                 {
-                    "$type": "Link",
+                    "type": "Link",
                     "IdRef": "tcm:5-1201-1024",
                 }
             ]
@@ -142,7 +142,7 @@ Example 3: Create a new Keyword.
     execute: async (args: CreateItemInput,
         context: any
     ) => {
-        sanitizeAgentJson(args);
+        formatForApi(args);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -333,11 +333,12 @@ Example 3: Create a new Keyword.
                         Message:`Successfully created ${createResponse.data.Id}`
                     };
                 }
+                const formattedResponseData = formatForAgent(responseData);
                 return {
                     content: [
                         {
                             type: "text",
-                            text: JSON.stringify(responseData, null, 2)
+                            text: JSON.stringify(formattedResponseData, null, 2)
                         }
                     ],
                 };

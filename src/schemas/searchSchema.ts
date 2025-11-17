@@ -19,7 +19,7 @@ export const SearchQueryValidation = z.object({
     "BusinessProcessType", "Category", "Component", "ComponentTemplate", "Folder",
     "Keyword", "Page", "PageTemplate", "ProcessDefinition", "Publication", "Schema",
     "StructureGroup", "TargetGroup", "TemplateBuildingBlock", "VirtualFolder"
-  ])).optional().describe("An array of item types to limit the search results to. If asked to search for a 'Bundle' or 'SearchFolder', use the 'VirtualFolder' type and then review the '$type' property of any returned items. To find 'MultimediaComponents', search for 'Component' and then review the 'ComponentType' property."),
+  ])).optional().describe("An array of item types to limit the search results to. If asked to search for a 'Bundle' or 'SearchFolder', use the 'VirtualFolder' type and then review the 'type' property of any returned items. To find 'MultimediaComponents', search for 'Component' and then review the 'ComponentType' property."),
 
   // --- Location and Scope ---
   SearchIn: z.string().regex(/^(tcm:\d+-\d+-[124]|ecl:[a-zA-Z0-9-]+)$/).optional().describe("The unique TCM URI of the publication or folder to search within. MUST be provided as a string. Required when using the 'BasedOnSchemas', 'UsedKeywords', 'ProcessDefinition', or 'ActivityDefinition' query parameters."),

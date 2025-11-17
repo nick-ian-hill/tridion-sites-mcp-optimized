@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { filterResponseData } from "../utils/responseFiltering.js";
+import { formatForAgent } from "../utils/fieldReordering.js";
 
 export const getActivities = {
     name: "getActivities",
@@ -22,7 +23,7 @@ export const getActivities = {
             .default(['Assigned'])
             .describe("An array of activity states to filter the results. Defaults to ['Assigned']."),
         includeProperties: z.array(z.string()).optional()
-            .describe(`The PREFERRED method for retrieving specific details. Provide property names (e.g., ["Assignee.IdRef", "Assignee.Title", "Assignee.Description", "Process.IdRef", "PrimarySubject.Title"]). 'Id', 'Title', and '$type' are always included.`),
+            .describe(`The PREFERRED method for retrieving specific details. Provide property names (e.g., ["Assignee.IdRef", "Assignee.Title", "Assignee.Description", "Process.IdRef", "PrimarySubject.Title"]). 'Id', 'Title', and 'type' are always included.`),
     },
     execute: async ({ userId, activityStates = ['Assigned'], includeProperties }: { 
         userId?: string, 
@@ -63,11 +64,12 @@ export const getActivities = {
                     responseData: response.data,
                     includeProperties: includeProperties
                 });
+                const formattedFinalData = formatForAgent(finalData);
 
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(finalData, null, 2)
+                        text: JSON.stringify(formattedFinalData, null, 2)
                     }],
                 };
             } else {

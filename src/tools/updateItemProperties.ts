@@ -5,7 +5,7 @@ import { generateSearchFolderXmlConfiguration } from "../utils/generateSearchFol
 import { toLink, toLinkArray } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldDefinitionSchema, fieldValueSchema } from "../schemas/fieldValueSchema.js";
-import { convertLinksRecursively, processSchemaFieldDefinitions, reorderFieldsBySchema, sanitizeAgentJson } from "../utils/fieldReordering.js";
+import { convertLinksRecursively, processSchemaFieldDefinitions, reorderFieldsBySchema, formatForApi } from "../utils/fieldReordering.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 import { regionDefinitionSchema } from "../schemas/regionDefinitionSchemas.js";
 
@@ -106,7 +106,7 @@ This example modifies the 'News Article' Schema (tcm:2-104-8) to include a new f
         itemType: "Schema",
         fields: {
             "headline": {
-                "$type": "SingleLineTextFieldDefinition",
+                "type": "SingleLineTextFieldDefinition",
                 "Name": "headline",
                 "Description": "Headline",
                 "MinOccurs": 1,
@@ -114,7 +114,7 @@ This example modifies the 'News Article' Schema (tcm:2-104-8) to include a new f
                 "IsLocalizable": true
             },
             "image": {
-                "$type": "MultimediaLinkFieldDefinition",
+                "type": "MultimediaLinkFieldDefinition",
                 "Name": "image",
                 "Description": "Image",
                 "MinOccurs": 0,
@@ -122,20 +122,20 @@ This example modifies the 'News Article' Schema (tcm:2-104-8) to include a new f
                 "IsLocalizable": true,
                 "AllowedTargetSchemas": [
                     {
-                        "$type": "Link",
+                        "type": "Link",
                         "IdRef": "tcm:2-66-8"
                     }
                 ]
             },
             "articleBody": {
-                "$type": "EmbeddedSchemaFieldDefinition",
+                "type": "EmbeddedSchemaFieldDefinition",
                 "Name": "articleBody",
                 "Description": "Article Body",
                 "MinOccurs": 0,
                 "MaxOccurs": -1,
                 "IsLocalizable": true,
                 "EmbeddedSchema": {
-                    "$type": "Link",
+                    "type": "Link",
                     "IdRef": "tcm:2-102-8"
                 }
             }
@@ -156,14 +156,14 @@ Example 2: Change the Metadata Schema of a Folder and provide the mandatory valu
             "featuredProducts": [
                 {
                     "productLink": {
-                        "$type": "Link",
+                        "type": "Link",
                         "IdRef": "tcm:5-801"
                     },
                     "promoText": "Early bird special!"
                 },
                 {
                     "productLink": {
-                        "$type": "Link",
+                        "type": "Link",
                         "IdRef": "tcm:5-802"
                     },
                     "promoText": "Limited time offer."
@@ -178,32 +178,32 @@ This example updates a basic Region Schema (e.g., 'tcm:5-3875-8') to make it non
         itemId: "tcm:5-3875-8",
         itemType: "Schema",
         regionDefinition: {
-            "$type": "RegionDefinition",
+            "type": "RegionDefinition",
             "ComponentPresentationConstraints": [
                 {
-                    "$type": "OccurrenceConstraint",
+                    "type": "OccurrenceConstraint",
                     "MaxOccurs": 10,
                     "MinOccurs": 0
                 },
                 {
-                    "$type": "TypeConstraint",
-                    "BasedOnSchema": { "$type": "Link", "IdRef": "tcm:5-103-8" }
+                    "type": "TypeConstraint",
+                    "BasedOnSchema": { "type": "Link", "IdRef": "tcm:5-103-8" }
                 }
             ],
             "NestedRegions": [
                 {
-                    "$type": "NestedRegion",
+                    "type": "NestedRegion",
                     "RegionName": "LeftColumn",
                     "RegionSchema": {
-                        "$type": "ExpandableLink",
+                        "type": "ExpandableLink",
                         "IdRef": "tcm:5-3873-8"
                     }
                 },
                 {
-                    "$type": "NestedRegion",
+                    "type": "NestedRegion",
                     "RegionName": "RightColumn",
                     "RegionSchema": {
-                        "$type": "ExpandableLink",
+                        "type": "ExpandableLink",
                         "IdRef": "tcm:5-3874-8"
                     }
                 }
@@ -213,7 +213,7 @@ This example updates a basic Region Schema (e.g., 'tcm:5-3875-8') to make it non
 `,
     input: updateItemPropertiesInputProperties,
     execute: async (params: UpdateItemPropertiesInput, context: any) => {
-        sanitizeAgentJson(params);
+        formatForApi(params);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -352,7 +352,7 @@ This example updates a basic Region Schema (e.g., 'tcm:5-3875-8') to make it non
             const updatedItem = updateResponse.data;
 
             const responseData = {
-                $type: updatedItem['$type'],
+                type: updatedItem['$type'],
                 Id: updatedItem.Id,
                 Message: `Successfully updated ${updatedItem.Id}`
             };

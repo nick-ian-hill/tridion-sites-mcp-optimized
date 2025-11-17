@@ -31,6 +31,7 @@ This is a crucial check before using the 'createPage' or 'updatePage' tools. If 
                     content: [{
                         type: "text",
                         text: JSON.stringify({
+                            type: "IsComponentTemplateRequired",
                             isComponentTemplateRequired: isRequired,
                             Message: message
                         }, null, 2)

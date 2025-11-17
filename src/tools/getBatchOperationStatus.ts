@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
+import { formatForAgent } from "../utils/fieldReordering.js";
 
 const getBatchOperationStatusInputProperties = {
     batchId: z.string().regex(/^tcm:0-\d+-66048$/).describe("The unique ID of the batch operation item (e.g., 'tcm:0-123-66048')."),
@@ -31,7 +32,7 @@ export const getBatchOperationStatus = {
 
                 if (typeof batch.TotalNumberOfOperations === 'undefined' || typeof batch.NumberOfDoneOperations === 'undefined') {
                     const errorResponse = {
-                        $type: 'Error',
+                        type: 'Error',
                         Message: `Error: Item ${batchId} is not a valid batch operation object.`
                     };
                     return {
@@ -63,10 +64,12 @@ export const getBatchOperationStatus = {
                     ItemStatuses: itemStatuses
                 };
 
+                const formattedJsonResponse = formatForAgent(jsonResponse);
+
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(jsonResponse, null, 2)
+                        text: JSON.stringify(formattedJsonResponse, null, 2)
                     }],
                 };
             } else {

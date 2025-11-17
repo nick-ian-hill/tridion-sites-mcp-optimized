@@ -44,7 +44,7 @@ The tool returns a confirmation that the item has been successfully unlocalized.
 
             if (response.status === 200) {
                 const responseData = {
-                    $type: response.data['$type'],
+                    type: response.data['$type'],
                     Id: response.data.Id,
                     Message: `Successfully unlocalized ${response.data.Id}`,
                 };

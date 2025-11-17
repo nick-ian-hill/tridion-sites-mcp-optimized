@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { filterResponseData } from "../utils/responseFiltering.js";
+import { formatForAgent } from "../utils/fieldReordering.js";
 
 const publishTransactionStateEnum = z.enum([
     "ScheduledForPublish",
@@ -43,7 +44,7 @@ const getPublishTransactionsInput = {
     details: z.enum(["IdAndTitle", "CoreDetails", "AllDetails"]).default("IdAndTitle").optional()
         .describe(`Specifies a predefined level of detail for the returned items. For custom property selection, use 'includeProperties' instead.`),
     includeProperties: z.array(z.string()).optional()
-        .describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include (e.g., ["PublishContexts.ProcessedItems.RenderTime", "Creator.Descripton", "Items.Title"]). If used, 'details' is ignored. 'Id', 'Title', and '$type' are always included.`),
+        .describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include (e.g., ["PublishContexts.ProcessedItems.RenderTime", "Creator.Descripton", "Items.Title"]). If used, 'details' is ignored. 'Id', 'Title', and 'type' are always included.`),
 };
 
 const getPublishTransactionsSchema = z.object(getPublishTransactionsInput);
@@ -58,7 +59,7 @@ This approach is token-inefficient and will fail on large result sets. The corre
 
 The key properties of a PublishTransaction have the following structure:
 {
-  "$type": "PublishTransaction",
+  "type": "PublishTransaction",
   "Id": "tcm:0-286-66560",
   "Title": "Sitemap - published to Staging only",
   "Creator": { ... },
@@ -66,15 +67,15 @@ The key properties of a PublishTransaction have the following structure:
   "Priority": "Normal",
   "PublishContexts": [
     {
-      "$type": "PublishContext",
+      "type": "PublishContext",
       "ProcessedItems": [
         {
-          "$type": "ProcessedItem",
+          "type": "ProcessedItem",
           "RenderTime": "00:00:01.5959346",
           "ResolvedItem": {
-            "$type": "ResolvedItem",
+            "type": "ResolvedItem",
             "Item": {
-              "$type": "Link",
+              "type": "Link",
               "IdRef": "tcm:5-2108-64",
               "Title": "Sitemap - published to Staging only"
             },
@@ -202,10 +203,12 @@ Example: Find all 'Failed' transactions and create a report of their error messa
                     includeProperties
                 });
 
+                const formattedFinalData = formatForAgent(finalData);
+
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(finalData, null, 2)
+                        text: JSON.stringify(formattedFinalData, null, 2)
                     }],
                 };
             } else {

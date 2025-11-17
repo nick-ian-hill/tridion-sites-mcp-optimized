@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { filterResponseData } from "../utils/responseFiltering.js";
+import { formatForAgent } from "../utils/fieldReordering.js";
 
 export const dependencyGraphForItem = {
     name: "dependencyGraphForItem",
@@ -43,19 +44,19 @@ Example 2: Finds all Components used by a Page, returning the base properties pl
 
 Expected JSON Output for Example 2:
 {
-  "$type": "DependencyGraphNode",
+  "type": "DependencyGraphNode",
   "Dependencies": [
     {
-      "$type": "DependencyGraphNode",
+      "type": "DependencyGraphNode",
       "Dependencies": [
         {
-          "$type": "DependencyGraphNode",
+          "type": "DependencyGraphNode",
           "Dependencies": [],
           "HasMore": false,
           "Item": {
             "Id": "tcm:5-292",
             "Title": "blueprint",
-            "$type": "Component",
+            "type": "Component",
             "VersionInfo": {
               "RevisionDate": "2025-09-26T09:12:50.293Z"
             }
@@ -66,23 +67,23 @@ Expected JSON Output for Example 2:
       "Item": {
         "Id": "tcm:5-307",
         "Title": "All Articles Intro",
-        "$type": "Component",
+        "type": "Component",
         "VersionInfo": {
           "RevisionDate": "2025-09-26T09:12:54.043Z"
         }
       }
     },
     {
-      "$type": "DependencyGraphNode",
+      "type": "DependencyGraphNode",
       "Dependencies": [
         {
-          "$type": "DependencyGraphNode",
+          "type": "DependencyGraphNode",
           "Dependencies": [],
           "HasMore": false,
           "Item": {
             "Id": "tcm:5-304",
             "Title": "calculator",
-            "$type": "Component",
+            "type": "Component",
             "VersionInfo": {
               "RevisionDate": "2025-09-26T09:12:53.303Z"
             }
@@ -93,20 +94,20 @@ Expected JSON Output for Example 2:
       "Item": {
         "Id": "tcm:5-305",
         "Title": "Articles Intro",
-        "$type": "Component",
+        "type": "Component",
         "VersionInfo": {
           "RevisionDate": "2025-09-26T09:12:53.593Z"
         }
       }
     },
     {
-      "$type": "DependencyGraphNode",
+      "type": "DependencyGraphNode",
       "Dependencies": [],
       "HasMore": false,
       "Item": {
         "Id": "tcm:5-280",
         "Title": "Company News Media Manager Video",
-        "$type": "Component",
+        "type": "Component",
         "VersionInfo": {
           "RevisionDate": "2025-09-26T09:12:47.003Z"
         }
@@ -137,7 +138,7 @@ Expected JSON Output for Example 2:
         includeContainers: z.boolean().optional().default(false).describe("If true and direction is 'Uses', the parent Folders or Structure Groups of the items in the graph are also returned (recursively)."),
         resultLimit: z.number().int().optional().default(100).describe("The maximum number of dependency nodes to return."),
         details: z.enum(["IdAndTitle", "CoreDetails", "AllDetails"]).default("IdAndTitle").optional().describe(`Specifies a predefined level of detail for the returned items. For custom property selection, use 'includeProperties' instead.`),
-        includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response and use dot notation for nested properties (e.g., ['ComponentType', 'BluePrintInfo.IsLocalized', 'IsPublishedInContext', 'Schema.IdRef', 'VersionInfo.CheckOutUser.IdRef']). If used, the 'details' parameter is ignored. The base properties 'Id', 'Title', and '$type' will always be included.`),
+        includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response and use dot notation for nested properties (e.g., ['ComponentType', 'BluePrintInfo.IsLocalized', 'IsPublishedInContext', 'Schema.IdRef', 'VersionInfo.CheckOutUser.IdRef']). If used, the 'details' parameter is ignored. The base properties 'Id', 'Title', and 'type' will always be included.`),
     },
     execute: async ({ itemId, direction = "Uses", contextRepositoryId, rloItemTypes, includeContainers = false, resultLimit = 100, details = "IdAndTitle", includeProperties }: any, context: any) => {
         const req = context?.request;
@@ -163,10 +164,11 @@ Expected JSON Output for Example 2:
 
             if (response.status === 200) {
                 const finalData = filterResponseData({ responseData: response.data, details, includeProperties });
+                const formattedFinalData = formatForAgent(finalData);
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(finalData, null, 2)
+                        text: JSON.stringify(formattedFinalData, null, 2)
                     }],
                 };
             } else {

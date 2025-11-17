@@ -3,7 +3,7 @@ import { createAuthenticatedAxios } from "../utils/axios.js";
 import { toLink } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
-import { processSchemaFieldDefinitions, sanitizeAgentJson } from "../utils/fieldReordering.js";
+import { processSchemaFieldDefinitions, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
 
 export const createBundleSchema = {
     name: "createBundleSchema",
@@ -22,7 +22,7 @@ Example 1: Create a simple Bundle Schema.
         description: "A schema for campaign-related bundles.",
         metadataFields: {
             "campaignManager": {
-                "$type": "SingleLineTextFieldDefinition",
+                "type": "SingleLineTextFieldDefinition",
                 "Name": "campaignManager",
                 "Description": "The manager of this campaign."
             }
@@ -40,7 +40,7 @@ Example 1: Create a simple Bundle Schema.
         isPublishable: z.boolean().optional().describe("Specifies whether metadata values are published.")
     },
     execute: async (args: any, context: any) => {
-        sanitizeAgentJson(args);
+        formatForApi(args);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -86,10 +86,11 @@ Example 1: Create a simple Bundle Schema.
                     Id: createResponse.data.Id,
                     Message: `Successfully created ${createResponse.data.Id}`
                 };
+                const formattedResponseData = formatForAgent(responseData);
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(responseData, null, 2)
+                        text: JSON.stringify(formattedResponseData, null, 2)
                     }],
                 };
             } else {

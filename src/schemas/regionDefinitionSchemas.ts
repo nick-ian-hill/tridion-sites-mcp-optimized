@@ -3,13 +3,13 @@ import { linkSchema } from "./linkSchema.js";
 import { expandableLinkSchema } from "./expandableLinkSchema.js";
 
 export const occurrenceConstraintSchema = z.object({
-    "$type": z.literal("OccurrenceConstraint"),
+    "type": z.literal("OccurrenceConstraint"),
     MaxOccurs: z.number().int().describe("Maximum number of Component Presentations allowed in this Region."),
     MinOccurs: z.number().int().describe("Minimum number of Component Presentations allowed in this Region.")
 });
 
 export const typeConstraintSchema = z.object({
-    "$type": z.literal("TypeConstraint"),
+    "type": z.literal("TypeConstraint"),
     BasedOnSchema: linkSchema.optional().describe("A Link to a Schema. Only Components based on this Schema are allowed."),
     BasedOnComponentTemplate: linkSchema.optional().describe("A Link to a Component Template. Only CPs with this template are allowed.")
 });
@@ -20,7 +20,7 @@ export const componentPresentationConstraintSchema = z.union([
 ]);
 
 export const nestedRegionSchema: z.ZodTypeAny = z.lazy(() => z.object({
-    "$type": z.literal("NestedRegion"),
+    "type": z.literal("NestedRegion"),
     RegionName: z.string().describe("The machine name of the nested Region."),
     IsMandatory: z.boolean().optional().describe("Whether this nested Region is mandatory."),
     RegionSchema: expandableLinkSchema.describe("A Link to another Region Schema that defines this nested Region. Must be an ExpandableLink."),
@@ -28,7 +28,7 @@ export const nestedRegionSchema: z.ZodTypeAny = z.lazy(() => z.object({
 }));
 
 export const regionDefinitionSchema = z.object({
-    "$type": z.literal("RegionDefinition"),
+    "type": z.literal("RegionDefinition"),
     ComponentPresentationConstraints: z.array(componentPresentationConstraintSchema).optional()
         .describe("An array of constraints (OccurrenceConstraint, TypeConstraint) for Component Presentations in this Region."),
     NestedRegions: z.array(nestedRegionSchema).optional()

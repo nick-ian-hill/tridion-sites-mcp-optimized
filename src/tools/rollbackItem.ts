@@ -35,7 +35,7 @@ export const rollbackItem = {
 
             if (response.status === 200) {
                 const responseData = {
-                    $type: response.data['$type'],
+                    type: response.data['$type'],
                     Id: response.data.Id,
                     Message: `Successfully rolled back ${response.data.Id}`,
                 };

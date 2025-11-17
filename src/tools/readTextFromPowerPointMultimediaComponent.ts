@@ -72,7 +72,7 @@ export const readTextFromPowerPointMultimediaComponent = {
             const slideFiles = zip.file(/ppt\/slides\/slide\d+\.xml/);
             if (slideFiles.length === 0) {
                 const errorResponse = {
-                    $type: 'PowerPointText',
+                    type: 'PowerPointText',
                     Id: itemId,
                     Content: "Presentation contains no slides.",
                 };
@@ -105,7 +105,7 @@ export const readTextFromPowerPointMultimediaComponent = {
                 .join("\n\n");
 
             const responseData = {
-                $type: "PowerPointText",
+                type: "PowerPointText",
                 Id: itemId,
                 Content: fullTextContent.trim(),
             };

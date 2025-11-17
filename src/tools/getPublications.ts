@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { filterResponseData } from "../utils/responseFiltering.js";
+import { formatForAgent } from "../utils/fieldReordering.js";
 
 export const getPublications = {
     name: "getPublications",
@@ -13,7 +14,7 @@ IMPORTANT: Requesting a high level of detail can be slow and token heavy. Prefer
 - "IdAndTitle": Returns only the ID and Title of each item. This is the recommended default.
 - "CoreDetails": Returns the main properties, excluding verbose security and link-related information.
 - "AllDetails": Returns all available properties for each item. Only select "AllDetails" if you absolutely need full details about the returned items.`),
-        includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response. If used, the 'details' parameter is ignored. 'Id', 'Title', and '$type' will always be included.`),
+        includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response. If used, the 'details' parameter is ignored. 'Id', 'Title', and 'type' will always be included.`),
     },
     execute: async ({ details = "IdAndTitle", includeProperties }: { details?: "IdAndTitle" | "CoreDetails" | "AllDetails", includeProperties?: string[] }, context: any) => {
         const req = context?.request;
@@ -34,10 +35,11 @@ IMPORTANT: Requesting a high level of detail can be slow and token heavy. Prefer
 
             if (response.status === 200) {
                 const finalData = filterResponseData({ responseData: response.data, details, includeProperties });
+                const formattedFinalData = formatForAgent(finalData);
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(finalData, null, 2)
+                        text: JSON.stringify(formattedFinalData, null, 2)
                     }],
                 };
             } else {

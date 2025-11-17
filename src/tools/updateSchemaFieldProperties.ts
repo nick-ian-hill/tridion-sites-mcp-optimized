@@ -1,7 +1,7 @@
 import { z, ZodIssue } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
-import { processSchemaFieldDefinitions, sanitizeAgentJson } from "../utils/fieldReordering.js";
+import { processSchemaFieldDefinitions, formatForApi } from "../utils/fieldReordering.js";
 
 import {
     singleLineTextFieldSchema,
@@ -72,7 +72,7 @@ const setNestedProperty = (obj: any, path: string, value: any): void => {
 
 // Helper to create a JSON error response
 const createJsonError = (message: string) => {
-    const errorResponse = { $type: 'Error', Message: message };
+    const errorResponse = { type: 'Error', Message: message };
     return { content: [{ type: "text", text: JSON.stringify(errorResponse, null, 2) }] };
 };
 
@@ -140,7 +140,7 @@ Example 3: Update a validation constraint on a field.
         params: z.infer<typeof updateSchemaFieldPropertiesSchema>, 
         context: any
     ) => {
-        sanitizeAgentJson(params);
+        formatForApi(params);
         const { schemaId, fieldUpdates } = params;
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
@@ -220,7 +220,7 @@ Example 3: Update a validation constraint on a field.
             const updatedItem = updateResponse.data;
 
             const responseData = {
-                $type: updatedItem['$type'],
+                type: updatedItem['$type'],
                 Id: updatedItem.Id,
                 Message: `Successfully updated ${updatedItem.Id}`
             };

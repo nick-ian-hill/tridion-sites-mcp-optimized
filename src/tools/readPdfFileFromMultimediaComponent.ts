@@ -65,7 +65,7 @@ export const readPdfFileFromMultimediaComponent = {
             console.log("Parsing complete.");
 
             const responseData = {
-                $type: "PdfText",
+                type: "PdfText",
                 Id: itemId,
                 Content: textContent.trim()
             };

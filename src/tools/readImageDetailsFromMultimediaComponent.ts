@@ -99,7 +99,7 @@ export const readImageDetailsFromMultimediaComponent = {
             const text = (result.text ?? "").trim();
             
             const responseData = {
-                $type: "ImageAnalysis",
+                type: "ImageAnalysis",
                 Id: itemId,
                 Description: text
             };

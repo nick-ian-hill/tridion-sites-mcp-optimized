@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
+import { formatForAgent } from "../utils/fieldReordering.js";
 
 export const batchLocalizeItems = {
     name: "batchLocalizeItems",
@@ -23,10 +24,11 @@ To find items that are shared and can be localized, use the 'search' tool with t
             const response = await authenticatedAxios.post('/batch/localize', requestModel);
 
             if (response.status === 202) {
+                const formattedResponse = formatForAgent(response.data);
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(response.data, null, 2)
+                        text: JSON.stringify(formattedResponse, null, 2)
                     }],
                 };
             } else {

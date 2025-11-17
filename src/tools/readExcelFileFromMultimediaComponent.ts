@@ -20,7 +20,7 @@ export const readExcelFileFromMultimediaComponent = {
     
     Example Return Object Shape:
     {
-      "$type": "ExcelData",
+      "type": "ExcelData",
       "Id": "tcm:5-124",
       "WorkbookData": {
         "Sheet1": [
@@ -126,7 +126,7 @@ export const readExcelFileFromMultimediaComponent = {
             });
 
             const responseData = {
-                $type: "ExcelData",
+                type: "ExcelData",
                 Id: itemId,
                 WorkbookData: workbookData
             };

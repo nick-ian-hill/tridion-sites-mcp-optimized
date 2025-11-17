@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { filterResponseData } from "../utils/responseFiltering.js";
+import { formatForAgent } from "../utils/fieldReordering.js";
 
 // Define the input schema
 const getUsesForVersionInputProperties = {
@@ -15,7 +16,7 @@ const getUsesForVersionInputProperties = {
 - "CoreDetails": Returns the main properties, excluding verbose security and link-related information.
 - "AllDetails": Returns all available properties for each item. Only select "AllDetails" if you absolutely need full details about the returned items. This request will likely fail if the item uses a large number of other items.`),
     includeProperties: z.array(z.string()).optional()
-        .describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response. If used, the 'details' parameter is ignored. 'Id', 'Title', and '$type' will always be included.`),
+        .describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response. If used, the 'details' parameter is ignored. 'Id', 'Title', and 'type' will always be included.`),
 };
 
 const getUsesForVersionSchema = z.object(getUsesForVersionInputProperties);
@@ -50,22 +51,22 @@ Find all items that were used by version 12 of the Page 'tcm:5-263-64'.
 Expected JSON Output (example is truncated for brevity):
 [
   {
-    "$type": "Schema",
+    "type": "Schema",
     "Id": "tcm:5-181-8",
     "Title": "[Article] Region"
   },
   {
-    "$type": "Component",
+    "type": "Component",
     "Id": "tcm:5-278",
     "Title": "Company News Media Manager Video"
   },
   {
-    "$type": "PageTemplate",
+    "type": "PageTemplate",
     "Id": "tcm:5-219-128",
     "Title": "Home Page"
   },
   {
-    "$type": "Keyword",
+    "type": "Keyword",
     "Id": "tcm:5-310-1024",
     "Title": "000 Home"
   }
@@ -114,12 +115,14 @@ Expected JSON Output (example is truncated for brevity):
                     details,
                     includeProperties
                 });
+
+                const formattedFinalData = formatForAgent(finalData);
                 
                 // The API returns an array, so we filter it and return the stringified array
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(finalData, null, 2)
+                        text: JSON.stringify(formattedFinalData, null, 2)
                     }],
                 };
             } else {

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
-import { sanitizeAgentJson } from "../utils/fieldReordering.js";
+import { formatForApi } from "../utils/fieldReordering.js";
 
 const resolveInstructionSchema = z.object({
     includeChildPublications: z.boolean().optional().default(false)
@@ -45,7 +45,7 @@ export const publish = {
     input: publishInputProperties,
 
     execute: async (input: z.infer<typeof publishSchema>, context: any) => {
-        sanitizeAgentJson(input);
+        formatForApi(input);
         const {
             itemIds,
             targetIdsOrPurposes,
@@ -96,7 +96,7 @@ export const publish = {
             if (response.status === successStatus) {
                 const transactionIds = response.data?.PublishTransactionIds || [];
                 const responseData = {
-                    $type: dryRun ? "PublishPreview" : "PublishResult",
+                    type: dryRun ? "PublishPreview" : "PublishResult",
                     Message: dryRun
                         ? `Publish preview generated. ${transactionIds.length} items would be processed.`
                         : `Successfully started publish action. ${transactionIds.length} transaction(s) created.`,

@@ -112,7 +112,7 @@ export const updateMultimediaComponentFromPrompt = {
             
             const updatedItem = updateResponse.data;
             const responseData = {
-                $type: updatedItem['$type'],
+                type: updatedItem['$type'],
                 Id: updatedItem.Id,
                 Message: `Successfully updated ${updatedItem.Id}`
             };

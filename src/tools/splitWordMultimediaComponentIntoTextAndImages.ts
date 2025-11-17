@@ -90,7 +90,7 @@ export const splitWordMultimediaComponentIntoTextAndImages = {
             }
             
             const responseData = {
-                $type: "SplitWordDocResult",
+                type: "SplitWordDocResult",
                 Id: itemId,
                 CreatedImageComponents: createdImageComponents,
                 HtmlContent: htmlContent

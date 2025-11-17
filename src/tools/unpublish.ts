@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
-import { sanitizeAgentJson } from "../utils/fieldReordering.js";
+import { formatForApi } from "../utils/fieldReordering.js";
 
 const resolveInstructionSchema = z.object({
     includeChildPublications: z.boolean().optional().default(false)
@@ -45,7 +45,7 @@ export const unpublish = {
     input: unpublishInputProperties,
 
     execute: async (input: z.infer<typeof unpublishSchema>, context: any) => {
-        sanitizeAgentJson(input);
+        formatForApi(input);
         const {
             itemIds,
             targetIdsOrPurposes,
@@ -96,7 +96,7 @@ export const unpublish = {
             if (response.status === successStatus) {
                 const transactionIds = response.data?.PublishTransactionIds || [];
                 const responseData = {
-                    $type: dryRun ? "UnpublishPreview" : "UnpublishResult",
+                    type: dryRun ? "UnpublishPreview" : "UnpublishResult",
                     Message: dryRun
                         ? `Unpublish preview generated. ${transactionIds.length} items would be processed.`
                         : `Successfully started unpublish action. ${transactionIds.length} transaction(s) created.`,
