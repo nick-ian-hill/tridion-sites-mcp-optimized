@@ -9,22 +9,24 @@ import { regionDefinitionSchema } from "../schemas/regionDefinitionSchemas.js";
 export const createRegionSchema = {
     name: "createRegionSchema",
     description: `Creates a new Content Manager System (CMS) item of type 'Schema' with a purpose of 'Region'.
-    
-Region Schemas are used by Page Templates to define the layout and content areas (regions) of a Page.
-This tool is the correct choice for creating the "Page Schema" that a Page Template links to.
+
+Region Schemas are used by Page Templates to define the layout and content areas (regions) of a Page. This tool is the correct choice for creating the "Page Schema" that a Page Template links to.
 
 A Region Schema can define:
-1.  Constraints on the Component Presentations that can be placed within it (using 'type: "Link"').
-2.  A set of nested Regions, each linking to its own Region Schema (using 'type: "ExpandableLink"').
-3.  A set of metadata fields for the Region itself.
+1. Constraints on the Component Presentations that can be placed within it (using "type": "Link").
+2. A set of nested Regions, each linking to its own Region Schema (using "type": "ExpandableLink").
+3. A set of metadata fields for the Region itself.
 
 This tool accepts the 'regionDefinition' as a direct JSON object, making it much easier to define constraints and nested regions.
 
 IMPORTANT
-- When defining a 'TypeConstraint', the 'BasedOnSchema' and 'BasedOnComponentTemplate' properties must be a Link:
-  { "type": "Link", "IdRef": "tcm:1-2-8" }
-- When defining a 'NestedRegion', the 'RegionSchema' property must be an ExpandableLink:
-  { "type": "ExpandableLink", "IdRef": "tcm:1-3-8" }
+When defining a 'TypeConstraint', the 'BasedOnSchema' and 'BasedOnComponentTemplate' properties must be a Link: { "type": "Link", "IdRef": "tcm:1-2-8" }
+When defining a 'NestedRegion', the 'RegionSchema' property must be an ExpandableLink that references a valid, existing Region Schema: { "type": "ExpandableLink", "IdRef": "tcm:1-3-8" }
+
+Note on Nested Region Workflow: A NestedRegion's RegionSchema property must link to a valid schema ID; placeholders like "tcm:0-0-0" are not allowed and will cause a validation error.
+You must first create the schemas for your nested regions, then create the main Page Schema that links to them.
+Best Practice (Flexible): Create a separate Region Schema for each nested region (e.g., "Main Region", "Sidebar Region"). This allows you to define different ComponentPresentationConstraints for each.
+Simple Pattern (Shared): Create one generic Region Schema and have all NestedRegions link to it. This is faster, but all regions will share the same constraints.
 
 Examples:
 
