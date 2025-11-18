@@ -41,20 +41,34 @@ async function getOrderedFieldNames(schemaId: string, fieldType: 'content' | 'me
 
 /**
  * Recursively reorders the properties of a data object (content/metadata) to match the field order defined in a Schema.
+ * Validates that all provided fields actually exist in the Schema.
  * @param data The data object to reorder.
  * @param schemaId The TCM URI of the Schema defining the order.
  * @param fieldType Specifies whether to use 'content' or 'metadata' fields from the schema.
  * @param axiosInstance An authenticated Axios instance.
  * @returns A new object with properties sorted according to the Schema definition.
+ * @throws Error if the data contains fields not present in the Schema.
  */
 export async function reorderFieldsBySchema(data: Record<string, any>, schemaId: string, fieldType: 'content' | 'metadata', axiosInstance: AxiosInstance): Promise<Record<string, any>> {
     const orderedFieldNames = await getOrderedFieldNames(schemaId, fieldType, axiosInstance);
+
+    // Validate that all fields in 'data' exist in the schema (ignoring the system property '$type')
+    const inputKeys = Object.keys(data).filter(key => key !== '$type');
+    const unknownKeys = inputKeys.filter(key => !orderedFieldNames.includes(key));
+
+    if (unknownKeys.length > 0) {
+        throw new Error(
+            `Validation Error: The following fields provided in the input are not defined in the ${fieldType} schema (${schemaId}): [${unknownKeys.join(', ')}]. ` +
+            `Available fields are: [${orderedFieldNames.join(', ')}].`
+        );
+    }
+
     const reorderedData: Record<string, any> = {};
 
     for (const fieldName of orderedFieldNames) {
         if (data.hasOwnProperty(fieldName)) {
             const fieldValue = data[fieldName];
-            
+
             const schemaDefinition = schemaDefinitionCache.get(schemaId) || (await axiosInstance.get(`/items/${schemaId.replace(':', '_')}`)).data;
             const fieldDefinition = (fieldType === 'content' ? schemaDefinition.Fields : schemaDefinition.MetadataFields)?.[fieldName];
 
@@ -75,12 +89,6 @@ export async function reorderFieldsBySchema(data: Record<string, any>, schemaId:
         }
     }
 
-    for (const key in data) {
-        if (!reorderedData.hasOwnProperty(key)) {
-            reorderedData[key] = data[key];
-        }
-    }
-
     return reorderedData;
 }
 
@@ -94,7 +102,7 @@ export const convertLinksRecursively = (currentObject: any, contextId: string) =
     if (Array.isArray(currentObject)) {
         currentObject.forEach(item => convertLinksRecursively(item, contextId));
     } else {
-        if ((currentObject.$type === "Link" || currentObject.$type === "ExpandableLink") && 
+        if ((currentObject.$type === "Link" || currentObject.$type === "ExpandableLink") &&
             typeof currentObject.IdRef === 'string') {
             currentObject.IdRef = convertItemIdToContextPublication(currentObject.IdRef, contextId);
         }
@@ -185,10 +193,10 @@ export function formatForApi(obj: any): any {
 
     if (typeValue !== undefined) {
         const rest = { ...obj }; // Get all other formatted child properties
-        
+
         // Clear all keys from the original object
         Object.keys(obj).forEach(key => delete obj[key]);
-        
+
         // Re-assign them with '$type' first
         Object.assign(obj, { '$type': typeValue, ...rest });
     }
@@ -220,7 +228,7 @@ export function formatForAgent(obj: any): any {
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
             const formattedValue = formatForAgent(obj[key]);
-            
+
             if (key === '$type') {
                 typeValue = formattedValue;
             } else {
