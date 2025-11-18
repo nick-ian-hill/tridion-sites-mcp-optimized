@@ -91,13 +91,13 @@ interface MapScriptContext {
 const toolOrchestratorInputProperties = {
     itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/))
         .optional()
-        .describe("An array of unique IDs (TCM URIs) for the items to be processed. This is required *unless* a 'preProcessingScript' is provided to generate the list."),
+        .describe("An optional array of unique IDs (TCM URIs) to be processed. If provided, these are passed to the 'mapScript'. If a 'preProcessingScript' is also provided, the IDs returned by that script take precedence."),
     preProcessingScript: z.string().optional()
-        .describe("An optional first JavaScript string (as an async function body) that runs once *before* the main loop. It must return either a string[] of item IDs, or an object { itemIds: string[], preProcessingResult?: any } to pass data to subsequent scripts. This is the 'setup' phase, perfect for dynamically fetching or filtering items (e.g., by calling 'context.tools.search(...)') or for expensive, one-time lookups (e.g., getting Target Type IDs)."),
-    mapScript: z.string()
-        .describe("A JavaScript string (as an async function body) to execute for each item. The mapScript has access to a 'context' object. This is the 'map' phase. NOTE: Each item is processed in an isolated sandbox. This means you can safely use await and write parallel code (maxConcurrency > 1) without worrying about tasks interfering with each other. The context object is unique and stable for each item."),
+        .describe("An optional first JavaScript string (as an async function body) that runs once before the main loop. It must return either a string[] of item IDs, or an object { itemIds: string[], preProcessingResult?: any } to pass data to subsequent scripts. This is the 'setup' phase, perfect for dynamically fetching or filtering items, or for one-time setup operations (e.g. creating a folder structure)."),
+    mapScript: z.string().optional()
+        .describe("An optional JavaScript string (as an async function body) to execute for each item. The mapScript has access to a 'context' object. This is the 'map' phase. NOTE: Each item is processed in an isolated sandbox. This means you can safely use await and write parallel code (maxConcurrency > 1). If omitted, this phase is skipped."),
     postProcessingScript: z.string().optional()
-        .describe("An optional second JavaScript string (as an async function body) that runs once after all items are processed. The script has access to a 'context' object containing: `results` (an array of all execution results from the 'map' phase), `successes`, `failures`, `parameters` (the JSON object passed to the tool), and `preProcessingResult` (the 'context' object from the setup phase). Its return value becomes the final output of the tool. This is the 'reduce' phase."),
+        .describe("An optional second JavaScript string (as an async function body) that runs once after all items are processed (or immediately after the setup phase if no items/mapScript exist). The script has access to a 'context' object containing: `results` (an array of all execution results from the 'map' phase), `successes`, `failures`, `parameters` (the JSON object passed to the tool), and `preProcessingResult` (the 'context' object from the setup phase). Its return value becomes the final output of the tool. This is the 'reduce' phase."),
     parameters: z.record(z.any()).optional()
         .describe("An optional JSON object of parameters to pass into all scripts. Use this for simple, static values like search queries, find/replace strings, or target TCM URIs. Note: Complex objects (like data from other tools) passed as parameters are treated as literal values. If you pass a stringified JSON object as a parameter value, you must manually call JSON.parse() on it inside your script. (Note: this only applies to input parameters, not to the responses from tool calls, which are always auto-parsed)."),
     stopOnError: z.boolean().optional().default(true)
@@ -110,13 +110,7 @@ const toolOrchestratorInputProperties = {
         .describe("If true, the full execution log is included in the JSON response. Defaults to false. Only consider setting this to true when debugging.")
 };
 
-const toolOrchestratorSchema = z.object(toolOrchestratorInputProperties).refine(
-    (data) => (data.itemIds && data.itemIds.length > 0) || !!data.preProcessingScript,
-    {
-        message: "Either 'itemIds' must be provided with at least one item, or a 'preProcessingScript' must be provided to generate the item list.",
-        path: ["itemIds"], // Associates the error with the itemIds field
-    }
-);
+const toolOrchestratorSchema = z.object(toolOrchestratorInputProperties);
 
 export const toolOrchestrator = {
     name: "toolOrchestrator",
@@ -125,11 +119,11 @@ export const toolOrchestrator = {
     This is the recommended tool for tasks involving repetitive actions on many items, especially aggregate queries (like "find the most...", "count all...", or "tabulate...").
     Using this tool for aggregation (e.g., running 'search' in 'preProcessingScript' and processing the results in 'postProcessingScript') is far more scalable, token-efficient and reliable than calling 'search', 'getActivities', 'getItemsInContainer', etc. directly and processing a massive JSON result in the context window.
     
-    The tool supports up to three phases:
+    The tool supports up to three phases. You can mix and match these phases based on your needs (e.g., use only 'setup' for a one-off task, or 'setup' and 'reduce' without a 'map' phase).
     
-    Phase 1 ('setup'): The optional 'preProcessingScript' runs once to dynamically fetch (e.g., via a publication-wide search with a suitably large resultLimit such as 25k) or filter the list of item IDs to be processed.
-    Phase 2 ('map'): The main 'mapScript' runs for each item in the list generated by Phase 1 or provided via 'itemIds'.
-    Phase 3 ('reduce'): The optional 'postProcessingScript' runs once on the collected results from Phase 2, allowing for aggregation, filtering, or sorting to find a final answer. An important role of this script is to ensure the response does not overwhelm the agent. Therefore, only return the data that is needed, and condense any error information to a few lines of text.
+    Phase 1 ('setup'): The optional 'preProcessingScript' runs once to dynamically fetch (e.g., via a publication-wide search with a suitably large resultLimit such as 25k) or filter the list of item IDs to be processed, or to perform one-time setup tasks.
+    Phase 2 ('map'): The optional 'mapScript' runs for each item in the list generated by Phase 1 or provided via 'itemIds'. If no items are provided or this script is omitted, this phase is skipped.
+    Phase 3 ('reduce'): The optional 'postProcessingScript' runs once on the collected results from Phase 2 (or just the data from Phase 1), allowing for aggregation, filtering, or sorting to find a final answer. An important role of this script is to ensure the response does not overwhelm the agent. Therefore, only return the data that is needed, and condense any error information to a few lines of text.
 
     By default, up to 5 scripts can run in parallel in the 'map' phase. Setting a higher 'maxConcurrency' value can increase speed at the cost of overall server load. Only use a value of 1 when debugging a script or when explicitly requested by the user.
 
@@ -162,7 +156,7 @@ This script *must* return either:
 1. An array of item ID strings (string[]).
 2. An object: { itemIds: string[], preProcessingResult?: any }. The preProcessingResult object is passed to the 'map' and 'post' scripts as context.preProcessingResult. Any data or objects you add to preProcessingResult (e.g., preProcessingResult: { myData: [...] }) are passed as live JavaScript objects. You can access them directly (e.g., context.preProcessingResult.myData) with no JSON.parse() required.
 
-The mandatory 'mapScript' receives a 'context' object with:
+The optional 'mapScript' receives a 'context' object with:
 - context.currentItemId (string): The ID of the item currently being processed.
 - context.parameters (object): The JavaScript object you passed to the 'parameters' input.
 - context.preProcessingResult (any): The live JavaScript object returned by the preProcessingScript (if any). No JSON.parse() is needed.
@@ -754,7 +748,7 @@ This script finds all Pages in a Publication, efficiently gets the required Targ
     });
 
 Example 9: Create a 'Diamond' BluePrint Hierarchy (Setup only)
-This script uses the 'preProcessingScript' to perform a complex, one-time setup: creating a full BluePrint hierarchy. It creates a Root Publication, adds the required Root Structure Group, and then creates a 'diamond' inheritance pattern (a Website inheriting from separate Schema and Content Publications). The 'mapScript' is skipped, and the 'postProcessingScript' returns a final summary.
+This script uses the 'preProcessingScript' to perform a complex, one-time setup: creating a full BluePrint hierarchy. It creates a Root Publication, adds the required Root Structure Group, and then creates a 'diamond' inheritance pattern (a Website inheriting from separate Schema and Content Publications). The 'mapScript' is skipped (omitted), and the 'postProcessingScript' returns a final summary.
 Note: This script assumes the Publication titles are unique. Publication titles must be globally unique, and the script will fail with a 409 Conflict error if a Publication with one of these titles already exists. Verify uniqueness using getPublications before creating and running the script.
 
     const result = await tools.toolOrchestrator({
@@ -819,10 +813,11 @@ Note: This script assumes the Publication titles are unique. Publication titles 
 
             context.log("Diamond BluePrint setup complete.");
 
-            // Return the IDs of the created publications, plus an empty itemIds
-            // so the map phase is skipped.
+            // Return the IDs of the created publications.
+            // Note: 'itemIds' is intentionally returned as an empty array (or could be omitted) 
+            // because we have no map phase.
             return {
-                itemIds: [], // <-- No items to map
+                itemIds: [], 
                 preProcessingResult: { // <-- Pass data to post-processing
                     root: rootPubId,
                     schema: schemaPubId,
@@ -831,11 +826,7 @@ Note: This script assumes the Publication titles are unique. Publication titles 
                 }
             };
         \`,
-        mapScript: \`
-            // This script is intentionally empty.
-            // The pre-processing script performed all setup actions
-            // and returned an empty 'itemIds' list, so this phase is skipped.
-        \`,
+        // NO 'mapScript' is provided.
         postProcessingScript: \`
             // 'context.preProcessingResult' holds the object returned from the setup phase
             // (which in this case contains the new Publication IDs).
@@ -1522,9 +1513,11 @@ This script would first be run by following the "Debugging Strategies" (test on 
                         preScriptContextData = Object.freeze(preScriptResult.preProcessingResult);
                     }
                 } else {
-                    const errorMsg = "Pre-processing script Error: The script must return a string[] or an object { itemIds: string[], preProcessingResult?: any }.";
-                    logs.push(errorMsg);
-                    return { content: [{ type: "text", text: errorMsg + `\nReceived: ${JSON.stringify(preScriptResult)}` }] };
+                    if (preScriptResult && typeof preScriptResult === 'object') {
+                         if (preScriptResult.preProcessingResult) {
+                            preScriptContextData = Object.freeze(preScriptResult.preProcessingResult);
+                        }
+                    }
                 }
 
                 logs.push(`Pre-processing script finished. Found ${finalItemIds.length} items to process.`);
@@ -1547,9 +1540,9 @@ This script would first be run by following the "Debugging Strategies" (test on 
         }
 
         // --- Phase 2: Execution Logic (Map Phase) ---
-        log(`\nStarting map phase for ${finalItemIds.length} items with maxConcurrency: ${maxConcurrency}`);
-
-        if (finalItemIds.length > 0) {
+        // Only run if we have items AND a map script.
+        if (finalItemIds.length > 0 && mapScript) {
+            log(`\nStarting map phase for ${finalItemIds.length} items with maxConcurrency: ${maxConcurrency}`);
 
             // --- Create ONE reusable sandbox for the entire Map phase ---
             let compiledMapScript: vm.Script;
@@ -1660,12 +1653,16 @@ This script would first be run by following the "Debugging Strategies" (test on 
 
                 await Promise.allSettled(Array.from(workerPool));
             }
+            logs.push("\nMap phase finished.");
         } else {
-            log("No items found to process. Skipping map phase.");
+            if (finalItemIds.length > 0 && !mapScript) {
+                log("Items found but no mapScript provided. Skipping map phase.");
+            } else {
+                log("No items found to process. Skipping map phase.");
+            }
         }
         // --- End of Map Phase ---
 
-        logs.push("\nMap phase finished.");
 
         // --- Phase 3: Post-Processing Logic (Reduce Phase) ---
         if (postProcessingScript) {
