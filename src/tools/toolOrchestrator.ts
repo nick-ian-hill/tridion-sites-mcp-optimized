@@ -204,6 +204,10 @@ Best practice for passing complex Data (like Excel/Search Results):
 DO NOT pass large JSON strings via the parameters object. This is inefficient and requires manual JSON.parse(), which can lead to errors.
 The correct method is to fetch the data inside the preProcessingScript and pass the parsed object to the other scripts via the context return value.
 
+Note: IDs (e.g., "tcm:5-100", "tcm:0-5-1") used in the following examples are fictional.
+NEVER hardcode these IDs in your scripts.
+You can use the 'preProcessingScript' (Phase 1) to dynamically discover real IDs based on the user's request (e.g., using 'search', 'getItemsInContainer', or 'getPublications').
+
 Examples:
 
 Example 1: Find and Replace in a Component Field (Map only)
