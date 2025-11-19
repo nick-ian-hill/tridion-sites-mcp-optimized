@@ -1,10 +1,6 @@
 import { z } from "zod";
 import axios from "axios";
 import FormData from "form-data";
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
-import * as crypto from 'crypto';
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
@@ -37,10 +33,9 @@ export const createMultimediaComponentFromUrl = {
         const { mediaUrl, title, fileName, locationId, schemaId, metadata } = input;
         
         const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
-        const stagedFilePath = path.join(os.tmpdir(), `${crypto.randomUUID()}${path.extname(new URL(mediaUrl).pathname)}`);
 
         try {
-            // --- Part 1: Staging Logic ---
+            // --- Part 1: Download Logic ---
             const requestHeaders = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
                 'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
@@ -75,13 +70,10 @@ export const createMultimediaComponentFromUrl = {
                 headers: requestHeaders
             });
 
-            fs.writeFileSync(stagedFilePath, response.data);
-            console.log(`File successfully downloaded and staged to: ${stagedFilePath}`);
-
             // --- Part 2: Component Creation Logic ---
-            console.log(`Reading file from staged path: ${stagedFilePath}`);
-            const fileBuffer = fs.readFileSync(stagedFilePath);
-            console.log(`Successfully read file. Size: ${fileBuffer.length} bytes.`);
+            // Convert response data directly to Buffer in memory
+            const fileBuffer = Buffer.from(response.data);
+            console.log(`Successfully downloaded file into memory. Size: ${fileBuffer.length} bytes.`);
 
             const formData = new FormData();
             formData.append('file', fileBuffer, fileName);
@@ -187,16 +179,6 @@ export const createMultimediaComponentFromUrl = {
                 return handleAxiosError(error, sizeErrorContext);
             }
             return handleAxiosError(error, "Failed to create multimedia component from URL");
-        } finally {
-            // --- Part 3: Cleanup Logic ---
-            try {
-                if (fs.existsSync(stagedFilePath)) {
-                    fs.unlinkSync(stagedFilePath);
-                    console.log(`Successfully cleaned up staged file: ${stagedFilePath}`);
-                }
-            } catch (cleanupError) {
-                handleAxiosError(cleanupError, `Failed to clean up staged file ${stagedFilePath}`);
-            }
         }
     }
 };
