@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-// --- Tool Interface (Copied from index.ts) ---
+// --- Tool Interface ---
 interface Tool {
     name: string;
     description: string;
@@ -20,19 +20,20 @@ function isTool(obj: any): obj is Tool {
         'execute' in obj && typeof obj.execute === 'function'
     );
 }
-// ---------------------------------------------
-
 
 /**
- * This function loads all tools from the /tools directory,
- * exactly like index.ts, and then executes the toolOrchestrator
- * with a specific test script.
+ * Loads all tools and executes the Relational Content Import logic.
+ * Strategy:
+ * 1. Setup Containers (Folder, SG, Category)
+ * 2. Create Keywords (Parallel)
+ * 3. Create Schemas & Templates
+ * 4. Create Components (Parallel)
+ * 5. Create Pages (Parallel)
  */
 async function runTest() {
-    console.log("--- Starting Orchestrator Integration Test ---");
+    console.log("--- Starting 5-Stage High-Performance Import ---");
 
-    // --- 1. Load All Tools (Logic from index.ts) ---
-    console.log("Loading all tools from '/tools' directory...");
+    // --- 1. Load All Tools ---
     const tools: Tool[] = [];
     const __dirname = path.dirname(fileURLToPath(import.meta.url));
     const toolsDirPath = path.join(__dirname, 'tools');
@@ -45,7 +46,6 @@ async function runTest() {
                 const moduleUrl = pathToFileURL(modulePath).href;
                 const module = await import(moduleUrl);
                 const potentialTool = Object.values(module)[0];
-
                 if (isTool(potentialTool)) {
                     tools.push(potentialTool);
                 }
@@ -53,211 +53,476 @@ async function runTest() {
         }
     } catch (error) {
         console.error("----- FATAL: Could not load tools -----");
-        console.error(error);
         process.exit(1);
     }
     
-    console.log(`Successfully loaded ${tools.length} tools.`);
-
-    // --- 2. Build the exact Context and find the Orchestrator ---
     const toolsAsRecord: Record<string, Tool> = tools.reduce((acc, tool) => {
         acc[tool.name] = tool;
         return acc;
     }, {} as Record<string, Tool>);
 
     const orchestratorTool = tools.find(t => t.name === 'toolOrchestrator');
-
-    if (!orchestratorTool) {
-        console.error("----- FATAL: toolOrchestrator was not found in the /tools directory -----");
-        process.exit(1);
-    }
+    if (!orchestratorTool) process.exit(1);
     
-    // This is the identical context the server would create
-    const mcpContext = {
-        tools: toolsAsRecord
-    };
+    const mcpContext = { tools: toolsAsRecord };
 
-    // --- 3. Define Your Test Case ---
-    // This script now uses the 'dependencyGraphForItem' tool for a
-    // complete and accurate check of all dependencies.
+    // Global Config - Unique Name Generation
+    const EXCEL_ITEM_ID = "tcm:5-4485";
+    const RUN_ID = new Date().getTime();
+    const IMPORT_ROOT_NAME = `Import_${RUN_ID}`; 
     
-    const testInput = {
+    console.log(`Target Root Name: ${IMPORT_ROOT_NAME}`);
+
+    // --- Shared State passed between stages ---
+    let containers: any = {};
+    let keywordMap: Record<string, string> = {};
+    let schemaIds: any = {};
+    let componentMap: Record<string, string> = {};
+
+    // Helper to unwrap debug responses
+    const getResultData = (responseBody: any) => responseBody.result ? responseBody.result : responseBody;
+
+    // =================================================================================
+    // STAGE 0: CONTAINERS (Folder, SG, Category)
+    // =================================================================================
+    console.log("\n=== STAGE 0: Containers ===");
+    
+    const stage0Input = {
         debug: true,
-        maxConcurrency: 1, // Keep at 1 for clearer test logs
-        
+        maxConcurrency: 1,
+        parameters: { rootName: IMPORT_ROOT_NAME },
         preProcessingScript: `
-            context.log('TEST RUN: Finding ALL pages in Publication tcm:0-5-1...');
+            context.log('Stage 0: Creating Containers...');
             
-            const allItems = await context.tools.getItemsInContainer({
-                containerId: "tcm:0-5-1", // The root of the Publication
-                itemTypes: ["Page"],
-                recursive: true,
-                details: "IdAndTitle"
+            // 1. Find Root Context (Publication Root)
+            const pubId = "tcm:0-5-1"; 
+            const rootSgItems = await context.tools.getItemsInContainer({ containerId: pubId, itemTypes: ["StructureGroup"], details: "IdAndTitle" });
+            const rootSg = rootSgItems.find(i => i.Title === "Root") || rootSgItems[0];
+            
+            const rootFolderItems = await context.tools.getItemsInContainer({ containerId: pubId, itemTypes: ["Folder"], details: "IdAndTitle" });
+            const rootFolder = rootFolderItems.find(i => i.Title === "Building Blocks" || i.Title === "Content" || i.Title === "Root") || rootFolderItems[0];
+
+            // 2. Create Containers
+            context.log('Creating Folder...');
+            const folderRes = await context.tools.createItem({ 
+                itemType: "Folder", 
+                title: context.parameters.rootName, 
+                locationId: rootFolder.Id 
             });
 
-            const itemIds = allItems.map(item => item.Id);
-            context.log('Found ' + itemIds.length + ' total Pages to check.');
-            return itemIds;
-        `,
-        mapScript: `
-            context.log('Checking Page: ' + context.currentItemId);
-            
-            // 1. Get Page's own info
-            const item = await context.tools.getItem({ 
-                itemId: context.currentItemId,
-                includeProperties: ["Title", "VersionInfo.RevisionDate"]
+            context.log('Creating Structure Group...');
+            const sgRes = await context.tools.createItem({ 
+                itemType: "StructureGroup", 
+                title: context.parameters.rootName, 
+                locationId: rootSg.Id, 
+                directory: context.parameters.rootName.toLowerCase() 
             });
 
-            if (!item || !item.VersionInfo) {
-                context.log("Page not found or lacks VersionInfo. Skipping.");
-                return null;
-            }
-            context.log('  Page Title: ' + item.Title);
-
-            // 2. Get Publish info for the Page
-            const publishInfos = await context.tools.getPublishInfo({ 
-                itemId: context.currentItemId,
-                includeProperties: ["PublishedAt", "TargetType.Title"] 
+            context.log('Creating Category...');
+            const catRes = await context.tools.createItem({ 
+                itemType: "Category", 
+                title: "Classification " + context.parameters.rootName, 
+                locationId: pubId 
             });
-
-            if (!publishInfos || publishInfos.length === 0) {
-                context.log("  No publish info found. Skipping page.");
-                return null; // Page has never been published
-            }
-
-            // 3. Get *all* Component dependencies (direct and indirect)
-            context.log('  Fetching dependency graph for components...');
-            
-            // Helper function to flatten the dependency graph tree
-            function flattenDependencies(node) {
-                let items = [];
-                if (node.Dependencies && node.Dependencies.length > 0) {
-                    for (const childNode of node.Dependencies) {
-                        if (childNode.Item) {
-                            items.push(childNode.Item);
-                        }
-                        // Recurse
-                        items = items.concat(flattenDependencies(childNode));
-                    }
-                }
-                return items;
-            }
-
-            let dependencyDetails = []; // This will hold our component items
-            try {
-                // --- FIX: Inside the orchestrator, tool calls return the final JSON *directly*,
-                // not the { content: [...] } wrapper.
-                const graph = await context.tools.dependencyGraphForItem({
-                    itemId: context.currentItemId,
-                    direction: "Uses", // Get items this page *uses*
-                    rloItemTypes: ["Component"], // Only find Components
-                    includeProperties: ["Title", "VersionInfo.RevisionDate"] // Get details we need
-                });
-                
-                // Now, 'graph' is the DependencyGraphNode object, not a 'response' object
-                if (graph && graph.Dependencies) {
-                    dependencyDetails = flattenDependencies(graph);
-                    context.log('  Found ' + dependencyDetails.length + ' total Component dependencies.');
-                } else {
-                    context.log('  Tool returned an invalid graph object. Assuming 0 dependencies.');
-                    dependencyDetails = [];
-                    context.log('  Found 0 total Component dependencies.');
-                }
-                // --- END FIX ---
-                
-            } catch (e) {
-                context.log('  ERROR: Failed to get dependency graph: ' + e.message);
-                return null;
-            }
-
-
-            // 4. Find the single LATEST modification date from the page + all dependencies
-            let latestModificationDate = new Date(item.VersionInfo.RevisionDate);
-            let latestModifiedItem = { 
-                title: item.Title + ' (Page)', 
-                date: latestModificationDate 
-            };
-
-            for (const comp of dependencyDetails) {
-                if (comp && comp.VersionInfo && comp.VersionInfo.RevisionDate) {
-                    const compRevisionDate = new Date(comp.VersionInfo.RevisionDate);
-                    if (compRevisionDate > latestModificationDate) {
-                        latestModificationDate = compRevisionDate;
-                        latestModifiedItem = { 
-                            title: comp.Title + ' (' + comp.Id + ')', 
-                            date: latestModificationDate 
-                        };
-                    }
-                }
-            }
-            context.log('  Latest modification: ' + latestModificationDate.toISOString() + ' from "' + latestModifiedItem.title + '"');
-            
-            // 5. Loop through each target and do one simple comparison
-            const staleOnTargets = {};
-            for (const info of publishInfos) {
-                if (!info || !info.PublishedAt || !info.TargetType || !info.TargetType.Title) {
-                    continue;
-                }
-                
-                const targetName = info.TargetType.Title;
-                const publishedAt = new Date(info.PublishedAt);
-                context.log('  -> Checking Target: "' + targetName + '", Published: ' + publishedAt.toISOString());
-
-                if (latestModificationDate > publishedAt) {
-                    context.log('     Comparison: TRUE (Stale)');
-                    staleOnTargets[targetName] = {
-                        reason: 'Content modified',
-                        staleItem: latestModifiedItem.title,
-                        modifiedDate: latestModifiedItem.date.toISOString(),
-                        publishedDate: publishedAt.toISOString()
-                    };
-                } else {
-                    context.log('     Comparison: FALSE (Up to date)');
-                }
-            }
-            
-            // 6. Return a result ONLY if any target was found to be stale
-            if (Object.keys(staleOnTargets).length > 0) {
-                return {
-                    id: context.currentItemId,
-                    title: item.Title,
-                    staleTargets: staleOnTargets
-                };
-            }
-            
-            return null; // Not stale on any target
-        `,
-        postProcessingScript: `
-            context.log('TEST RUN: Aggregating ' + results.length + ' results.');
-            const modifiedItems = results
-                .filter(r => r.status === 'success' && r.result !== null)
-                .map(r => r.result);
 
             return {
-                totalChecked: results.length,
-                totalStalePages: modifiedItems.length,
-                stalePages: modifiedItems
+                itemIds: [], 
+                preProcessingResult: {
+                    folderId: folderRes.Id,
+                    structureGroupId: sgRes.Id,
+                    categoryId: catRes.Id,
+                    pubId: pubId
+                }
+            };
+        `,
+        postProcessingScript: `return context.preProcessingResult;`
+    };
+
+    try {
+        const res = await orchestratorTool.execute(stage0Input as any, mcpContext);
+        containers = getResultData(JSON.parse(res.content[0].text));
+        if (!containers.folderId) throw new Error("Stage 0 failed to return container IDs");
+        console.log("Containers Created:", JSON.stringify(containers, null, 2));
+    } catch (e) {
+        console.error("Stage 0 Failed:", e);
+        process.exit(1);
+    }
+
+    // =================================================================================
+    // STAGE 1: KEYWORDS (Parallel Creation)
+    // =================================================================================
+    console.log("\n=== STAGE 1: Keywords (Parallel) ===");
+
+    const stage1Input = {
+        debug: true,
+        maxConcurrency: 5, 
+        parameters: { 
+            excelItemId: EXCEL_ITEM_ID,
+            categoryId: containers.categoryId
+        },
+        preProcessingScript: `
+            context.log('Stage 1: Reading Excel tags...');
+            const excelData = await context.tools.readExcelFileFromMultimediaComponent({ itemId: context.parameters.excelItemId });
+            const workbook = typeof excelData === 'string' ? JSON.parse(excelData) : excelData;
+            const articleRows = workbook.WorkbookData['Articles'] || [];
+            
+            const uniqueTags = new Set();
+            articleRows.forEach(row => { 
+                if (row.tags) row.tags.split(';').forEach(t => uniqueTags.add(t.trim())); 
+            });
+            
+            const tagArray = Array.from(uniqueTags);
+            context.log('Found ' + tagArray.length + ' unique tags to create.');
+
+            return {
+                itemIds: tagArray, 
+                preProcessingResult: { categoryId: context.parameters.categoryId }
+            };
+        `,
+        mapScript: `
+            const tagName = context.currentItemId;
+            const categoryId = context.preProcessingResult.categoryId;
+
+            try {
+                const kw = await context.tools.createItem({
+                    itemType: "Keyword",
+                    title: tagName,
+                    locationId: categoryId
+                });
+                return { name: tagName, id: kw.Id };
+            } catch (e) {
+                context.log("Error creating keyword " + tagName + ": " + e.message);
+                return { name: tagName, error: e.message };
+            }
+        `,
+        postProcessingScript: `
+            const map = {};
+            context.successes.forEach(s => { 
+                if (s.result && s.result.id) map[s.result.name] = s.result.id; 
+            });
+            return map;
+        `
+    };
+
+    try {
+        const res = await orchestratorTool.execute(stage1Input as any, mcpContext);
+        keywordMap = getResultData(JSON.parse(res.content[0].text));
+        console.log(`Created ${Object.keys(keywordMap).length} keywords.`);
+    } catch (e) {
+        console.error("Stage 1 Failed:", e);
+        process.exit(1);
+    }
+
+    // =================================================================================
+    // STAGE 2: SCHEMAS & TEMPLATES
+    // =================================================================================
+    console.log("\n=== STAGE 2: Schemas & Templates ===");
+
+    const stage2Input = {
+        debug: true,
+        maxConcurrency: 1,
+        parameters: { 
+            folderId: containers.folderId,
+            categoryId: containers.categoryId
+        },
+        preProcessingScript: `
+            const folderId = context.parameters.folderId;
+            const categoryId = context.parameters.categoryId;
+            context.log('Stage 2: Creating Schemas in ' + folderId);
+
+            // 1. Author Embedded Schema
+            const authorRes = await context.tools.createEmbeddedSchema({
+                title: "Author Embedded", locationId: folderId, rootElementName: "Author", description: "Author details",
+                fields: {
+                    "firstName": { "type": "SingleLineTextFieldDefinition", "Name": "firstName", "Description": "First Name" },
+                    "lastName": { "type": "SingleLineTextFieldDefinition", "Name": "lastName", "Description": "Last Name" },
+                    "bio": { "type": "MultiLineTextFieldDefinition", "Name": "bio", "Description": "Biography" }
+                }
+            });
+            const authorSchemaId = authorRes.Id;
+
+            // 2. Article Component Schema
+            const artRes = await context.tools.createComponentSchema({
+                title: "Article", locationId: folderId, rootElementName: "Article", description: "Article Schema",
+                fields: {
+                    "headline": { "type": "SingleLineTextFieldDefinition", "Name": "headline", "Description": "Headline", "MinOccurs": 1 },
+                    "bodyText": { "type": "XhtmlFieldDefinition", "Name": "bodyText", "Description": "Body Content", "Height": 5 },
+                    "source": { "type": "ExternalLinkFieldDefinition", "Name": "source", "Description": "Source URL", "MinOccurs": 0 },
+                    "publishDate": { "type": "DateFieldDefinition", "Name": "publishDate", "Description": "Publish Date" },
+                    "imageKey": { "type": "SingleLineTextFieldDefinition", "Name": "imageKey", "Description": "Image Key Reference" },
+                    "authors": { 
+                        "type": "EmbeddedSchemaFieldDefinition", "Name": "authors", "Description": "Authors", "MinOccurs": 0, "MaxOccurs": -1,
+                        "EmbeddedSchema": { "type": "Link", "IdRef": authorSchemaId }
+                    },
+                    "tags": {
+                        "type": "KeywordFieldDefinition", "Name": "tags", "Description": "Classification", 
+                        "Category": { "type": "Link", "IdRef": categoryId }, 
+                        "List": { "type": "ListDefinition", "Type": "Checkbox" }, 
+                        "MinOccurs": 0, "MaxOccurs": -1
+                    }
+                }
+            });
+            const articleSchemaId = artRes.Id;
+
+            // 3. Page Schemas
+            // A. Content Region (Constraints)
+            const crRes = await context.tools.createRegionSchema({
+                title: "Content Region", locationId: folderId, description: "Allows any content",
+                regionDefinition: { "type": "RegionDefinition", "ComponentPresentationConstraints": [] }
+            });
+            const contentRegionId = crRes.Id;
+
+            // B. Master Page Definition (Structure)
+            // Explicitly set IsMandatory to false, though structure is key.
+            const mpRes = await context.tools.createRegionSchema({
+                title: "Master Page Definition", locationId: folderId, description: "Defines Main and Sidebar",
+                regionDefinition: {
+                    "type": "RegionDefinition",
+                    "NestedRegions": [
+                        { "type": "NestedRegion", "RegionName": "Main", "IsMandatory": false, "RegionSchema": { "type": "ExpandableLink", "IdRef": contentRegionId } },
+                        { "type": "NestedRegion", "RegionName": "Sidebar", "IsMandatory": false, "RegionSchema": { "type": "ExpandableLink", "IdRef": contentRegionId } }
+                    ]
+                }
+            });
+            const masterPageSchemaId = mpRes.Id;
+
+            // 4. Templates
+            const tbbs = await context.tools.search({ searchQuery: { ItemTypes: ["TemplateBuildingBlock"] }, resultLimit: 1 });
+            const tbbId = tbbs.length > 0 ? tbbs[0].Id : null;
+            if (!tbbId) throw new Error("No TBB found");
+
+            // Component Template
+            const ctRes = await context.tools.createItem({
+                itemType: "ComponentTemplate", title: "Article Detail", locationId: folderId,
+                templateBuildingBlocks: [tbbId], relatedSchemaIds: [articleSchemaId]
+            });
+
+            // Page Template
+            const ptRes = await context.tools.createItem({
+                itemType: "PageTemplate", title: "Standard Page", locationId: folderId,
+                fileExtension: "html", 
+                pageSchemaId: masterPageSchemaId, 
+                templateBuildingBlocks: [tbbId]
+            });
+
+            return {
+                itemIds: [],
+                preProcessingResult: {
+                    authorSchemaId, articleSchemaId, masterPageSchemaId,
+                    componentTemplateId: ctRes.Id,
+                    pageTemplateId: ptRes.Id
+                }
+            };
+        `,
+        postProcessingScript: `return context.preProcessingResult;`
+    };
+
+    try {
+        const res = await orchestratorTool.execute(stage2Input as any, mcpContext);
+        schemaIds = getResultData(JSON.parse(res.content[0].text));
+        console.log("Schemas Created:", JSON.stringify(schemaIds, null, 2));
+    } catch (e) {
+        console.error("Stage 2 Failed:", e);
+        process.exit(1);
+    }
+
+    // =================================================================================
+    // STAGE 3: COMPONENTS (Parallel)
+    // =================================================================================
+    console.log("\n=== STAGE 3: Components ===");
+
+    const stage3Input = {
+        debug: true,
+        maxConcurrency: 5,
+        parameters: { 
+            excelItemId: EXCEL_ITEM_ID, 
+            infra: { ...containers, ...schemaIds, keywordMap } 
+        },
+        preProcessingScript: `
+            context.log('Stage 3: Preparing Component Data...');
+            const excelData = await context.tools.readExcelFileFromMultimediaComponent({ itemId: context.parameters.excelItemId });
+            const workbook = typeof excelData === 'string' ? JSON.parse(excelData) : excelData;
+            
+            const articles = workbook.WorkbookData['Articles'] || [];
+            const authors = workbook.WorkbookData['Authors'] || [];
+
+            const authorsMap = {};
+            authors.forEach(a => {
+                if (!authorsMap[a.articleKey]) authorsMap[a.articleKey] = [];
+                authorsMap[a.articleKey].push({ firstName: a.firstName, lastName: a.lastName, bio: a.bio });
+            });
+
+            const validArticles = articles.filter(a => a.uniqueKey);
+            return {
+                itemIds: validArticles.map(a => a.uniqueKey),
+                preProcessingResult: { articles, authorsMap, infra: context.parameters.infra }
+            };
+        `,
+        mapScript: `
+            const key = context.currentItemId;
+            const { articles, authorsMap, infra } = context.preProcessingResult;
+            const article = articles.find(a => a.uniqueKey === key);
+            if (!article) return null;
+
+            context.log('Creating: ' + article.headline);
+
+            const associatedAuthors = authorsMap[key] || [];
+            const tagIds = [];
+            if (article.tags) {
+                article.tags.split(';').forEach(t => {
+                    const tagClean = t.trim();
+                    if (infra.keywordMap[tagClean]) tagIds.push(infra.keywordMap[tagClean]);
+                });
+            }
+            const keywordFieldData = tagIds.length > 0 ? tagIds.map(id => ({ "type": "Link", "IdRef": id })) : undefined;
+
+            const content = {
+                "headline": article.headline,
+                "bodyText": "<p>" + article.bodyText + "</p>",
+                "source": article.source, 
+                "publishDate": article.publishDate,
+                "imageKey": article.imageKey,
+                "authors": associatedAuthors, 
+                "tags": keywordFieldData
+            };
+
+            try {
+                const result = await context.tools.createComponent({
+                    title: article.headline,
+                    locationId: infra.folderId,
+                    schemaId: infra.articleSchemaId,
+                    content: content
+                });
+                return { key: key, id: result.Id };
+            } catch(e) {
+                context.log("Error creating " + key + ": " + e.message);
+                return { key: key, error: e.message };
+            }
+        `,
+        postProcessingScript: `
+            const map = {};
+            context.successes.forEach(s => { if (s.result && s.result.id) map[s.result.key] = s.result.id; });
+            return map;
+        `
+    };
+
+    try {
+        const res = await orchestratorTool.execute(stage3Input as any, mcpContext);
+        componentMap = getResultData(JSON.parse(res.content[0].text));
+        console.log(`Created ${Object.keys(componentMap).length} components.`);
+    } catch (e) {
+        console.error("Stage 3 Failed:", e);
+        process.exit(1);
+    }
+
+    // =================================================================================
+    // STAGE 4: PAGES (Parallel)
+    // =================================================================================
+    console.log("\n=== STAGE 4: Pages ===");
+
+    const stage4Input = {
+        debug: true,
+        maxConcurrency: 5,
+        parameters: { 
+            excelItemId: EXCEL_ITEM_ID, 
+            infra: { ...containers, ...schemaIds },
+            compMap: componentMap 
+        },
+        preProcessingScript: `
+            context.log('Stage 4: Preparing Page Data...');
+            const excelData = await context.tools.readExcelFileFromMultimediaComponent({ itemId: context.parameters.excelItemId });
+            const workbook = typeof excelData === 'string' ? JSON.parse(excelData) : excelData;
+            const pageRows = workbook.WorkbookData['Page Map'] || [];
+
+            const pages = {};
+            pageRows.forEach(row => {
+                if (!pages[row.pageTitle]) {
+                    pages[row.pageTitle] = { fileName: row.fileName, regions: {} };
+                }
+                if (!pages[row.pageTitle].regions[row.regionName]) {
+                    pages[row.pageTitle].regions[row.regionName] = [];
+                }
+                pages[row.pageTitle].regions[row.regionName].push(row.articleKey);
+            });
+
+            return {
+                itemIds: Object.keys(pages),
+                preProcessingResult: { pages, infra: context.parameters.infra, compMap: context.parameters.compMap }
+            };
+        `,
+        mapScript: `
+            const pageTitle = context.currentItemId;
+            const { pages, infra, compMap } = context.preProcessingResult;
+            const pageData = pages[pageTitle];
+
+            context.log('Creating Page: ' + pageTitle);
+
+            // Must adhere to the strict Schema structure ("Main" and "Sidebar")
+            const definedRegions = ["Main", "Sidebar"];
+            const regionsPayload = [];
+            
+            for (const regionName of definedRegions) {
+                const articleKeys = pageData.regions[regionName] || [];
+                const cps = [];
+                
+                articleKeys.forEach(key => {
+                    if (compMap[key]) {
+                        cps.push({
+                            "type": "ComponentPresentation",
+                            "Component": { "type": "Link", "IdRef": compMap[key] },
+                            "ComponentTemplate": { "type": "Link", "IdRef": infra.componentTemplateId }
+                        });
+                    } else {
+                        context.log("Warning: Article Key " + key + " missing.");
+                    }
+                });
+
+                // Always add the region object, even if empty.
+                regionsPayload.push({
+                    "type": "EmbeddedRegion",
+                    "RegionName": regionName,
+                    "ComponentPresentations": cps
+                });
+            }
+
+            try {
+                const res = await context.tools.createPage({
+                    title: pageTitle,
+                    locationId: infra.structureGroupId,
+                    fileName: pageData.fileName,
+                    pageTemplateId: infra.pageTemplateId,
+                    regions: regionsPayload
+                });
+                return { id: res.Id, status: "Created" };
+            } catch (e) {
+                context.log("Error creating page " + pageTitle + ": " + e.message);
+                return { error: e.message };
+            }
+        `,
+        postProcessingScript: `
+            context.log("Stage 4 Complete.");
+            const successes = context.successes.filter(s => s.result && s.result.id).map(s => ({ title: s.itemId, ...s.result }));
+            const failures = context.successes.filter(s => s.result && s.result.error).map(s => ({ title: s.itemId, error: s.result.error }));
+            const hardFailures = context.failures.map(f => ({ title: f.itemId, error: f.error }));
+            
+            return { 
+                pagesCreated: successes.length,
+                failures: failures.length + hardFailures.length,
+                details: [...successes, ...failures, ...hardFailures]
             };
         `
     };
-    
-    // --- 4. Execute the Test ---
-    console.log("\n--- Executing toolOrchestrator with test script ---");
-    
-    try {
-        // We cast to 'any' to bypass schema checking for this test harness
-        const result = await orchestratorTool.execute(testInput as any, mcpContext);
-        
-        console.log("\n--- toolOrchestrator Final Output ---");
-        const output = JSON.parse(result.content[0].text);
-        console.log(JSON.stringify(output, null, 2));
 
-    } catch (error) {
-        console.error("\n--- toolOrchestrator FAILED ---");
-        console.error(error);
+    try {
+        const res = await orchestratorTool.execute(stage4Input as any, mcpContext);
+        const output = getResultData(JSON.parse(res.content[0].text));
+        console.log("\nFinal Output:");
+        console.log(JSON.stringify(output, null, 2));
+    } catch (e) {
+        console.error("Stage 4 Failed:", e);
     }
-    console.log("\n--- Test Finished ---");
+
+    console.log("\n--- Import Process Finished ---");
 }
 
-// Run the test
 runTest();
