@@ -35,7 +35,6 @@ As a result of the automatic mapping, you do not need to use the 'mapItemToConte
 
 If you get a 404 'Not Found' error for an item you trying to reference (e.g., a Schema or Keyword) it likely means the item is in a sibling or child Publication, not a parent or other ancestor.
 Items created in sibling/child Pubications are not inherited, and therefore the mapped ID will not correspond to a real item.
-
 In this scenario, you will either need to
 - find an alternative item that already exists in the context Publication,
 - create a new item in the context Publication or a parent/ancestor, or
@@ -43,7 +42,8 @@ In this scenario, you will either need to
 
 To find the parent Publications, call getItem on your current Publication URI (e.g., 'tcm:0-99-1') and set includeProperties to ['Parents'].
 
-When populating a Component Link field (ComponentLinkFieldDefinition), the linked Component must be based on a Schema specified in that field's 'AllowedTargetSchemas' list. If you encounter a schema validation error on a component link field, use the following strategy:
+When populating a Component Link field (ComponentLinkFieldDefinition), the linked Component must be based on a Schema specified in that field's 'AllowedTargetSchemas' list.
+If you encounter a schema validation error on a component link field, use the following strategy:
 - Use 'getItem' to retrieve the main Schema's definition.
 - Inspect the AllowedTargetSchemas property for the specific field causing the error.
 - Use the 'search' tool with the BasedOnSchemas filter to find a valid Component URI to use in the link.
@@ -97,7 +97,7 @@ Example 2: Create a Component with both content fields and metadata fields.
         const userSessionId = match ? match[1] : null;
 
         let { locationId, schemaId, title, content, metadata } = args;
-
+        
         // Convert links and schema ID to the context of the target location
         try {
             schemaId = convertItemIdToContextPublication(schemaId, locationId);
@@ -114,11 +114,11 @@ Example 2: Create a Component with both content fields and metadata fields.
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
 
-            // Reorder content and metadata fields based on the Component Schema
-            if (content && schemaId) {
+            // Reorder content and metadata fields based on the Component Schema.
+            if (content) {
                 content = await reorderFieldsBySchema(content, schemaId, 'content', authenticatedAxios);
             }
-            if (metadata && schemaId) {
+            if (metadata) {
                 metadata = await reorderFieldsBySchema(metadata, schemaId, 'metadata', authenticatedAxios);
             }
 
@@ -139,7 +139,7 @@ Example 2: Create a Component with both content fields and metadata fields.
             
             if (content) payload.Content = content;
             if (metadata) payload.Metadata = metadata;
-
+            
             if (!payload.LocationInfo?.OrganizationalItem?.IdRef) {
                 payload.LocationInfo = { ...payload.LocationInfo, OrganizationalItem: toLink(locationId) };
             }
@@ -152,7 +152,7 @@ Example 2: Create a Component with both content fields and metadata fields.
                     responseData = {
                         $type: createResponse.data['$type'],
                         Id: createResponse.data.Id,
-                        Message:`Successfully created ${createResponse.data.Id}`
+                        Message: `Successfully created ${createResponse.data.Id}`
                     };
                 }
                 const formattedResponseData = formatForAgent(responseData);

@@ -16,7 +16,7 @@ const updatePageInputProperties = {
     metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of a Schema for the Page's metadata. Replaces the existing schema. If the Page Template defines a Region Schema, that Region Schema can be used here."),
     metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the Page's metadata fields. Can be provided alongside 'metadataSchemaId'. Replaces existing metadata."),
     componentPresentations: z.array(componentPresentationSchemaForTyping).optional().describe("A complete array of Component Presentation objects to replace the existing ones on the page."),
-    regions: z.array(regionSchemaForTyping).optional().describe("A complete array of Region objects to replace the existing ones on the page.")
+    regions: z.array(regionSchemaForTyping).optional().describe("A complete array of Region objects to replace the existing region data.")
 };
 
 const updatePageInputSchema = z.object(updatePageInputProperties);
