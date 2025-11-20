@@ -14,7 +14,12 @@ const createItemInputProperties = {
         "Bundle", "SearchFolder", "PageTemplate", "ComponentTemplate"
     ]).describe("The type of CMS item to create."),
     title: z.string().describe("The title for the new item. Note that creation will fail if an item of the same type exists in the current container (e.g., 'Folder'), or in the inherited copy of the container in a child or descendent 'Publication'. In other words, for a given container and item type, the title needs to be unique across the BluePrint hierarchy."),
-    locationId: z.string().regex(/^tcm:\d+-\d+-\d+$/).describe("The TCM URI of the parent container. Use 'search' or 'getItemsInContainer' to find a suitable container. For 'Keyword', the container must be a Category (use 'getCategories'). For 'Category', the container is a Publication (use 'getPublications')."),
+    locationId: z.string().regex(/^tcm:\d+-\d+-\d+$/).describe(`The TCM URI of the parent container.
+Constraints by Item Type:
+- Folder, Bundle, SearchFolder, PageTemplate, ComponentTemplate -> Must be in a Folder (tcm:x-y-2).
+- StructureGroup -> Must be in a Structure Group (tcm:x-y-4).
+- Keyword -> Must be in a Category (tcm:x-y-512).
+- Category -> Must be in a Publication (tcm:0-x-1).`),
     metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("Optional. The TCM URI of the Metadata Schema. Use 'getSchemaLinks' to find available Schemas."),
     metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields. The order of keys in your JSON object does not matter - the tool will automatically order the fields to match the Schema definition."),
     isAbstract: z.boolean().optional().describe("Only for 'Keyword' type. Set to true to create an abstract Keyword."),
@@ -56,44 +61,36 @@ export const createItem = {
     name: "createItem",
     description: `Creates a new Content Manager System (CMS) item of a specified type.
 This is a general-purpose creation tool for Folders, Structure Groups, Keywords, Categories, Bundles, etc.
-To create a Component, use the dedicated 'createComponent' tool.
-To create a Multimedia Component, use 'createMultimediaComponentFromPrompt', 'createMultimediaComponentFromUrl', or 'createMultimediaComponentFromBase64'.
-The tool automatically handles different item types and their specific properties.
-The created item will be placed in the container (Folder, Structure Group, Category, or Publication) specified by 'locationId'.
-Note that a Publication can only have one root Folder and one root Structure Group.
-A Folder/structure Group can contain arbitrarily many child Folders/Structure Groups.
-For a Category, the container is the Publication.
-For Keywords, the container must be a Category.
-For Folders, Bundles, SearchFolders, PageTemplates and ComponentTemplates the container must be a Folder.
-For StructureGroups the container must be another StructureGroup.
-For items other than Publications, the first number in the ID identifies the Publication (e.g., for both tcm:5-127 and tcm:5-2002-2, the Publication is 5).
-For Publications, the second number identifies the Publication (e.g., tcm:0-5-1 represents Publication 5).
-Notes on BluePrint structure in relation to content creation:
-You would typically not create content or design related items in the root Publication.
-Instead, content-related schemas (schemas with purpose 'Component' or 'Embedded') and Categories used for classifying content would typically be created in a direct child Publication of the root (e.g., 'Schema Master').
-Creating Categories and content Schemas in the same Publication ensures that any 'KeywordFieldDefinition' fields can reference a relevant Catgory.
-Items related to how content is rendered (Component Templates, Page Templates, Template Building Blocks, and Region Schemas) are commonly created in a second direct child of the root Publication (e.g., 'Design Master').
-As siblings, 'Schema Master' and 'Design Master' do not have access to each other's items.
-The main content Components would typically be created in a 'Content Master' Publication having both the 'Schema Master' and 'Design Master' Publications as parents.
-Items (Schemas, Templates etc.) from both Publications would be available (via inheritance) in 'Content Master'.
-BluePrint Context & 404 Errors:
-Any ID parameters you provide (e.g., 'metadataSchemaId', 'pageSchemaId', 'parentKeywords') MUST exist in the same Publication as 'locationId'.
-If any IDs reference items in a parent or other ancestor Publication, the items will be inherited by the context Publication, and the tool will map the IDs to the correct context automatically.
-For example, if you are in 'locationId' "tcm:107-..." (Child) and reference a metadataSchema from "tcm:105-..." (Parent), the tool correctly maps this to the inherited ID "tcm:107-...".
-As a result of the automatic mapping, you do not need to use the 'mapItemToContextPublication' tool for mapping purposes.
-If you get a 404 'Not Found' error for an item you trying to reference (e.g., a Keyword) it likely means the item is in a sibling or child Publication, not a parent or other ancestor.
-Items created in sibling/child Pubications are not inherited, and therefore the mapped ID will not correspond to a real item.
-In this scenario, you will either need to
-- find an alternative item that already exists in the context Publication,
-- create a new item in the context Publication or a parent/ancestor, or
-- promote the item(s) you are trying to reference to a parent or ancestor Publication using the 'promoteItem' tool.
-To find the parent Publications, call getItem on your current Publication URI (e.g., 'tcm:0-99-1') and set includeProperties to ['Parents'].
-When populating a Component Link field (ComponentLinkFieldDefinition), the linked Component must be based on a Schema specified in that field's 'AllowedTargetSchemas' list.
-If you encounter a schema validation error on a component link field, use the following strategy:
-- Use 'getItem' to retrieve the main Schema's definition.
-- Inspect the AllowedTargetSchemas property for the specific field causing the error.
-- Use the 'search' tool with the BasedOnSchemas filter to find a valid Component URI to use in the link.
-Important: Creation will fail with a '409 Conflict' error if an item of the same type and with the same title already exists in the target location or its BluePrint context (e.g. a child Publication).
+
+**Container Rules (Where to create what):**
+* **Folders** contain: Folders, Bundles, SearchFolders, PageTemplates, ComponentTemplates, Components, and Schemas.
+* **Structure Groups** contain: Structure Groups and Pages.
+* **Categories** contain: Keywords.
+* **Publications** contain: Root Folders, Root Structure Groups, and Categories.
+
+**Notes on BluePrint structure:**
+* **Schema Master:** Content-related schemas and Categories are typically created in a child of the Root Publication.
+* **Design Master:** Templates and Region Schemas are typically created in a sibling of the Schema Master.
+* **Content Master:** Actual content (Components) is created in a publication inheriting from both.
+
+**BluePrint Context & Automatic Mapping (Important):**
+The tool automatically transforms any parent/ancestor ID you provide (e.g., 'metadataSchemaId', 'parentKeywords') to match the context of the 'locationId' publication.
+* **Mechanism:** It purely replaces the Publication ID in the URI string. It does *not* verify existence.
+* **Assumption:** This works if the item exists in the target context via BluePrint inheritance (i.e., it is a Parent/Ancestor).
+* **404 Errors:** If the source item is in a **Sibling** or **Child** publication, the transformed ID will not point to a real item, resulting in a 404 error.
+* **Resolution:** If you get a 404 on a dependency ID:
+    1.  Verify the item exists in a Parent/Ancestor of the target 'locationId'.
+    2.  If it is in a Sibling/Child, you must 'promote' it to a common Parent (using 'promoteItem') or find an alternative item in the correct context.
+
+**Troubleshooting Component Links:**
+If you encounter a schema validation error on a Component Link field (ComponentLinkFieldDefinition):
+1.  Use 'getItem' to retrieve the main Schema's definition.
+2.  Inspect the 'AllowedTargetSchemas' property for the specific field causing the error.
+3.  Use the 'search' tool with the 'BasedOnSchemas' filter to find a valid Component URI that matches one of those schemas.
+
+**Validation:**
+Creation will fail if an item of the same type and title already exists in the folder/structure group.
+
 Examples:
 
 Example 1: Create a Folder for a campaign.
@@ -246,7 +243,7 @@ The provided 'locationId' (${locationId}) is a '${locationType}'.`;
             if (metadata) payload.Metadata = metadata;
             // Type-specific properties
             if (itemType === 'PageTemplate' || itemType === 'ComponentTemplate') {
-                if (templateBuildingBlocks) {
+                if (templateBuildingBlocks && templateBuildingBlocks.length > 0) {
                     const tbbInvocations = templateBuildingBlocks.map(tbbId =>
                         `<TemplateInvocation><Template xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="${tbbId}" xlink:title="" /></TemplateInvocation>`
                     ).join('');
