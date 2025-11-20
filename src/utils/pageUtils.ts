@@ -28,84 +28,154 @@ export function processComponentPresentations(
     });
 }
 
+/**
+ * Processes regions by comparing the user-provided regions against the Schema definition.
+ * It automatically fills in missing regions defined in the schema with empty objects.
+ * @param regions The array of regions provided by the user/agent.
+ * @param contextId The Publication context ID (e.g., tcm:0-5-1).
+ * @param containerId The ID of the container definition (either a Page Template ID or a Region Schema ID).
+ * @param axiosInstance Authenticated Axios instance.
+ */
 export async function processRegions(
     regions: RegionForTyping[] | undefined,
     contextId: string,
-    pageTemplateId: string,
+    containerId: string,
     axiosInstance: AxiosInstance
 ): Promise<any[]> {
-    if (!regions) return [];
-
-    // First, get the Page Template to find its Region Schema
-    let pageTemplate: any;
+    
+    // 1. Fetch the Container Item (Page Template or Region Schema)
+    // We need this to find the "RegionDefinition" which tells us what regions are expected.
+    let containerItem: any;
     try {
-        pageTemplate = (await axiosInstance.get(`/items/${pageTemplateId.replace(':', '_')}`)).data;
+        containerItem = (await axiosInstance.get(`/items/${containerId.replace(':', '_')}`)).data;
     } catch (e) {
-        throw new Error(`Failed to load Page Template ${pageTemplateId} to process regions: ${String(e)}`);
+        console.warn(`Failed to load container item ${containerId} for region processing: ${String(e)}. Auto-fill of missing regions will be disabled.`);
+        // Fallback: If we can't load the schema, we just process what the user gave us without auto-fill.
+        if (!regions) return [];
+        return Promise.all(regions.map(r => processSingleRegion(r, undefined, contextId, axiosInstance)));
     }
 
-    // Get the main Region Schema linked from the Page Template
-    let mainRegionSchema: any;
-    const regionSchemaId = pageTemplate.PageSchema?.IdRef;
-    if (regionSchemaId) {
-        try {
-            mainRegionSchema = (await axiosInstance.get(`/items/${regionSchemaId.replace(':', '_')}`)).data;
-        } catch (e) {
-            console.warn(`Could not load main Region Schema ${regionSchemaId} for page ${contextId}.`);
+    // 2. Determine the "Region Schema" that defines the structure
+    let definitionSchema: any;
+
+    if (containerItem.$type === 'PageTemplate') {
+        // If it's a Page Template, look for the linked PageSchema
+        const pageSchemaId = containerItem.PageSchema?.IdRef;
+        if (pageSchemaId) {
+            try {
+                definitionSchema = (await axiosInstance.get(`/items/${pageSchemaId.replace(':', '_')}`)).data;
+            } catch (e) {
+                console.warn(`Could not load Page Schema ${pageSchemaId} linked from Page Template ${containerId}.`);
+            }
         }
+    } else if (containerItem.$type === 'Schema' && containerItem.Purpose === 'Region') {
+        // If we passed a Schema ID (recursion), this item IS the definition
+        definitionSchema = containerItem;
     }
 
-    const processSingleRegion = async (regionData: RegionForTyping): Promise<any> => {
-        const name = regionData.RegionName;
-        const agentProvidedMetadata = regionData.Metadata;
-        let finalMetadataPayload: any = undefined;
-        let regionSchemaIdRef: string | undefined;
+    // 3. Merge User Regions with Schema Definitions
+    const definedNestedRegions = definitionSchema?.RegionDefinition?.NestedRegions || [];
+    const userRegions = regions || [];
+    const processedRegions: any[] = [];
+    
+    // Keep track of which user regions we have consumed to identify ad-hoc ones later
+    const consumedUserRegionNames = new Set<string>();
 
-        if (mainRegionSchema?.RegionDefinition?.NestedRegions) {
-            const regionDef = mainRegionSchema.RegionDefinition.NestedRegions.find(
-                (r: any) => r.RegionName === name
-            );
-            if (regionDef?.RegionSchema?.IdRef) {
-                regionSchemaIdRef = regionDef.RegionSchema.IdRef;
-            }
-        }
+    // A. Iterate through DEFINED regions (Auto-fill logic)
+    for (const def of definedNestedRegions) {
+        const regionName = def.RegionName;
+        const userRegion = userRegions.find(r => r.RegionName === regionName);
 
-        if (regionSchemaIdRef) {
-            // Case 1: Region is defined on the schema.
-            if (agentProvidedMetadata) {
-                finalMetadataPayload = await reorderFieldsBySchema(agentProvidedMetadata, regionSchemaIdRef, 'content', axiosInstance);
-            } else {
-                // Add empty metadata, as required by the schema.
-                finalMetadataPayload = { "$type": "FieldsValueDictionary" };
-            }
-        } else if (agentProvidedMetadata) {
-            // Case 2: Region is not defined, but agent sent metadata. This is an error.
-            throw new Error(`Metadata provided for Region '${name}', but that Region has no RegionSchema defined on the Page Template.`);
+        if (userRegion) {
+            // User provided this region
+            consumedUserRegionNames.add(regionName);
+            processedRegions.push(await processSingleRegion(userRegion, definitionSchema, contextId, axiosInstance));
         } else {
-            // Case 3: Region is not defined (ad-hoc), and agent sent no metadata.
+            // User missed this region -> Auto-fill empty object
+            // Note: We purposefully pass empty ComponentPresentations and Regions to trigger recursion
+            // inside processSingleRegion, ensuring deep mandatory structures are also filled.
+            const emptyRegionData: RegionForTyping = {
+                type: "EmbeddedRegion",
+                RegionName: regionName,
+                ComponentPresentations: [],
+                Regions: []
+            };
+            processedRegions.push(await processSingleRegion(emptyRegionData, definitionSchema, contextId, axiosInstance));
+        }
+    }
+
+    // B. Process Ad-Hoc Regions (User provided, but not in schema)
+    // Some implementations allow loose regions not strictly defined in the schema.
+    for (const userRegion of userRegions) {
+        if (!consumedUserRegionNames.has(userRegion.RegionName)) {
+             processedRegions.push(await processSingleRegion(userRegion, definitionSchema, contextId, axiosInstance));
+        }
+    }
+
+    return processedRegions;
+}
+
+/**
+ * Helper to process a single region object.
+ */
+async function processSingleRegion(
+    regionData: RegionForTyping,
+    parentRegionSchema: any,
+    contextId: string,
+    axiosInstance: AxiosInstance
+): Promise<any> {
+    const name = regionData.RegionName;
+    const agentProvidedMetadata = regionData.Metadata;
+    
+    let finalMetadataPayload: any = undefined;
+    let regionSchemaIdRef: string | undefined;
+
+    // 1. Find this region's definition in the parent schema to get its Schema ID
+    if (parentRegionSchema?.RegionDefinition?.NestedRegions) {
+        const regionDef = parentRegionSchema.RegionDefinition.NestedRegions.find(
+            (r: any) => r.RegionName === name
+        );
+        if (regionDef?.RegionSchema?.IdRef) {
+            regionSchemaIdRef = regionDef.RegionSchema.IdRef;
+        }
+    }
+
+    // 2. Process Metadata
+    if (regionSchemaIdRef) {
+        // Case 1: Region is defined in schema
+        if (agentProvidedMetadata) {
+            finalMetadataPayload = await reorderFieldsBySchema(agentProvidedMetadata, regionSchemaIdRef, 'content', axiosInstance);
+        } else {
+            // Always provide empty metadata if defined
             finalMetadataPayload = { "$type": "FieldsValueDictionary" };
         }
+    } else if (agentProvidedMetadata) {
+        // Case 2: Region not defined but metadata provided (Error)
+        throw new Error(`Metadata provided for Region '${name}', but that Region has no RegionSchema defined in the parent.`);
+    } else {
+        // Case 3: Region not defined, no metadata (Ad-hoc empty)
+        finalMetadataPayload = { "$type": "FieldsValueDictionary" };
+    }
 
-        let nestedRegions: any[] = [];
-        if (regionSchemaIdRef && regionData.Regions) {
-            nestedRegions = await processRegions(regionData.Regions, contextId, regionSchemaIdRef, axiosInstance);
-        }
+    // 3. Process Nested Regions (Recursion)
+    // We pass the *current* region's schema ID as the container for the next level
+    let nestedRegions: any[] = [];
+    if (regionSchemaIdRef) {
+        // RECURSION: This will auto-fill children of THIS region if they are missing
+        nestedRegions = await processRegions(regionData.Regions, contextId, regionSchemaIdRef, axiosInstance);
+    }
 
-        const regionPayload: any = {
-            "$type": "EmbeddedRegion",
-            RegionName: name,
-            Metadata: finalMetadataPayload,
-            ComponentPresentations: processComponentPresentations(regionData.ComponentPresentations, contextId),
-            Regions: nestedRegions
-        };
-
-        if (regionSchemaIdRef) {
-            regionPayload.RegionSchema = toLink(convertItemIdToContextPublication(regionSchemaIdRef, contextId));
-        }
-        return regionPayload;
+    const regionPayload: any = {
+        "$type": "EmbeddedRegion",
+        RegionName: name,
+        Metadata: finalMetadataPayload,
+        ComponentPresentations: processComponentPresentations(regionData.ComponentPresentations, contextId),
+        Regions: nestedRegions
     };
 
-    return Promise.all(
-        regions.map(regionData => processSingleRegion(regionData))
-    );
+    if (regionSchemaIdRef) {
+        regionPayload.RegionSchema = toLink(convertItemIdToContextPublication(regionSchemaIdRef, contextId));
+    }
+
+    return regionPayload;
 }
