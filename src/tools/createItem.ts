@@ -28,7 +28,7 @@ const createItemInputProperties = {
     resultLimit: z.number().int().default(100).describe("The maximum number of results to return. Only applicable to SearchFolder type"),
     fileExtension: z.string().optional().describe("Required for 'PageTemplate' type. The file extension (e.g., 'html')."),
     pageSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("Required for 'PageTemplate' type. The TCM URI of the Page Schema (also known as a Region Schema). Use 'getSchemaLinks' with purpose 'Region' to find available schemas."),
-    templateBuildingBlocks: z.array(z.string().regex(/^tcm:\d+-\d+-2048$/)).optional().describe("Required for 'PageTemplate' and 'ComponentTemplate' types. An array of TCM URIs for Template Building Blocks. Use 'search' with itemType 'TemplateBuildingBlock' to find available TBBs."),
+    templateBuildingBlocks: z.array(z.string().regex(/^tcm:\d+-\d+-2048$/)).optional().describe("Optional for 'PageTemplate' and 'ComponentTemplate' types. An array of TCM URIs for Template Building Blocks. If provided, these will replace the default template content. Use 'search' with itemType 'TemplateBuildingBlock' to find available TBBs."),
     allowOnPage: z.boolean().optional().describe("For 'ComponentTemplate' type. Defaults to true."),
     isRepositoryPublishable: z.boolean().optional().describe("For 'ComponentTemplate' type. Whether the template renders dynamic Component Presentations. Defaults to false."),
     outputFormat: z.string().optional().describe("For 'ComponentTemplate' type. Defaults to 'HTML Fragment'."),
@@ -48,9 +48,6 @@ const createItemInputSchema = z.object(createItemInputProperties)
     })
     .refine(data => !(data.itemType === 'PageTemplate' && !data.pageSchemaId), {
         message: "To create a 'PageTemplate', the 'pageSchemaId' parameter is required."
-    })
-    .refine(data => !((data.itemType === 'PageTemplate' || data.itemType === 'ComponentTemplate') && (!data.templateBuildingBlocks || data.templateBuildingBlocks.length === 0)), {
-        message: "To create a 'PageTemplate' or 'ComponentTemplate', the 'templateBuildingBlocks' parameter must be provided and not be empty."
     });
 
 type CreateItemInput = z.infer<typeof createItemInputSchema>;
@@ -61,43 +58,42 @@ export const createItem = {
 This is a general-purpose creation tool for Folders, Structure Groups, Keywords, Categories, Bundles, etc.
 To create a Component, use the dedicated 'createComponent' tool.
 To create a Multimedia Component, use 'createMultimediaComponentFromPrompt', 'createMultimediaComponentFromUrl', or 'createMultimediaComponentFromBase64'.
-
-The tool automatically handles different item types and their specific properties. The created item will be placed in the container (Folder, Structure Group, Category, or Publication) specified by 'locationId'. Note that a Publication can only have one root Folder and one root Structure Group. A Folder/structure Group can contain arbitrarily many child Folders/Structure Groups.
+The tool automatically handles different item types and their specific properties.
+The created item will be placed in the container (Folder, Structure Group, Category, or Publication) specified by 'locationId'.
+Note that a Publication can only have one root Folder and one root Structure Group.
+A Folder/structure Group can contain arbitrarily many child Folders/Structure Groups.
 For a Category, the container is the Publication.
 For Keywords, the container must be a Category.
 For Folders, Bundles, SearchFolders, PageTemplates and ComponentTemplates the container must be a Folder.
 For StructureGroups the container must be another StructureGroup.
 For items other than Publications, the first number in the ID identifies the Publication (e.g., for both tcm:5-127 and tcm:5-2002-2, the Publication is 5).
 For Publications, the second number identifies the Publication (e.g., tcm:0-5-1 represents Publication 5).
-
 Notes on BluePrint structure in relation to content creation:
-You would typically not create content or design related items in the root Publication. Instead, content-related schemas (schemas with purpose 'Component' or 'Embedded') and Categories used for classifying content would typically be created in a direct child Publication of the root (e.g., 'Schema Master'). Creating Categories and content Schemas in the same Publication ensures that any 'KeywordFieldDefinition' fields can reference a relevant Catgory.
-Items related to how content is rendered (Component Templates, Page Templates, Template Building Blocks, and Region Schemas) are commonly created in a second direct child of the root Publication (e.g., 'Design Master'). As siblings, 'Schema Master' and 'Design Master' do not have access to each other's items.
-The main content Components would typically be created in a 'Content Master' Publication having both the 'Schema Master' and 'Design Master' Publications as parents. Items (Schemas, Templates etc.) from both Publications would be available (via inheritance) in 'Content Master'.
-
+You would typically not create content or design related items in the root Publication.
+Instead, content-related schemas (schemas with purpose 'Component' or 'Embedded') and Categories used for classifying content would typically be created in a direct child Publication of the root (e.g., 'Schema Master').
+Creating Categories and content Schemas in the same Publication ensures that any 'KeywordFieldDefinition' fields can reference a relevant Catgory.
+Items related to how content is rendered (Component Templates, Page Templates, Template Building Blocks, and Region Schemas) are commonly created in a second direct child of the root Publication (e.g., 'Design Master').
+As siblings, 'Schema Master' and 'Design Master' do not have access to each other's items.
+The main content Components would typically be created in a 'Content Master' Publication having both the 'Schema Master' and 'Design Master' Publications as parents.
+Items (Schemas, Templates etc.) from both Publications would be available (via inheritance) in 'Content Master'.
 BluePrint Context & 404 Errors:
 Any ID parameters you provide (e.g., 'metadataSchemaId', 'pageSchemaId', 'parentKeywords') MUST exist in the same Publication as 'locationId'.
 If any IDs reference items in a parent or other ancestor Publication, the items will be inherited by the context Publication, and the tool will map the IDs to the correct context automatically.
 For example, if you are in 'locationId' "tcm:107-..." (Child) and reference a metadataSchema from "tcm:105-..." (Parent), the tool correctly maps this to the inherited ID "tcm:107-...".
 As a result of the automatic mapping, you do not need to use the 'mapItemToContextPublication' tool for mapping purposes.
-
 If you get a 404 'Not Found' error for an item you trying to reference (e.g., a Keyword) it likely means the item is in a sibling or child Publication, not a parent or other ancestor.
 Items created in sibling/child Pubications are not inherited, and therefore the mapped ID will not correspond to a real item.
-
 In this scenario, you will either need to
 - find an alternative item that already exists in the context Publication,
 - create a new item in the context Publication or a parent/ancestor, or
 - promote the item(s) you are trying to reference to a parent or ancestor Publication using the 'promoteItem' tool.
-
 To find the parent Publications, call getItem on your current Publication URI (e.g., 'tcm:0-99-1') and set includeProperties to ['Parents'].
-
-When populating a Component Link field (ComponentLinkFieldDefinition), the linked Component must be based on a Schema specified in that field's 'AllowedTargetSchemas' list. If you encounter a schema validation error on a component link field, use the following strategy:
+When populating a Component Link field (ComponentLinkFieldDefinition), the linked Component must be based on a Schema specified in that field's 'AllowedTargetSchemas' list.
+If you encounter a schema validation error on a component link field, use the following strategy:
 - Use 'getItem' to retrieve the main Schema's definition.
 - Inspect the AllowedTargetSchemas property for the specific field causing the error.
 - Use the 'search' tool with the BasedOnSchemas filter to find a valid Component URI to use in the link.
-
 Important: Creation will fail with a '409 Conflict' error if an item of the same type and with the same title already exists in the target location or its BluePrint context (e.g. a child Publication).
-
 Examples:
 
 Example 1: Create a Folder for a campaign.
@@ -119,15 +115,13 @@ Example 1: Create a Folder for a campaign.
             ]
         }
     });
-
 Example 2: Create a new Category in a Publication. If used for classifying content, the selected publication should be the "master" content publication or one of its parents/ancestors.
-    const result = await tools.createItem({
+const result = await tools.createItem({
         itemType: "Category",
         locationId: "tcm:0-5-1", // ID of the Publication
         title: "News Categories",
         description: "A category for classifying news articles."
     });
-
 Example 3: Create a new Keyword.
     const result = await tools.createItem({
         itemType: "Keyword",
@@ -151,7 +145,6 @@ Example 3: Create a new Keyword.
         const { locationId, itemType } = args;
 
         const locationTypeSuffix = locationId.split('-').pop();
-
         const typeMap: { [key: string]: string } = {
             '1': 'Publication',
             '2': 'Folder',
@@ -160,29 +153,31 @@ Example 3: Create a new Keyword.
             '1024': 'Keyword'
         };
         const locationType = typeMap[locationTypeSuffix ?? ''] || `Unknown (suffix: -${locationTypeSuffix})`;
-
         const containerMustBeFolder = [
             "Folder", "Bundle", "SearchFolder",
             "PageTemplate", "ComponentTemplate"
         ];
-
         let validationError: string | null = null;
 
         if (containerMustBeFolder.includes(itemType)) {
             if (locationTypeSuffix !== '2') {
-                validationError = `To create a '${itemType}', the 'locationId' must be a Folder (-2). The provided 'locationId' (${locationId}) is a '${locationType}'.`;
+                validationError = `To create a '${itemType}', the 'locationId' must be a Folder (-2).
+The provided 'locationId' (${locationId}) is a '${locationType}'.`;
             }
         } else if (itemType === 'StructureGroup') {
             if (locationTypeSuffix !== '4') {
-                validationError = `To create a 'StructureGroup', the 'locationId' must be another Structure Group (-4). The provided 'locationId' (${locationId}) is a '${locationType}'.`;
+                validationError = `To create a 'StructureGroup', the 'locationId' must be another Structure Group (-4).
+The provided 'locationId' (${locationId}) is a '${locationType}'.`;
             }
         } else if (itemType === 'Category') {
             if (locationTypeSuffix !== '1') {
-                validationError = `To create a 'Category', the 'locationId' must be a Publication (-1). The provided 'locationId' (${locationId}) is a '${locationType}'.`;
+                validationError = `To create a 'Category', the 'locationId' must be a Publication (-1).
+The provided 'locationId' (${locationId}) is a '${locationType}'.`;
             }
         } else if (itemType === 'Keyword') {
             if (locationTypeSuffix !== '512') {
-                validationError = `To create a 'Keyword', the 'locationId' must be a Category (-512). The provided 'locationId' (${locationId}) is a '${locationType}'.`;
+                validationError = `To create a 'Keyword', the 'locationId' must be a Category (-512).
+The provided 'locationId' (${locationId}) is a '${locationType}'.`;
             }
         }
 
@@ -191,7 +186,6 @@ Example 3: Create a new Keyword.
                 type: "Error",
                 Message: `Validation Error: ${validationError}`
             };
-
             const formattedError = formatForAgent(errorResponse);
             return {
                 content: [{
@@ -227,10 +221,8 @@ Example 3: Create a new Keyword.
         }
 
         let { title, metadataSchemaId, metadata, isAbstract, description, key, parentKeywords, relatedKeywords, itemsInBundle, searchQuery, resultLimit = 100, fileExtension, pageSchemaId, templateBuildingBlocks, allowOnPage, isRepositoryPublishable, outputFormat, priority, relatedSchemaIds, directory } = args;
-
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
-
             // Reorder metadata fields based on schema
             if (metadata) {
                 if (metadataSchemaId && metadataSchemaId !== 'tcm:0-0-0') {
@@ -248,12 +240,10 @@ Example 3: Create a new Keyword.
                 return handleUnexpectedResponse(defaultModelResponse);
             }
             const payload = defaultModelResponse.data;
-
             // 2. Customize the payload
             payload.Title = title;
             if (metadataSchemaId) payload.MetadataSchema = { IdRef: metadataSchemaId };
             if (metadata) payload.Metadata = metadata;
-
             // Type-specific properties
             if (itemType === 'PageTemplate' || itemType === 'ComponentTemplate') {
                 if (templateBuildingBlocks) {
@@ -293,7 +283,6 @@ Example 3: Create a new Keyword.
                 // Ensure all URIs within the search query are mapped to the correct publication context.
                 if (searchQuery.SearchIn) {
                     const contextId = searchQuery.SearchIn;
-
                     if (searchQuery.BasedOnSchemas) {
                         searchQuery.BasedOnSchemas = searchQuery.BasedOnSchemas.map(schemaFilter => ({
                             ...schemaFilter,
