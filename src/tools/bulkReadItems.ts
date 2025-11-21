@@ -11,9 +11,7 @@ This tool is the most efficient way to get 'Content', 'Metadata', or 'BinaryCont
 The returned data is an 'IdentifiableObjectDictionary' type, which maps each item ID to its details.
 To control the amount of data returned, use the 'includeProperties' parameter for granular control, which is the most efficient method.
 The 'useDynamicVersion' parameter can be set to true to load the latest saved data for versioned items.
-
-The following item types are versioned: Components, Component Templates, Pages, Page Templates, Schemas,
-and Template Building Blocks.
+For versioned item types (Components, Component Templates, Pages, Page Templates, Template Building Blocks and Schemas), this tool returns the most recent saved data (dynamic version) by default.
 
 ID formats for versioned items:
 - Components: tcm:integer-integer, tcm:integer-integer-16, ecl:integer-integer, or ecl:integer-integer-16.
@@ -53,11 +51,11 @@ Expected JSON Output:
 `,
     input: {
         itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)).describe("An array of unique IDs for the items to retrieve. Use tools like 'search' or 'getItemsInContainer' to find item IDs."),
-        useDynamicVersion: z.boolean().optional().default(false).describe("When true, loads the latest revisions for versioned items. Defaults to false."),
+        useDynamicVersion: z.boolean().optional().default(true).describe("Defaults to true. For versioned items (Components, Pages, Templates, Schemas), this retrieves the latest saved state (dynamic version), including minor revisions and checked-out changes. Set to false to strictly retrieve the last checked-in major version. This parameter is ignored for non-versioned items."),
         loadFullItems: z.boolean().optional().default(false).describe("When true, loads the full content and metadata for each item (where applicable), and BinaryContent for Multimedia Components (components with 'ComponentType' = 'Multimedia'). This is ignored if 'includeProperties' is used."),
         includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response (e.g., ['LocationInfo.Path', 'VersionInfo.CreationDate', 'Content', 'Metadata', 'BinaryContent.MimeType']). If used, 'loadFullItems' is ignored. 'Id', 'Title', and 'type' will always be included.`),
     },
-    execute: async ({ itemIds, useDynamicVersion = false, loadFullItems = false, includeProperties }: { 
+    execute: async ({ itemIds, useDynamicVersion = true, loadFullItems = false, includeProperties }: { 
         itemIds: string[], 
         useDynamicVersion?: boolean, 
         loadFullItems?: boolean,
