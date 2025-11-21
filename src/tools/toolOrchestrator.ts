@@ -507,37 +507,20 @@ This is the most robust and accurate way to find stale content.
             // 3. Get *all* dependencies (direct and indirect)
             context.log('  Fetching dependency graph...');
             
-            // Helper function to flatten the dependency graph tree
-            function flattenDependencies(node) {
-                let items = [];
-                if (node.Dependencies && node.Dependencies.length > 0) {
-                    for (const childNode of node.Dependencies) {
-                        if (childNode.Item) {
-                            items.push(childNode.Item);
-                        }
-                        // Recurse
-                        items = items.concat(flattenDependencies(childNode));
-                    }
-                }
-                return items;
-            }
-
+            // dependencyGraphForItem defaults to flatMode: true, so we get a simple array.
             let dependencyDetails = [];
             try {
-                // Get the graph object *directly*
-                const graph = await context.tools.dependencyGraphForItem({
+                const graphItems = await context.tools.dependencyGraphForItem({
                     itemId: context.currentItemId,
-                    direction: "Uses", // Get items this page *uses*
-                    // Ask for the details we need directly
+                    direction: "Uses",
                     includeProperties: ["Title", "VersionInfo.RevisionDate"]
                 });
                 
-                if (graph && graph.Dependencies) {
-                    // Flatten the tree structure to get a simple list of items
-                    dependencyDetails = flattenDependencies(graph);
+                if (graphItems && graphItems.length > 0) {
+                    dependencyDetails = graphItems;
                     context.log(\`  Found \${dependencyDetails.length} total dependencies.\`);
                 } else {
-                    context.log(\`  No dependencies found or graph was invalid.\`);
+                    context.log(\`  No dependencies found.\`);
                     dependencyDetails = [];
                 }
             } catch (e) {
@@ -977,27 +960,23 @@ Example 11: Find Large, Unused Multimedia Components
             context.log(\`Found large file: \${item.Title} (\${item.BinaryContent.Size} bytes)\`);
 
             // 3. Find all Pages that use this component
-            const graph = await context.tools.dependencyGraphForItem({
-                itemId: itemId,
-                direction: "UsedBy",
-                rloItemTypes: ["Page"], // Only care about Page usages
-                details: "IdAndTitle"
-            });
-
-            // Helper to flatten the graph into a list of Page IDs
-            function flattenPageIds(node) {
-                let ids = [];
-                if (!node || !node.Dependencies) return ids;
-                for (const child of node.Dependencies) {
-                    if (child.Item && child.Item.type === 'Page') {
-                        ids.push(child.Item.Id);
-                    }
-                    ids = ids.concat(flattenPageIds(child));
-                }
-                return [...new Set(ids)]; // Return unique IDs
+            // dependencyGraphForItem defaults to flatMode: true, so we get a flat array.
+            let graphItems = [];
+            try {
+                graphItems = await context.tools.dependencyGraphForItem({
+                    itemId: itemId,
+                    direction: "UsedBy",
+                    rloItemTypes: ["Page"], // Only care about Page usages
+                    details: "IdAndTitle"
+                });
+            } catch (e) {
+                context.log(\`Error getting dependencies: \${e.message}\`);
+                // Treat as unused for safety, or skip
+                return null; 
             }
+
+            const pageIds = graphItems.map(item => item.Id);
             
-            const pageIds = flattenPageIds(graph);
             if (pageIds.length === 0) {
                 context.log('  -> Unused by any Page. Adding to report.');
                 return { id: item.Id, title: item.Title, size: item.BinaryContent.Size, reason: "Unused by any Page" };

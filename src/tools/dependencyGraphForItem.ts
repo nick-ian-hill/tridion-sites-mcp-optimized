@@ -8,6 +8,9 @@ export const dependencyGraphForItem = {
     name: "dependencyGraphForItem",
     description: `Returns items in the Content Management System that are either dependencies of (direction = 'Uses') or dependent on (direction = 'UsedBy') the specified item.
 This tool is essential for impact analysis, such as checking what will be affected by a change, or for checking an item's usages with direction 'UsedBy' before attempting deletion with 'deleteItem' or 'batchDeleteItems'.
+
+**Flat Mode (Default):** This tool flattens the hierarchical dependency tree into a simple array of unique items by default. This is highly recommended for analysis tasks (e.g., "Count all dependencies", "Find stale content") as it simplifies processing and reduces token usage. To retrieve the full nested graph structure, set 'flatMode' to 'false'.
+
 IMPORTANT: Requesting details for many items can return a large amount of data. Use 'IdAndTitle' or the 'includeProperties' parameter for the most efficient and reliable results.
 Only select "AllDetails" if you absolutely need full details about the returned items. This request will likely fail with a large number of item (resultLimit > 150). 'AllDetails' adds the following properties to 'CoreDetails':
   - AccessControlList
@@ -34,7 +37,7 @@ Example 1: Finds all items that are directly using a Schema, returning only thei
         details: "IdAndTitle"
     });
 
-Example 2: Finds all Components used by a Page, returning the base properties plus 'VersionInfo.RevisionDate' for each item in the dependency tree.
+Example 2: Finds all Components used by a Page, returning a flat list of unique items with specific properties.
     const result = await tools.dependencyGraphForItem({
         itemId: "tcm:5-314-64",
         direction: "Uses",
@@ -42,78 +45,21 @@ Example 2: Finds all Components used by a Page, returning the base properties pl
         includeProperties: ["VersionInfo.RevisionDate"]
     });
 
-Expected JSON Output for Example 2:
-{
-  "type": "DependencyGraphNode",
-  "Dependencies": [
-    {
-      "type": "DependencyGraphNode",
-      "Dependencies": [
-        {
-          "type": "DependencyGraphNode",
-          "Dependencies": [],
-          "HasMore": false,
-          "Item": {
-            "Id": "tcm:5-292",
-            "Title": "blueprint",
-            "type": "Component",
-            "VersionInfo": {
-              "RevisionDate": "2025-09-26T09:12:50.293Z"
-            }
-          }
-        }
-      ],
-      "HasMore": false,
-      "Item": {
-        "Id": "tcm:5-307",
-        "Title": "All Articles Intro",
-        "type": "Component",
-        "VersionInfo": {
-          "RevisionDate": "2025-09-26T09:12:54.043Z"
-        }
-      }
-    },
-    {
-      "type": "DependencyGraphNode",
-      "Dependencies": [
-        {
-          "type": "DependencyGraphNode",
-          "Dependencies": [],
-          "HasMore": false,
-          "Item": {
-            "Id": "tcm:5-304",
-            "Title": "calculator",
-            "type": "Component",
-            "VersionInfo": {
-              "RevisionDate": "2025-09-26T09:12:53.303Z"
-            }
-          }
-        }
-      ],
-      "HasMore": false,
-      "Item": {
-        "Id": "tcm:5-305",
-        "Title": "Articles Intro",
-        "type": "Component",
-        "VersionInfo": {
-          "RevisionDate": "2025-09-26T09:12:53.593Z"
-        }
-      }
-    },
-    {
-      "type": "DependencyGraphNode",
-      "Dependencies": [],
-      "HasMore": false,
-      "Item": {
-        "Id": "tcm:5-280",
-        "Title": "Company News Media Manager Video",
-        "type": "Component",
-        "VersionInfo": {
-          "RevisionDate": "2025-09-26T09:12:47.003Z"
-        }
-      }
-    }
-}
+Expected JSON Output for Example 2 (Flat Mode):
+[
+  {
+    "Id": "tcm:5-292",
+    "Title": "blueprint",
+    "type": "Component",
+    "VersionInfo": { "RevisionDate": "2025-09-26T09:12:50.293Z" }
+  },
+  {
+    "Id": "tcm:5-307",
+    "Title": "All Articles Intro",
+    "type": "Component",
+    "VersionInfo": { "RevisionDate": "2025-09-26T09:12:54.043Z" }
+  }
+]
 `,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the item for which the dependency graph should be retrieved."),
@@ -136,11 +82,12 @@ Expected JSON Output for Example 2:
             "TargetGroup",
         ])).optional().describe("Filters the results to include only these types of repository-local objects."),
         includeContainers: z.boolean().optional().default(false).describe("If true and direction is 'Uses', the parent Folders or Structure Groups of the items in the graph are also returned (recursively)."),
+        flatMode: z.boolean().optional().default(true).describe("Defaults to true. Flattens the hierarchical dependency tree into a simple list of unique items. Set to false to retrieve the full nested graph structure."),
         resultLimit: z.number().int().optional().default(100).describe("The maximum number of dependency nodes to return."),
         details: z.enum(["IdAndTitle", "CoreDetails", "AllDetails"]).default("IdAndTitle").optional().describe(`Specifies a predefined level of detail for the returned items. For custom property selection, use 'includeProperties' instead.`),
         includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response and use dot notation for nested properties (e.g., ['ComponentType', 'BluePrintInfo.IsLocalized', 'IsPublishedInContext', 'Schema.IdRef', 'VersionInfo.CheckOutUser.IdRef']). If used, the 'details' parameter is ignored. The base properties 'Id', 'Title', and 'type' will always be included.`),
     },
-    execute: async ({ itemId, direction = "Uses", contextRepositoryId, rloItemTypes, includeContainers = false, resultLimit = 100, details = "IdAndTitle", includeProperties }: any, context: any) => {
+    execute: async ({ itemId, direction = "Uses", contextRepositoryId, rloItemTypes, includeContainers = false, resultLimit = 100, details = "IdAndTitle", includeProperties, flatMode = true }: any, context: any) => {
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -163,7 +110,28 @@ Expected JSON Output for Example 2:
             });
 
             if (response.status === 200) {
-                const finalData = filterResponseData({ responseData: response.data, details, includeProperties });
+                let dataToProcess = response.data;
+
+                if (flatMode) {
+                    const uniqueItems = new Map<string, any>();
+                    
+                    const traverse = (node: any) => {
+                        if (node.Item && node.Item.Id) {
+                            if (!uniqueItems.has(node.Item.Id)) {
+                                uniqueItems.set(node.Item.Id, node.Item);
+                            }
+                        }
+                        if (node.Dependencies && Array.isArray(node.Dependencies)) {
+                            node.Dependencies.forEach(traverse);
+                        }
+                    };
+
+                    // The API typically returns a single root DependencyGraphNode
+                    traverse(dataToProcess);
+                    dataToProcess = Array.from(uniqueItems.values());
+                }
+
+                const finalData = filterResponseData({ responseData: dataToProcess, details, includeProperties });
                 const formattedFinalData = formatForAgent(finalData);
                 return {
                     content: [{
