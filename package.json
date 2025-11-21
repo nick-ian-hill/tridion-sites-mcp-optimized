@@ -5,7 +5,7 @@
   "main": "src/index.js",
   "type": "module",
   "scripts": {
-    "start": "node --loader ts-node/esm src/index.ts",
+    "start": "tsx src/index.ts",
     "orchestrator": "node --loader ts-node/esm src/runOrchestratorTest.ts"
   },
   "keywords": [],
@@ -31,6 +31,7 @@
     "@types/qs": "^6.14.0",
     "@types/xml2js": "^0.4.14",
     "ts-node": "^10.9.2",
+    "tsx": "^4.20.6",
     "typescript": "^5.9.2"
   }
 }
