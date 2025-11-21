@@ -10,42 +10,51 @@ import { formatForAgent, formatForApi } from "../utils/fieldReordering.js";
 export const search = {
     name: "search",
     description: `Performs a comprehensive search on the Content Manager System (CMS) for various item types based on a wide range of criteria.
-  This tool is used to find items that match the specified query, such as full-text search strings, item titles, types, authors, lock status, and more.
-  The return value will be an array of items that match the search criteria or an empty array if no items are found.
-  For browsing a known folder structure, 'getItemsInContainer' is an alternative.
+This tool is used to find items that match the specified query, such as full-text search strings, item titles, types, authors, lock status, and more.
+The return value will be an array of items that match the search criteria or an empty array if no items are found.
+For browsing a known folder structure, 'getItemsInContainer' is an alternative.
 
-  ### Important: Retrieving Full Item Details
-  The search service is optimized for finding items, not for retrieving their full content or deep structural data. Properties like a Component's 'Content'/'Metadata' (the values), a Schema's 'Fields'/'MetadataFields', or a Multimedia Component's 'BinaryContent' (MimeType, Size) are **NEVER** returned by this tool, regardless of the 'details' or 'includeProperties' settings.
- 
-  For tasks requiring inspection of these properties, always use a two-step process:
-  1.  Find: Use 'search' with the default 'details: "IdAndTitle"' to efficiently get a list of relevant item IDs.
-  2.  Fetch: Use 'bulkReadItems' with the resulting IDs and the 'includeProperties' parameter to retrieve only the specific fields you need (e.g., ['Fields', 'MetadataFields', 'BinaryContent']). This is the most token-efficient and reliable method.
+### CRITICAL: Search Index vs. Real-Time State (Versioning)
+Search results reflect the indexed state of items, which typically corresponds to the last **checked-in major version**.
+* **Drafts are invisible:** Changes made in minor versions (checked-out items) are **not** reflected in search result properties like 'RevisionDate' or 'LastModifiedDate'.
+* **Stale Content Checks:** If your task is to find "Stale Content" (e.g., items not modified in 30 days), relying solely on search results will produce **false positives**. An item might appear old in the search index but have a fresh, unchecked-in draft.
+* **Resolution:** Always use the "Find-then-Fetch" pattern described below to verify the *actual* current state of an item.
 
-  When using 'FullTextQuery' to search for a substring, a leading/trailing asterisk or other wildcard may be necessary, e.g., "*ing", "?art*".
+### Important: Retrieving Full Item Details
+The search service is optimized for finding items, not for retrieving their full content or deep structural data. Properties like a Component's 'Content'/'Metadata' (the values), a Schema's 'Fields'/'MetadataFields', or a Multimedia Component's 'BinaryContent' (MimeType, Size) are **NEVER** returned by this tool, regardless of the 'details' or 'includeProperties' settings.
 
-  Strategy for Efficient Searching
-  To avoid excessive token usage, follow this strategy when choosing how much detail to request:
+### The "Find-Then-Fetch" Pattern
+For tasks requiring inspection of content, metadata, or exact modification dates (including drafts), always use a two-step process:
+1.  **Find:** Use 'search' with the default 'details: "IdAndTitle"' to efficiently get a list of relevant item IDs.
+2.  **Fetch:** Use 'bulkReadItems' (or 'getItem') with the resulting IDs.
+    * **For Content:** Use the 'includeProperties' parameter to retrieve fields like ['Content', 'Metadata', 'BinaryContent'].
+    * **For Status/Dates:** Use 'useDynamicVersion: true' (the default) to ensure you see the latest Work-In-Progress (WIP) dates, not just the indexed major version.
 
-  1.  Always prefer 'includeProperties' for specific details. If you need any information beyond an item's ID and Title (e.g., who created it, where it is located), use the 'includeProperties' parameter. This is the most token-efficient method. A good practice is to first run a narrow search to identify available properties, then run your full search requesting only the ones you need.
-  2.  Default to 'details: "IdAndTitle"' for lists. If the goal is simply to find items or get a count, this is the safest and fastest option.
-  3.  Use 'details: "CoreDetails"' with extreme caution. This option returns a predefined set of properties, but excludes key properties like 'Content', 'Metadata', 'Fields', and 'MetadataFields'. It has high token usage and may fail if the search returns many items (over 300). Only use this if you cannot determine the required properties in advance.
-  4.  Avoid 'details: "AllDetails"'. This option should almost never be used as it will likely fail or exhaust the context window.
-  
-  'AllDetails' adds the following properties to 'CoreDetails':
-  - AccessControlList
-  - ApplicableActions
-  - ApprovalStatus
-  - ContentSecurityDescriptor
-  - ExtensionProperties
-  - ListLinks
-  - SecurityDescriptor
-  - LoadInfo
+When using 'FullTextQuery' to search for a substring, a leading/trailing asterisk or other wildcard may be necessary, e.g., "*ing", "?art*".
 
-  When using search query parameters that target items in a specific publication: 'BasedOnSchema', 'UsedKeywords', 'ProcessDefinitions', and 'ActivityDefinitions', it's mandatory to also provide a value for the 'SearchIn' parameter, otherwise the request will fail. 
+### Strategy for Efficient Searching
+To avoid excessive token usage, follow this strategy when choosing how much detail to request:
 
-  Strategy for tasks requiring post-processing or aggregation of results (e.g., "Find the Most...", "Count all...")
-  When post-processing of data from a large set of items is required, do not use this tool directly.
-  This approach is token-inefficient and will fail on large result sets. The correct, scalable method is to use the 'toolOrchestrator', and supply a postProcessingScript to perform the aggregation on the server-side. See the 'toolOrchestrator' documentation for the recommended 3-phase (setup-map-reduce) pattern.
+1.  **Always prefer 'includeProperties' for specific details.** If you need any information beyond an item's ID and Title (e.g., who created it, where it is located), use the 'includeProperties' parameter. This is the most token-efficient method. A good practice is to first run a narrow search to identify available properties, then run your full search requesting only the ones you need.
+2.  **Default to 'details: "IdAndTitle"' for lists.** If the goal is simply to find items or get a count, this is the safest and fastest option.
+3.  **Use 'details: "CoreDetails"' with extreme caution.** This option returns a predefined set of properties, but excludes key properties like 'Content', 'Metadata', 'Fields', and 'MetadataFields'. It has high token usage and may fail if the search returns many items (over 300). Only use this if you cannot determine the required properties in advance.
+4.  **Avoid 'details: "AllDetails"'.** This option should almost never be used as it will likely fail or exhaust the context window.
+
+'AllDetails' adds the following properties to 'CoreDetails':
+- AccessControlList
+- ApplicableActions
+- ApprovalStatus
+- ContentSecurityDescriptor
+- ExtensionProperties
+- ListLinks
+- SecurityDescriptor
+- LoadInfo
+
+When using search query parameters that target items in a specific publication: 'BasedOnSchema', 'UsedKeywords', 'ProcessDefinitions', and 'ActivityDefinitions', it's mandatory to also provide a value for the 'SearchIn' parameter, otherwise the request will fail.
+
+### Strategy for tasks requiring post-processing (e.g., "Find the Most...", "Count all...")
+When post-processing of data from a large set of items is required, do not use this tool directly.
+This approach is token-inefficient and will fail on large result sets. The correct, scalable method is to use the 'toolOrchestrator', and supply a postProcessingScript to perform the aggregation on the server-side. See the 'toolOrchestrator' documentation for the recommended 3-phase (setup-map-reduce) pattern.
 
   Examples:
  
@@ -75,6 +84,20 @@ Example 2: Find 'Multimedia Components' based on the 'Default Multimedia Schema'
       },
       includeProperties: ['ComponentType']
     });
+
+Example 3: Find "Stale" Pages (Pages not modified in the last 30 days).
+  CRITICAL: Do NOT use 'LastModifiedBefore' in the search query. This relies on the index and will miss recent drafts, causing false positives.
+  Instead, use 'search' to find ALL Pages, and then use 'toolOrchestrator' to check the actual 'RevisionDate' of the dynamic version.
+
+    // Step 1: Find the pages (Search only for type, NOT by date)
+    const result = await tools.search({
+      searchQuery: {
+        ItemTypes: ['Page'],
+        SearchIn: 'tcm:0-5-1'
+      },
+      details: 'IdAndTitle' 
+    });
+    // Step 2: Pass these IDs to toolOrchestrator/getItem to check 'VersionInfo.RevisionDate' with useDynamicVersion: true (the default).
   `,
     input: {
         searchQuery: SearchQueryValidation.optional().describe("A search query model. If not provided, a default search for all items is performed."),
