@@ -1,24 +1,7 @@
 {
-  "coreTools": [
-    "ShellTool",
-    "WebFetchTool",
-    "WebSearchTool"
-  ],
   "mcpServers": {
     "mcp-test-server": {
       "httpUrl": "http://localhost:8090"
-    }/*,
-    "mcp-test-server2": {
-      "command": "node",
-      "args": [
-        "--inspect=9229",
-        "--loader",
-        "ts-node/esm",
-        "src/index.ts"
-      ],
-      "mode": "stdio",
-      "cwd": ".",
-      "timeout": 10000
-    }*/
+    }
   }
 }
