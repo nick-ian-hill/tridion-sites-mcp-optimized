@@ -3,12 +3,13 @@ import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { PlanStep } from './types.js';
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-if (!GEMINI_API_KEY) {
-    throw new Error("Server is not configured with a GEMINI_API_KEY.");
-}
-
-const genAI = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+const getGenAI = (): GoogleGenAI => {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+        throw new Error("Action failed: Server is not configured with a GEMINI_API_KEY.");
+    }
+    return new GoogleGenAI({ apiKey });
+};
 
 export interface DetectedIntent {
   strategy: 'SIMPLE_ACTION' | 'MEDIUM_ACTION' | 'COMPLEX_OR_GENERAL';
@@ -44,7 +45,7 @@ export const detectIntent = async (prompt: string): Promise<DetectedIntent> => {
     const systemInstruction = `You are an expert intent strategist. Analyze the user's prompt and classify its complexity. You MUST call one of the provided functions. Default to handleComplexOrGeneralQuery if uncertain.`;
 
     try {
-        const result = await genAI.models.generateContent({
+        const result = await getGenAI().models.generateContent({
             model: "gemini-2.5-pro",
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: {
@@ -158,7 +159,7 @@ export const determineNextStep = async (
         ${contextItemId ? `Context Item ID: "${contextItemId}"` : ''}
     `;
 
-    const result: GenerateContentResponse = await genAI.models.generateContent({
+    const result: GenerateContentResponse = await getGenAI().models.generateContent({
         model: "gemini-2.5-pro",
         contents: history,
         config: {
@@ -246,7 +247,7 @@ export const selectRelevantTools = async (prompt: string, allTools: any[], maxTo
     `;
 
     try {
-        const result = await genAI.models.generateContent({
+        const result = await getGenAI().models.generateContent({
             model: "gemini-2.5-pro",
             contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
             config: { systemInstruction, tools: [{ functionDeclarations: [toolLister] }], toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.ANY } }, temperature: 0.0 }
@@ -298,7 +299,7 @@ export const summarizeToolOutput = async (toolOutput: any, userPrompt: string): 
     `;
 
     try {
-        const result = await genAI.models.generateContent({
+        const result = await getGenAI().models.generateContent({
             model: "gemini-2.5-flash",
             contents: summaryPrompt,
             config: {
