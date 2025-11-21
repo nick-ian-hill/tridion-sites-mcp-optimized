@@ -15,9 +15,9 @@ const convertGraphToDot = (nodes: any[], edges: any[]): string => {
     parts.push('');
     nodes.forEach(node => {
         let textLabel = escapeHTML(node.label);
-        if (node.metadata?.item?.title && node.label !== node.metadata.item.title) {
-            const itemTitle = escapeHTML(node.metadata.item.title);
-            textLabel += `<BR/>(${itemTitle})`;
+        const itemTitle = node.data?.item?.title;
+        if (itemTitle && node.label !== itemTitle) {
+            textLabel += `<BR/>(${escapeHTML(itemTitle)})`;
         }
         const htmlLabel = `
 <TABLE BORDER="2" COLOR="#F50057" CELLBORDER="0" CELLSPACING="0" CELLPADDING="1" BGCOLOR="#FFFFFF">
@@ -45,19 +45,47 @@ const convertGraphToDot = (nodes: any[], edges: any[]): string => {
 
 export const getBluePrintHierarchy = {
     name: "getBluePrintHierarchy",
-    description: `Retrieves the BluePrint hierarchy for a specified Content Manager item. The hierarchy shows the parent and child relationships for the item within the BluePrint, which is fundamental for content inheritance and reuse.
-This tool should be used before performing BluePrinting operations like 'localizeItem', 'unlocalizeItem', 'promoteItem', or 'demoteItem' to understand the context and identify valid parent/child Publications.
-IMPORTANT: Requesting a high level of detail for many items can be slow. Prefer 'details: "IdAndTitle"' or 'includeProperties' for efficiency.`,
+    description: `Retrieves the BluePrint hierarchy for a specified Content Manager item.
+The hierarchy shows the parent and child relationships for the item within the BluePrint, which is fundamental for content inheritance and reuse.
+
+### Output Structure (JsonGraph)
+By default, this tool returns a 'JsonGraph' object containing a 'graph' property.
+IMPORTANT: The 'nodes' and 'edges' properties are **ARRAYS**, not Dictionaries/Maps.
+The 'data.item' property of each node respects the 'includeProperties' or 'details' parameters, allowing you to request specific fields (like 'BluePrintInfo' or 'VersionInfo') for every item in the hierarchy in a single call.
+
+Example Structure:
+{
+  "graph": {
+    "nodes": [
+      { 
+        "id": "tcm:0-2-1", 
+        "label": "Child Pub", 
+        "data": { 
+           "item": { 
+              "Id": "tcm:2-123-64", 
+              "Title": "My Page", 
+              ... // Requested properties appear here
+           } 
+        } 
+      }
+    ],
+    "edges": [
+      { "source": "tcm:0-1-1", "target": "tcm:0-2-1", "relation": "has child" }
+    ]
+  }
+}
+
+This tool should be used before performing BluePrinting operations like 'localizeItem', 'unlocalizeItem', 'promoteItem', or 'demoteItem' to understand the context and identify valid parent/child Publications.`,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The TCM URI of the item for which to retrieve the BluePrint hierarchy."),
-        outputFormat: z.enum(["Raw", "JsonGraph", "Svg"]).optional().default("Raw").describe("Specifies the output format. 'Raw' returns the API JSON. 'JsonGraph' formats the data for graph processing. 'Svg' generates and returns an SVG image of the hierarchy."),
-        details: z.enum(["IdAndTitle", "CoreDetails", "AllDetails"]).default("IdAndTitle").optional().describe(`Specifies a predefined level of detail. This is ignored if outputFormat is 'JsonGraph' or 'Svg'.
+        outputFormat: z.enum(["Raw", "JsonGraph", "Svg"]).optional().default("JsonGraph").describe("Specifies the output format. Defaults to 'JsonGraph', which formats the data for efficient graph processing (Best for scripts). 'Raw' returns the nested API JSON. 'Svg' generates and returns an SVG image of the hierarchy."),
+        details: z.enum(["IdAndTitle", "CoreDetails", "AllDetails"]).default("IdAndTitle").optional().describe(`Specifies a predefined level of detail.
 - "IdAndTitle": Returns only the ID and Title of each item.
 - "CoreDetails": Returns the main properties, excluding verbose security and link-related information.
 - "AllDetails": Returns all available properties for each item. Only select "AllDetails" if you absolutely need full details about the returned items.`),
-        includeProperties: z.array(z.string()).optional().describe(`An array of property names to include in the response for custom control (e.g., Parents.IdRef, Children.Title). If used, 'details' is ignored. This is ignored if outputFormat is 'JsonGraph' or 'Svg'. Prefer this option to avoid returning unnecessary data and limit token usage.`),
+        includeProperties: z.array(z.string()).optional().describe(`An array of property names to include in the response for custom control (e.g., Parents.IdRef, Children.Title, BluePrintInfo, VersionInfo). If used, 'details' is ignored. Prefer this option to avoid returning unnecessary data and limit token usage.`),
     },
-    execute: async ({ itemId, outputFormat = "Raw", details = "IdAndTitle", includeProperties }: { itemId: string; outputFormat: "Raw" | "JsonGraph" | "Svg"; details?: "IdAndTitle" | "CoreDetails" | "AllDetails", includeProperties?: string[] }, context: any) => {
+    execute: async ({ itemId, outputFormat = "JsonGraph", details = "IdAndTitle", includeProperties }: { itemId: string; outputFormat: "Raw" | "JsonGraph" | "Svg"; details?: "IdAndTitle" | "CoreDetails" | "AllDetails", includeProperties?: string[] }, context: any) => {
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -93,11 +121,18 @@ IMPORTANT: Requesting a high level of detail for many items can be slow. Prefer 
 
             rawData.Items.forEach((bpNode: any) => {
                 const pubId = bpNode.ContextRepositoryId;
+
+                const filteredItem = filterResponseData({ 
+                    responseData: bpNode.Item, 
+                    details, 
+                    includeProperties 
+                });
+
                 if (!nodes.has(pubId)) {
                     nodes.set(pubId, {
                         id: pubId,
                         label: bpNode.ContextRepositoryTitle,
-                        metadata: { item: { id: bpNode.Item.Id, title: bpNode.Item.Title } }
+                        data: { item: filteredItem }
                     });
                 }
             });
@@ -108,6 +143,7 @@ IMPORTANT: Requesting a high level of detail for many items can be slow. Prefer 
                     bpNode.Parents.forEach((parent: any) => {
                         const parentPubId = parent.IdRef;
                         if (!nodes.has(parentPubId)) {
+                            // For parent nodes not in the primary list, we create a stub.
                             nodes.set(parentPubId, { id: parentPubId, label: parent.Title });
                         }
                         const uniqueEdgeId = `${parentPubId}->${childPubId}`;
