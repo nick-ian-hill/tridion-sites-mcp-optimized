@@ -5,6 +5,7 @@ import { convertItemIdToContextPublication } from "../utils/convertItemIdToConte
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 import { reorderFieldsBySchema, convertLinksRecursively, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
+import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
 
 const createComponentInputProperties = {
     title: z.string().nonempty().describe("The title for the new Component. Note that creation will fail if a Component with the same title already exists in the target Folder."),
@@ -98,7 +99,8 @@ Example 2: Create a Component with both content fields and metadata fields.
 
         let { locationId, schemaId, title, content, metadata } = args;
         
-        // Convert links and schema ID to the context of the target location
+        const authenticatedAxios = createAuthenticatedAxios(userSessionId);
+
         try {
             schemaId = convertItemIdToContextPublication(schemaId, locationId);
             if (content) {
@@ -107,13 +109,7 @@ Example 2: Create a Component with both content fields and metadata fields.
             if (metadata) {
                 convertLinksRecursively(metadata, locationId);
             }
-        } catch (e) {
-            return handleAxiosError(e, "Failed during context conversion");
-        }
         
-        try {
-            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
-
             // Reorder content and metadata fields based on the Component Schema.
             if (content) {
                 content = await reorderFieldsBySchema(content, schemaId, 'content', authenticatedAxios);
@@ -168,6 +164,7 @@ Example 2: Create a Component with both content fields and metadata fields.
                 return handleUnexpectedResponse(createResponse);
             }
         } catch (error) {
+            await diagnoseBluePrintError(error, args, locationId, authenticatedAxios);
             return handleAxiosError(error, "Failed to create Component");
         }
     }

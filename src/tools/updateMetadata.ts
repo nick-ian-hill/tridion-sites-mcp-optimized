@@ -3,6 +3,7 @@ import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 import { reorderFieldsBySchema, convertLinksRecursively, formatForApi } from "../utils/fieldReordering.js";
+import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
 
 export const updateMetadata = {
     name: "updateMetadata",
@@ -128,6 +129,7 @@ Example 2: Updates the metadata values for a 'Folder' with featuring a multi-val
                 content: [{ type: "text", text: JSON.stringify(responseData, null, 2) }],
             };
         } catch (error) {
+            await diagnoseBluePrintError(error, metadata, itemId, authenticatedAxios);
             return handleAxiosError(error, "Failed to update item metadata");
         }
     }

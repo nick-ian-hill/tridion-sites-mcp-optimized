@@ -7,6 +7,7 @@ import { convertItemIdToContextPublication } from "../utils/convertItemIdToConte
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 import { reorderFieldsBySchema, convertLinksRecursively, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
+import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
 
 const createItemInputProperties = {
     itemType: z.enum([
@@ -218,8 +219,10 @@ The provided 'locationId' (${locationId}) is a '${locationType}'.`;
         }
 
         let { title, metadataSchemaId, metadata, isAbstract, description, key, parentKeywords, relatedKeywords, itemsInBundle, searchQuery, resultLimit = 100, fileExtension, pageSchemaId, templateBuildingBlocks, allowOnPage, isRepositoryPublishable, outputFormat, priority, relatedSchemaIds, directory } = args;
+        
+        const authenticatedAxios = createAuthenticatedAxios(userSessionId);
+
         try {
-            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             // Reorder metadata fields based on schema
             if (metadata) {
                 if (metadataSchemaId && metadataSchemaId !== 'tcm:0-0-0') {
@@ -338,6 +341,7 @@ The provided 'locationId' (${locationId}) is a '${locationType}'.`;
                 return handleUnexpectedResponse(createResponse);
             }
         } catch (error) {
+            await diagnoseBluePrintError(error, args, locationId, authenticatedAxios);
             return handleAxiosError(error, "Failed to create CMS item");
         }
     }

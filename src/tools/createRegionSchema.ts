@@ -5,6 +5,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
 import { convertLinksRecursively, processSchemaFieldDefinitions, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
 import { regionDefinitionSchema } from "../schemas/regionDefinitionSchemas.js";
+import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
 
 export const createRegionSchema = {
     name: "createRegionSchema",
@@ -106,9 +107,10 @@ Note the use of "type": "ExpandableLink" for the 'RegionSchema' property inside 
             title, locationId, description, metadataFields, regionDefinition,
             isIndexable, isPublishable
         } = args;
+
+        const authenticatedAxios = createAuthenticatedAxios(userSessionId);
         
         try {
-            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const processedMetadataFields = metadataFields ? await processSchemaFieldDefinitions(metadataFields, locationId, authenticatedAxios) : undefined;
 
             if (processedMetadataFields) {
@@ -159,6 +161,7 @@ Note the use of "type": "ExpandableLink" for the 'RegionSchema' property inside 
                 return handleUnexpectedResponse(createResponse);
             }
         } catch (error) {
+            await diagnoseBluePrintError(error, args, locationId, authenticatedAxios);
             return handleAxiosError(error, "Failed to create Region Schema");
         }
     }

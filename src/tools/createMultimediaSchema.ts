@@ -4,6 +4,7 @@ import { toLink, toLinkArray } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
 import { processSchemaFieldDefinitions, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
+import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
 
 export const createMultimediaSchema = {
     name: "createMultimediaSchema",
@@ -61,9 +62,10 @@ Example 1: Create a simple Multimedia Schema for images.
             title, locationId, description, metadataFields,
             allowedMultimediaTypes, isIndexable, isPublishable
         } = args;
+
+        const authenticatedAxios = createAuthenticatedAxios(userSessionId);
         
         try {
-            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const processedMetadataFields = metadataFields ? await processSchemaFieldDefinitions(metadataFields, locationId, authenticatedAxios) : undefined;
 
             const defaultModelResponse = await authenticatedAxios.get('/item/defaultModel/Schema', {
@@ -106,6 +108,7 @@ Example 1: Create a simple Multimedia Schema for images.
                 return handleUnexpectedResponse(createResponse);
             }
         } catch (error) {
+            await diagnoseBluePrintError(error, args, locationId, authenticatedAxios);
             return handleAxiosError(error, "Failed to create Multimedia Schema");
         }
     }

@@ -4,6 +4,7 @@ import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 import { formatForAgent, formatForApi } from "../utils/fieldReordering.js";
+import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
 
 const createMultimediaComponentFromBase64InputProperties = {
     base64Content: z.string().describe("The base64 encoded content of the file to upload."),
@@ -31,6 +32,8 @@ export const createMultimediaComponentFromBase64 = {
 
         const { base64Content, title, fileName, locationId, schemaId, metadata } = input;
         
+        const authenticatedAxios = createAuthenticatedAxios(userSessionId);
+
         try {
             // --- Part 1: Decode Base64 and Prepare for Upload ---
             const fileBuffer = Buffer.from(base64Content, 'base64');
@@ -40,7 +43,6 @@ export const createMultimediaComponentFromBase64 = {
             formData.append('file', fileBuffer, fileName);
 
             console.log("Uploading binary data to CMS temporary storage...");
-            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const uploadResponse = await authenticatedAxios.post('/binary/upload', formData, {
                 headers: formData.getHeaders()
             });
@@ -136,6 +138,7 @@ export const createMultimediaComponentFromBase64 = {
             }
 
         } catch (error) {
+            await diagnoseBluePrintError(error, input, locationId, authenticatedAxios);
             return handleAxiosError(error, "Failed to create multimedia component from base64");
         }
     }

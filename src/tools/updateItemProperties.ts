@@ -8,6 +8,7 @@ import { fieldDefinitionSchema, fieldValueSchema } from "../schemas/fieldValueSc
 import { convertLinksRecursively, processSchemaFieldDefinitions, reorderFieldsBySchema, formatForApi } from "../utils/fieldReordering.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 import { regionDefinitionSchema } from "../schemas/regionDefinitionSchemas.js";
+import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
 
 const updateItemPropertiesInputProperties = {
     itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the CMS item to update."),
@@ -362,6 +363,7 @@ This example updates a basic Region Schema (e.g., 'tcm:5-3875-8') to make it non
             };
 
         } catch (error) {
+            await diagnoseBluePrintError(error, params, itemId, authenticatedAxios);
             return handleAxiosError(error, `Failed to update ${itemType} ${itemId}`);
         }
     }

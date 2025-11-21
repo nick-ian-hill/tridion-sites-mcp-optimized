@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
+import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
 
 const classifyInputProperties = {
     itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)
@@ -53,10 +54,9 @@ The tool will return a warning if no changes were made. For batch operations, us
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
         const userSessionId = match ? match[1] : null;
+        const authenticatedAxios = createAuthenticatedAxios(userSessionId);
 
         try {
-            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
-
             // Map keywords to the publication context of the target item
             const finalKeywordIdsToAdd = keywordIdsToAdd.map(keywordId =>
                 convertItemIdToContextPublication(keywordId, itemId)
@@ -113,6 +113,7 @@ The tool will return a warning if no changes were made. For batch operations, us
                 return handleUnexpectedResponse(response);
             }
         } catch (error) {
+            await diagnoseBluePrintError(error, input, itemId, authenticatedAxios);
             return handleAxiosError(error, `Failed to update classification for item ${itemId}`);
         }
     }

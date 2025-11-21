@@ -3,6 +3,7 @@ import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 import { reorderFieldsBySchema, convertLinksRecursively, formatForApi } from "../utils/fieldReordering.js";
+import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
 
 export const updateContent = {
     name: "updateContent",
@@ -109,6 +110,7 @@ Example 2: Updates the content of an embedded schema field.
             };
             
         } catch (error) {
+            await diagnoseBluePrintError(error, content, itemId, authenticatedAxios);
             return handleAxiosError(error, "Failed to update component");
         }
     }

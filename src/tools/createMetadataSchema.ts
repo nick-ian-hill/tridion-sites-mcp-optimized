@@ -4,6 +4,7 @@ import { toLink } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
 import { processSchemaFieldDefinitions, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
+import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
 
 export const createMetadataSchema = {
     name: "createMetadataSchema",
@@ -75,9 +76,10 @@ Example 2: Create a Metadata Schema with a multi-value checkbox field using a pr
             title, locationId, description, metadataFields,
             isIndexable, isPublishable
         } = args;
+
+        const authenticatedAxios = createAuthenticatedAxios(userSessionId);
         
         try {
-            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const processedMetadataFields = metadataFields ? await processSchemaFieldDefinitions(metadataFields, locationId, authenticatedAxios) : undefined;
 
             const defaultModelResponse = await authenticatedAxios.get('/item/defaultModel/Schema', {
@@ -119,6 +121,7 @@ Example 2: Create a Metadata Schema with a multi-value checkbox field using a pr
                 return handleUnexpectedResponse(createResponse);
             }
         } catch (error) {
+            await diagnoseBluePrintError(error, args, locationId, authenticatedAxios);
             return handleAxiosError(error, "Failed to create Metadata Schema");
         }
     }

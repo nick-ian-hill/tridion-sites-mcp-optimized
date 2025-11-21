@@ -7,6 +7,7 @@ import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 import { reorderFieldsBySchema, convertLinksRecursively, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
 import { processComponentPresentations, processRegions } from "../utils/pageUtils.js";
 import { componentPresentationSchemaForTyping, regionSchemaForTyping } from "../schemas/pageSchemas.js";
+import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
 
 const createPageInputProperties = {
     title: z.string().nonempty().describe("The title for the new Page."),
@@ -177,12 +178,13 @@ This example shows a two-column layout within the main content area.
             return { content: [{ type: "text", text: JSON.stringify(errorResponse, null, 2) }], errors: [] };
         };
 
+        const authenticatedAxios = createAuthenticatedAxios(userSessionId);
+
         try {
             let parsedComponentPresentations = componentPresentations;
             let parsedRegions = regions;
 
             // Fetch the default model to use as a base
-            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const defaultModelResponse = await authenticatedAxios.get('/item/defaultModel/Page', {
                 params: { containerId: locationId }
             });
@@ -321,6 +323,7 @@ This example shows a two-column layout within the main content area.
                 return handleUnexpectedResponse(createResponse);
             }
         } catch (error) {
+            await diagnoseBluePrintError(error, args, locationId, authenticatedAxios);
             return handleAxiosError(error, "Failed to create CMS item");
         }
     }

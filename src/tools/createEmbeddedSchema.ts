@@ -5,6 +5,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 import { xmlNameSchema } from "../schemas/xmlNameSchema.js";
 import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
 import { processSchemaFieldDefinitions, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
+import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
 
 export const createEmbeddedSchema = {
     name: "createEmbeddedSchema",
@@ -61,9 +62,10 @@ This schema can then be used inside other schemas (like an 'Article' schema) to 
             title, locationId, rootElementName, description,
             fields, isIndexable, isPublishable
         } = args;
+
+        const authenticatedAxios = createAuthenticatedAxios(userSessionId);
         
         try {
-            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const processedFields = fields ? await processSchemaFieldDefinitions(fields, locationId, authenticatedAxios) : undefined;
 
             const defaultModelResponse = await authenticatedAxios.get('/item/defaultModel/Schema', {
@@ -105,6 +107,7 @@ This schema can then be used inside other schemas (like an 'Article' schema) to 
                 return handleUnexpectedResponse(createResponse);
             }
         } catch (error) {
+            await diagnoseBluePrintError(error, args, locationId, authenticatedAxios);
             return handleAxiosError(error, "Failed to create Embedded Schema");
         }
     }

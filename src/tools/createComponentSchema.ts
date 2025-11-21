@@ -5,6 +5,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 import { xmlNameSchema } from "../schemas/xmlNameSchema.js";
 import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
 import { processSchemaFieldDefinitions, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
+import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
 
 export const createComponentSchema = {
     name: "createComponentSchema",
@@ -304,9 +305,10 @@ Example 8: Create a Schema with advanced constraints.
             fields, metadataFields, componentProcessId, isIndexable,
             isPublishable
         } = args;
+
+        const authenticatedAxios = createAuthenticatedAxios(userSessionId);
         
         try {
-            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const processedFields = fields ? await processSchemaFieldDefinitions(fields, locationId, authenticatedAxios) : undefined;
             const processedMetadataFields = metadataFields ? await processSchemaFieldDefinitions(metadataFields, locationId, authenticatedAxios) : undefined;
 
@@ -351,6 +353,7 @@ Example 8: Create a Schema with advanced constraints.
                 return handleUnexpectedResponse(createResponse);
             }
         } catch (error) {
+            await diagnoseBluePrintError(error, args, locationId, authenticatedAxios);
             return handleAxiosError(error, "Failed to create Component Schema");
         }
     }

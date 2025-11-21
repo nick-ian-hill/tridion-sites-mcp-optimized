@@ -2,6 +2,7 @@ import { z, ZodIssue } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { processSchemaFieldDefinitions, formatForApi } from "../utils/fieldReordering.js";
+import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
 
 import {
     singleLineTextFieldSchema,
@@ -230,7 +231,9 @@ Example 3: Update a validation constraint on a field.
             };
 
         } catch (error) {
-             if (error instanceof Error) {
+            await diagnoseBluePrintError(error, params, schemaId, authenticatedAxios);
+            
+            if (error instanceof Error) {
                 return createJsonError(error.message);
             }
             return handleAxiosError(error, `Failed to update fields for Schema ${schemaId}`);
