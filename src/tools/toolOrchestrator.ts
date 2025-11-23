@@ -740,103 +740,139 @@ This script finds all Pages in a Publication, efficiently gets the required Targ
     });
 
 Example 9: Create a 'Diamond' BluePrint Hierarchy (Setup only)
-This script uses the 'preProcessingScript' to perform a complex, one-time setup: creating a full BluePrint hierarchy. It creates a Root Publication, adds the required Root Structure Group, and then creates a 'diamond' inheritance pattern (a Website inheriting from separate Schema and Content Publications). The 'mapScript' is skipped (omitted) because this is a one-time 'Global' operation that does not iterate over items.
-Note: This script assumes the Publication titles are unique. Publication titles must be globally unique, and the script will fail with a 409 Conflict error if a Publication with one of these titles already exists. Verify uniqueness using getPublications before creating and running the script.
+This script uses the 'preProcessingScript' to perform a complex, one-time setup: creating a full 'Diamond' BluePrint hierarchy with 5 levels.
+Structure:
+Level 0: 000 Empty (Root)
+Level 1: 100 Schema Master
+Level 2: Split -> 200 Design Master AND 210 Global Content
+Level 3: Merge -> 300 Master Content (Inherits from 200 and 210)
+Level 4: 400 Website Master
+Level 5: 510 Dutch Website, 520 Indonesian Website
 
     const result = await tools.toolOrchestrator({
         preProcessingScript: \`
             // --- Phase 1: Setup ---
             context.log("Starting BluePrint 'Diamond Pattern' setup...");
 
-            // 1. Create Root Publication
-            // The orchestrator automatically parses the JSON response.
+            // 1. Level 0: 000 Empty (Root)
+            // A pure scalability container. Must have a Root Structure Group to be a parent.
             const rootPub = await context.tools.createPublication({
-                title: "010 Global Master (Root)",
-                publicationUrl: "/master",
+                title: "000 Empty",
+                publicationKey: "000-Empty", // Good practice to set keys explicitly
                 locale: "en-US"
             });
-            // We can access the 'Id' property directly from the returned object.
             const rootPubId = rootPub.Id;
-            if (!rootPubId) throw new Error("Failed to create Root Publication.");
-            context.log(\`Created Root Publication: \${rootPubId}\`);
+            context.log(\`Created Level 0 (Root): \${rootPubId}\`);
 
-            // 2. Create Root Structure Group (REQUIRED for BluePrinting)
-            // A Publication must have a Root Structure Group to be a parent.
-            // No need to capture the ID, but we check for success
-            const rootSg = await context.tools.createRootStructureGroup({
+            // Create Root Structure Group (REQUIRED for a Publication to be a parent)
+            // Child publications will inherit this.
+            await context.tools.createRootStructureGroup({
                 title: "Root",
-                publicationId: rootPubId 
+                publicationId: rootPubId
             });
-            if (!rootSg.Id) throw new Error("Failed to create Root Structure Group.");
-            context.log(\`Created Root Structure Group in \${rootPubId}\`);
 
-            // 3. Create Schema Master (inherits from Root). Used for Component Schemas, Embedded Schemas, Categories, and Keywords.
+            // 2. Level 1: 100 Schema Master
+            // Inherits from 000. Contains Schemas, Categories, Keywords.
             const schemaPub = await context.tools.createPublication({
-                title: "020 Schema Master",
+                title: "100 Schema Master",
                 parentPublications: [rootPubId],
                 publicationType: "Content"
             });
             const schemaPubId = schemaPub.Id;
-            if (!schemaPubId) throw new Error("Failed to create Schema Master.");
-            context.log(\`Created Schema Master Publication: \${schemaPubId}\`);
+            context.log(\`Created Level 1: \${schemaPubId}\`);
 
-            // 4. Create Design Master (inherits from Root). Used for Component Templates, Page Templates, Template Building Blocks, and Region Schemas.
+            // 3. Level 2: The Split (Design vs. Global Content)
+            // 200 Design Master: Templates, TBBs
             const designPub = await context.tools.createPublication({
-                title: "030 Design Master",
-                parentPublications: [rootPubId],
+                title: "200 Design Master",
+                parentPublications: [schemaPubId],
                 publicationType: "Content"
             });
             const designPubId = designPub.Id;
-            if (!designPubId) throw new Error("Failed to create Design Master.");
-            context.log(\`Created Design Master Publication: \${designPubId}\`);
 
-            // 5. Create Website (inherits from Schema AND Design)
-            // This forms the 'diamond' shape.
-            const websitePub = await context.tools.createPublication({
-                title: "100 Global Website",
-                parentPublications: [schemaPubId, designPubId], // <-- Inherits from two parents
-                publicationUrl: "/global",
-                locale: "en-US",
-                publicationType: "Web"
+            // 210 Global Content: Global shared components (Company Name, Logos)
+            const globalContentPub = await context.tools.createPublication({
+                title: "210 Global Content",
+                parentPublications: [schemaPubId],
+                publicationType: "Content"
             });
-            const websitePubId = websitePub.Id;
-            if (!websitePubId) throw new Error("Failed to create Website Publication.");
-            context.log(\`Created Website Publication: \${websitePubId}\`);
+            const globalContentPubId = globalContentPub.Id;
+            context.log(\`Created Level 2: \${designPubId} and \${globalContentPubId}\`);
+
+            // 4. Level 3: The Merge (300 Master Content)
+            // Where Global Content meets Design to allow creation of Page-level components.
+            // Inherits from Design (200) AND Global Content (210).
+            const masterContentPub = await context.tools.createPublication({
+                title: "300 Master Content",
+                parentPublications: [designPubId, globalContentPubId], // Merge point
+                publicationType: "Content"
+            });
+            const masterContentPubId = masterContentPub.Id;
+            context.log(\`Created Level 3 (Merge): \${masterContentPubId}\`);
+
+            // 5. Level 4: 400 Website Master
+            // Defines the sitemap (Structure Groups and Pages).
+            const websiteMasterPub = await context.tools.createPublication({
+                title: "400 Website Master",
+                parentPublications: [masterContentPubId],
+                publicationType: "Web",
+                publicationUrl: "/"
+            });
+            const websiteMasterPubId = websiteMasterPub.Id;
+            context.log(\`Created Level 4: \${websiteMasterPubId}\`);
+
+            // 6. Level 5: Localized Delivery Sites
+            const dutchPub = await context.tools.createPublication({
+                title: "510 Dutch Website",
+                parentPublications: [websiteMasterPubId],
+                publicationType: "Web",
+                publicationUrl: "/nl",
+                locale: "nl-NL"
+            });
+            
+            const indoPub = await context.tools.createPublication({
+                title: "520 Indonesian Website",
+                parentPublications: [websiteMasterPubId],
+                publicationType: "Web",
+                publicationUrl: "/id",
+                locale: "id-ID"
+            });
+            context.log(\`Created Level 5: \${dutchPub.Id} and \${indoPub.Id}\`);
 
             context.log("Diamond BluePrint setup complete.");
 
-            // Return the IDs of the created publications.
-            // Note: 'itemIds' is intentionally returned as an empty array (or could be omitted) 
-            // because we have no map phase.
+            // Return the IDs for reference
             return {
                 itemIds: [], 
-                preProcessingResult: { // <-- Pass data to post-processing
+                preProcessingResult: { 
                     root: rootPubId,
                     schema: schemaPubId,
                     design: designPubId,
-                    website: websitePubId
+                    globalContent: globalContentPubId,
+                    masterContent: masterContentPubId,
+                    websiteMaster: websiteMasterPubId,
+                    dutchSite: dutchPub.Id,
+                    indoSite: indoPub.Id
                 }
             };
         \`,
-        // NO 'mapScript' is provided.
+        // NO 'mapScript' is provided because this is a global setup task.
         postProcessingScript: \`
-            // 'context.preProcessingResult' holds the object returned from the setup phase
-            // (which in this case contains the new Publication IDs).
-            const createdIds = context.preProcessingResult;
+            const ids = context.preProcessingResult;
             
             const summary = {
-                message: "Successfully created 'Diamond' BluePrint hierarchy.",
-                publications: [
-                    { role: "Root", id: createdIds.root },
-                    { role: "Schema Master", id: createdIds.schema },
-                    { role: "Design Master", id: createdIds.design },
-                    { role: "Website (Child)", id: createdIds.website }
-                ]
+                message: "Successfully created Diamond BluePrint hierarchy.",
+                hierarchy: {
+                    level0: ids.root,
+                    level1: ids.schema,
+                    level2: [ids.design, ids.globalContent],
+                    level3: ids.masterContent,
+                    level4: ids.websiteMaster,
+                    level5: [ids.dutchSite, ids.indoSite]
+                }
             };
 
             context.log(JSON.stringify(summary, null, 2));
-            
-            // The return value of this script is the final output.
             return summary;
         \`
     });
