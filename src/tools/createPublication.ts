@@ -8,32 +8,37 @@ export const createPublication = {
     description: `Creates a new Publication in the Content Management System.
 
 Introduction to Publications and BluePrints
-- Publications are the main organizational units in the Content Manager. They act as containers for all other content and design items like Components, Pages, Schemas, Categories, Keywords, and Templates.
-- BluePrinting is a hierarchical structure of related Publications that enables you to organize, reuse, and manage content and structure across multiple Publications within a single CMS instance.
-- The system can contain multiple BluePrint hierarchies, but a Publication can only belong to at most one hierarchy, and all Publications in a hierarchy must share a common root Structure Group. It is not possible to remove a Publication from a hierarchy, but it can be deleted if none of its items are published or localized.
+    - Publications are the main organizational units in the Content Manager. They act as containers for all other content and design items like Components, Pages, Schemas, Categories, Keywords, and Templates.
+    - BluePrinting is a hierarchical structure of related Publications that enables you to organize, reuse, and manage content and structure across multiple Publications within a single CMS instance.
+    - The system can contain multiple BluePrint hierarchies, but a Publication can only belong to at most one hierarchy, and all Publications in a hierarchy must share a common root Structure Group. It is not possible to remove a Publication from a hierarchy, but it can be deleted if none of its items are published or localized.
 
 Core Concepts and Terminology
-- Root Publication: The top-level parent in a BluePrint hierarchy. Since it has no parent, it contains only items created within that Publication (local items). To create a root Publication, do not specify any parent Publications. To be referenced as a parent, a Publication must have a root Structure Group. IMPORTANT It is only neccessary to create a root structure group for the root Publication, as it will be inherited by child Publications.
-- BluePrint Hierarchy: A system of two or more Publications where every Publication is a direct child or descendent of a common root Publication.
-- Inheritance: Items created in a parent Publication are shared down the BluePrint hierarchy to all child Publications.
-- Parent Publication: A Publication that is refenced as a parent by one or more Publications. All items in a parent Publication are inherited by its children and their descendents. When you make changes to a Primary item in a parent Publication, those changes are automatically applied to shared items in child Publications.
-- Child Publication: Inherits items from one or more parent Publications. The parent Publications must belong to the same BluePrint hierarchy, i.e., share a common root Structure Group. It can also contain its own local content, which can be combined with shared content.
-- Primary Item: An item that is not shared or localized from an item in an ancestor Publication. Changes to a Primary item are inherited by shared instances of the item in descended Publications.
-- Owning Item: A primary item or an item that has been localized. Changes to an owning item will impact shared copies of that item in descendent Publications.
-- Shared Item: A read-only item that is inherited from its owning item.
-- Localized Item: An inherited item that is localized in the current Publication. Localizing an item breaks the inheritance from the owning item and makes the localized item editable. After localization, subsequent changes to the owning item no longer modify the localized item.
+    - Root Publication: The top-level parent in a BluePrint hierarchy. Since it has no parent, it contains only items created within that Publication (local items). To create a root Publication, do not specify any parent Publications. To be referenced as a parent, a Publication must have a root Structure Group. IMPORTANT It is only neccessary to create a root structure group for the root Publication, as it will be inherited by child Publications.
+    - BluePrint Hierarchy: A system of two or more Publications where every Publication is a direct child or descendent of a common root Publication.
+    - Inheritance: Items created in a parent Publication are shared down the BluePrint hierarchy to all child Publications.
+    - Parent Publication: A Publication that is refenced as a parent by one or more Publications. All items in a parent Publication are inherited by its children and their descendents. When you make changes to a Primary item in a parent Publication, those changes are automatically applied to shared items in child Publications.
+    - Child Publication: Inherits items from one or more parent Publications. The parent Publications must belong to the same BluePrint hierarchy, i.e., share a common root Structure Group. It can also contain its own local content, which can be combined with shared content.
+    - Primary Item: An item that is not shared or localized from an item in an ancestor Publication. Changes to a Primary item are inherited by shared instances of the item in descended Publications.
+    - Owning Item: A primary item or an item that has been localized. Changes to an owning item will impact shared copies of that item in descendent Publications.
+    - Shared Item: A read-only item that is inherited from its owning item.
+    - Localized Item: An inherited item that is localized in the current Publication. Localizing an item breaks the inheritance from the owning item and makes the localized item editable. After localization, subsequent changes to the owning item no longer modify the localized item.
 
 Business Rules for Effective BluePrints
-- Hierarchy Structure: A BluePrint hierarchy has a single root Publication. Only Publications that have a root Structure Group can have child Publications.
-- Content cannot be moved between different Publications. However, it is possible to move a primary item up or down the hierarchy using the Promote and Demote tools.
-- Inheritance Conflict Resolution:
-  1. Proximity Rule: A child Publication inherits an item from the closest parent (fewest hops) that contains a localized or original version of that item.
-  2. Priority Rule (Tie-Breaker): If multiple parents are equally close, the one with the highest priority is chosen. Priority is determined by the order in the 'parentPublications' array; the Publication with the lowest index has the highest priority.
-- Localization Flexibility: Most content and metadata fields can be localized. However, individual fields can be defined as non-localizable via the Schema, meaning their values will always be shared from the primary item and cannot be modified in a localized item.
+    - Hierarchy Structure: A BluePrint hierarchy has a single root Publication. Only Publications that have a root Structure Group can have child Publications.
+    - Content cannot be moved between different Publications. However, it is possible to move a primary item up or down the hierarchy using the Promote and Demote tools.
+    - Inheritance Conflict Resolution:
+        1. Proximity Rule: A child Publication inherits an item from the closest parent (fewest hops) that contains a localized or original version of that item.
+        2. Priority Rule (Tie-Breaker): If multiple parents are equally close, the one with the highest priority is chosen. Priority is determined by the order in the 'parentPublications' array; the Publication with the lowest index has the highest priority.
+    - Localization Flexibility: Most content and metadata fields can be localized. However, individual fields can be defined as non-localizable via the Schema, meaning their values will always be shared from the primary item and cannot be modified in a localized item.
 
 Practical Application
-- BluePrint hierarchies are ideal for managing multi-language websites, different brand channels, or various stages of a project (development, staging, live).
-- For multi-language sites, the BluePrint structure drives translations and dictates the translation flow. Content created at a corporate level can be shared down the hierarchy to country-specific Publications, where it can be localized, translated, and supplemented with local content.
+    - BluePrint hierarchies are ideal for managing multi-language websites, different brand channels, or various stages of a project (development, staging, live).
+    - For multi-language sites, the BluePrint structure drives translations and dictates the translation flow. Content created at a corporate level can be shared down the hierarchy to country-specific Publications, where it can be localized, translated, and supplemented with local content.
+
+Constraints and Validation
+    - Unique Titles: Publication Titles must be unique within the entire Content Management System. You cannot create a Publication with the same name as an existing one, even if it is in a different BluePrint hierarchy.
+    - Unique Keys: The Publication Key must also be unique. If not provided, the Key defaults to the Title.
+    - Best Practice: Before creating a Publication, it is highly recommended to use the 'getPublications' tool to check if the Title already exists to avoid execution errors.
 
 Examples:
 
@@ -62,7 +67,7 @@ Example 3: Creates a Publication and configures its default workflow processes.
         enableWorkflowProcessAssociations: true
     });`,
     input: {
-        title: z.string().describe("The title for the new Publication."),
+        title: z.string().describe("The title for the new Publication. MUST be unique across the entire system. If a Publication with this title already exists, the operation will fail."),
         parentPublications: z.array(z.string().regex(/^tcm:\d+-\d+-1$/)).optional().describe("An array of URIs for parent Publications. Use the 'getPublications' tool to find available publications. The parents must belong to the same BluePrint hierarchy. If no parent Publications are specified, a root Publication will be created."),
         publicationKey: z.string().optional().describe("Optional unique key. Only provide this if the key must be different from the title. If omitted, the title is used as the key."),
         publicationPath: z.string().optional().describe("The publication path, which forms the base of the publish path for Structure Groups and Pages within this Publication."),
