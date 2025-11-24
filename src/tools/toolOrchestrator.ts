@@ -739,141 +739,63 @@ This script finds all Pages in a Publication, efficiently gets the required Targ
         \`
     });
 
-Example 9: Create a 'Diamond' BluePrint Hierarchy (Setup only)
-This script uses the 'preProcessingScript' to perform a complex, one-time setup: creating a full 'Diamond' BluePrint hierarchy with 5 levels.
-Structure:
-Level 0: 000 Empty (Root)
-Level 1: 100 Schema Master
-Level 2: Split -> 200 Design Master AND 210 Global Content
-Level 3: Merge -> 300 Master Content (Inherits from 200 and 210)
-Level 4: 400 Website Master
-Level 5: 510 Dutch Website, 520 Indonesian Website
+Example 9: Create a 'Diamond' BluePrint Hierarchy (Declarative Setup)
+This script uses the 'preProcessingScript' to call the dedicated 'createBluePrintHierarchy' tool.
 
     const result = await tools.toolOrchestrator({
         preProcessingScript: \`
-            // --- Phase 1: Setup ---
-            context.log("Starting BluePrint 'Diamond Pattern' setup...");
+            context.log("Starting BluePrint Setup...");
 
-            // 1. Level 0: 000 Empty (Root)
-            // A pure scalability container. Must have a Root Structure Group to be a parent.
-            const rootPub = await context.tools.createPublication({
-                title: "000 Empty",
-                publicationKey: "000-Empty", // Good practice to set keys explicitly
-                locale: "en-US"
-            });
-            const rootPubId = rootPub.Id;
-            context.log(\`Created Level 0 (Root): \${rootPubId}\`);
+            // Define the hierarchy declaratively
+            const hierarchy = {
+                nodes: [
+                    // Level 1
+                    { id: "schema", data: { title: "100 Schema Master", publicationType: "Content" } },
+                    // Level 2 (Split)
+                    { id: "design", data: { title: "200 Design Master", publicationType: "Content" } },
+                    { id: "global", data: { title: "210 Global Content", publicationType: "Content" } },
+                    // Level 3 (Merge)
+                    { id: "master", data: { title: "300 Master Content", publicationType: "Content" } },
+                    // Level 4 (Web)
+                    { id: "web", data: { title: "400 Website Master", publicationType: "Web", publicationUrl: "/" } }
+                ],
+                edges: [
+                    { source: "ROOT", target: "schema" },
+                    { source: "schema", target: "design" },
+                    { source: "schema", target: "global" },
+                    { source: "design", target: "master" },
+                    { source: "global", target: "master" },
+                    { source: "master", target: "web" }
+                ]
+            };
 
-            // Create Root Structure Group (REQUIRED for a Publication to be a parent)
-            // Child publications will inherit this.
-            await context.tools.createRootStructureGroup({
-                title: "Root",
-                publicationId: rootPubId
+            // Call the single tool to handle creation and sorting
+            // Note: We use JSON.stringify because the tool accepts strings to ensure agent compatibility
+            const result = await context.tools.createBluePrintHierarchy({
+                rootPublicationJson: JSON.stringify({
+                    title: "000 Root",
+                    key: "000-Root",
+                    locale: "en-US"
+                }),
+                rootStructureGroupTitle: "Root",
+                hierarchyJson: JSON.stringify(hierarchy)
             });
 
-            // 2. Level 1: 100 Schema Master
-            // Inherits from 000. Contains Schemas, Categories, Keywords.
-            const schemaPub = await context.tools.createPublication({
-                title: "100 Schema Master",
-                parentPublications: [rootPubId],
-                publicationType: "Content"
-            });
-            const schemaPubId = schemaPub.Id;
-            context.log(\`Created Level 1: \${schemaPubId}\`);
-
-            // 3. Level 2: The Split (Design vs. Global Content)
-            // 200 Design Master: Templates, TBBs
-            const designPub = await context.tools.createPublication({
-                title: "200 Design Master",
-                parentPublications: [schemaPubId],
-                publicationType: "Content"
-            });
-            const designPubId = designPub.Id;
-
-            // 210 Global Content: Global shared components (Company Name, Logos)
-            const globalContentPub = await context.tools.createPublication({
-                title: "210 Global Content",
-                parentPublications: [schemaPubId],
-                publicationType: "Content"
-            });
-            const globalContentPubId = globalContentPub.Id;
-            context.log(\`Created Level 2: \${designPubId} and \${globalContentPubId}\`);
-
-            // 4. Level 3: The Merge (300 Master Content)
-            // Where Global Content meets Design to allow creation of Page-level components.
-            // Inherits from Design (200) AND Global Content (210).
-            const masterContentPub = await context.tools.createPublication({
-                title: "300 Master Content",
-                parentPublications: [designPubId, globalContentPubId], // Merge point
-                publicationType: "Content"
-            });
-            const masterContentPubId = masterContentPub.Id;
-            context.log(\`Created Level 3 (Merge): \${masterContentPubId}\`);
-
-            // 5. Level 4: 400 Website Master
-            // Defines the sitemap (Structure Groups and Pages).
-            const websiteMasterPub = await context.tools.createPublication({
-                title: "400 Website Master",
-                parentPublications: [masterContentPubId],
-                publicationType: "Web",
-                publicationUrl: "/"
-            });
-            const websiteMasterPubId = websiteMasterPub.Id;
-            context.log(\`Created Level 4: \${websiteMasterPubId}\`);
-
-            // 6. Level 5: Localized Delivery Sites
-            const dutchPub = await context.tools.createPublication({
-                title: "510 Dutch Website",
-                parentPublications: [websiteMasterPubId],
-                publicationType: "Web",
-                publicationUrl: "/nl",
-                locale: "nl-NL"
-            });
+            context.log("Hierarchy created. ID Map returned.");
             
-            const indoPub = await context.tools.createPublication({
-                title: "520 Indonesian Website",
-                parentPublications: [websiteMasterPubId],
-                publicationType: "Web",
-                publicationUrl: "/id",
-                locale: "id-ID"
-            });
-            context.log(\`Created Level 5: \${dutchPub.Id} and \${indoPub.Id}\`);
-
-            context.log("Diamond BluePrint setup complete.");
-
-            // Return the IDs for reference
+            // Pass the map of "tempID -> realID" to the next phase or output
             return {
                 itemIds: [], 
-                preProcessingResult: { 
-                    root: rootPubId,
-                    schema: schemaPubId,
-                    design: designPubId,
-                    globalContent: globalContentPubId,
-                    masterContent: masterContentPubId,
-                    websiteMaster: websiteMasterPubId,
-                    dutchSite: dutchPub.Id,
-                    indoSite: indoPub.Id
-                }
+                preProcessingResult: result.content[0].text 
             };
         \`,
-        // NO 'mapScript' is provided because this is a global setup task.
         postProcessingScript: \`
-            const ids = context.preProcessingResult;
-            
-            const summary = {
-                message: "Successfully created Diamond BluePrint hierarchy.",
-                hierarchy: {
-                    level0: ids.root,
-                    level1: ids.schema,
-                    level2: [ids.design, ids.globalContent],
-                    level3: ids.masterContent,
-                    level4: ids.websiteMaster,
-                    level5: [ids.dutchSite, ids.indoSite]
-                }
+            // Output the mapping for the user
+            const data = JSON.parse(context.preProcessingResult);
+            return {
+                message: "Hierarchy Setup Complete",
+                idMap: data.idMap
             };
-
-            context.log(JSON.stringify(summary, null, 2));
-            return summary;
         \`
     });
 
