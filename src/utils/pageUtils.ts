@@ -42,7 +42,7 @@ export async function processRegions(
     containerId: string,
     axiosInstance: AxiosInstance
 ): Promise<any[]> {
-    
+
     // 1. Fetch the Container Item (Page Template or Region Schema)
     // We need this to find the "RegionDefinition" which tells us what regions are expected.
     let containerItem: any;
@@ -77,7 +77,7 @@ export async function processRegions(
     const definedNestedRegions = definitionSchema?.RegionDefinition?.NestedRegions || [];
     const userRegions = regions || [];
     const processedRegions: any[] = [];
-    
+
     // Keep track of which user regions we have consumed to identify ad-hoc ones later
     const consumedUserRegionNames = new Set<string>();
 
@@ -104,11 +104,17 @@ export async function processRegions(
         }
     }
 
-    // B. Process Ad-Hoc Regions (User provided, but not in schema)
-    // Some implementations allow loose regions not strictly defined in the schema.
+    // B. Provided region is not defined in the schema
     for (const userRegion of userRegions) {
         if (!consumedUserRegionNames.has(userRegion.RegionName)) {
-             processedRegions.push(await processSingleRegion(userRegion, definitionSchema, contextId, axiosInstance));
+            const validNames = definedNestedRegions.map((r: any) => r.RegionName).join(", ");
+
+            throw new Error(
+                `Validation Error: The Page Template references a Region Schema that does not contain a nested region named '${userRegion.RegionName}'. ` +
+                (validNames.length > 0
+                    ? `Available regions are: [${validNames}].`
+                    : `This Schema has NO nested regions defined (it is likely a leaf region that accepts Component Presentations directly).`)
+            );
         }
     }
 
@@ -126,7 +132,7 @@ async function processSingleRegion(
 ): Promise<any> {
     const name = regionData.RegionName;
     const agentProvidedMetadata = regionData.Metadata;
-    
+
     let finalMetadataPayload: any = undefined;
     let regionSchemaIdRef: string | undefined;
 
