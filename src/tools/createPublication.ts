@@ -40,6 +40,12 @@ Constraints and Validation
     - Unique Keys: The Publication Key must also be unique. If not provided, the Key defaults to the Title.
     - Best Practice: Before creating a Publication, it is highly recommended to use the 'getPublications' tool to check if the Title already exists to avoid execution errors.
 
+RETURNS:
+    The tool returns a JSON object containing:
+    - "Id": The TCM URI of the new Publication.
+    - "RootFolder": A Link object ({ IdRef, Title }) to the Publication's root Folder.
+    - "RootStructureGroup": A Link object ({ IdRef, Title }) to the Publication's root Structure Group (if one exists).
+
 Examples:
 
 Example 1: Creates a new child Publication with a title, a publication URL for web content, a specific URL for multimedia items, and sets its locale to US English.
@@ -139,6 +145,9 @@ Example 3: Creates a Publication and configures its default workflow processes.
                 const responseData = {
                     type: createResponse.data['$type'],
                     Id: createResponse.data.Id,
+                    Title: createResponse.data.Title,
+                    RootFolder: createResponse.data.RootFolder,
+                    RootStructureGroup: createResponse.data.RootStructureGroup,
                     Message: `Successfully created ${createResponse.data.Id}`
                 };
                 return {
