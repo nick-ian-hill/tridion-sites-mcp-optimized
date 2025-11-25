@@ -17,7 +17,7 @@ const updateItemPropertiesInputProperties = {
         "Category", "Schema", "Bundle", "SearchFolder", "PageTemplate", "ComponentTemplate"
     ]).describe("The type of the CMS item to update."),
     title: z.string().optional().describe("The new title for the item."),
-    metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the Metadata Schema for the item's metadata. Replaces the existing schema."),
+    metadataSchemaId: z.string().regex(/^(tcm:\d+-\d+-8|tcm:0-0-0)$/).optional().describe("The TCM URI of the Metadata Schema for the item's metadata. Replaces the existing schema. Pass 'tcm:0-0-0' to remove the metadata schema."),
     metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields. May be required in the case of mandatory fields when changing the metadata schema. Replaces existing metadata."),
     isAbstract: z.boolean().optional().describe("Set to true to make a Keyword abstract. (Applicable to Keyword)"),
     description: z.string().optional().describe("A new description for the item."),
@@ -76,23 +76,27 @@ When updating collection properties like 'fields', 'metadataFields', 'itemsInBun
 
 BluePrint Context & 404 Errors:
 The ID parameters you provide (e.g., 'metadataSchemaId', 'parentKeywords', 'templateBuildingBlocks') MUST exist in the 'itemId's Publication or one of its parent Publications.
-
 If you get a 404 'Not Found' error on an item you expect to inherit (like a Schema or TBB):
 1.  It likely means the item is in a sibling or child Publication, not a parent.
 2.  To verify, call getItem on your current Publication URI (e.g., 'tcm:0-99-1') and set includeProperties to ['Parents'].
 3.  Inspect the 'Parents' array in the response.
-4.  This will show you your Publication's true parents. Any Schemas, TTBs, Components, etc. from a parent Publication can be used when creating/updating items in the current Publication. The tools automatically map Ids to the correct Publication context, you should not need to call mapItemToContextPublication.
+4.  This will show you your Publication's true parents.
 
+Any Schemas, TTBs, Components, etc. from a parent Publication can be used when creating/updating items in the current Publication.
+The tools automatically map Ids to the correct Publication context, you should not need to call mapItemToContextPublication.
 
-When providing a value for a Component Link field, the linked Component must be based on a Schema specified in that field's 'AllowedTargetSchemas' list. If you encounter a schema validation error on a component link field, use the following strategy:
+When providing a value for a Component Link field, the linked Component must be based on a Schema specified in that field's 'AllowedTargetSchemas' list.
+If you encounter a schema validation error on a component link field, use the following strategy:
 - Use 'getItem' to retrieve the main Schema's definition.
 - Inspect the AllowedTargetSchemas property for the specific field causing the error.
 - Use the 'search' tool with the BasedOnSchemas filter to find a valid Component URI to use in the link.
 
-To discover all available fields within an embedded schema, including optional ones, you must inspect the schema definition. Use the following strategy:
+To discover all available fields within an embedded schema, including optional ones, you must inspect the schema definition.
+Use the following strategy:
 - Use getItem to retrieve the main Schema's definition.
 - Locate the specific EmbeddedSchemaFieldDefinition within the Fields or MetadataFields.
-- Inspect the EmbeddedFields property of that definition. This property contains a dictionary of all the fields (both mandatory and optional) that you can populate.
+- Inspect the EmbeddedFields property of that definition.
+This property contains a dictionary of all the fields (both mandatory and optional) that you can populate.
 
 IMPORTANT: 
 - Shared items ('BluePrintInfo.IsShared' is true) cannot be updated. To modify inherited properties, such as a Schema's fields, you must update the parent item in the BluePrint chain ('PrimaryBluePrintParentItem').
@@ -100,8 +104,8 @@ IMPORTANT:
 - The operation will be aborted if the item is checked out by another user.
 
 Example 1: Update a Schema to make a mandatory field optional.
-This example modifies the 'News Article' Schema (tcm:2-104-8) to include a new field, 'image'. Note that the entire 'fields' object must be provided, including the unchanged fields.
-
+This example modifies the 'News Article' Schema (tcm:2-104-8) to include a new field, 'image'.
+Note that the entire 'fields' object must be provided, including the unchanged fields.
     const result = await tools.updateItemProperties({
         itemId: "tcm:2-104-8",
         itemType: "Schema",
@@ -149,7 +153,7 @@ Example 2: Change the Metadata Schema of a Folder and provide the mandatory valu
         itemType: "Folder",
         metadataSchemaId: "tcm:5-322-8",
         metadata: {
-                    "campaignYear": 2025,
+            "campaignYear": 2025,
             "campaignManager": {
                 "name": "Jane Doe",
                 "email": "jane.doe@example.com"
@@ -225,9 +229,6 @@ This example updates a basic Region Schema (e.g., 'tcm:5-3875-8') to make it non
         const authenticatedAxios = createAuthenticatedAxios(userSessionId);
 
         try {
-            if (updates.metadataSchemaId) {
-                updates.metadataSchemaId = convertItemIdToContextPublication(updates.metadataSchemaId, itemId);
-            }
             if (updates.parentKeywords) {
                 updates.parentKeywords = updates.parentKeywords.map((kw: string) => convertItemIdToContextPublication(kw, itemId));
             }
@@ -283,13 +284,23 @@ This example updates a basic Region Schema (e.g., 'tcm:5-3875-8') to make it non
             if (updates.description) itemToUpdate.Description = updates.description;
 
             if (updates.metadataSchemaId) {
-                itemToUpdate.MetadataSchema = toLink(updates.metadataSchemaId);
+                if (updates.metadataSchemaId === 'tcm:0-0-0') {
+                    itemToUpdate.MetadataSchema = toLink('tcm:0-0-0');
+                    delete itemToUpdate.Metadata;
+                } else {
+                    const mappedSchemaId = convertItemIdToContextPublication(updates.metadataSchemaId, itemId);
+                    itemToUpdate.MetadataSchema = toLink(mappedSchemaId);
+                }
             }
-            if (updates.metadata) {
+
+            if (updates.metadata && updates.metadataSchemaId !== 'tcm:0-0-0') {
                 const schemaIdForMetadata = updates.metadataSchemaId || itemToUpdate.MetadataSchema?.IdRef;
                 if (!schemaIdForMetadata || schemaIdForMetadata === 'tcm:0-0-0') throw new Error(`Could not determine a valid Schema for metadata. Please specify a 'metadataSchemaId'.`);
+
+                const contextualSchemaId = convertItemIdToContextPublication(schemaIdForMetadata, itemId);
+
                 convertLinksRecursively(updates.metadata, itemId);
-                const orderedMetadata = await reorderFieldsBySchema(updates.metadata, schemaIdForMetadata, 'metadata', authenticatedAxios);
+                const orderedMetadata = await reorderFieldsBySchema(updates.metadata, contextualSchemaId, 'metadata', authenticatedAxios);
                 itemToUpdate.Metadata = orderedMetadata;
             }
 
@@ -351,17 +362,14 @@ This example updates a basic Region Schema (e.g., 'tcm:5-3875-8') to make it non
                 return handleUnexpectedResponse(updateResponse);
             }
             const updatedItem = updateResponse.data;
-
             const responseData = {
                 type: updatedItem['$type'],
                 Id: updatedItem.Id,
                 Message: `Successfully updated ${updatedItem.Id}`
             };
-
             return {
                 content: [{ type: "text", text: JSON.stringify(responseData, null, 2) }],
             };
-
         } catch (error) {
             await diagnoseBluePrintError(error, params, itemId, authenticatedAxios);
             return handleAxiosError(error, `Failed to update ${itemType} ${itemId}`);

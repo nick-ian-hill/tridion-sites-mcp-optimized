@@ -13,7 +13,7 @@ const updatePageInputProperties = {
     title: z.string().optional().describe("The new title for the Page."),
     fileName: z.string().regex(/^\S+$/, "File name cannot contain white space.").optional().describe("The new file name for the page (e.g., 'new-page.html'), which cannot contain spaces."),
     pageTemplateId: z.string().regex(/^tcm:\d+-\d+-128$/).optional().describe("The TCM URI of the Page Template to be associated with the Page. Replaces the existing Page Template."),
-    metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of a Schema for the Page's metadata. Replaces the existing schema. If the Page Template defines a Region Schema, that Region Schema can be used here."),
+    metadataSchemaId: z.string().regex(/^(tcm:\d+-\d+-8|tcm:0-0-0)$/).optional().describe("The TCM URI of a Schema for the Page's metadata. Replaces the existing schema. If the Page Template defines a Region Schema, that Region Schema can be used here. Pass 'tcm:0-0-0' to remove the metadata schema."),
     metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the Page's metadata fields. Can be provided alongside 'metadataSchemaId'. Replaces existing metadata."),
     componentPresentations: z.array(componentPresentationSchemaForTyping).optional().describe("A complete array of Component Presentation objects to replace the existing ones on the page."),
     regions: z.array(regionSchemaForTyping).optional().describe("A complete array of Region objects to replace the existing region data.")
@@ -73,6 +73,12 @@ Example 4: Change the Metadata Schema and provide metadata for the new fields. S
             "campaignCode": "Q4-2025"
         }
     });
+
+Example 5: Remove the Metadata Schema from a Page.
+    const result = await tools.updatePage({
+        itemId: "tcm:1-123-64",
+        metadataSchemaId: "tcm:0-0-0"
+    });
 `,
     input: updatePageInputProperties,
     
@@ -105,11 +111,16 @@ Example 4: Change the Metadata Schema and provide metadata for the new fields. S
             }
 
             if (updates.metadataSchemaId) {
-                const contextualMetadataSchemaId = convertItemIdToContextPublication(updates.metadataSchemaId, itemId);
-                itemToUpdate.MetadataSchema = toLink(contextualMetadataSchemaId);
+                if (updates.metadataSchemaId === 'tcm:0-0-0') {
+                    itemToUpdate.MetadataSchema = toLink('tcm:0-0-0');
+                    delete itemToUpdate.Metadata;
+                } else {
+                    const contextualMetadataSchemaId = convertItemIdToContextPublication(updates.metadataSchemaId, itemId);
+                    itemToUpdate.MetadataSchema = toLink(contextualMetadataSchemaId);
+                }
             }
 
-            if (updates.metadata) {
+            if (updates.metadata && updates.metadataSchemaId !== 'tcm:0-0-0') {
                 // First, check if a new schema is being set in this same update
                 let schemaIdForMetadata = updates.metadataSchemaId;
                 
@@ -122,9 +133,13 @@ Example 4: Change the Metadata Schema and provide metadata for the new fields. S
                 if (!schemaIdForMetadata || schemaIdForMetadata === 'tcm:0-0-0') {
                     const pageTemplateId = itemToUpdate.PageTemplate?.IdRef;
                     if (pageTemplateId) {
-                         const ptResponse = await authenticatedAxios.get(`/items/${pageTemplateId.replace(':', '_')}`);
-                         if (ptResponse.data?.PageSchema?.IdRef) {
-                            schemaIdForMetadata = ptResponse.data.PageSchema.IdRef;
+                         try {
+                             const ptResponse = await authenticatedAxios.get(`/items/${pageTemplateId.replace(':', '_')}`);
+                             if (ptResponse.data?.PageSchema?.IdRef) {
+                                schemaIdForMetadata = ptResponse.data.PageSchema.IdRef;
+                             }
+                         } catch (e) {
+                             console.warn(`Could not load Page Template ${pageTemplateId} to check for Region Schema fallback.`);
                          }
                     }
                 }
