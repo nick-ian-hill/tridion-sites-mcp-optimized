@@ -1,6 +1,7 @@
 import { z } from "zod";
 import * as vm from 'vm';
 import { formatForAgent, formatForApi } from "../utils/fieldReordering.js";
+import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 
 // --- Security Configuration ---
 /**
@@ -69,6 +70,11 @@ interface PreScriptContext {
     parameters: Record<string, any>;
     /** A dictionary of all available tools, wrapped for execution (e.g., `tools.search`, `tools.getItemsInContainer`). */
     tools: { [toolName: string]: (args: any) => Promise<any> };
+    /** A set of synchronous utility functions. */
+    utils: {
+        /** Converts an item ID to match a specific publication context. Returns the string ID directly. */
+        convertItemIdToContextPublication: (itemId: string, contextItemId: string) => string;
+    };
     /** A function to log messages, which will be included in the final summary. */
     log: (message: string) => void;
 }
@@ -83,6 +89,11 @@ interface MapScriptContext {
     preProcessingResult: any;
     /** A dictionary of all available tools, wrapped for execution (e.g., `tools.getItem`, `tools.updateContent`). */
     tools: { [toolName: string]: (args: any) => Promise<any> };
+    /** A set of synchronous utility functions. */
+    utils: {
+        /** Converts an item ID to match a specific publication context. Returns the string ID directly. */
+        convertItemIdToContextPublication: (itemId: string, contextItemId: string) => string;
+    };
     /** A function to log messages, which will be included in the final summary. */
     log: (message: string) => void;
 }
@@ -134,6 +145,13 @@ export const toolOrchestrator = {
 
     By default, up to 5 scripts can run in parallel in the 'map' phase. Setting a higher 'maxConcurrency' value can increase speed at the cost of overall server load. Only use a value of 1 when debugging a script or when explicitly requested by the user.
 
+    ### Available Context and Utilities
+    The 'context' object available in scripts provides:
+    - context.tools: Dictionary of async tools (e.g., context.tools.getItem).
+    - context.log(msg): Function to log progress.
+    - context.utils: Dictionary of synchronous utility functions.
+      - **context.utils.convertItemIdToContextPublication(itemId, contextItemId)**: Returns a string ID mapped to the new context. Use this instead of the 'mapItemIdToContextPublication' tool for simpler, synchronous logic.
+
     RECOMMENDED STRATEGY FOR COMPLEX TASKS
     For complex, multi-stage tasks (like bulk-importing relational data from an Excel file), it is highly recommended to break the operation into separate, sequential 'toolOrchestrator' calls.
     For example:
@@ -156,6 +174,7 @@ export const toolOrchestrator = {
 The 'preProcessingScript' receives a 'context' object with:
 - context.parameters (object): The JavaScript object you passed to the 'parameters' input.
 - context.tools (object): A dictionary of all available tools (e.g., context.tools.search).
+- context.utils (object): Utilities like convertItemIdToContextPublication.
 - context.log(message) (function): A function to log progress.
 This script *must* return either:
 1. An array of item ID strings (string[]).
@@ -166,6 +185,7 @@ The optional 'mapScript' receives a 'context' object with:
 - context.parameters (object): The JavaScript object you passed to the 'parameters' input.
 - context.preProcessingResult (any): The live JavaScript object returned by the preProcessingScript (if any). No JSON.parse() is needed.
 - context.tools (object): A dictionary of all available tools (e.g., context.tools.getItem, context.tools.updateContent).
+- context.utils (object): Utilities like convertItemIdToContextPublication.
 - context.log(message) (function): A function to log progress.
 
 The optional 'postProcessingScript' receives a 'context' object with:
@@ -175,6 +195,7 @@ The optional 'postProcessingScript' receives a 'context' object with:
 - context.parameters (object): The JavaScript object you passed to the 'parameters' input.
 - context.preProcessingResult (any): The live JavaScript object returned by the preProcessingScript (if any). No JSON.parse() is needed.
 - context.tools (object): A dictionary of all available tools (e.g., context.tools.getItem, context.tools.updateContent).
+- context.utils (object): Utilities like convertItemIdToContextPublication.
 - context.log(message) (function): A function to log progress.
 This script's return value is the final output of the tool.
 
@@ -1429,6 +1450,9 @@ This script would first be run by following the "Debugging Strategies" (test on 
             const preScriptContext: PreScriptContext = {
                 parameters: Object.freeze(parameters), // Freeze parameters for security
                 tools: toolWrappers,
+                utils: {
+                    convertItemIdToContextPublication
+                },
                 log: preScriptLog
             };
 
@@ -1536,6 +1560,9 @@ This script would first be run by following the "Debugging Strategies" (test on 
                     parameters: Object.freeze(parameters),
                     preProcessingResult: preScriptContextData,
                     tools: toolWrappers,
+                    utils: {
+                        convertItemIdToContextPublication
+                    },
                     log: perItemLog
                 };
 
@@ -1661,6 +1688,9 @@ This script would first be run by following the "Debugging Strategies" (test on 
                 parameters: Object.freeze(parameters),
                 preProcessingResult: preScriptContextData,
                 tools: toolWrappers,
+                utils: {
+                    convertItemIdToContextPublication
+                },
                 log: postScriptLog
             };
             sandboxContext.console = { log: postScriptLog, error: postScriptErrorLog, warn: postScriptWarnLog };
