@@ -32,7 +32,7 @@ This example gets the revision date for two Components. The output includes the 
 Expected JSON Output:
 {
   "tcm:5-320": {
-    "Id": "tcm:5-320-v0",
+    "Id": "tcm:5-320",
     "Title": "Sitemap2",
     "type": "Component",
     "VersionInfo": {

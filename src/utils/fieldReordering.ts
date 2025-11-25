@@ -28,8 +28,8 @@ async function getOrderedFieldNames(schemaId: string, fieldType: 'content' | 'me
 
     const schema = response.data;
     schemaDefinitionCache.set(schemaId, schema); // Also cache the full definition.
-    const fieldDefinitions = fieldType === 'content' ? schema.Fields : schema.MetadataFields;
 
+    const fieldDefinitions = fieldType === 'content' ? schema.Fields : schema.MetadataFields;
     if (!fieldDefinitions) {
         return [];
     }
@@ -74,6 +74,7 @@ export async function reorderFieldsBySchema(data: Record<string, any>, schemaId:
 
             if (fieldDefinition?.$type === 'EmbeddedSchemaFieldDefinition' && fieldDefinition.EmbeddedSchema?.IdRef) {
                 const embeddedSchemaId = fieldDefinition.EmbeddedSchema.IdRef;
+
                 if (Array.isArray(fieldValue)) {
                     reorderedData[fieldName] = await Promise.all(
                         fieldValue.map(item => reorderFieldsBySchema(item, embeddedSchemaId, 'content', axiosInstance))
@@ -99,6 +100,7 @@ export async function reorderFieldsBySchema(data: Record<string, any>, schemaId:
  */
 export const convertLinksRecursively = (currentObject: any, contextId: string) => {
     if (!currentObject || typeof currentObject !== 'object') return;
+
     if (Array.isArray(currentObject)) {
         currentObject.forEach(item => convertLinksRecursively(item, contextId));
     } else {
@@ -119,7 +121,7 @@ export const convertLinksRecursively = (currentObject: any, contextId: string) =
  * context and automatically populates the 'EmbeddedFields' property for any EmbeddedSchemaFieldDefinition.
  * @param fieldDefinitions A dictionary of field definitions.
  * @param contextId The TCM URI of the context item (e.g., the Schema's parent Folder).
- * @param axiosInstance An authenticated Axios instance. ✅
+ * @param axiosInstance An authenticated Axios instance.
  * @returns A promise that resolves to the processed dictionary of field definitions.
  */
 export async function processSchemaFieldDefinitions(fieldDefinitions: Record<string, any>, contextId: string, axiosInstance: AxiosInstance): Promise<Record<string, any>> {
@@ -129,7 +131,6 @@ export async function processSchemaFieldDefinitions(fieldDefinitions: Record<str
 
     for (const fieldName in processedFields) {
         const fieldDef = processedFields[fieldName];
-
         convertLinksRecursively(fieldDef, contextId);
 
         if (fieldDef.$type === "EmbeddedSchemaFieldDefinition" && fieldDef.EmbeddedSchema?.IdRef) {
@@ -208,13 +209,20 @@ export function formatForApi(obj: any): any {
  * Recursively formats a raw API response (using '$type') to be Agent-friendly (using 'type').
  * 1. Renames '$type' to 'type'.
  * 2. Ensures 'type' is the first key in any object.
+ * 3. Strips '-v0' suffix from TCM URIs (unchecked-in new items) to ensure validation compatibility.
  * This function returns a new object and does not mutate the original.
  *
  * @param obj The raw API object or array to format.
  */
 export function formatForAgent(obj: any): any {
     if (!obj || typeof obj !== 'object') {
-        return obj; // Return primitives as-is
+        // Sanitize TCM URIs ending in -v0 (e.g., tcm:5-123-v0 -> tcm:5-123)
+        // This prevents Zod validation errors in subsequent tool calls, as -v0 implies a 
+        // new item that hasn't been checked in yet, but the base ID is sufficient for interactions.
+        if (typeof obj === 'string' && obj.startsWith('tcm:') && obj.endsWith('-v0')) {
+            return obj.slice(0, -3);
+        }
+        return obj;
     }
 
     if (Array.isArray(obj)) {
@@ -228,7 +236,6 @@ export function formatForAgent(obj: any): any {
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
             const formattedValue = formatForAgent(obj[key]);
-
             if (key === '$type') {
                 typeValue = formattedValue;
             } else {
