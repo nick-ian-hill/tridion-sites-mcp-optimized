@@ -16,6 +16,7 @@ interface NodeLayout {
 }
 
 const truncateText = (text: string, maxLength: number): string => {
+    if (!text) return "";
     if (text.length <= maxLength) return text;
     return text.substring(0, maxLength - 3) + "...";
 };
@@ -75,21 +76,21 @@ const generateSvg = (nodes: any[], edges: any[]): string => {
             const y = PADDING + (rowIndex * (NODE_HEIGHT + VERTICAL_GAP));
             const rawNode = nodeMap.get(nodeId);
             
-            const isLocalized = rawNode.data?.item?.BluePrintInfo?.IsLocalized;
-            const itemTitle = rawNode.data?.item?.title;
+            const item = rawNode.data?.item;
+            const isLocalized = item?.BluePrintInfo?.IsLocalized;
+            const itemTitle = item?.Title || "";
+            const itemId = item?.Id || "";
             const label = rawNode.label;
 
             let subLabel = "";
-            if (nodeId.endsWith("-1")) {
-                subLabel = nodeId;
+            
+            if (itemId.endsWith("-1")) {
+                subLabel = itemId;
             } else {
-                if (itemTitle && itemTitle !== label) {
-                    subLabel = `(${itemTitle})`;
-                } else {
-                    subLabel = isLocalized ? "Localized" : "Shared / Parent";
-                }
+                subLabel = itemTitle;
             }
             
+
             const color = isLocalized ? "#2E7D32" : "#4D2C91";
 
             layoutNodes.set(nodeId, {
@@ -138,7 +139,6 @@ const generateSvg = (nodes: any[], edges: any[]): string => {
         svgContent += `<rect width="${n.width}" height="${n.height}" rx="${CORNER_RADIUS}" fill="white" stroke="${n.color}" stroke-width="2"/>`;
         
         // Colored Header Bar
-        // Precise path matching the top rounded corners (0,0) to eliminate white gaps.
         const headerPath = `
             M 0,${CORNER_RADIUS} 
             Q 0,0 ${CORNER_RADIUS},0 
