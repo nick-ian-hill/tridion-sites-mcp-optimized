@@ -15,33 +15,25 @@ interface NodeLayout {
     isLocalized: boolean;
 }
 
+const truncateText = (text: string, maxLength: number): string => {
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength - 3) + "...";
+};
+
 const generateSvg = (nodes: any[], edges: any[]): string => {
     // Configuration
     const NODE_WIDTH = 250;
     const NODE_HEIGHT = 60;
-    const HORIZONTAL_GAP = 100; // Space between ranks (columns)
-    const VERTICAL_GAP = 20;    // Space between nodes in a column
-    const PADDING = 20;
+    const HORIZONTAL_GAP = 120;
+    const VERTICAL_GAP = 20;    
+    const PADDING = 40;
 
-    // 1. Build Adjacency Map & Calculate Ranks (Longest Path Layering)
+    // 1. Build Adjacency Map & Calculate Ranks
     const nodeMap = new Map<string, any>(nodes.map(n => [n.id, n]));
     const ranks = new Map<string, number>();
-    const parentsOf = new Map<string, string[]>();
+    
+    nodes.forEach(n => ranks.set(n.id, 0));
 
-    // Initialize
-    nodes.forEach(n => {
-        ranks.set(n.id, 0); 
-        parentsOf.set(n.id, []);
-    });
-
-    edges.forEach(e => {
-        const list = parentsOf.get(e.target) || [];
-        list.push(e.source);
-        parentsOf.set(e.target, list);
-    });
-
-    // Simple iterative relaxation to push children to the right of their parents
-    // Run enough times to settle deep hierarchies (max depth assumption ~50)
     for (let i = 0; i < 50; i++) {
         let changed = false;
         edges.forEach(e => {
@@ -55,7 +47,7 @@ const generateSvg = (nodes: any[], edges: any[]): string => {
         if (!changed) break; 
     }
 
-    // 2. Group by Rank to determine positions
+    // 2. Group by Rank & Sort
     const columns: string[][] = [];
     nodes.forEach(n => {
         const r = ranks.get(n.id) || 0;
@@ -63,14 +55,13 @@ const generateSvg = (nodes: any[], edges: any[]): string => {
         columns[r].push(n.id);
     });
 
-    // Sort columns alpha-numerically for consistency
     columns.forEach(col => col.sort((a, b) => {
         const titleA = nodeMap.get(a)?.label || "";
         const titleB = nodeMap.get(b)?.label || "";
         return titleA.localeCompare(titleB);
     }));
 
-    // 3. Calculate Coordinates
+    // 3. Layout Calculation
     const layoutNodes = new Map<string, NodeLayout>();
     let maxGraphHeight = 0;
     let maxGraphWidth = columns.length * (NODE_WIDTH + HORIZONTAL_GAP);
@@ -82,14 +73,21 @@ const generateSvg = (nodes: any[], edges: any[]): string => {
             const y = PADDING + (rowIndex * (NODE_HEIGHT + VERTICAL_GAP));
             const rawNode = nodeMap.get(nodeId);
             
-            // Logic for labels and colors
+            const isLocalized = rawNode.data?.item?.BluePrintInfo?.IsLocalized;
             const itemTitle = rawNode.data?.item?.title;
             const label = rawNode.label;
-            const subLabel = (itemTitle && itemTitle !== label) ? `(${itemTitle})` : (
-                rawNode.data?.item?.BluePrintInfo?.IsLocalized ? "Localized" : "Shared / Parent"
-            );
+
+            let subLabel = "";
+            if (nodeId.endsWith("-1")) {
+                subLabel = nodeId;
+            } else {
+                if (itemTitle && itemTitle !== label) {
+                    subLabel = `(${itemTitle})`;
+                } else {
+                    subLabel = isLocalized ? "Localized" : "Shared / Parent";
+                }
+            }
             
-            const isLocalized = rawNode.data?.item?.BluePrintInfo?.IsLocalized;
             const color = isLocalized ? "#2E7D32" : "#4D2C91";
 
             layoutNodes.set(nodeId, {
@@ -98,8 +96,8 @@ const generateSvg = (nodes: any[], edges: any[]): string => {
                 y,
                 width: NODE_WIDTH,
                 height: NODE_HEIGHT,
-                label,
-                subLabel,
+                label: truncateText(label, 32),
+                subLabel: truncateText(subLabel, 40),
                 color,
                 isLocalized
             });
@@ -111,58 +109,49 @@ const generateSvg = (nodes: any[], edges: any[]): string => {
     // 4. Generate SVG Strings
     let svgContent = "";
 
-    // -- Draw Edges (Cubic Bezier Curves) --
-    // We draw edges first so they appear *behind* the boxes
+    // -- Draw Edges (Smooth Bézier Curves) --
+    // We add opacity so overlapping lines are less visually overwhelming.
     edges.forEach(e => {
         const source = layoutNodes.get(e.source);
         const target = layoutNodes.get(e.target);
         if (!source || !target) return;
 
-        // Start at right-center of source
+        // Start at Center-Right of Source
         const x1 = source.x + source.width;
         const y1 = source.y + (source.height / 2);
         
-        // End at left-center of target
+        // End at Center-Left of Target
         const x2 = target.x;
         const y2 = target.y + (target.height / 2);
 
-        // Control points for smooth "S" curve
+        // Control Points for smooth S-curve
         const c1x = x1 + (HORIZONTAL_GAP / 2);
         const c1y = y1;
         const c2x = x2 - (HORIZONTAL_GAP / 2);
         const c2y = y2;
 
-        svgContent += `<path d="M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x2} ${y2}" stroke="#999" stroke-width="1.5" fill="none" marker-end="url(#arrow)" />\n`;
+        svgContent += `<path d="M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x2} ${y2}" stroke="#999" stroke-width="1.5" fill="none" stroke-opacity="0.6" marker-end="url(#arrow)" />\n`;
     });
 
     // -- Draw Nodes --
     layoutNodes.forEach(n => {
-        // Main Box
         svgContent += `<g transform="translate(${n.x},${n.y})">`;
         svgContent += `<rect width="${n.width}" height="${n.height}" rx="4" fill="white" stroke="${n.color}" stroke-width="2"/>`;
-        
-        // Colored Header Bar
         svgContent += `<path d="M 1 1 L ${n.width-1} 1 L ${n.width-1} 24 L 1 24 Z" fill="${n.color}" />`;
         
-        // Title Text
-        // Basic escaping for XML
         const escTitle = n.label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const escSub = n.subLabel.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
         svgContent += `<text x="8" y="17" font-family="Arial, sans-serif" font-weight="bold" font-size="12" fill="white">${escTitle}</text>`;
-        
-        // Subtitle Text
         svgContent += `<text x="8" y="45" font-family="Arial, sans-serif" font-size="11" fill="#666">${escSub}</text>`;
-        
         svgContent += `</g>\n`;
     });
 
-    // Wrap in SVG tag
     return `
 <svg xmlns="http://www.w3.org/2000/svg" width="${maxGraphWidth + PADDING}" height="${maxGraphHeight + PADDING}">
   <defs>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
-      <path d="M0,0 L0,6 L9,3 z" fill="#999" />
+      <path d="M0,0 L0,6 L9,3 z" fill="#999" fill-opacity="0.6" />
     </marker>
   </defs>
   ${svgContent}
