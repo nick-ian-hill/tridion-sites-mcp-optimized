@@ -27,6 +27,8 @@ const generateSvg = (nodes: any[], edges: any[]): string => {
     const HORIZONTAL_GAP = 120;
     const VERTICAL_GAP = 20;    
     const PADDING = 40;
+    const CORNER_RADIUS = 4;
+    const HEADER_HEIGHT = 24;
 
     // 1. Build Adjacency Map & Calculate Ranks
     const nodeMap = new Map<string, any>(nodes.map(n => [n.id, n]));
@@ -109,35 +111,44 @@ const generateSvg = (nodes: any[], edges: any[]): string => {
     // 4. Generate SVG Strings
     let svgContent = "";
 
-    // -- Draw Edges (Smooth Bézier Curves) --
-    // We add opacity so overlapping lines are less visually overwhelming.
+    // -- Draw Edges (Smooth Bézier Curves, No Arrows) --
     edges.forEach(e => {
         const source = layoutNodes.get(e.source);
         const target = layoutNodes.get(e.target);
         if (!source || !target) return;
 
-        // Start at Center-Right of Source
         const x1 = source.x + source.width;
         const y1 = source.y + (source.height / 2);
-        
-        // End at Center-Left of Target
         const x2 = target.x;
         const y2 = target.y + (target.height / 2);
 
-        // Control Points for smooth S-curve
         const c1x = x1 + (HORIZONTAL_GAP / 2);
         const c1y = y1;
         const c2x = x2 - (HORIZONTAL_GAP / 2);
         const c2y = y2;
 
-        svgContent += `<path d="M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x2} ${y2}" stroke="#999" stroke-width="1.5" fill="none" stroke-opacity="0.6" marker-end="url(#arrow)" />\n`;
+        svgContent += `<path d="M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x2} ${y2}" stroke="#999" stroke-width="1.5" fill="none" stroke-opacity="0.6" />\n`;
     });
 
     // -- Draw Nodes --
     layoutNodes.forEach(n => {
         svgContent += `<g transform="translate(${n.x},${n.y})">`;
-        svgContent += `<rect width="${n.width}" height="${n.height}" rx="4" fill="white" stroke="${n.color}" stroke-width="2"/>`;
-        svgContent += `<path d="M 1 1 L ${n.width-1} 1 L ${n.width-1} 24 L 1 24 Z" fill="${n.color}" />`;
+        
+        // Main Box Border (White Fill, Colored Stroke)
+        svgContent += `<rect width="${n.width}" height="${n.height}" rx="${CORNER_RADIUS}" fill="white" stroke="${n.color}" stroke-width="2"/>`;
+        
+        // Colored Header Bar
+        // Precise path matching the top rounded corners (0,0) to eliminate white gaps.
+        const headerPath = `
+            M 0,${CORNER_RADIUS} 
+            Q 0,0 ${CORNER_RADIUS},0 
+            L ${n.width - CORNER_RADIUS},0 
+            Q ${n.width},0 ${n.width},${CORNER_RADIUS} 
+            L ${n.width},${HEADER_HEIGHT} 
+            L 0,${HEADER_HEIGHT} 
+            Z`.replace(/\s+/g, ' ');
+
+        svgContent += `<path d="${headerPath}" fill="${n.color}" />`;
         
         const escTitle = n.label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const escSub = n.subLabel.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -149,11 +160,6 @@ const generateSvg = (nodes: any[], edges: any[]): string => {
 
     return `
 <svg xmlns="http://www.w3.org/2000/svg" width="${maxGraphWidth + PADDING}" height="${maxGraphHeight + PADDING}">
-  <defs>
-    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
-      <path d="M0,0 L0,6 L9,3 z" fill="#999" fill-opacity="0.6" />
-    </marker>
-  </defs>
   ${svgContent}
 </svg>`.trim();
 };
