@@ -83,7 +83,7 @@ This tool should be used before performing BluePrinting operations like 'localiz
 - "IdAndTitle": Returns only the ID and Title of each item.
 - "CoreDetails": Returns the main properties, excluding verbose security and link-related information.
 - "AllDetails": Returns all available properties for each item. Only select "AllDetails" if you absolutely need full details about the returned items.`),
-        includeProperties: z.array(z.string()).optional().describe(`An array of property names to include in the response for custom control (e.g., Parents.IdRef, Children.Title, BluePrintInfo, VersionInfo). If used, 'details' is ignored. Prefer this option to avoid returning unnecessary data and limit token usage.`),
+        includeProperties: z.array(z.string()).optional().describe(`An array of property names to include in the response for custom control (e.g., Parents.IdRef, Children.Title, BluePrintInfo, BluePrintInfo.IsLocalized, BluePrintInfo.IsShared, Locale, PublicationType, VersionInfo). If used, 'details' is ignored. Prefer this option to avoid returning unnecessary data and limit token usage.`),
     },
     execute: async ({ itemId, outputFormat = "JsonGraph", details = "IdAndTitle", includeProperties }: { itemId: string; outputFormat: "Raw" | "JsonGraph" | "Svg"; details?: "IdAndTitle" | "CoreDetails" | "AllDetails", includeProperties?: string[] }, context: any) => {
         const req = context?.request;
@@ -94,9 +94,10 @@ This tool should be used before performing BluePrinting operations like 'localiz
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const hasCustomProperties = includeProperties && includeProperties.length > 0;
-            const isMinimalDetails =
+            const isMinimalDetails = !hasCustomProperties && (
                 (outputFormat === 'JsonGraph' || outputFormat === 'Svg') ||
-                (details === 'IdAndTitle' && !hasCustomProperties);
+                (details === 'IdAndTitle')
+            );
 
             const apiDetails = isMinimalDetails ? 'IdAndTitleOnly' : 'Contentless';
 
@@ -122,10 +123,10 @@ This tool should be used before performing BluePrinting operations like 'localiz
             rawData.Items.forEach((bpNode: any) => {
                 const pubId = bpNode.ContextRepositoryId;
 
-                const filteredItem = filterResponseData({ 
-                    responseData: bpNode.Item, 
-                    details, 
-                    includeProperties 
+                const filteredItem = filterResponseData({
+                    responseData: bpNode.Item,
+                    details,
+                    includeProperties
                 });
 
                 if (!nodes.has(pubId)) {
@@ -172,7 +173,7 @@ This tool should be used before performing BluePrinting operations like 'localiz
                 const dotString = convertGraphToDot(Array.from(nodes.values()), edges);
                 const viz = await instance();
                 const svgOutput = await viz.renderString(dotString, { format: "svg", engine: "dot" });
-                
+
                 const jsonResponse = {
                     type: "SvgImage",
                     Id: itemId,
