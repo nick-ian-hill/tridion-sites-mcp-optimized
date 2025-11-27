@@ -2,7 +2,6 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { filterResponseData } from "../utils/responseFiltering.js";
-import { formatForAgent } from "../utils/fieldReordering.js";
 
 const escapeHTML = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, '\\"');
 const convertGraphToDot = (nodes: any[], edges: any[]): string => {
@@ -51,7 +50,7 @@ The hierarchy shows the parent and child relationships for the item within the B
 ### Output Structure (JsonGraph)
 By default, this tool returns a 'JsonGraph' object containing a 'graph' property.
 IMPORTANT: The 'nodes' and 'edges' properties are **ARRAYS**, not Dictionaries/Maps.
-The 'data.item' property of each node respects the 'includeProperties' or 'details' parameters, allowing you to request specific fields (like 'BluePrintInfo' or 'VersionInfo') for every item in the hierarchy in a single call.
+The 'data.item' property of each node respects the 'includeProperties' parameter, allowing you to request specific fields (like 'BluePrintInfo' or 'VersionInfo') for every item in the hierarchy in a single call.
 
 Example Structure:
 {
@@ -78,14 +77,17 @@ Example Structure:
 This tool should be used before performing BluePrinting operations like 'localizeItem', 'unlocalizeItem', 'promoteItem', or 'demoteItem' to understand the context and identify valid parent/child Publications.`,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The TCM URI of the item for which to retrieve the BluePrint hierarchy."),
-        outputFormat: z.enum(["Raw", "JsonGraph", "Svg"]).optional().default("JsonGraph").describe("Specifies the output format. Defaults to 'JsonGraph', which formats the data for efficient graph processing (Best for scripts). 'Raw' returns the nested API JSON. 'Svg' generates and returns an SVG image of the hierarchy."),
-        details: z.enum(["IdAndTitle", "CoreDetails", "AllDetails"]).default("IdAndTitle").optional().describe(`Specifies a predefined level of detail.
-- "IdAndTitle": Returns only the ID and Title of each item.
-- "CoreDetails": Returns the main properties, excluding verbose security and link-related information.
-- "AllDetails": Returns all available properties for each item. Only select "AllDetails" if you absolutely need full details about the returned items.`),
-        includeProperties: z.array(z.string()).optional().describe(`An array of property names to include in the response for custom control (e.g., Parents.IdRef, Children.Title, BluePrintInfo, BluePrintInfo.IsLocalized, BluePrintInfo.IsShared, Locale, PublicationType, VersionInfo). If used, 'details' is ignored. Prefer this option to avoid returning unnecessary data and limit token usage.`),
+        outputFormat: z.enum(["JsonGraph", "Svg"]).optional().default("JsonGraph").describe("Specifies the output format. Defaults to 'JsonGraph', which formats the data for efficient graph processing (Best for scripts). 'Svg' generates and returns an SVG image of the hierarchy."),
+        includeProperties: z.array(z.string()).optional().describe(`An array of property names to include in the response for custom control.
+Common properties to include:
+- "BluePrintInfo": Essential for checking inheritance status (e.g., BluePrintInfo.IsLocalized, BluePrintInfo.IsShared, BluePrintInfo.OwningRepository).
+- "VersionInfo": To see revision dates and version numbers across the hierarchy (e.g., VersionInfo.CreationDate, VersionInfo.RevisionDate, VersionInfo.Creator.IdRef).
+- "Locale": To see the language of the publication (if the item is a Publication).
+- "PublicationType": e.g., 'Content', 'Web' (if the item is a Publication).
+- "Parents.IdRef": For structural traversal.
+If omitted, only 'Id' and 'Title' are returned.`),
     },
-    execute: async ({ itemId, outputFormat = "JsonGraph", details = "IdAndTitle", includeProperties }: { itemId: string; outputFormat: "Raw" | "JsonGraph" | "Svg"; details?: "IdAndTitle" | "CoreDetails" | "AllDetails", includeProperties?: string[] }, context: any) => {
+    execute: async ({ itemId, outputFormat = "JsonGraph", includeProperties }: { itemId: string; outputFormat: "JsonGraph" | "Svg"; includeProperties?: string[] }, context: any) => {
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -94,12 +96,8 @@ This tool should be used before performing BluePrinting operations like 'localiz
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const hasCustomProperties = includeProperties && includeProperties.length > 0;
-            const isMinimalDetails = !hasCustomProperties && (
-                (outputFormat === 'JsonGraph' || outputFormat === 'Svg') ||
-                (details === 'IdAndTitle')
-            );
-
-            const apiDetails = isMinimalDetails ? 'IdAndTitleOnly' : 'Contentless';
+            
+            const apiDetails = hasCustomProperties ? 'Contentless' : 'IdAndTitleOnly';
 
             const escapedItemId = itemId.replace(':', '_');
             const response = await authenticatedAxios.get(`/items/${escapedItemId}/bluePrintHierarchy`, {
@@ -108,12 +106,6 @@ This tool should be used before performing BluePrinting operations like 'localiz
 
             if (response.status !== 200) {
                 return handleUnexpectedResponse(response);
-            }
-
-            if (outputFormat === "Raw") {
-                const finalData = filterResponseData({ responseData: response.data, details, includeProperties });
-                const formattedFinalData = formatForAgent(finalData);
-                return { content: [{ type: "text", text: JSON.stringify(formattedFinalData, null, 2) }] };
             }
 
             const rawData = response.data;
@@ -125,8 +117,8 @@ This tool should be used before performing BluePrinting operations like 'localiz
 
                 const filteredItem = filterResponseData({
                     responseData: bpNode.Item,
-                    details,
-                    includeProperties
+                    includeProperties,
+                    details: "IdAndTitle" // Fallback default if includeProperties is empty
                 });
 
                 if (!nodes.has(pubId)) {
