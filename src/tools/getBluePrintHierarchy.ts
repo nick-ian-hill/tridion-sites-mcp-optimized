@@ -3,43 +3,170 @@ import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { filterResponseData } from "../utils/responseFiltering.js";
 
-const escapeHTML = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, '\\"');
-const convertGraphToDot = (nodes: any[], edges: any[]): string => {
-    const parts: string[] = [];
-    parts.push('digraph Blueprint {');
-    parts.push('  rankdir="TB";');
-    parts.push('  bgcolor="transparent";');
-    parts.push('  node [shape=plaintext, fontname="Arial, Helvetica, sans-serif"];');
-    parts.push('  edge [arrowhead=vee, color="#F50057"];');
-    parts.push('');
-    nodes.forEach(node => {
-        let textLabel = escapeHTML(node.label);
-        const itemTitle = node.data?.item?.title;
-        if (itemTitle && node.label !== itemTitle) {
-            textLabel += `<BR/>(${escapeHTML(itemTitle)})`;
-        }
-        const htmlLabel = `
-<TABLE BORDER="2" COLOR="#F50057" CELLBORDER="0" CELLSPACING="0" CELLPADDING="1" BGCOLOR="#FFFFFF">
-  <TR>
-    <TD>
-      <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="3" BGCOLOR="#4D2C91">
-        <TR>
-          <TD ALIGN="CENTER">
-            <FONT COLOR="#FFFFFF">${textLabel}</FONT>
-          </TD>
-        </TR>
-      </TABLE>
-    </TD>
-  </TR>
-</TABLE>`;
-        parts.push(`  "${node.id}" [label=<${htmlLabel}>];`);
+interface NodeLayout {
+    id: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    label: string;
+    subLabel: string;
+    color: string;
+    isLocalized: boolean;
+}
+
+const generateSvg = (nodes: any[], edges: any[]): string => {
+    // Configuration
+    const NODE_WIDTH = 250;
+    const NODE_HEIGHT = 60;
+    const HORIZONTAL_GAP = 100; // Space between ranks (columns)
+    const VERTICAL_GAP = 20;    // Space between nodes in a column
+    const PADDING = 20;
+
+    // 1. Build Adjacency Map & Calculate Ranks (Longest Path Layering)
+    const nodeMap = new Map<string, any>(nodes.map(n => [n.id, n]));
+    const ranks = new Map<string, number>();
+    const parentsOf = new Map<string, string[]>();
+
+    // Initialize
+    nodes.forEach(n => {
+        ranks.set(n.id, 0); 
+        parentsOf.set(n.id, []);
     });
-    parts.push('');
-    edges.forEach(edge => {
-        parts.push(`  "${edge.source}" -> "${edge.target}";`);
+
+    edges.forEach(e => {
+        const list = parentsOf.get(e.target) || [];
+        list.push(e.source);
+        parentsOf.set(e.target, list);
     });
-    parts.push('}');
-    return parts.join("\n");
+
+    // Simple iterative relaxation to push children to the right of their parents
+    // Run enough times to settle deep hierarchies (max depth assumption ~50)
+    for (let i = 0; i < 50; i++) {
+        let changed = false;
+        edges.forEach(e => {
+            const pRank = ranks.get(e.source) || 0;
+            const cRank = ranks.get(e.target) || 0;
+            if (cRank <= pRank) {
+                ranks.set(e.target, pRank + 1);
+                changed = true;
+            }
+        });
+        if (!changed) break; 
+    }
+
+    // 2. Group by Rank to determine positions
+    const columns: string[][] = [];
+    nodes.forEach(n => {
+        const r = ranks.get(n.id) || 0;
+        if (!columns[r]) columns[r] = [];
+        columns[r].push(n.id);
+    });
+
+    // Sort columns alpha-numerically for consistency
+    columns.forEach(col => col.sort((a, b) => {
+        const titleA = nodeMap.get(a)?.label || "";
+        const titleB = nodeMap.get(b)?.label || "";
+        return titleA.localeCompare(titleB);
+    }));
+
+    // 3. Calculate Coordinates
+    const layoutNodes = new Map<string, NodeLayout>();
+    let maxGraphHeight = 0;
+    let maxGraphWidth = columns.length * (NODE_WIDTH + HORIZONTAL_GAP);
+
+    columns.forEach((colIds, rankIndex) => {
+        const x = PADDING + (rankIndex * (NODE_WIDTH + HORIZONTAL_GAP));
+        
+        colIds.forEach((nodeId, rowIndex) => {
+            const y = PADDING + (rowIndex * (NODE_HEIGHT + VERTICAL_GAP));
+            const rawNode = nodeMap.get(nodeId);
+            
+            // Logic for labels and colors
+            const itemTitle = rawNode.data?.item?.title;
+            const label = rawNode.label;
+            const subLabel = (itemTitle && itemTitle !== label) ? `(${itemTitle})` : (
+                rawNode.data?.item?.BluePrintInfo?.IsLocalized ? "Localized" : "Shared / Parent"
+            );
+            
+            const isLocalized = rawNode.data?.item?.BluePrintInfo?.IsLocalized;
+            const color = isLocalized ? "#2E7D32" : "#4D2C91";
+
+            layoutNodes.set(nodeId, {
+                id: nodeId,
+                x,
+                y,
+                width: NODE_WIDTH,
+                height: NODE_HEIGHT,
+                label,
+                subLabel,
+                color,
+                isLocalized
+            });
+
+            if (y + NODE_HEIGHT > maxGraphHeight) maxGraphHeight = y + NODE_HEIGHT;
+        });
+    });
+
+    // 4. Generate SVG Strings
+    let svgContent = "";
+
+    // -- Draw Edges (Cubic Bezier Curves) --
+    // We draw edges first so they appear *behind* the boxes
+    edges.forEach(e => {
+        const source = layoutNodes.get(e.source);
+        const target = layoutNodes.get(e.target);
+        if (!source || !target) return;
+
+        // Start at right-center of source
+        const x1 = source.x + source.width;
+        const y1 = source.y + (source.height / 2);
+        
+        // End at left-center of target
+        const x2 = target.x;
+        const y2 = target.y + (target.height / 2);
+
+        // Control points for smooth "S" curve
+        const c1x = x1 + (HORIZONTAL_GAP / 2);
+        const c1y = y1;
+        const c2x = x2 - (HORIZONTAL_GAP / 2);
+        const c2y = y2;
+
+        svgContent += `<path d="M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x2} ${y2}" stroke="#999" stroke-width="1.5" fill="none" marker-end="url(#arrow)" />\n`;
+    });
+
+    // -- Draw Nodes --
+    layoutNodes.forEach(n => {
+        // Main Box
+        svgContent += `<g transform="translate(${n.x},${n.y})">`;
+        svgContent += `<rect width="${n.width}" height="${n.height}" rx="4" fill="white" stroke="${n.color}" stroke-width="2"/>`;
+        
+        // Colored Header Bar
+        svgContent += `<path d="M 1 1 L ${n.width-1} 1 L ${n.width-1} 24 L 1 24 Z" fill="${n.color}" />`;
+        
+        // Title Text
+        // Basic escaping for XML
+        const escTitle = n.label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const escSub = n.subLabel.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+        svgContent += `<text x="8" y="17" font-family="Arial, sans-serif" font-weight="bold" font-size="12" fill="white">${escTitle}</text>`;
+        
+        // Subtitle Text
+        svgContent += `<text x="8" y="45" font-family="Arial, sans-serif" font-size="11" fill="#666">${escSub}</text>`;
+        
+        svgContent += `</g>\n`;
+    });
+
+    // Wrap in SVG tag
+    return `
+<svg xmlns="http://www.w3.org/2000/svg" width="${maxGraphWidth + PADDING}" height="${maxGraphHeight + PADDING}">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#999" />
+    </marker>
+  </defs>
+  ${svgContent}
+</svg>`.trim();
 };
 
 export const getBluePrintHierarchy = {
@@ -77,14 +204,17 @@ Example Structure:
 This tool should be used before performing BluePrinting operations like 'localizeItem', 'unlocalizeItem', 'promoteItem', or 'demoteItem' to understand the context and identify valid parent/child Publications.`,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The TCM URI of the item for which to retrieve the BluePrint hierarchy."),
-        outputFormat: z.enum(["JsonGraph", "Svg"]).optional().default("JsonGraph").describe("Specifies the output format. Defaults to 'JsonGraph', which formats the data for efficient graph processing (Best for scripts). 'Svg' generates and returns an SVG image of the hierarchy."),
-        includeProperties: z.array(z.string()).optional().describe(`An array of property names to include in the response for custom control.
-Common properties to include:
-- "BluePrintInfo": Essential for checking inheritance status (e.g., BluePrintInfo.IsLocalized, BluePrintInfo.IsShared, BluePrintInfo.OwningRepository).
-- "VersionInfo": To see revision dates and version numbers across the hierarchy (e.g., VersionInfo.CreationDate, VersionInfo.RevisionDate, VersionInfo.Creator.IdRef).
+        outputFormat: z.enum(["JsonGraph", "Svg"]).optional().default("JsonGraph").describe("Specifies the output format. Defaults to 'JsonGraph', which formats the data for efficient graph processing (Best for scripts). 'Svg' generates and returns an SVG image of the hierarchy using a high-performance internal layout engine."),
+        includeProperties: z.array(z.string()).optional().describe(`An array of property names to include in the response for custom control. Supports dot notation for nested properties to minimize token usage.
+Common properties:
+- "BluePrintInfo": Returns the full object (IsLocalized, IsShared, OwningRepository, etc.).
+- "BluePrintInfo.IsLocalized": Returns only the boolean status.
+- "VersionInfo.RevisionDate": To see when the item was last modified in each publication.
+- "VersionInfo.Creator.IdRef": The ID of the user who created the item.
 - "Locale": To see the language of the publication (if the item is a Publication).
 - "PublicationType": e.g., 'Content', 'Web' (if the item is a Publication).
-- "Parents.IdRef": For structural traversal.
+- "Parents.IdRef": An array of Links to the parent publications (if the item is a Publication).
+
 If omitted, only 'Id' and 'Title' are returned.`),
     },
     execute: async ({ itemId, outputFormat = "JsonGraph", includeProperties }: { itemId: string; outputFormat: "JsonGraph" | "Svg"; includeProperties?: string[] }, context: any) => {
@@ -97,6 +227,8 @@ If omitted, only 'Id' and 'Title' are returned.`),
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const hasCustomProperties = includeProperties && includeProperties.length > 0;
             
+            // If properties are requested, we must ask the API for 'Contentless' (full metadata).
+            // Otherwise, we use 'IdAndTitleOnly' for maximum efficiency.
             const apiDetails = hasCustomProperties ? 'Contentless' : 'IdAndTitleOnly';
 
             const escapedItemId = itemId.replace(':', '_');
@@ -161,10 +293,7 @@ If omitted, only 'Id' and 'Title' are returned.`),
             }
 
             if (outputFormat === 'Svg') {
-                const { instance } = await import("@viz-js/viz");
-                const dotString = convertGraphToDot(Array.from(nodes.values()), edges);
-                const viz = await instance();
-                const svgOutput = await viz.renderString(dotString, { format: "svg", engine: "dot" });
+                const svgOutput = generateSvg(Array.from(nodes.values()), edges);
 
                 const jsonResponse = {
                     type: "SvgImage",
