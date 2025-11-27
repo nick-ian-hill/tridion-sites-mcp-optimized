@@ -90,7 +90,6 @@ const generateSvg = (nodes: any[], edges: any[]): string => {
                 subLabel = itemTitle;
             }
             
-
             const color = isLocalized ? "#2E7D32" : "#4D2C91";
 
             layoutNodes.set(nodeId, {
@@ -220,9 +219,19 @@ If omitted, only 'Id' and 'Title' are returned.`),
 
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
-            const hasCustomProperties = includeProperties && includeProperties.length > 0;
             
-            // If properties are requested, we must ask the API for 'Contentless' (full metadata).
+            let propsToInclude = includeProperties ? [...includeProperties] : [];
+
+            if (outputFormat === 'Svg') {
+                const hasBluePrintInfo = propsToInclude.some(p => p === 'BluePrintInfo' || p.startsWith('BluePrintInfo.'));
+                if (!hasBluePrintInfo) {
+                    propsToInclude.push('BluePrintInfo.IsLocalized');
+                }
+            }
+
+            const hasCustomProperties = propsToInclude.length > 0;
+            
+            // If properties are requested (or injected for SVG), we must ask the API for 'Contentless' (full metadata).
             // Otherwise, we use 'IdAndTitleOnly' for maximum efficiency.
             const apiDetails = hasCustomProperties ? 'Contentless' : 'IdAndTitleOnly';
 
@@ -244,7 +253,7 @@ If omitted, only 'Id' and 'Title' are returned.`),
 
                 const filteredItem = filterResponseData({
                     responseData: bpNode.Item,
-                    includeProperties,
+                    includeProperties: propsToInclude,
                     details: "IdAndTitle" // Fallback default if includeProperties is empty
                 });
 
