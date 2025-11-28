@@ -16,7 +16,7 @@ export const moveItem = {
     Items for which the 'LocationInfo/OrganizationalItem/IdRef' property references a Category can be moved to either another Keyword (in the same Category) or the Category.`,
     input: {
         itemId: z.string().regex(/^tcm:\d+-\d+(-\d+)?$/).describe("The TCM URI of the item to be moved. Use 'search' or 'getItemsInContainer' to find the item's ID."),
-        destinationId: z.string().regex(/^tcm:\d+-\d+-[24]$/).describe("The TCM URI of the destination Folder or Structure Group.")
+        destinationId: z.string().regex(/^tcm:\d+-\d+-(2|4|512|1024)$/).describe("The TCM URI of the destination Folder, Structure Group, Category, or Keyword.")
     },
     execute: async ({ itemId, destinationId }: { itemId: string, destinationId: string }, context: any) => {
         const req = context?.request;

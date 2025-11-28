@@ -8,10 +8,10 @@ export const copyItem = {
     It is only possible to copy an item to a destination where the 'BlueprintInfo.IsLocalized' and 'BlueprintInfo.IsShared' properties are both 'false'. You can check these properties using the 'getItem' tool.
     The title of the copied item must be unique in the destination container.
     Items can only be copied to containers of the same type (Folder to Folder, StructureGroup to StructureGroup).
-    The ID of the container is given by the 'LocationInfo/OrganizationalItem/IdRef' property.`,
+    The ID of an item's container is given by the 'LocationInfo/OrganizationalItem/IdRef' property.`,
     input: {
         itemId: z.string().regex(/^tcm:\d+-\d+(-\d+)?$/).describe("The TCM URI of the item to be copied. Use 'search' or 'getItemsInContainer' to find the item's ID."),
-        destinationId: z.string().regex(/^tcm:\d+-\d+-(2|4)$/).describe("The TCM URI of the destination Folder or Structure Group. Use 'search' or 'getItemsInContainer' to find a destination.")
+        destinationId: z.string().regex(/^tcm:\d+-\d+-(2|4|512|1024)$/).describe("The TCM URI of the destination Folder, Structure Group, Category, or Keyword. Use 'search' or 'getItemsInContainer' to find a destination.")
     },
     execute: async ({ itemId, destinationId }: { itemId: string, destinationId: string },
         context: any
