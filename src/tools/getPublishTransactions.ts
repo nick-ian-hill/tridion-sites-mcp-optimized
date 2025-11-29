@@ -44,7 +44,7 @@ const getPublishTransactionsInput = {
     details: z.enum(["IdAndTitle", "CoreDetails", "AllDetails"]).default("IdAndTitle").optional()
         .describe(`Specifies a predefined level of detail for the returned items. For custom property selection, use 'includeProperties' instead.`),
     includeProperties: z.array(z.string()).optional()
-        .describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include (e.g., ["PublishContexts.ProcessedItems.RenderTime", "Creator.Descripton", "Items.Title"]). If used, 'details' is ignored. 'Id', 'Title', and 'type' are always included.`),
+        .describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include (e.g., ["PublishContexts.ProcessedItems.RenderTime", "Creator.Descripton", "Items.Title"]). If used, 'details' is ignored. 'Id', 'Title', and 'type' are always included. Refer to the 'getItem' tool description for a comprehensive list of available properties.`),
 };
 
 const getPublishTransactionsSchema = z.object(getPublishTransactionsInput);

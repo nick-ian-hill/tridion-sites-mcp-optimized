@@ -31,7 +31,7 @@ Expected JSON Output for a single item in the result array:
         maxId: z.number().int().optional().default(200)
             .describe("The maximum ID to scan for. The tool will check for Multimedia Types with IDs from tcm:0-1-65544 up to this value."),
         includeProperties: z.array(z.string()).optional()
-            .describe("An array of property names to include in the response for each Multimedia Type. 'Id', 'Title', and 'type' will always be included. Common useful properties are 'FileExtensions' and 'MimeType'."),
+            .describe("An array of property names to include in the response for each Multimedia Type. 'Id', 'Title', and 'type' will always be included. Common useful properties are 'FileExtensions' and 'MimeType'. Refer to the 'getItem' tool description for a comprehensive list of available properties."),
     },
     execute: async ({ maxId = 200, includeProperties }: { 
         maxId?: number; 

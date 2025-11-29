@@ -21,7 +21,8 @@ const getLockedItemsInput = {
     maxResults: z.number().int().optional().default(500)
         .describe("Specifies the maximum number of results to return."),
     includeProperties: z.array(z.string()).optional().describe(`An array of property names to include in the response, reducing the amount of data returned. 'Id', 'Title', and 'type' are always included.
-Use dot notation for nested properties (e.g., "VersionInfo.Creator", "LockInfo.LockUser", "LocationInfo.Path"). This is useful for focusing on specific details without retrieving the full item data.`),
+Use dot notation for nested properties (e.g., "VersionInfo.Creator", "LockInfo.LockUser", "LocationInfo.Path"). This is useful for focusing on specific details without retrieving the full item data.
+Refer to the 'getItem' tool description for a comprehensive list of available properties.`),
 };
 
 const getLockedItemsSchema = z.object(getLockedItemsInput);

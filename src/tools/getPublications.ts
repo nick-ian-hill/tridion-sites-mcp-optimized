@@ -14,7 +14,7 @@ IMPORTANT: Requesting a high level of detail can be slow and token heavy. Prefer
 - "IdAndTitle": Returns only the ID and Title of each item. This is the recommended default.
 - "CoreDetails": Returns the main properties, excluding verbose security and link-related information.
 - "AllDetails": Returns all available properties for each item. Only select "AllDetails" if you absolutely need full details about the returned items.`),
-        includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response. If used, the 'details' parameter is ignored. 'Id', 'Title', and 'type' will always be included.`),
+        includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response. If used, the 'details' parameter is ignored. 'Id', 'Title', and 'type' will always be included. Refer to the 'getItem' tool description for a comprehensive list of available properties.`),
     },
     execute: async ({ details = "IdAndTitle", includeProperties }: { details?: "IdAndTitle" | "CoreDetails" | "AllDetails", includeProperties?: string[] }, context: any) => {
         const req = context?.request;

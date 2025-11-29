@@ -16,7 +16,7 @@ const getUsesForVersionInputProperties = {
 - "CoreDetails": Returns the main properties, excluding verbose security and link-related information.
 - "AllDetails": Returns all available properties for each item. Only select "AllDetails" if you absolutely need full details about the returned items. This request will likely fail if the item uses a large number of other items.`),
     includeProperties: z.array(z.string()).optional()
-        .describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response. If used, the 'details' parameter is ignored. 'Id', 'Title', and 'type' will always be included.`),
+        .describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response. If used, the 'details' parameter is ignored. 'Id', 'Title', and 'type' will always be included. Refer to the 'getItem' tool description for a comprehensive list of available properties.`),
 };
 
 const getUsesForVersionSchema = z.object(getUsesForVersionInputProperties);

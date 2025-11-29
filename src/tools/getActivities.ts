@@ -23,7 +23,7 @@ export const getActivities = {
             .default(['Assigned'])
             .describe("An array of activity states to filter the results. Defaults to ['Assigned']."),
         includeProperties: z.array(z.string()).optional()
-            .describe(`The PREFERRED method for retrieving specific details. Provide property names (e.g., ["Assignee.IdRef", "Assignee.Title", "Assignee.Description", "Process.IdRef", "PrimarySubject.Title"]). 'Id', 'Title', and 'type' are always included.`),
+            .describe(`The PREFERRED method for retrieving specific details. Provide property names (e.g., ["Assignee.IdRef", "Assignee.Title", "Assignee.Description", "Process.IdRef", "PrimarySubject.Title"]). 'Id', 'Title', and 'type' are always included. Refer to the 'getItem' tool description for a comprehensive list of available properties.`),
     },
     execute: async ({ userId, activityStates = ['Assigned'], includeProperties }: { 
         userId?: string, 

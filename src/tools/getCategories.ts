@@ -18,7 +18,7 @@ export const getCategories = {
 - "IdAndTitle": Returns only the ID and Title of each item. This is the most efficient option, and the best choice if you only need a list of items matching the query.
 - "CoreDetails": Returns the main properties of each item, excluding verbose security, link-related, and content/field-related information.
 - "AllDetails": Returns all available properties for each item, excluding content/field data.`),
-        includeProperties: z.array(z.string()).optional().describe(`Takes precedence over the 'details' parameter. Provide an array of property names to include in the response. 'Id', 'Title', and '$type' are always included.`),
+        includeProperties: z.array(z.string()).optional().describe(`Takes precedence over the 'details' parameter. Provide an array of property names to include in the response. 'Id', 'Title', and '$type' are always included. Refer to the 'getItem' tool description for a comprehensive list of available properties.`),
     },
     execute: async ({ itemId, details = "IdAndTitle", includeProperties }: { 
         itemId: string,

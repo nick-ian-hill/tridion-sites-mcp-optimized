@@ -10,7 +10,7 @@ const getTargetTypesInputProperties = {
     details: z.enum(["IdAndTitle", "CoreDetails", "AllDetails"]).default("IdAndTitle").optional()
         .describe(`Specifies a predefined level of detail. 'IdAndTitle' is fastest. For custom properties, use 'includeProperties'.`),
     includeProperties: z.array(z.string()).optional()
-        .describe(`The PREFERRED method for retrieving specific details. Provide property names (e.g., ["Purpose", "BusinessProcessType.Title"]). If used, 'details' is ignored. 'Id', 'Title', and 'type' are always included.`),
+        .describe(`The PREFERRED method for retrieving specific details. Provide property names (e.g., ["Purpose", "BusinessProcessType.Title"]). If used, 'details' is ignored. 'Id', 'Title', and 'type' are always included. Refer to the 'getItem' tool description for a comprehensive list of available properties.`),
 };
 
 const getTargetTypesSchema = z.object(getTargetTypesInputProperties);

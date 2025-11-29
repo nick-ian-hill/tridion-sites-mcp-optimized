@@ -31,7 +31,7 @@ This approach is token-inefficient and will fail on large result sets. The corre
 - "IdAndTitle": Returns the ID, Title, and type of each item. This is the recommended default.
 - "CoreDetails": Returns the main properties, excluding verbose security and link-related information. This may be slow or fail if the container holds many items.
 - "AllDetails": Returns all available properties for each item. This is likely to fail if the container holds many items.`),
-        includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response. If used, the 'details' parameter is ignored. 'Id', 'Title', and 'type' will always be included.`),
+        includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response. If used, the 'details' parameter is ignored. 'Id', 'Title', and 'type' will always be included. Refer to the 'getItem' tool description for a comprehensive list of available properties.`),
     },
     execute: async ({ containerId, recursive = false, useDynamicVersion = true, itemTypes, details = "IdAndTitle", includeProperties }: { 
         containerId: string, 

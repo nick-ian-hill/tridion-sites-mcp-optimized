@@ -209,7 +209,7 @@ Common properties:
 - "PublicationType": e.g., 'Content', 'Web' (if the item is a Publication).
 - "Parents.IdRef": An array of Links to the parent publications (if the item is a Publication).
 
-If omitted, only 'Id' and 'Title' are returned.`),
+If omitted, only 'Id' and 'Title' are returned. Refer to the 'getItem' tool description for a comprehensive list of available properties.`),
     },
     execute: async ({ itemId, outputFormat = "JsonGraph", includeProperties }: { itemId: string; outputFormat: "JsonGraph" | "Svg"; includeProperties?: string[] }, context: any) => {
         const req = context?.request;
