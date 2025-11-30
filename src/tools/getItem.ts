@@ -7,22 +7,23 @@ import { formatForAgent } from "../utils/fieldReordering.js";
 export const getItem = {
     name: "getItem",
     description: `Retrieves read-only details for a single Content Manager System (CMS) item.
-This is the primary tool for "fetching" the FULL data of an item. To avoid polluting the context window, use the 'includeProperties' parameter to request only what you need.
+This is the primary tool for fetching the FULL data of an item.
+To avoid polluting the context window, use the 'includeProperties' parameter to request only what you need.
 
-### Available Properties Reference
+### MASTER PROPERTY REFERENCE
 You can request these properties using dot notation (e.g., 'VersionInfo.RevisionDate', 'BinaryContent.MimeType').
 
 **1. Standard Properties (Always Returned)**
-* **Id**: The TCM URI (e.g., 'tcm:5-123'). You do not need to request this.
-* **Title**: The name of the item. You do not need to request this.
-* **type**: The object type (e.g., 'Component', 'Page'). You do not need to request this.
+* **Id**: The TCM URI (e.g., 'tcm:5-123').
+* **Title**: The name of the item.
+* **type**: The object type (e.g., 'Component', 'Page').
 
-**2. Common Optional Properties**
+**2. Common Optional Properties (All Types)**
 * **Description**: The description field.
 * **Metadata**: The dictionary of metadata field values.
 * **MetadataSchema**: Link to the schema defining the metadata ({ IdRef, Title }).
 * **LocationInfo**:
-    * **Path**: The folder path (e.g., "\\Content\\News").
+    * **Path**: The logical folder path (e.g., "\\Content\\News").
     * **OrganizationalItem**: Link to the parent Folder/Structure Group.
     * **ContextRepository**: Link to the Publication containing the item.
     * **WebDavUrl**: The WebDAV access path.
@@ -34,53 +35,93 @@ You can request these properties using dot notation (e.g., 'VersionInfo.Revision
 * **VersionInfo**:
     * **Version**: (number) Current major version.
     * **Revision**: (number) Current minor version.
-    * **CreationDate**: ISO date string.
-    * **RevisionDate**: ISO date string (last modified).
-    * **Creator**: Link to the User who created it.
-    * **Revisor**: Link to the User who last modified it.
+    * **CreationDate**, **RevisionDate**: ISO date strings.
+    * **Creator**, **Revisor**: Links to Users.
 * **LockInfo**:
     * **LockType**: ['CheckedOut' | 'InWorkflow' | 'None'].
     * **LockUser**: Link to the User holding the lock.
-    * **LockDate**: Date the lock was applied.
+* **SecurityDescriptor**: 
+    * **Rights**: Array of rights the current user has (e.g., ['Read', 'Write', 'Localize', 'PublishManagement']).
+    * **Permissions**: Access permissions.
+* **ApprovalStatus**: Link to the current approval status (e.g., "Unapproved", "Live").
+* **WorkflowInfo**:
+    * **ActivityInstance**, **ProcessInstance**: Links to the current activity and workflow process.
+    * **Assignee**, **Performer**: Links to the assignee and performer.
+    * **AssignmentDate**, **CreationDate**: ISO date strings.
+    * **PreviousMessage**: The optional message provided for the previous activity.
 
 **3. Type-Specific Properties**
+
+* **Component**:
+    * **Schema**: Link to the Component Schema.
+    * **Content**: The dictionary of content field values.
+    * **ComponentType**: 'Normal' or 'Multimedia'.
+    * **IsBasedOnMandatorySchema**: (boolean) If true, all Components in this Folder must use the Schema defined in the Folder's LinkedSchema property.
+    * **BinaryContent** (Multimedia only):
+        * **Filename**, **Size**, **MimeType**, **Url**.
+
+* **Page**:
+    * **FileName**: The filename (e.g., 'index.html').
+    * **PageTemplate**: Link to the associated Page Template.
+    * **ComponentPresentations**: Array of CPs on the page.
+    * **Regions**: Array of regions and their content.
+    * **LocationInfo** (Page-Specific):
+        * **PublishLocationUrl**: The calculated URL of the page (e.g., "/en/news/index.html").
+        * **PublishPath**: The physical path on the server.
+
+* **Folder**:
+    * **LinkedSchema**: Link to the default Schema for Components in this folder.
+    * **IsLinkedSchemaMandatory**: (boolean) If true, all Components in the Folder must use the LinkedSchema.
+
+* **Structure Group**:
+    * **Directory**: The directory name in the URL path.
+    * **DefaultPageTemplate**: Link to default PT.
+    * **IsActive**: (boolean) If false, items inside cannot be published.
+    * **LocationInfo**:
+        * **PublishLocationUrl**, **PublishPath** (Structure Group-Specific).
+
+* **Schema** (Component, Metadata, Region, etc.):
+    * **Purpose**: 'Component', 'Multimedia', 'Metadata', 'Region', 'Protocol', etc.
+    * **RootElementName**: XML root name.
+    * **NamespaceUri**: The target namespace URI.
+    * **Fields**: Definitions for content fields.
+    * **MetadataFields**: Definitions for metadata fields.
+    * **RegionDefinition**: (For Region Schemas) Constraints and NestedRegions.
+
+* **Bundle** (Virtual Folder):
+    * **Items**: List of Links to items contained in the bundle.
+
 * **Publication**:
     * **PublicationUrl**, **PublicationPath**: Web delivery settings.
     * **MultimediaUrl**, **MultimediaPath**: Binary delivery settings.
     * **RootFolder**, **RootStructureGroup**: Links to root containers.
     * **Parents**: Array of Links to parent Publications.
-* **Component**:
-    * **Schema**: Link to the Component Schema.
-    * **Content**: The dictionary of content field values.
-    * **ComponentType**: 'Normal' or 'Multimedia'.
-    * **BinaryContent** (Multimedia only):
-        * **Filename**, **Size**, **MimeType**, **Url**.
-        * **MultimediaType**: Link to the file type definition.
-* **Page**:
-    * **FileName**: The filename (e.g., 'index').
-    * **PageTemplate**: Link to the associated Page Template.
-    * **ComponentPresentations**: Array of CPs on the page.
-    * **Regions**: Array of regions and their content.
-* **Schema**:
-    * **Purpose**: 'Component', 'Multimedia', 'Metadata', 'Region', etc.
-    * **RootElementName**: XML root name.
-    * **Fields**: Definitions for content fields.
-    * **MetadataFields**: Definitions for metadata fields.
-* **Structure Group**:
-    * **Directory**: The directory name in the URL path.
-    * **DefaultPageTemplate**: Link to default PT.
-* **Keyword**:
-    * **Key**: Custom key string.
-    * **IsAbstract**: (boolean).
-    * **ParentKeywords**: Array of links to parents.
-    * **RelatedKeywords**: Array of links to relations.
-* **Category**:
-    * **IsTaxonomyRoot**: (boolean).
-    * **KeywordMetadataSchema**: Link to schema for keywords in this category.`,
+    * **ShareProcessAssociations**: (boolean).
+
+* **User**:
+    * **IsEnabled**: (boolean).
+    * **IsPredefined**: (boolean) e.g., for System Administrator.
+    * **LanguageId**, **LocaleId**: User preferences.
+
+* **Group**:
+    * **Scope**: Array of Links to Repositories for which privileges associated with this group apply.
+    * **SystemPrivileges**: Array of system-wide privileges (e.g., 'TmManagement').
+    * **ClaimMappings**: SSO/Directory mappings.
+
+* **Target Type**:
+    * **Purpose**: e.g., 'Staging' or 'Live'.
+    * **BusinessProcessType**: Link to the BPT.
+
+* **Activity Instance** (Workflow):
+    * **ActivityState**: 'Assigned', 'Started', 'Finished', etc.
+    * **Assignee**: Link to User or Group.
+    * **ActivityDefinition**: Link to the definition (contains description/instructions).
+    * **WorkItems**: Array of items in the workflow package.
+    * **ProcessInstance**: Link to the parent process (workflow).`,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the item."),
-        useDynamicVersion: z.boolean().optional().default(true).describe("Defaults to true. For versioned items (Components, Pages, Templates, Schemas), this retrieves the latest saved state (dynamic version), including minor revisions and checked-out changes. Set to false to strictly retrieve the last checked-in major version. This parameter is ignored for non-versioned items."),
-        includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names (supports dot notation like 'BinaryContent.MimeType'). 'Id', 'Title', and 'type' are always included. Refer to the tool description for a comprehensive list of available properties.`)
+        useDynamicVersion: z.boolean().optional().default(true).describe("Defaults to true. For versioned items, retrieves the latest saved state (dynamic version), including minor revisions (checked-out). Set to false to strictly retrieve the last checked-in major version."),
+        includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names (supports dot notation like 'BinaryContent.MimeType'). 'Id', 'Title', and 'type' are always included.`)
     },
     execute: async ({ itemId, useDynamicVersion = true, includeProperties }: { 
         itemId: string, 
@@ -96,7 +137,6 @@ You can request these properties using dot notation (e.g., 'VersionInfo.Revision
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const restItemId = itemId.replace(':', '_');
             const params: { useDynamicVersion?: boolean } = {};
-
             if (useDynamicVersion) {
                 params.useDynamicVersion = true;
             }
