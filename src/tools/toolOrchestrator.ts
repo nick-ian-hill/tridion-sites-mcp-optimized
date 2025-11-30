@@ -533,10 +533,10 @@ This is the most robust and accurate way to find stale content.
             // 3. Get *all* dependencies (direct and indirect)
             context.log('  Fetching dependency graph...');
             
-            // dependencyGraphForItem defaults to flatMode: true, so we get a simple array.
+            // getDependencyGraph defaults to flatMode: true, so we get a simple array.
             let dependencyDetails = [];
             try {
-                const graphItems = await context.tools.dependencyGraphForItem({
+                const graphItems = await context.tools.getDependencyGraphFor({
                     itemId: context.currentItemId,
                     direction: "Uses",
                     includeProperties: ["Title", "VersionInfo.RevisionDate"]
@@ -944,10 +944,10 @@ Example 11: Find Large, Unused Multimedia Components
             context.log(\`Found large file: \${item.Title} (\${item.BinaryContent.Size} bytes)\`);
 
             // 3. Find all Pages that use this component
-            // dependencyGraphForItem defaults to flatMode: true, so we get a flat array.
+            // getDependencyGraph defaults to flatMode: true, so we get a flat array.
             let graphItems = [];
             try {
-                graphItems = await context.tools.dependencyGraphForItem({
+                graphItems = await context.tools.getDependencyGraph({
                     itemId: itemId,
                     direction: "UsedBy",
                     rloItemTypes: ["Page"], // Only care about Page usages

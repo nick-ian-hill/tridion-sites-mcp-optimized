@@ -26,7 +26,7 @@ export const getUsesForVersion = {
     name: "getUsesForVersion",
     description: `Retrieves a list of items that were used by a *specific version* of a specified item.
 This tool is useful for historical analysis, such as reconstructing a Page's dependencies at a particular point in time.
-It differs from 'dependencyGraphForItem' (with direction 'Uses'), which shows dependencies for the *current* state of an item.
+It differs from 'getDependencyGraph' (with direction 'Uses'), which shows dependencies for the *current* state of an item.
 
 IMPORTANT: Requesting a high level of detail can be slow. Prefer 'details: "IdAndTitle"' or 'includeProperties' for efficiency.
 'AllDetails' adds the following properties to 'CoreDetails':

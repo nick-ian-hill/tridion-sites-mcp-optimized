@@ -4,8 +4,8 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 import { filterResponseData } from "../utils/responseFiltering.js";
 import { formatForAgent } from "../utils/fieldReordering.js";
 
-export const dependencyGraphForItem = {
-    name: "dependencyGraphForItem",
+export const getDependencyGraph = {
+    name: "getDependencyGraph",
     description: `Returns items in the Content Management System that are either dependencies of (direction = 'Uses') or dependent on (direction = 'UsedBy') the specified item.
 This tool is essential for impact analysis, such as checking what will be affected by a change, or for checking an item's usages with direction 'UsedBy' before attempting deletion with 'deleteItem' or 'batchDeleteItems'.
 
@@ -31,14 +31,14 @@ Only select "AllDetails" if you absolutely need full details about the returned 
 Examples:
 
 Example 1: Finds all items that are directly using a Schema, returning only their IDs and titles.
-    const result = await tools.dependencyGraphForItem({
+    const result = await tools.getDependencyGraph({
         itemId: "tcm:5-256-8",
         direction: "UsedBy",
         details: "IdAndTitle"
     });
 
 Example 2: Finds all Components used by a Page, returning a flat list of unique items with specific properties.
-    const result = await tools.dependencyGraphForItem({
+    const result = await tools.getDependencyGraph({
         itemId: "tcm:5-314-64",
         direction: "Uses",
         rloItemTypes: ["Component"],

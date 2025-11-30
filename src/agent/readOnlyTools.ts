@@ -41,6 +41,6 @@ export const READ_ONLY_TOOLS = [
     'getTargetTypes',
     'getUsedByHistory',
     'getUsesForVersion',
-    'dependencyGraphForItem',
+    'getDependencyGraph',
     'mapItemIdToContextPublication'
 ];

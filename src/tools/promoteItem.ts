@@ -19,7 +19,7 @@ export const promoteItem = {
     input: {
         itemId: z.string().regex(/^tcm:\d+-\d+(-\d+)?$/).describe("The unique ID (TCM URI) of the shared item to promote."),
         destinationRepositoryId: z.string().regex(/^tcm:\d+-\d+-1$/).describe("The TCM URI of the parent Publication to promote the item to. Use 'getBluePrintHierarchy' to find a valid parent Publication."),
-        recursive: z.boolean().optional().default(false).describe("Specifies whether the operation should be performed recursively. If true, all linked items (recursively) are promoted too if they don't already exist in the destination Publication. Use 'dependencyGraphForItem' to see the dependencies."),
+        recursive: z.boolean().optional().default(false).describe("Specifies whether the operation should be performed recursively. If true, all linked items (recursively) are promoted too if they don't already exist in the destination Publication. Use 'getDependencyGraph' to see the dependencies."),
     },
     execute: async ({ itemId, destinationRepositoryId, recursive = false }: { itemId: string; destinationRepositoryId: string; recursive: boolean }, context: any) => {
         const req = context?.request;
