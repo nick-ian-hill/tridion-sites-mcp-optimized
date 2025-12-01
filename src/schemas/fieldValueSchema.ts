@@ -194,10 +194,10 @@ const primitiveFieldValueSchema = z.union([
   z.number(),
   z.boolean(),
   linkSchema,
-]);
+]).nullable();
 
 export const fieldValueSchema = z.union([
   primitiveFieldValueSchema,
   z.array(z.unknown()),
   z.record(z.unknown()).describe("For an embedded schema field, this represents the object containing the embedded fields. The tool will automatically reorder the fields to match the schema definition."),
-]);
+]).nullable();

@@ -2,12 +2,19 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
-import { reorderFieldsBySchema, convertLinksRecursively, formatForApi } from "../utils/fieldReordering.js";
+import { reorderFieldsBySchema, convertLinksRecursively, formatForApi, deepMerge } from "../utils/fieldReordering.js";
 import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
 
 export const updateContent = {
     name: "updateContent",
-    description: `Updates the content fields for an item of type 'Component' in the Content Management System. Versioning is handled automatically. If the item is not checked out, it will be checked out, updated, and then checked back in. If the item is already checked out by you, it will remain checked out after the update. The operation will be aborted if the item is checked out by another user.
+    description: `Updates the content fields for an item of type 'Component' in the Content Management System. Versioning is handled automatically. If the item is not checked out, it will be checked out, updated, and then checked back in.
+
+Partial Updates Supported:
+- You only need to provide the fields you wish to change.
+- The tool performs a recursive "deep merge":
+  - **Objects**: Merged (e.g., if updating 'Address.City', 'Address.Zip' is preserved).
+  - **Arrays**: Replaced (e.g., providing a new list of 'Tags' overwrites the old list entirely).
+  - **Primitives**: Overwritten.
 
 Important Constraints:
 - This tool is only for Components. It cannot update other item types.
@@ -30,41 +37,28 @@ To discover all available fields within an embedded schema, including optional o
 
 Examples:
 
-Example 1: Updates the values of the content fields with XML names 'TitleField', 'Abstract', and 'Tags'.
+Example 1: Updates ONLY the 'TitleField', preserving other existing content fields.
     const result = await tools.updateContent({
         "itemId": "tcm:5-123",
         "content": {
-            "TitleField": "Component Title",
-            "Abstract": "<p>The <em>quick</em> brown fox jumped over the lazy dog.</p>",
-            "Tags": ["AI", "Google", "Machine Learning"]
+            "TitleField": "Updated Component Title" 
         }
     });
     
-Example 2: Updates the content of an embedded schema field.
+Example 2: Updates a specific field deep inside an embedded schema, preserving siblings.
     const result = await tools.updateContent({
         "itemId": "tcm:5-123",
         "content": {
-            "headline": "Existing Headline",
             "sourceAttribution": {
-                "authorName": "Dr. Ellie Sattler",
-                "publication": "Science Today",
-                "relatedArticles": [
-                    {
-                        "type": "Link",
-                        "IdRef": "tcm:5-801"
-                    },
-                    {
-                        "type": "Link",
-                        "IdRef": "tcm:5-802"
-                    }
-                ]
+                // This updates 'authorName' but keeps 'publication' and 'relatedArticles' if they exist.
+                "authorName": "Dr. Ellie Sattler"
             }
         }
     });
     `,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-16)?)$/).describe("The unique ID of the component to update (e.g., 'tcm:5-123')."),
-        content: z.record(fieldValueSchema).describe("A JSON object containing the Component's content fields. The tool will automatically order the fields to match the Schema definition."),
+        content: z.record(fieldValueSchema).describe("A JSON object containing the Component's content fields to update. Partial updates are supported."),
     },
     execute: async ({ itemId, content }: { itemId: string, content: Record<string, any> }, context: any) => {
         formatForApi(content);
@@ -89,7 +83,13 @@ Example 2: Updates the content of an embedded schema field.
             }
             
             convertLinksRecursively(content, itemId);
-            const orderedContent = await reorderFieldsBySchema(content, schemaId, 'content', authenticatedAxios);
+
+            // Fetch existing content and merge with new input
+            const existingContent = itemToUpdate.Content || {};
+            const mergedContent = deepMerge(existingContent, content);
+
+            // Reorder based on the full merged object
+            const orderedContent = await reorderFieldsBySchema(mergedContent, schemaId, 'content', authenticatedAxios);
 
             itemToUpdate.Content = orderedContent;
 

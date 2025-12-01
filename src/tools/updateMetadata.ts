@@ -2,12 +2,19 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
-import { reorderFieldsBySchema, convertLinksRecursively, formatForApi } from "../utils/fieldReordering.js";
+import { reorderFieldsBySchema, convertLinksRecursively, formatForApi, deepMerge } from "../utils/fieldReordering.js";
 import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
 
 export const updateMetadata = {
     name: "updateMetadata",
-    description: `Updates the metadata fields for a specific item in the Content Management System. Versioning is handled automatically. If the item is not checked out, it will be checked out, updated, and then checked back in. If the item is already checked out by you, it will remain checked out after the update. The operation will be aborted if the item is checked out by another user.
+    description: `Updates the metadata fields for a specific item in the Content Management System. Versioning is handled automatically. If the item is not checked out, it will be checked out, updated, and then checked back in.
+
+Partial Updates Supported:
+- You only need to provide the fields you wish to change.
+- The tool performs a recursive "deep merge":
+  - **Objects**: Merged (e.g., if updating 'Address.City', 'Address.Zip' is preserved).
+  - **Arrays**: Replaced (e.g., providing a new list of 'Keywords' overwrites the old list entirely).
+  - **Primitives**: Overwritten.
 
 Important Constraints:
 - This tool only updates the metadata fields. It cannot update the item's Title or Content fields.
@@ -27,49 +34,26 @@ To discover all available fields within an embedded schema, including optional o
 
 Examples:
 
-Example 1: Updates the metadata fields with XML names 'Keywords' and 'Author' for a Component.
+Example 1: Updates ONLY the 'Keywords' metadata field.
     const result = await tools.updateMetadata({
         "itemId": "tcm:5-123",
         "metadata": {
-            "Keywords": ["Update", "Tool", "Metadata"],
-            "Author": "Author Name"
+            "Keywords": ["Update", "Tool", "Metadata"] 
         }
     });
     
-Example 2: Updates the metadata values for a 'Folder' with featuring a multi-value embedded schema field.
+Example 2: Updates a metadata value for a 'Folder' containing a multi-value embedded schema field.
     const result = await tools.updateMetadata({
         "itemId": "tcm:4-567-2",
         "metadata": {
+            // Because 'Products' is an array, providing this list REPLACES the existing list.
             "Products": [
                 {
                     "Description": {
                         type: "Link",
                         IdRef: "tcm:4-101"
                     },
-                    "AvailableFrom": "2025-10-02T00:00:00",
-                    "relatedProducts": [
-                        {
-                            "type": "Link",
-                            "IdRef": "tcm:4-801"
-                        },
-                        {
-                            "type": "Link",
-                            "IdRef": "tcm:4-802"
-                        }
-                    ]
-                },
-                {
-                    "Description": {
-                        type: "Link",
-                        IdRef: "tcm:4-102"
-                    },
-                    "AvailableFrom": "2025-10-02T00:00:00",
-                    "relatedProducts": [
-                        {
-                            "type": "Link",
-                            "IdRef": "tcm:4-803"
-                        }
-                    ]
+                    "AvailableFrom": "2025-10-02T00:00:00"
                 }
             ]
         }
@@ -77,7 +61,7 @@ Example 2: Updates the metadata values for a 'Folder' with featuring a multi-val
     `,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the item to update (e.g., 'tcm:5-1234-64')."),
-        metadata: z.record(fieldValueSchema).describe("A JSON object containing the item's metadata fields. The tool will automatically order the fields to match the Metadata Schema definition."),
+        metadata: z.record(fieldValueSchema).describe("A JSON object containing the item's metadata fields to update. Partial updates are supported."),
     },
     execute: async ({ itemId, metadata }: { itemId: string, metadata: Record<string, any> }, context: any) => {
         formatForApi(metadata);
@@ -109,7 +93,13 @@ Example 2: Updates the metadata values for a 'Folder' with featuring a multi-val
             }
 
             convertLinksRecursively(metadata, itemId);
-            const orderedMetadata = await reorderFieldsBySchema(metadata, schemaIdForMetadata, 'metadata', authenticatedAxios);
+
+            // Fetch existing metadata and merge with new input
+            const existingMetadata = itemToUpdate.Metadata || {};
+            const mergedMetadata = deepMerge(existingMetadata, metadata);
+
+            // Reorder based on the full merged object
+            const orderedMetadata = await reorderFieldsBySchema(mergedMetadata, schemaIdForMetadata, 'metadata', authenticatedAxios);
             
             itemToUpdate.Metadata = orderedMetadata;
 

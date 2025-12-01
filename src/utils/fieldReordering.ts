@@ -252,3 +252,29 @@ export function formatForAgent(obj: any): any {
 
     return newObj; // Return the new object
 }
+
+/**
+ * Deep merges the source object into the target object.
+ * - Objects are merged recursively.
+ * - Arrays are NOT merged; the source array replaces the target array.
+ * - Primitives are overwritten.
+ */
+export function deepMerge(target: any, source: any): any {
+    if (typeof source !== 'object' || source === null || Array.isArray(source)) {
+        return source; // Primitives and Arrays overwrite
+    }
+    if (typeof target !== 'object' || target === null || Array.isArray(target)) {
+        return source; // Target isn't mergeable, overwrite
+    }
+    const output = { ...target };
+    Object.keys(source).forEach(key => {
+        if (Object.prototype.hasOwnProperty.call(source, key)) {
+            if (key in target) {
+                output[key] = deepMerge(target[key], source[key]);
+            } else {
+                output[key] = source[key];
+            }
+        }
+    });
+    return output;
+}

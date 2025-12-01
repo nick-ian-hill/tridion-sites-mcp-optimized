@@ -264,24 +264,19 @@ This script finds 'Old Product Name' and replaces it with 'New Product Name' in 
             let content = item.Content;
             let updated = false;
             if (content && content.TextField && content.TextField.includes(context.parameters.find)) {
-                content.TextField = content.TextField.replace(
+                const newValue = content.TextField.replace(
                     new RegExp(context.parameters.find, 'g'), 
                     context.parameters.replace
                 );
-                updated = true;
-                context.log('Found and replaced in content.');
-            } else if (!content) {
-                context.log('Item has no Content. Skipping.');
-            }
-
-            // Save changes if any
-            if (updated) {
-            // updateContent returns a JSON object with the update status
+                
+                // Note: We only need to pass the updated field. 
+                // The tool handles merging this with the rest of the content.
                 const updateResult = await context.tools.updateContent({
                     itemId: context.currentItemId,
-                    content: content
+                    content: {
+                        "TextField": newValue
+                    }
                 });
-                // The JSON is automatically parsed, so we access its 'Message' property
                 context.log(updateResult.Message);
             } else {
                 context.log('No changes needed.');
@@ -327,10 +322,10 @@ This script uses the AI to rewrite the 'Summary' field of several articles to ha
             context.log(\`New summary: \${newSummary.substring(0, 50)}...\`);
 
             // Update the component
-            item.Content.Summary = newSummary;
+            // We pass ONLY the 'Summary' field. The tool merges it.
             await context.tools.updateContent({
                 itemId: context.currentItemId,
-                content: item.Content
+                content: { "Summary": newSummary }
             });
             context.log('Successfully updated with AI-generated content.');
         \`
@@ -472,7 +467,8 @@ This script uses the 'setup' phase to find all Components based on a specific Sc
         \`,
         mapScript: \`
             // Phase 2 (Map): Update the 'TextField' for EACH item.
-            // updateContent automatically handles checking out, updating, and checking in.
+            // NOTE: updateContent automatically handles checking out, updating, and checking in.
+            // Partial updates are supported, so we do NOT need to fetch the existing content first.
             await context.tools.updateContent({
                 itemId: context.currentItemId,
                 content: {
@@ -1211,48 +1207,36 @@ This script would first be run by following the "Debugging Strategies" (test on 
 
             // 1. ADVANCED: Use try...catch to handle tool errors
             try {
+                // Note: We only need to fetch 'Title' for logging. 
+                // We do NOT need to fetch 'Content.TextField' to update it, because 
+                // updateContent supports partial updates.
                 item = await context.tools.getItem({ 
                     itemId: itemId,
-                    includeProperties: ["Content.TextField"]
+                    includeProperties: ["Title"]
                 });
                 
                 if (!item) {
-                    // This case handles items that are findable but inaccessible
                     context.log("Item was null or inaccessible.");
-                    // Return a custom error object for the post-script
                     return { error: "Item was null or inaccessible" };
                 }
 
             } catch (e) {
-                // This 'catch' block will handle errors from the tool itself
-                // e.g., "Item tcm:5-9999 not found."
                 context.log(\`Failed to get item: \${e.message}\`);
-                // Return a custom error object
                 return { error: e.message };
             }
 
             // 2. Logic: If we are here, 'item' is valid
-            context.log(\`Got item: \${item.Title}. Checking content...\`);
-            let content = item.Content;
+            context.log(\`Got item: \${item.Title}. Updating content...\`);
             
-            if (content && content.TextField) {
-                content.TextField = context.parameters.newValue;
-                
-                // 3. Update
-                await context.tools.updateContent({
-                    itemId: itemId,
-                    content: content
-                });
-                
-                context.log("Update logic complete.");
-                // Return a success object
-                return { updated: true, title: item.Title };
-                
-            } else {
-                context.log("No 'TextField' found to update.");
-                // Return a "skipped" object
-                return { updated: false, title: item.Title, reason: "No TextField" };
-            }
+            // 3. Update
+            // The tool handles the deep merge. We just send the field we want to change.
+            await context.tools.updateContent({
+                itemId: itemId,
+                content: { "TextField": context.parameters.newValue }
+            });
+            
+            context.log("Update logic complete.");
+            return { updated: true, title: item.Title };
         \`,
         postProcessingScript: \`
             // Phase 3: We can now report on our custom return objects
