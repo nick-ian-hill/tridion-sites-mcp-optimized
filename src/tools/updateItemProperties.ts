@@ -218,6 +218,18 @@ This example updates a basic Region Schema (e.g., 'tcm:5-3875-8') to make it non
 `,
     input: updateItemPropertiesInputProperties,
     execute: async (params: UpdateItemPropertiesInput, context: any) => {
+        try {
+            updateItemPropertiesSchema.parse(params);
+        } catch (validationError: any) {
+            const errorResponse = {
+                type: "Error",
+                Message: `Validation Error: ${validationError.errors?.[0]?.message || validationError.message}`
+            };
+            return {
+                content: [{ type: "text", text: JSON.stringify(errorResponse, null, 2) }]
+            };
+        }
+
         formatForApi(params);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
@@ -329,7 +341,7 @@ This example updates a basic Region Schema (e.g., 'tcm:5-3875-8') to make it non
                     const processedMetadataFields = await processSchemaFieldDefinitions(updates.metadataFields, schemaLocationId, authenticatedAxios);
                     itemToUpdate.MetadataFields = { "$type": "FieldsDefinitionDictionary", ...processedMetadataFields };
                 }
-                
+
                 if (updates.regionDefinition) {
                     convertLinksRecursively(updates.regionDefinition, itemId);
                     itemToUpdate.RegionDefinition = updates.regionDefinition;
