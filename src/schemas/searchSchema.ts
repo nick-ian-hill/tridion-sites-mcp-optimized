@@ -17,7 +17,7 @@ export const SearchQueryValidation = z.object({
   Description: z.string().optional().describe("A string to search for in the item's description field."),
   ItemTypes: z.array(z.enum([
     "BusinessProcessType", "Category", "Component", "ComponentTemplate", "Folder",
-    "Keyword", "Page", "PageTemplate", "ProcessDefinition", "Publication", "Schema",
+    "Keyword", "Page", "PageTemplate", "ProcessDefinition", "Schema",
     "StructureGroup", "TargetGroup", "TemplateBuildingBlock", "VirtualFolder"
   ])).optional().describe("An array of item types to limit the search results to. If asked to search for a 'Bundle' or 'SearchFolder', use the 'VirtualFolder' type and then review the 'type' property of any returned items. To find 'MultimediaComponents', search for 'Component' and then review the 'ComponentType' property."),
 
