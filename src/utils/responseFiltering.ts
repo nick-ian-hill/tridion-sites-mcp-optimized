@@ -130,7 +130,7 @@ export const filterResponseData = ({ responseData, details, includeProperties }:
     }
 
     if (!filterFn) return responseData;
-    
+
     // Handle recursive DependencyGraphNode structure (from some dependencyGraph calls)
     if (responseData.$type === 'DependencyGraphNode' && responseData.Item && responseData.Dependencies) {
         return filterDependencyGraphNode(responseData, filterFn);
@@ -145,7 +145,19 @@ export const filterResponseData = ({ responseData, details, includeProperties }:
     if (responseData.Items && Array.isArray(responseData.Items)) {
         return { ...responseData, Items: applyFilterToArray(responseData.Items, filterFn) };
     }
-    
+
+    if (responseData.$type === 'IdentifiableObjectDictionary' || responseData.type === 'IdentifiableObjectDictionary') {
+        const filteredDict: any = {};
+        for (const key in responseData) {
+            if (key === '$type' || key === 'type') {
+                filteredDict[key] = responseData[key];
+            } else {
+                filteredDict[key] = filterFn(responseData[key]);
+            }
+        }
+        return filteredDict;
+    }
+
     if (typeof responseData === 'object' && responseData !== null) {
         return filterFn(responseData);
     }
