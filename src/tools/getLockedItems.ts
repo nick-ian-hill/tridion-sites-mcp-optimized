@@ -20,49 +20,53 @@ const getLockedItemsInput = {
         .describe("Simple Filter: EXCLUDES any item that has AT LEAST ONE of these lock states (e.g., ['Permanent']). Use this to filter out unwanted states."),
     maxResults: z.number().int().optional().default(500)
         .describe("Specifies the maximum number of results to return."),
-    includeProperties: z.array(z.string()).optional().describe(`An array of property names to include in the response, reducing the amount of data returned. 'Id', 'Title', and 'type' are always included.
-Use dot notation for nested properties (e.g., "VersionInfo.Creator", "LockInfo.LockUser", "LocationInfo.Path"). This is useful for focusing on specific details without retrieving the full item data.
-Refer to the 'getItem' tool description for a comprehensive list of available properties.`),
 };
 
 const getLockedItemsSchema = z.object(getLockedItemsInput);
 
 export const getLockedItems = {
     name: "getLockedItems",
-description: `Gets a list of new and locked items (e.g., checked-out, in workflow).
-This tool is ideal for finding items in specific states using AND/NOT logic.
-Note that this tool does NOT return properties such as 'Content', 'Metadata' (values), or 'BinaryContent' (MimeType, Size). To inspect those properties, you must use 'getItem' or 'bulkReadItems' on the returned IDs.
-
-Strategy for tasks requiring post-processing or aggregation of results (e.g., "Find the Most...", "Count all...")
-When post-processing of data from a large set of items is required, do not use this tool directly.
-This approach is token-inefficient and will fail on large result sets. The correct, scalable method is to use the 'toolOrchestrator', and supply a postProcessingScript to perform the aggregation on the server-side. See the 'toolOrchestrator' documentation for the recommended 3-phase (setup-map-reduce) pattern.
-
-Example 1: Find all items that HAVE the 'CheckedOut' state.
+    description: `Gets a list of new and locked items (e.g., checked-out, in workflow).
+    
+    This tool is ideal for finding items in specific states using AND/NOT logic.
+    
+    ### "Find-Then-Fetch" Pattern
+    This tool only returns the Id, Title, type properties.
+    
+    To inspect detailed properties:
+    1.  **Find:** Use this tool to get the item IDs.
+    2.  **Fetch:** Use the 'toolOrchestrator' to pass these IDs to a script that calls 'getItem' or 'bulkReadItems'.
+    
+    For example, to find all items checked out by a user and check their file size:
+    1. Call 'getLockedItems' with 'allOfLockStates: ["CheckedOut"]' and the appropriate 'lockUserId'.
+    2. Pass the resulting IDs to 'toolOrchestrator' to call 'getItem' for 'BinaryContent.Size'.
+ 
+    Example 1: Find all items that HAVE the 'CheckedOut' state.
     const result = await tools.getLockedItems({
         allOfLockStates: ["CheckedOut"],
         forAllUsers: true,
         includeProperties: ["LocationInfo.Path"]
     });
 
-Example 2: Find all items that have BOTH 'InWorkflow' AND 'CheckedOut' states.
+    Example 2: Find all items that have BOTH 'InWorkflow' AND 'CheckedOut' states.
     const result = await tools.getLockedItems({
         allOfLockStates: ["InWorkflow", "CheckedOut"],
         forAllUsers: true
     });
 
-Example 3: Find all items that HAVE 'InWorkflow' but do NOT have 'CheckedOut' or 'Permanent'.
+    Example 3: Find all items that HAVE 'InWorkflow' but do NOT have 'CheckedOut' or 'Permanent'.
     const result = await tools.getLockedItems({
         allOfLockStates: ["InWorkflow"],
         noneOfLockStates: ["CheckedOut", "Permanent"],
         forAllUsers: true
     });
 
-Example 4: Find all items that do NOT have the 'CheckedOut' state.
+    Example 4: Find all items that do NOT have the 'CheckedOut' state.
     const result = await tools.getLockedItems({
         noneOfLockStates: ["CheckedOut"],
         forAllUsers: true
     });
-`,
+    `,
     input: getLockedItemsInput,
     
     execute: async (
@@ -74,10 +78,9 @@ Example 4: Find all items that do NOT have the 'CheckedOut' state.
             lockUserId, 
             allOfLockStates, 
             noneOfLockStates,
-            maxResults = 500, 
-            includeProperties 
+            maxResults = 500
         } = input;
-        
+
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -96,7 +99,7 @@ Example 4: Find all items that do NOT have the 'CheckedOut' state.
             
             // Remove duplicates
             finalLockFilter = [...new Set(allMentionedStates)];
-            
+
             // The 'result' is ONLY the set of states we WANT to see.
             // If positiveStates is empty (e.g., "NOT CheckedOut"), the result is effectively "None".
             finalLockResult = positiveStates.length > 0 ? positiveStates : ["None"];
@@ -120,15 +123,17 @@ Example 4: Find all items that do NOT have the 'CheckedOut' state.
                 lockResult: finalLockResult,
                 maxResults,
             };
-
             const cleanParams = Object.fromEntries(Object.entries(params).filter(([_, v]) => v !== undefined && (!Array.isArray(v) || v.length > 0)));
-
+            
             const response = await authenticatedAxios.get('/lockedItems', {
                 params: cleanParams
             });
 
             if (response.status === 200) {
-                const finalData = filterResponseData({ responseData: response.data, includeProperties });
+                const finalData = filterResponseData({ 
+                    responseData: response.data, 
+                    details: "IdAndTitle" 
+                });
                 const formattedFinalData = formatForAgent(finalData);
                 return {
                     content: [{

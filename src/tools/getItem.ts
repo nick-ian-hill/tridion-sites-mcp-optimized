@@ -80,6 +80,14 @@ You can request these properties using dot notation (e.g., 'VersionInfo.Revision
     * **LocationInfo**:
         * **PublishLocationUrl**, **PublishPath** (Structure Group-Specific).
 
+* **Category**:
+    * **XmlName**: The XML name (key) of the category.
+    * **KeywordMetadataSchema**: Link to the schema defining metadata for keywords in this category.
+    * **AllowedParentCategories**: Array of Links to categories allowed as parents.
+    * **UseForNavigation**: (boolean) Indicates if the category is used for navigation.
+    * **UseForIdentification**: (boolean).
+    * **IsTaxonomyRoot**: (boolean).
+
 * **Schema** (Component, Metadata, Region, etc.):
     * **Purpose**: 'Component', 'Multimedia', 'Metadata', 'Region', 'Protocol', etc.
     * **RootElementName**: XML root name.
@@ -108,16 +116,34 @@ You can request these properties using dot notation (e.g., 'VersionInfo.Revision
     * **SystemPrivileges**: Array of system-wide privileges (e.g., 'TmManagement').
     * **ClaimMappings**: SSO/Directory mappings.
 
+* **Multimedia Type**:
+    * **FileExtensions**: Array of file extensions e.g., ["doc"].
+    * **MimeType**: The Mime type, e.g., "application/msword".
+
 * **Target Type**:
     * **Purpose**: e.g., 'Staging' or 'Live'.
     * **BusinessProcessType**: Link to the BPT.
+    * **MinimumApprovalStatus**: Link.
+    * **Priority**: Default priority.
 
 * **Activity Instance** (Workflow):
     * **ActivityState**: 'Assigned', 'Started', 'Finished', etc.
     * **Assignee**: Link to User or Group.
     * **ActivityDefinition**: Link to the definition (contains description/instructions).
     * **WorkItems**: Array of items in the workflow package.
-    * **ProcessInstance**: Link to the parent process (workflow).`,
+    * **ProcessInstance**: Link to the parent process (workflow).
+
+* **Publish Transaction**:
+    * **State**: The transaction state (e.g., 'Success', 'Failed', 'WaitingForPublish').
+    * **Priority**: 'Low', 'Normal', or 'High'.
+    * **Items**: Array of items being published.
+    * **TargetType**: Link to the Target Type.
+    * **RenderingTime**, **TotalExecutionTime**: Timing details.
+    * **PublishContexts**: Array containing details about processed items.
+        * **ProcessedItems**: Array of items processed during publishing.
+            * **ResolvedItem**: Link to the resolved Item and Template.
+            * **RenderTime**: Time taken to render.
+        * **Publication**: Link to the Publication.`,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the item."),
         useDynamicVersion: z.boolean().optional().default(true).describe("Defaults to true. For versioned items, retrieves the latest saved state (dynamic version), including minor revisions (checked-out). Set to false to strictly retrieve the last checked-in major version."),

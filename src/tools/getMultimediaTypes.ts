@@ -6,37 +6,18 @@ import { formatForAgent } from "../utils/fieldReordering.js";
 
 export const getMultimediaTypes = {
     name: "getMultimediaTypes",
-    description: `Retrieves a list of all Multimedia Types available in the system. Multimedia Types define allowed file extensions and MIME types (e.g., 'jpeg', 'pdf') and are used in Multimedia Schemas to restrict uploads. Since there is no direct API to list them, this tool attempts to load them by checking for commonly used IDs.
-
-Example:
-Find all multimedia types and return only their file extensions and MIME types.
-
-    const result = await tools.getMultimediaTypes({
-        includeProperties: ["FileExtensions", "MimeType"]
-    });
-
-Expected JSON Output for a single item in the result array:
-[
-  {
-    "type": "MultimediaType",
-    "Id": "tcm:0-4-65544",
-    "Title": "Word document",
-    "FileExtensions": [
-      "doc"
-    ],
-    "MimeType": "application/msword"
-  }
-]`,
+    description: `Retrieves a list of all Multimedia Types available in the system (Id, Title).
+    
+    Multimedia Types define allowed file extensions and MIME types.
+    
+    ### "Find-Then-Fetch" Pattern
+    1.  **Find:** Use this tool to get the list of Multimedia Type IDs.
+    2.  **Fetch:** Use the 'toolOrchestrator' to call 'getItem' on specific IDs to check properties like 'FileExtensions' or 'MimeType'.`,
     input: {
         maxId: z.number().int().optional().default(200)
             .describe("The maximum ID to scan for. The tool will check for Multimedia Types with IDs from tcm:0-1-65544 up to this value."),
-        includeProperties: z.array(z.string()).optional()
-            .describe("An array of property names to include in the response for each Multimedia Type. 'Id', 'Title', and 'type' will always be included. Common useful properties are 'FileExtensions' and 'MimeType'. Refer to the 'getItem' tool description for a comprehensive list of available properties."),
     },
-    execute: async ({ maxId = 200, includeProperties }: { 
-        maxId?: number; 
-        includeProperties?: string[] 
-    }, context: any) => {
+    execute: async ({ maxId = 200 }: { maxId?: number }, context: any) => {
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -44,7 +25,6 @@ Expected JSON Output for a single item in the result array:
 
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
-
             // Generate an array of potential Multimedia Type IDs to check.
             const potentialIds = [];
             for (let i = 1; i <= maxId; i++) {
@@ -57,7 +37,8 @@ Expected JSON Output for a single item in the result array:
                 potentialIds,
                 {
                     params: {
-                        // We need the full item details to get the MultimediaType properties.
+                        // We still need loadFullItems=true internally to verify existence and get the basic object
+                        // but we will filter the output before returning it to the agent.
                         loadFullItems: true,
                     }
                 }
@@ -65,13 +46,14 @@ Expected JSON Output for a single item in the result array:
 
             if (response.status === 200) {
                 // The response is a dictionary where keys are the found IDs.
-                // We extract the values to get an array of the Multimedia Type objects.
                 const foundItems = Object.values(response.data);
-
-                // Apply property filtering if requested.
-                const finalData = filterResponseData({ responseData: foundItems, includeProperties });
-                const formattedFinalData = formatForAgent(finalData);
                 
+                const finalData = filterResponseData({ 
+                    responseData: foundItems, 
+                    details: "IdAndTitle" 
+                });
+                
+                const formattedFinalData = formatForAgent(finalData);
                 return {
                     content: [
                         {

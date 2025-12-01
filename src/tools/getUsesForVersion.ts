@@ -4,41 +4,29 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 import { filterResponseData } from "../utils/responseFiltering.js";
 import { formatForAgent } from "../utils/fieldReordering.js";
 
-// Define the input schema
 const getUsesForVersionInputProperties = {
     itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)
         .describe("The unique ID (TCM URI) of the versioned item to inspect."),
     version: z.number().int().min(1)
         .describe("The specific major version number of the item to inspect (e.g., 12)."),
-    details: z.enum(["IdAndTitle", "CoreDetails", "AllDetails"]).default("IdAndTitle").optional()
-        .describe(`Specifies a predefined level of detail for the returned items. For custom property selection, use 'includeProperties' instead.
-- "IdAndTitle": Returns only the ID and Title of each item. This is the recommended default.
-- "CoreDetails": Returns the main properties, excluding verbose security and link-related information.
-- "AllDetails": Returns all available properties for each item. Only select "AllDetails" if you absolutely need full details about the returned items. This request will likely fail if the item uses a large number of other items.`),
-    includeProperties: z.array(z.string()).optional()
-        .describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response. If used, the 'details' parameter is ignored. 'Id', 'Title', and 'type' will always be included. Refer to the 'getItem' tool description for a comprehensive list of available properties.`),
 };
 
 const getUsesForVersionSchema = z.object(getUsesForVersionInputProperties);
 
-// Define the tool
 export const getUsesForVersion = {
     name: "getUsesForVersion",
     description: `Retrieves a list of items that were used by a *specific version* of a specified item.
-This tool is useful for historical analysis, such as reconstructing a Page's dependencies at a particular point in time.
-It differs from 'getDependencyGraph' (with direction 'Uses'), which shows dependencies for the *current* state of an item.
-
-IMPORTANT: Requesting a high level of detail can be slow. Prefer 'details: "IdAndTitle"' or 'includeProperties' for efficiency.
-'AllDetails' adds the following properties to 'CoreDetails':
-  - AccessControlList
-  - ApplicableActions
-  - ApprovalStatus
-  - ContentSecurityDescriptor
-  - ExtensionProperties
-  - ListLinks
-  - SecurityDescriptor
-  - LoadInfo
-
+    
+    This tool is useful for historical analysis, such as reconstructing a Page's dependencies at a particular point in time.
+    It differs from 'getDependencyGraph' (with direction 'Uses'), which shows dependencies for the *current* state of an item.
+    
+    ### "Find-Then-Fetch" Pattern
+    This tool returns minimal identification data (Id, Title, type).
+    
+    To analyze the historical dependencies:
+    1.  **Find:** Use this tool to get the list of used item IDs.
+    2.  **Fetch:** Use the 'toolOrchestrator' to call 'getItem' in combination with the 'includeProperties' input parameter if additional information is required. The 'getItem' tool provides a comprehensive list of available properties.
+    
 Example:
 Find all items that were used by version 12 of the Page 'tcm:5-263-64'.
 
@@ -78,8 +66,7 @@ Expected JSON Output (example is truncated for brevity):
         input: z.infer<typeof getUsesForVersionSchema>,
         context: any
     ) => {
-        const { itemId, version, details = "IdAndTitle", includeProperties } = input;
-        
+        const { itemId, version } = input;
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -87,19 +74,12 @@ Expected JSON Output (example is truncated for brevity):
 
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
-
-            // Construct the version-specific item ID
             const versionedItemId = `${itemId}-v${version}`;
             const escapedItemId = versionedItemId.replace(':', '_');
             const endpoint = `/items/${escapedItemId}/uses`;
 
-            // Determine the correct 'details' value for the API call
-            const hasCustomProperties = includeProperties && includeProperties.length > 0;
-            const apiDetails = (hasCustomProperties || details === 'CoreDetails' || details === 'AllDetails')
-                ? 'Contentless'
-                : 'IdAndTitleOnly';
+            const apiDetails = 'IdAndTitleOnly';
 
-            // Call the API with the hardcoded parameters
             const response = await authenticatedAxios.get(endpoint, {
                 params: {
                     includeBlueprintParentItem: false,
@@ -109,16 +89,12 @@ Expected JSON Output (example is truncated for brevity):
             });
 
             if (response.status === 200) {
-                // Apply post-retrieval filtering based on 'details' or 'includeProperties'
                 const finalData = filterResponseData({
                     responseData: response.data,
-                    details,
-                    includeProperties
+                    details: "IdAndTitle"
                 });
-
                 const formattedFinalData = formatForAgent(finalData);
                 
-                // The API returns an array, so we filter it and return the stringified array
                 return {
                     content: [{
                         type: "text",

@@ -9,117 +9,36 @@ import { formatForAgent, formatForApi } from "../utils/fieldReordering.js";
 
 export const search = {
     name: "search",
-    description: `Performs a comprehensive search on the Content Manager System (CMS) for various item types based on a wide range of criteria.
-This tool is used to find items that match the specified query, such as full-text search strings, item titles, types, authors, lock status, and more.
-The return value will be an array of items that match the search criteria or an empty array if no items are found.
-For browsing a known folder structure, 'getItemsInContainer' is an alternative.
+    description: `Performs a comprehensive search on the Content Manager System (CMS) to find item IDs based on various criteria.
+    
+    This tool is the entry point for finding items based on full-text queries, schemas, modification dates, and lock statuses.
+    
+    ### CRITICAL: Search and Versioned Items
+    Changes to versioned items (Components, Pages, Templates, Schemas, and Template Building Blocks) are only indexed when the item in checked in.
+    This means that new items (items that have been saved but do not yet have a major version) will not appear in the results.
+    Similarly, changes to existing versioned items that are not yet present in a major version will not be picked up by a search.
+    In scenarios where potentially non-indexed changes in versioned items need to be considered (e.g., stale content analysis), you should first find every item of the required type using 'getItemsInContainer', and then check the relevant property (or properties) using 'getItem' in mapScript of a toolOrchestrator call.
 
-### CRITICAL: Search Index vs. Real-Time State (Versioning)
-Search results reflect the indexed state of items, which typically corresponds to the last **checked-in major version**.
-* **Drafts are invisible:** Changes made in minor versions (checked-out items) are **not** reflected in search result properties like 'RevisionDate' or 'LastModifiedDate'.
-* **Stale Content Checks:** If your task is to find "Stale Content" (e.g., items not modified in 30 days), relying solely on search results will produce **false positives**. An item might appear old in the search index but have a fresh, unchecked-in draft.
-* **Resolution:** Always use the "Find-then-Fetch" pattern described below to verify the *actual* current state of an item.
+    ### The "Find-Then-Fetch" Pattern
+    This tool returns **ONLY** the 'Id', 'Title', and 'type' of matching items.
+    
+    To inspect item details:
+    1.  **Find:** Use this tool ('search') to efficiently get a list of relevant item IDs.
+    2.  **Fetch:** Pass the IDs to the 'bulkReadItems' tool, or iterate over the items using the 'toolOrchestrator' and call 'getItem'. To retrieve specific properties (e.g., 'Content', 'Metadata', 'VersionInfo', etc.) use the includeProperties parameter in the 'getItem' or 'bulkReadItems' tools. A comprehensive list of available properties is documented in the 'getItem' tool.
+    
+    ### Strategy for efficient aggregation
+    When you need to count items based on deep properties (e.g., "Count components with schema X that have empty description fields"), do NOT try to do this with one search.
+    Instead, use the 'toolOrchestrator':
+    1.  **Pre-Processing:** Call 'search' to find all candidate items (e.g., all components using Schema X).
+    2.  **Map Script:** For each item, call 'getItem' to check the specific field.
+    3.  **Post-Processing:** Aggregate the results.
 
-### Important: Retrieving Full Item Details
-The search service is optimized for finding items, not for retrieving their full content or deep structural data. Properties like a Component's 'Content'/'Metadata' (the values), a Schema's 'Fields'/'MetadataFields', or a Multimedia Component's 'BinaryContent' (MimeType, Size) are **NEVER** returned by this tool, regardless of the 'details' or 'includeProperties' settings.
-
-### The "Find-Then-Fetch" Pattern
-For tasks requiring inspection of content, metadata, or exact modification dates (including drafts), always use a two-step process:
-1.  **Find:** Use 'search' with the default 'details: "IdAndTitle"' to efficiently get a list of relevant item IDs.
-2.  **Fetch:** Use 'bulkReadItems' (or 'getItem') with the resulting IDs.
-    * **For Content:** Use the 'includeProperties' parameter to retrieve fields like ['Content', 'Metadata', 'BinaryContent'].
-    * **For Status/Dates:** Use 'useDynamicVersion: true' (the default) to ensure you see the latest Work-In-Progress (WIP) dates, not just the indexed major version.
-
-When using 'FullTextQuery' to search for a substring, a leading/trailing asterisk or other wildcard may be necessary, e.g., "*ing", "?art*".
-
-### Strategy for Efficient Searching
-To avoid excessive token usage, follow this strategy when choosing how much detail to request:
-
-1.  **Always prefer 'includeProperties' for specific details.** If you need any information beyond an item's ID and Title (e.g., who created it, where it is located), use the 'includeProperties' parameter. This is the most token-efficient method. A good practice is to first run a narrow search to identify available properties, then run your full search requesting only the ones you need.
-2.  **Default to 'details: "IdAndTitle"' for lists.** If the goal is simply to find items or get a count, this is the safest and fastest option.
-3.  **Use 'details: "CoreDetails"' with extreme caution.** This option returns a predefined set of properties, but excludes key properties like 'Content', 'Metadata', 'Fields', and 'MetadataFields'. It has high token usage and may fail if the search returns many items (over 300). Only use this if you cannot determine the required properties in advance.
-4.  **Avoid 'details: "AllDetails"'.** This option should almost never be used as it will likely fail or exhaust the context window.
-
-'AllDetails' adds the following properties to 'CoreDetails':
-- AccessControlList
-- ApplicableActions
-- ApprovalStatus
-- ContentSecurityDescriptor
-- ExtensionProperties
-- ListLinks
-- SecurityDescriptor
-- LoadInfo
-
-When using search query parameters that target items in a specific publication: 'BasedOnSchema', 'UsedKeywords', 'ProcessDefinitions', and 'ActivityDefinitions', it's mandatory to also provide a value for the 'SearchIn' parameter, otherwise the request will fail.
-
-### Strategy for tasks requiring post-processing (e.g., "Find the Most...", "Count all...")
-When post-processing of data from a large set of items is required, do not use this tool directly.
-This approach is token-inefficient and will fail on large result sets. The correct, scalable method is to use the 'toolOrchestrator', and supply a postProcessingScript to perform the aggregation on the server-side. See the 'toolOrchestrator' documentation for the recommended 3-phase (setup-map-reduce) pattern.
-
-  Examples:
- 
-  Example 1: Find all Components that use the text 'logo' and include their ComponentType for filtering.
-  NOTE: The 'search' tool cannot access 'BinaryContent' (for MimeType, Size, etc.) or 'Metadata' (for alt text). It also cannot filter by 'ComponentType' directly.
-  The correct way to perform this task is to search for 'ItemTypes: ['Component']' and then use the 'toolOrchestrator' to fetch and filter the results. See 'toolOrchestrator' Example 10.
-
-This query will find all Components, which you can then process further.
-    const result = await tools.search({
-      searchQuery: {
-        ItemTypes: ['Component'],
-        FullTextQuery: 'logo'
-      },
-      includeProperties: ['ComponentType']
-    });
-
-Example 2: Find 'Multimedia Components' based on the 'Default Multimedia Schema' (tcm:4-5-8) within the '200 Example Content' Publication (tcm:0-4-1).
-    const result = await tools.search({
-      searchQuery: {
-        ItemTypes: ['Component'],
-        SearchIn: 'tcm:0-4-1',
-        BasedOnSchemas: [
-          {
-            schemaUri: 'tcm:4-5-8'
-          }
-        ]
-      },
-      includeProperties: ['ComponentType']
-    });
-
-Example 3: Find "Stale" Pages (Pages not modified in the last 30 days).
-  CRITICAL: Do NOT use 'LastModifiedBefore' in the search query. This relies on the index and will miss recent drafts, causing false positives.
-  Instead, use 'search' to find ALL Pages, and then use 'toolOrchestrator' to check the actual 'RevisionDate' of the dynamic version.
-
-    // Step 1: Find the pages (Search only for type, NOT by date)
-    const result = await tools.search({
-      searchQuery: {
-        ItemTypes: ['Page'],
-        SearchIn: 'tcm:0-5-1'
-      },
-      details: 'IdAndTitle' 
-    });
-    // Step 2: Pass these IDs to toolOrchestrator/getItem to check 'VersionInfo.RevisionDate' with useDynamicVersion: true (the default).
-  `,
+    When using 'FullTextQuery' to search for a substring, a leading/trailing asterisk or other wildcard may be necessary, e.g., "*ing", "?art*".`,
     input: {
         searchQuery: SearchQueryValidation.optional().describe("A search query model. If not provided, a default search for all items is performed."),
         resultLimit: z.number().int().default(100).optional().describe("The maximum number of results to return. If the number of results matches the (default) result limit, consider setting a higher resultLimit and trying again."),
-        details: z.enum(["IdAndTitle", "CoreDetails", "AllDetails"]).default("IdAndTitle").optional().describe(`Specifies a predefined level of detail for the returned items. For custom property selection, use 'includeProperties' instead.
-- "IdAndTitle": Returns only the ID and Title of each item. This is the most efficient option, and the best choice if you only need a list of items matching the query.
-- "CoreDetails": Returns the main properties of each item, excluding verbose security, link-related, and content/field-related information.
-- "AllDetails": Returns all available properties for each item, excluding content/field data.`),
-        includeProperties: z.array(z.string()).optional().describe(`The strongly preferred method for retrieving specific details to minimize token usage. Provide an array of property names to include in the response, using dot notation for nested properties (e.g., "VersionInfo.Creator",  "ComponentType").
-If this parameter is used, the 'details' parameter is ignored. 'Id', 'Title', and 'type' are always included.
-
-Important: Search results are content-less. Properties like 'Content', 'Metadata', 'Fields', 'MetadataFields', and 'BinaryContent' are never available via search. To retrieve them, first find the item ID using this tool, then use 'bulkReadItems' or 'getItem'.
-
-Available top-level properties in search results include, but are not limited to:
-- "LocationInfo": Information about the item's location (e.g., Path, ContextRepository, OrganizationalItem).
-- "VersionInfo": Details about the item's Version, CreationDate, Creator, RevisionDate, Revisor, etc.
-- "LockInfo": The LockType and LockUser (the user who has the item checked out). When purely interested in finding new items or items in various lock states, the 'getLockedItems' tool is more powerful.
-- "BluePrintInfo": Information related to the item's BluePrinting context (e.g., IsShared, IsLocalized, OwningRepository).
-- "MetadataSchema": The Title and Id of the item's metadata schema.
-Example: ["VersionInfo.Creator", "BluePrintInfo.OwningRepository", "LockInfo", "ComponentType"]. Refer to the 'getItem' tool description for a comprehensive list of available properties.`),
     },
-    execute: async ({ searchQuery, resultLimit = 100, details = "IdAndTitle", includeProperties }: { searchQuery?: z.infer<typeof SearchQueryValidation>, resultLimit: number, details?: "IdAndTitle" | "CoreDetails" | "AllDetails", includeProperties?: string[] }, context: any) => {
+    execute: async ({ searchQuery, resultLimit = 100 }: { searchQuery?: z.infer<typeof SearchQueryValidation>, resultLimit: number }, context: any) => {
         formatForApi(searchQuery);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
@@ -130,7 +49,6 @@ Example: ["VersionInfo.Creator", "BluePrintInfo.OwningRepository", "LockInfo", "
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             if (searchQuery && searchQuery.SearchIn) {
                 const contextId = searchQuery.SearchIn;
-
                 if (searchQuery.BasedOnSchemas) {
                     if (!searchQuery.SearchIn) {
                         throw new Error("InvalidSearchQuery: The 'SearchIn' parameter is required when filtering by 'BasedOnSchemas'.");
@@ -194,7 +112,6 @@ Example: ["VersionInfo.Creator", "BluePrintInfo.OwningRepository", "LockInfo", "
                             IdRef: s.schemaUri
                         }
                     };
-
                     if (s.fieldFilter) {
                         schemaFilterObject.Field = s.fieldFilter.name;
                         schemaFilterObject.FieldValue = String(s.fieldFilter.value);
@@ -213,18 +130,9 @@ Example: ["VersionInfo.Creator", "BluePrintInfo.OwningRepository", "LockInfo", "
                 )
             );
 
-            const hasCustomProperties = includeProperties && includeProperties.length > 0;
-            const apiDetails = hasCustomProperties || details === 'CoreDetails' || details === 'AllDetails'
-                ? 'Contentless'
-                : 'IdAndTitleOnly';
-
-            type SearchParams = {
-                details: "IdAndTitleOnly" | "Contentless";
-                resultLimit?: number;
-            };
-
-            const params: SearchParams = {
-                details: apiDetails,
+            // Force minimal details to enforce the "find-then-fetch" pattern
+            const params: any = {
+                details: 'IdAndTitleOnly',
             };
 
             if (resultLimit !== undefined) {
@@ -234,13 +142,14 @@ Example: ["VersionInfo.Creator", "BluePrintInfo.OwningRepository", "LockInfo", "
             const response = await authenticatedAxios.post(
                 `/system/search`,
                 finalPayload,
-                {
-                    params: params
-                }
+                { params: params }
             );
 
             if (response.status === 200) {
-                const finalData = filterResponseData({ responseData: response.data, details, includeProperties });
+                const finalData = filterResponseData({ 
+                    responseData: response.data, 
+                    details: "IdAndTitle" 
+                });
                 const formattedFinalData = formatForAgent(finalData);
                 console.log(JSON.stringify(formattedFinalData, null, 2));
                 return {

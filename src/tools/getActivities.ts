@@ -6,8 +6,14 @@ import { formatForAgent } from "../utils/fieldReordering.js";
 
 export const getActivities = {
     name: "getActivities",
-    description: `Gets a list of workflow activities, which can be filtered by user and state. This is useful for finding tasks assigned to a specific user or for reviewing all activities in a particular state (e.g., 'Suspended').
-    Consider using this tool in combination with the toolOrchestrator to ensure the response does not 'pollute' the context window.`,
+    description: `Gets a list of workflow activities, which can be filtered by user and state.
+    
+    IMPORTANT: This tool returns the Id and Title of the requested activities., ActivityState).
+    
+    ### "Find-Then-Fetch" Pattern
+    To retrieve detailed information about specific activities (e.g., to generate a report of all "Suspended" activities and their error messages):
+    1.  **Find:** Use this tool to get the list of activity IDs.
+    2.  **Fetch:** Use the 'toolOrchestrator' to pass these IDs to a 'mapScript' that calls 'getItem', or use 'bulkReadItems' in a toolOrchestrator preProcessingScript.`,
     input: {
         userId: z.string().regex(/^tcm:0-\d+-65552$/).optional()
             .describe("The TCM URI of a user. If specified, the tool returns activities where this user is either the owner or the assignee. The 'getUsers' tool can be used to find user IDs."),
@@ -22,13 +28,10 @@ export const getActivities = {
             .optional()
             .default(['Assigned'])
             .describe("An array of activity states to filter the results. Defaults to ['Assigned']."),
-        includeProperties: z.array(z.string()).optional()
-            .describe(`The PREFERRED method for retrieving specific details. Provide property names (e.g., ["Assignee.IdRef", "Assignee.Title", "Assignee.Description", "Process.IdRef", "PrimarySubject.Title"]). 'Id', 'Title', and 'type' are always included. Refer to the 'getItem' tool description for a comprehensive list of available properties.`),
     },
-    execute: async ({ userId, activityStates = ['Assigned'], includeProperties }: { 
+    execute: async ({ userId, activityStates = ['Assigned'] }: { 
         userId?: string, 
-        activityStates?: ("Assigned" | "Started" | "Finished" | "Suspended" | "Failed" | "Aborted")[],
-        includeProperties?: string[]
+        activityStates?: ("Assigned" | "Started" | "Finished" | "Suspended" | "Failed" | "Aborted")[]
     }, context: any) => {
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
@@ -37,7 +40,6 @@ export const getActivities = {
 
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
-            
             // Prepare the query parameters for the API call
             const params: {
                 ownerId?: string;
@@ -62,7 +64,7 @@ export const getActivities = {
             if (response.status === 200) {
                 const finalData = filterResponseData({
                     responseData: response.data,
-                    includeProperties: includeProperties
+                    details: "IdAndTitle" 
                 });
                 const formattedFinalData = formatForAgent(finalData);
 

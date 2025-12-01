@@ -7,42 +7,31 @@ import { formatForAgent } from "../utils/fieldReordering.js";
 export const getDependencyGraph = {
     name: "getDependencyGraph",
     description: `Returns items in the Content Management System that are either dependencies of (direction = 'Uses') or dependent on (direction = 'UsedBy') the specified item.
-This tool is essential for impact analysis, such as checking what will be affected by a change, or for checking an item's usages with direction 'UsedBy' before attempting deletion with 'deleteItem' or 'batchDeleteItems'.
+    
+    This tool is essential for impact analysis (e.g., "what will change if I edit this Schema?") or for safety checks before deletion (e.g., "is this Component used by any Pages?").
 
-**Flat Mode (Default):** This tool flattens the hierarchical dependency tree into a simple array of unique items by default. This is highly recommended for analysis tasks (e.g., "Count all dependencies", "Find stale content") as it simplifies processing and reduces token usage. To retrieve the full nested graph structure, set 'flatMode' to 'false'.
-
-IMPORTANT: Requesting details for many items can return a large amount of data. Use 'IdAndTitle' or the 'includeProperties' parameter for the most efficient and reliable results.
-Only select "AllDetails" if you absolutely need full details about the returned items. This request will likely fail with a large number of item (resultLimit > 150). 'AllDetails' adds the following properties to 'CoreDetails':
-  - AccessControlList
-  - ApplicableActions
-  - ApprovalStatus
-  - ContentSecurityDescriptor
-  - ExtensionProperties
-  - ListLinks
-  - SecurityDescriptor
-  - LoadInfo
-
-  Note: While this tool can return item details via 'includeProperties', it does not retrieve full 'Content', 'Metadata' (values), or 'BinaryContent' properties. To inspect those, use 'getItem' or 'bulkReadItems' on the item IDs found in the graph.
-
-  Strategy for tasks requiring post-processing or aggregation of results (e.g., "Find the Most...", "Count all...")
-  When post-processing of data from a large set of items is required, do not use this tool directly.
-  This approach is token-inefficient and will fail on large result sets. The correct, scalable method is to use the 'toolOrchestrator', and supply a postProcessingScript to perform the aggregation on the server-side. See the 'toolOrchestrator' documentation for the recommended 3-phase (setup-map-reduce) pattern.
+    **Flat Mode (Default):** This tool flattens the hierarchical dependency tree into a simple array of unique items by default. This is highly recommended for analysis tasks as it simplifies processing and reduces token usage.
+    
+    ### "Find-Then-Fetch" Pattern
+    This tool only returns Id, Title, and type.
+    
+    To analyze the dependencies (e.g., to find "Used By" pages that are currently *published*):
+    1.  **Find:** Use this tool to get the list of dependent item IDs.
+    2.  **Fetch:** Use the 'toolOrchestrator' to process this list. In the 'mapScript', call 'getPublishInfo' or 'getItem' for each ID to check its status.
 
 Examples:
 
-Example 1: Finds all items that are directly using a Schema, returning only their IDs and titles.
+Example 1: Finds all items that are directly using a Schema.
     const result = await tools.getDependencyGraph({
         itemId: "tcm:5-256-8",
-        direction: "UsedBy",
-        details: "IdAndTitle"
+        direction: "UsedBy"
     });
 
-Example 2: Finds all Components used by a Page, returning a flat list of unique items with specific properties.
+Example 2: Finds all Components used by a Page.
     const result = await tools.getDependencyGraph({
         itemId: "tcm:5-314-64",
         direction: "Uses",
-        rloItemTypes: ["Component"],
-        includeProperties: ["VersionInfo.RevisionDate"]
+        rloItemTypes: ["Component"]
     });
 
 Expected JSON Output for Example 2 (Flat Mode):
@@ -50,14 +39,12 @@ Expected JSON Output for Example 2 (Flat Mode):
   {
     "Id": "tcm:5-292",
     "Title": "blueprint",
-    "type": "Component",
-    "VersionInfo": { "RevisionDate": "2025-09-26T09:12:50.293Z" }
+    "type": "Component"
   },
   {
     "Id": "tcm:5-307",
     "Title": "All Articles Intro",
-    "type": "Component",
-    "VersionInfo": { "RevisionDate": "2025-09-26T09:12:54.043Z" }
+    "type": "Component"
   }
 ]
 `,
@@ -84,10 +71,8 @@ Expected JSON Output for Example 2 (Flat Mode):
         includeContainers: z.boolean().optional().default(false).describe("If true and direction is 'Uses', the parent Folders or Structure Groups of the items in the graph are also returned (recursively)."),
         flatMode: z.boolean().optional().default(true).describe("Defaults to true. Flattens the hierarchical dependency tree into a simple list of unique items. Set to false to retrieve the full nested graph structure."),
         resultLimit: z.number().int().optional().default(100).describe("The maximum number of dependency nodes to return."),
-        details: z.enum(["IdAndTitle", "CoreDetails", "AllDetails"]).default("IdAndTitle").optional().describe(`Specifies a predefined level of detail for the returned items. For custom property selection, use 'includeProperties' instead.`),
-        includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names to include in the response and use dot notation for nested properties (e.g., ['ComponentType', 'BluePrintInfo.IsLocalized', 'IsPublishedInContext', 'Schema.IdRef', 'VersionInfo.CheckOutUser.IdRef']). If used, the 'details' parameter is ignored. The base properties 'Id', 'Title', and 'type' will always be included. Refer to the 'getItem' tool description for a comprehensive list of available properties.`),
     },
-    execute: async ({ itemId, direction = "Uses", contextRepositoryId, rloItemTypes, includeContainers = false, resultLimit = 100, details = "IdAndTitle", includeProperties, flatMode = true }: any, context: any) => {
+    execute: async ({ itemId, direction = "Uses", contextRepositoryId, rloItemTypes, includeContainers = false, resultLimit = 100, flatMode = true }: any, context: any) => {
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -97,10 +82,7 @@ Expected JSON Output for Example 2 (Flat Mode):
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const restItemId = itemId.replace(':', '_');
             
-            const hasCustomProperties = includeProperties && includeProperties.length > 0;
-            const apiDetails = hasCustomProperties || details === 'CoreDetails' || details === 'AllDetails'
-                ? 'Contentless'
-                : 'IdAndTitleOnly';
+            const apiDetails = 'IdAndTitleOnly';
 
             const params = { direction, contextRepositoryId, rloItemTypes, includeContainers, resultLimit, details: apiDetails };
             const cleanParams = Object.fromEntries(Object.entries(params).filter(([_, v]) => v !== undefined));
@@ -114,7 +96,6 @@ Expected JSON Output for Example 2 (Flat Mode):
 
                 if (flatMode) {
                     const uniqueItems = new Map<string, any>();
-                    
                     const traverse = (node: any) => {
                         if (node.Item && node.Item.Id) {
                             if (!uniqueItems.has(node.Item.Id)) {
@@ -125,13 +106,15 @@ Expected JSON Output for Example 2 (Flat Mode):
                             node.Dependencies.forEach(traverse);
                         }
                     };
-
                     // The API typically returns a single root DependencyGraphNode
                     traverse(dataToProcess);
                     dataToProcess = Array.from(uniqueItems.values());
                 }
 
-                const finalData = filterResponseData({ responseData: dataToProcess, details, includeProperties });
+                const finalData = filterResponseData({ 
+                    responseData: dataToProcess, 
+                    details: "IdAndTitle" 
+                });
                 const formattedFinalData = formatForAgent(finalData);
                 return {
                     content: [{

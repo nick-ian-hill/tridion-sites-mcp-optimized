@@ -168,10 +168,11 @@ export const getBluePrintHierarchy = {
     description: `Retrieves the BluePrint hierarchy for a specified Content Manager item.
 The hierarchy shows the parent and child relationships for the item within the BluePrint, which is fundamental for content inheritance and reuse.
 
-### Output Structure (JsonGraph)
-By default, this tool returns a 'JsonGraph' object containing a 'graph' property.
-IMPORTANT: The 'nodes' and 'edges' properties are **ARRAYS**, not Dictionaries/Maps.
-The 'data.item' property of each node respects the 'includeProperties' parameter, allowing you to request specific fields (like 'BluePrintInfo' or 'VersionInfo') for every item in the hierarchy in a single call.
+### Output Structure
+This tool can return either a **JsonGraph** (for data processing) or an **Svg** image (for visualization).
+
+1. **JsonGraph**: Returns a minimal directed graph structure with nodes (Id, Title) and edges.
+2. **Svg**: Returns an SVG string that visualizes the hierarchy. Green nodes indicate localized items, while purple nodes indicate shared items.
 
 Example Structure:
 {
@@ -182,9 +183,9 @@ Example Structure:
         "label": "Child Pub", 
         "data": { 
            "item": { 
+              type: "Page",
               "Id": "tcm:2-123-64", 
               "Title": "My Page", 
-              ... // Requested properties appear here
            } 
         } 
       }
@@ -195,23 +196,16 @@ Example Structure:
   }
 }
 
-This tool should be used before performing BluePrinting operations like 'localizeItem', 'unlocalizeItem', 'promoteItem', or 'demoteItem' to understand the context and identify valid parent/child Publications.`,
+### "Find-Then-Fetch" Pattern
+When using 'JsonGraph' mode, this tool returns minimal identification data. It does **not** return deep details like 'VersionInfo' or 'BluePrintInfo' properties for every node.
+To analyze the hierarchy nodes (e.g., to find which specific user created the item in the Parent Publication):
+1.  **Find:** Use this tool to get the hierarchy graph.
+2.  **Fetch:** Iterate through the nodes in the graph using the 'toolOrchestrator' and call 'getItem' for the specific IDs you need to inspect.`,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The TCM URI of the item for which to retrieve the BluePrint hierarchy."),
-        outputFormat: z.enum(["JsonGraph", "Svg"]).optional().default("JsonGraph").describe("Specifies the output format. Defaults to 'JsonGraph', which formats the data for efficient graph processing (Best for scripts). 'Svg' generates and returns an SVG image of the hierarchy using a high-performance internal layout engine."),
-        includeProperties: z.array(z.string()).optional().describe(`An array of property names to include in the response for custom control. Supports dot notation for nested properties to minimize token usage.
-Common properties:
-- "BluePrintInfo": Returns the full object (IsLocalized, IsShared, OwningRepository, etc.).
-- "BluePrintInfo.IsLocalized": Returns only the boolean status.
-- "VersionInfo.RevisionDate": To see when the item was last modified in each publication.
-- "VersionInfo.Creator.IdRef": The ID of the user who created the item.
-- "Locale": To see the language of the publication (if the item is a Publication).
-- "PublicationType": e.g., 'Content', 'Web' (if the item is a Publication).
-- "Parents.IdRef": An array of Links to the parent publications (if the item is a Publication).
-
-If omitted, only 'Id' and 'Title' are returned. Refer to the 'getItem' tool description for a comprehensive list of available properties.`),
+        outputFormat: z.enum(["JsonGraph", "Svg"]).optional().default("JsonGraph").describe("Specifies the output format. Defaults to 'JsonGraph', which formats the data for efficient graph processing. 'Svg' generates and returns an SVG image of the hierarchy using a high-performance internal layout engine."),
     },
-    execute: async ({ itemId, outputFormat = "JsonGraph", includeProperties }: { itemId: string; outputFormat: "JsonGraph" | "Svg"; includeProperties?: string[] }, context: any) => {
+    execute: async ({ itemId, outputFormat = "JsonGraph" }: { itemId: string; outputFormat: "JsonGraph" | "Svg" }, context: any) => {
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -220,20 +214,11 @@ If omitted, only 'Id' and 'Title' are returned. Refer to the 'getItem' tool desc
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             
-            let propsToInclude = includeProperties ? [...includeProperties] : [];
-
-            if (outputFormat === 'Svg') {
-                const hasBluePrintInfo = propsToInclude.some(p => p === 'BluePrintInfo' || p.startsWith('BluePrintInfo.'));
-                if (!hasBluePrintInfo) {
-                    propsToInclude.push('BluePrintInfo.IsLocalized');
-                }
-            }
-
-            const hasCustomProperties = propsToInclude.length > 0;
-            
-            // If properties are requested (or injected for SVG), we must ask the API for 'Contentless' (full metadata).
-            // Otherwise, we use 'IdAndTitleOnly' for maximum efficiency.
-            const apiDetails = hasCustomProperties ? 'Contentless' : 'IdAndTitleOnly';
+            // If output is SVG, we MUST fetch 'BluePrintInfo.IsLocalized' to render the colors correctly.
+            // If output is JsonGraph, we stick to the minimal "Find-then-Fetch" pattern (Id & Title only).
+            const isSvgMode = outputFormat === 'Svg';
+            const apiDetails = isSvgMode ? 'Contentless' : 'IdAndTitleOnly';
+            const propsToInclude = isSvgMode ? ['BluePrintInfo.IsLocalized'] : [];
 
             const escapedItemId = itemId.replace(':', '_');
             const response = await authenticatedAxios.get(`/items/${escapedItemId}/bluePrintHierarchy`, {
@@ -254,7 +239,7 @@ If omitted, only 'Id' and 'Title' are returned. Refer to the 'getItem' tool desc
                 const filteredItem = filterResponseData({
                     responseData: bpNode.Item,
                     includeProperties: propsToInclude,
-                    details: "IdAndTitle" // Fallback default if includeProperties is empty
+                    details: "IdAndTitle"
                 });
 
                 if (!nodes.has(pubId)) {

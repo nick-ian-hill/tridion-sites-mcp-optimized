@@ -6,30 +6,26 @@ import { formatForAgent } from "../utils/fieldReordering.js";
 
 const getTargetTypesInputProperties = {
     businessProcessTypeId: z.string().regex(/^tcm:\d+-\d+-4096$/, "Invalid Business Process Type ID. Expected 'tcm:X-X-4096'.").optional()
-        .describe("The TCM URI of a Business Process Type. If provided, the list is filtered to only those Target Types available for publishing from this BPT. For a given publication, the value of the 'BusinessProcessType' property, if defined, is a 'Link' to a BPT."),
-    details: z.enum(["IdAndTitle", "CoreDetails", "AllDetails"]).default("IdAndTitle").optional()
-        .describe(`Specifies a predefined level of detail. 'IdAndTitle' is fastest. For custom properties, use 'includeProperties'.`),
-    includeProperties: z.array(z.string()).optional()
-        .describe(`The PREFERRED method for retrieving specific details. Provide property names (e.g., ["Purpose", "BusinessProcessType.Title"]). If used, 'details' is ignored. 'Id', 'Title', and 'type' are always included. Refer to the 'getItem' tool description for a comprehensive list of available properties.`),
+        .describe("The TCM URI of a Business Process Type. If provided, the list is filtered to only those Target Types available for publishing from this BPT."),
 };
 
 const getTargetTypesSchema = z.object(getTargetTypesInputProperties);
 
 export const getTargetTypes = {
     name: "getTargetTypes",
-    description: `Retrieves a list of Target Types. 
-- If 'businessProcessTypeId' is provided, it returns only the publishable Target Types for that context. This is the **recommended** method when searching for a target to publish to.
-- If omitted, it returns all Target Types defined in the system.`,
+    description: `Retrieves a list of Target Types (Id, Title, type).
+    
+    This is the **recommended** method when searching for a target to publish to.
+    
+    ### "Find-Then-Fetch" Pattern
+    To inspect specific properties (e.g., 'Purpose', 'BusinessProcessType.Title):
+    1.  **Find:** Use this tool to get the list of Target Type IDs.
+    2.  **Fetch:** Use the 'toolOrchestrator' to call 'getItem' for specific details.`,
 
     input: getTargetTypesInputProperties,
 
     execute: async (input: z.infer<typeof getTargetTypesSchema>, context: any) => {
-        const { 
-            businessProcessTypeId, 
-            details = "IdAndTitle", 
-            includeProperties 
-        } = input;
-
+        const { businessProcessTypeId } = input;
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -49,20 +45,15 @@ export const getTargetTypes = {
 
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
-            
-            // Neither API endpoint specified accepts query parameters for filtering,
-            // so we fetch the full response and filter it locally.
             const response = await authenticatedAxios.get(endpoint);
 
             if (response.status === 200) {
                 const finalData = filterResponseData({ 
                     responseData: response.data, 
-                    details, 
-                    includeProperties 
+                    details: "IdAndTitle" 
                 });
 
                 const formattedFinalData = formatForAgent(finalData);
-
                 return {
                     content: [{
                         type: "text",

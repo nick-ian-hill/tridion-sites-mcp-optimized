@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { formatForAgent } from "../utils/fieldReordering.js";
+import { filterResponseData } from "../utils/responseFiltering.js";
 
 const getClassifiedItemsInputProperties = {
     keywordId: z.string().regex(/^(tcm:\d+-\d+-1024?|ecl:[a-zA-Z0-9-]+)$/).describe("The TCM URI of the Keyword to search for. To find a keyword, first use 'getCategories' to find a Category, then 'getKeywordsForCategory' to list its keywords."),
@@ -10,18 +11,19 @@ const getClassifiedItemsInputProperties = {
     resolveDescendantKeywords: z.boolean().optional().default(false).describe("If true, items classified with descendant keywords of the specified keyword are also included in the results."),
     resultLimit: z.number().int().optional().default(100).describe("The maximum number of items to return. Specify a positive value, or -1 for no limit. Defaults to 100."),
 };
-
 const getClassifiedItemsSchema = z.object(getClassifiedItemsInputProperties);
 
 export const getClassifiedItems = {
     name: "getClassifiedItems",
-    description: `Gets a list of all items that are classified with a specified Keyword. 'Classified' means an item has a keyword field that contains the specified Keyword.
-    Note that this tool does NOT return properties like  'Content', 'Metadata' (values), or 'BinaryContent' (MimeType, Size). To inspect those properties, you must use 'getItem' or 'bulkReadItems' on the returned IDs.
+    description: `Gets a list of all items that are classified with a specified Keyword.
+'Classified' means an item has a keyword field that contains the specified Keyword.
 
-  Strategy for tasks requiring post-processing or aggregation of results (e.g., "Find the Most...", "Count all...")
-  When post-processing of data from a large set of items is required, do not use this tool directly.
-  This approach is token-inefficient and will fail on large result sets. The correct, scalable method is to use the 'toolOrchestrator', and supply a postProcessingScript to perform the aggregation on the server-side. See the 'toolOrchestrator' documentation for the recommended 3-phase (setup-map-reduce) pattern.
-`,
+### "Find-Then-Fetch" Pattern
+This tool returns **ONLY** the 'Id', 'Title', and 'type' of matching items.
+To inspect item details:
+1.  **Find:** Use this tool to get the list of item IDs.
+2.  **Fetch:** Pass the IDs to the 'bulkReadItems' tool, or iterate over the items using the 'toolOrchestrator' and call 'getItem'.
+    To retrieve specific properties (e.g., 'Content', 'Metadata', etc.) use the includeProperties parameter in the 'getItem' or 'bulkReadItems' tools.`,
 
     input: getClassifiedItemsInputProperties,
 
@@ -30,7 +32,6 @@ export const getClassifiedItems = {
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
         const userSessionId = match ? match[1] : null;
-
         const { keywordId, useDynamicVersion = false, itemTypes, resolveDescendantKeywords = false, resultLimit = 100 } = input;
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
@@ -45,9 +46,13 @@ export const getClassifiedItems = {
                     resultLimit: resultLimit,
                 }
             });
-
             if (response.status === 200) {
-                const formattedResponseData = formatForAgent(response.data);
+                // The API returns full item details, so we must filter client-side to enforce the pattern.
+                const finalData = filterResponseData({ 
+                    responseData: response.data, 
+                    details: "IdAndTitle" 
+                });
+                const formattedResponseData = formatForAgent(finalData);
                 return {
                     content: [{
                         type: "text",

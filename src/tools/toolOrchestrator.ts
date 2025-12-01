@@ -22,7 +22,6 @@ const TOTAL_SCRIPT_TIMEOUT_MS = 60000; // 60 seconds
 const DISALLOWED_TOOLS: string[] = [
     "toolOrchestrator",
     "deleteItem",
-    "batchDeleteItems",
     "createMultimediaComponentFromPrompt",
     "updateMultimediaComponentFromPrompt",
     "generateContentFromPrompt",
@@ -136,12 +135,14 @@ export const toolOrchestrator = {
     Phase 2 ('map'): The optional 'mapScript' runs for each item found in Phase 1.
     Phase 3 ('reduce'): The optional 'postProcessingScript' runs once on the collected results from Phase 2.
 
-    ### CRITICAL RULE: When to use 'mapScript' vs Skipping it
-    You MUST provide a 'mapScript' if your task involves filtering or checking items based on properties that are not available in a simple list or search result.
-    * **INCORRECT (Skipping Map):** Finding items via 'search' in Phase 1 and trying to filter them by 'BinaryContent.Size' or 'UsedBy' in Phase 3. The search results do not contain this deep data.
-    * **CORRECT (Using Map):** Find items via 'search' in Phase 1 -> Use 'mapScript' (Phase 2) to 'getItem' or 'dependencyGraph' for EACH item to check the specific property -> Aggregate the valid results in Phase 3.
+    ### CRITICAL RULE: "Find-Then-Fetch" Pattern
+    Discovery tools (like 'search', 'getItemsInContainer', 'getDependencyGraph') ONLY return identification data (Id, Title, type). They do not return deep properties.
     
-    Only skip the 'mapScript' for "global" tasks that do not require iterating over a list of items (e.g., creating a specific Folder structure or Publication hierarchy one time).
+    To inspect properties like Metadata, Content, or Revision Dates:
+    1.  **Find:** Use a discovery tool in 'preProcessingScript' to get IDs, and then either use 'bulkReadItems' in the same script, or
+    2.  **Fetch:** Use 'mapScript' to call 'getItem' for the specific details you need.
+    
+    You MUST provide a 'mapScript' if your task involves filtering or checking items based on properties that are not available in the discovery phase.
 
     By default, up to 5 scripts can run in parallel in the 'map' phase. Setting a higher 'maxConcurrency' value can increase speed at the cost of overall server load. Only use a value of 1 when debugging a script or when explicitly requested by the user.
 
@@ -217,8 +218,7 @@ const generatedText = aiResult.Content;
 
 Note that calling one of the following tools in a toolOrchestrator script is disallowed and will result in an error:
     - toolOrchestrator,
-    - deleteItem,
-    - batchDeleteItems
+    - deleteItem
 
 Note on Script Limits:
 All scripts are sandboxed for security and stability.
@@ -411,7 +411,6 @@ This script first gets the version count for each component, then the post-proce
                     totalItems: context.results.length,
                     successCount: 0,
                     failureCount: context.failures.length,
-                    // Optionally include the specific failure details
                     failures: context.failures.map(f => ({ item: f.itemId, error: f.error }))
                 };
             }
@@ -453,8 +452,9 @@ This script uses the 'setup' phase to find all Components based on a specific Sc
             // WARNING: tools.search() will NOT find changes that have not been checked-in, or items that do not yet have a major version.
             // Therefore, when searching for versioned items (e.g., Components, Pages, Schemas), use the less efficient
             // context.tools.getItemsInContainer() instead to guarantee no relevant items are missed.
-            
-            // The JSON is automatically parsed. 'items' is an array.
+
+            // The JSON is automatically parsed. 'items' is an array of objects { Id, Title, type }.
+            // Note: search returns ONLY Id and Title in the find-then-fetch pattern.
             const items = await context.tools.search({
                 searchQuery: {
                     ItemTypes: ["Component"],
@@ -472,6 +472,7 @@ This script uses the 'setup' phase to find all Components based on a specific Sc
         \`,
         mapScript: \`
             // Phase 2 (Map): Update the 'TextField' for EACH item.
+            // updateContent automatically handles checking out, updating, and checking in.
             await context.tools.updateContent({
                 itemId: context.currentItemId,
                 content: {
@@ -484,7 +485,7 @@ This script uses the 'setup' phase to find all Components based on a specific Sc
 
 Example 6: Comprehensive "Stale Content" Report (Checks all Dependencies)
 This script finds all Pages in a Publication and checks if they OR any of their dependent items (components, images, etc.) have been modified since the last publish date.
-This is the most robust and accurate way to find stale content.
+This example strictly follows the find-then-fetch pattern.
 
     const result = await tools.toolOrchestrator({
         preProcessingScript: \`
@@ -496,8 +497,7 @@ This is the most robust and accurate way to find stale content.
             const allItems = await context.tools.getItemsInContainer({
                 containerId: "tcm:0-5-1",
                 itemTypes: ["Page"],
-                recursive: true,
-                details: "IdAndTitle"
+                recursive: true
             });
 
             const itemIds = allItems.map(item => item.Id);
@@ -507,7 +507,7 @@ This is the most robust and accurate way to find stale content.
         mapScript: \`
             context.log(\`Checking Page: \${context.currentItemId}\`);
             
-            // 1. Get Page's own info
+            // 1. Get Page's own info (fetch detailed props)
             const item = await context.tools.getItem({ 
                 itemId: context.currentItemId,
                 includeProperties: ["Title", "VersionInfo.RevisionDate"]
@@ -520,9 +520,9 @@ This is the most robust and accurate way to find stale content.
             context.log(\`  Page Title: \${item.Title}\`);
 
             // 2. Get Publish info for the Page
+            // getPublishInfo returns status objects { TargetType: { IdRef, Title }, PublishedAt, ... }
             const publishInfos = await context.tools.getPublishInfo({ 
-                itemId: context.currentItemId,
-                includeProperties: ["PublishedAt", "TargetType.Title"] 
+                itemId: context.currentItemId
             });
 
             if (!publishInfos || publishInfos.length === 0) {
@@ -533,62 +533,74 @@ This is the most robust and accurate way to find stale content.
             // 3. Get *all* dependencies (direct and indirect)
             context.log('  Fetching dependency graph...');
             
-            // getDependencyGraph defaults to flatMode: true, so we get a simple array.
-            let dependencyDetails = [];
+            // getDependencyGraph returns a flat array of { Id, Title, type } only.
+            let dependencyIds = [];
             try {
-                const graphItems = await context.tools.getDependencyGraphFor({
+                const graphItems = await context.tools.getDependencyGraph({
                     itemId: context.currentItemId,
-                    direction: "Uses",
-                    includeProperties: ["Title", "VersionInfo.RevisionDate"]
+                    direction: "Uses"
                 });
                 
                 if (graphItems && graphItems.length > 0) {
-                    dependencyDetails = graphItems;
-                    context.log(\`  Found \${dependencyDetails.length} total dependencies.\`);
+                    dependencyIds = graphItems.map(g => g.Id);
+                    context.log(\`  Found \${dependencyIds.length} total dependencies.\`);
                 } else {
                     context.log(\`  No dependencies found.\`);
-                    dependencyDetails = [];
+                    dependencyIds = [];
                 }
             } catch (e) {
                 context.log(\`  ERROR: Failed to get dependency graph: \${e.message}\`);
                 return null;
             }
 
-            // 5. Find the single LATEST modification date
+            // 4. Fetch details for dependencies to find LATEST modification date.
+            // We must use bulkReadItems because getDependencyGraph does not return VersionInfo.
             let latestModificationDate = new Date(item.VersionInfo.RevisionDate);
             let latestModifiedItem = { 
                 title: \`\${item.Title} (Page)\`, 
                 date: latestModificationDate 
             };
 
-            for (const comp of dependencyDetails) {
-                if (comp && comp.VersionInfo && comp.VersionInfo.RevisionDate) {
-                    const compRevisionDate = new Date(comp.VersionInfo.RevisionDate);
-                    if (compRevisionDate > latestModificationDate) {
-                        latestModificationDate = compRevisionDate;
-                        latestModifiedItem = { 
-                            title: \`\${comp.Title} (\${comp.Id})\`, 
-                            date: latestModificationDate 
-                        };
+            if (dependencyIds.length > 0) {
+                // Fetch the actual VersionInfo for all dependencies in one batch
+                const dependencies = await context.tools.bulkReadItems({
+                    itemIds: dependencyIds,
+                    includeProperties: ["VersionInfo.RevisionDate", "Title"]
+                });
+                
+                // bulkReadItems returns a dictionary object
+                for (const depId in dependencies) {
+                    const comp = dependencies[depId];
+                    if (comp && comp.VersionInfo && comp.VersionInfo.RevisionDate) {
+                        const compRevisionDate = new Date(comp.VersionInfo.RevisionDate);
+                        if (compRevisionDate > latestModificationDate) {
+                            latestModificationDate = compRevisionDate;
+                            latestModifiedItem = { 
+                                title: \`\${comp.Title} (\${comp.Id})\`, 
+                                date: latestModificationDate 
+                            };
+                        }
                     }
                 }
             }
+            
             context.log(\`  Latest modification: \${latestModificationDate.toISOString()} from "\${latestModifiedItem.title}"\`);
             
-            // 6. Loop through each target and do one simple comparison
+            // 5. Loop through each target and compare dates
             const staleOnTargets = {};
             for (const info of publishInfos) {
-                if (!info || !info.PublishedAt || !info.TargetType || !info.TargetType.Title) {
+                // Check if published
+                if (!info || !info.PublishedAt || !info.TargetType || !info.TargetType.IdRef) {
                     continue;
                 }
                 
-                const targetName = info.TargetType.Title;
+                const targetId = info.TargetType.IdRef;
                 const publishedAt = new Date(info.PublishedAt);
-                context.log(\`  -> Checking Target: "\${targetName}", Published: \${publishedAt.toISOString()}\`);
+                context.log(\`  -> Checking Target: "\${targetId}", Published: \${publishedAt.toISOString()}\`);
 
                 if (latestModificationDate > publishedAt) {
                     context.log('     Comparison: TRUE (Stale)');
-                    staleOnTargets[targetName] = {
+                    staleOnTargets[targetId] = {
                         reason: 'Content modified',
                         staleItem: latestModifiedItem.title,
                         modifiedDate: latestModificationDate.toISOString(),
@@ -599,7 +611,7 @@ This is the most robust and accurate way to find stale content.
                 }
             }
             
-            // 7. Return a result ONLY if any target was found to be stale
+            // 6. Return a result ONLY if any target was found to be stale
             if (Object.keys(staleOnTargets).length > 0) {
                 return {
                     id: context.currentItemId,
@@ -626,7 +638,7 @@ This is the most robust and accurate way to find stale content.
     });
 
 Example 7: Robust Batch Operation with Error Reporting (stopOnError: false)
-This script attempts to delete a list of items. It uses 'stopOnError: false' to ensure it tries all items, even if some fail (e.g., they are locked, already deleted, or cause a tool error). The post-script then provides a summary of successes and failures.
+This script attempts to delete a list of items. It uses 'stopOnError: false' to ensure it tries all items, even if some fail. The post-script then provides a summary of successes and failures.
 
     const result = await tools.toolOrchestrator({
         itemIds: ["tcm:5-400", "tcm:5-9999", "tcm:5-401"], // Assume tcm:5-9999 does not exist
@@ -635,10 +647,9 @@ This script attempts to delete a list of items. It uses 'stopOnError: false' to 
             // Phase 2 (Map): Attempt to delete one item.
             // If 'deleteItem' fails, the orchestrator will automatically catch
             // the error, log it, and add a { status: "error" } to the results.
-            // Because 'stopOnError: false', it will then continue to the next item.
             context.log(\`Attempting to delete \${context.currentItemId}...\`);
             await context.tools.deleteItem({ itemId: context.currentItemId });
-            return "Successfully deleted."; // This goes into 'result.result'
+            return "Successfully deleted."; 
         \`,
         postProcessingScript: \`
             // Phase 3 (Reduce): Summarize successes and failures.
@@ -654,7 +665,6 @@ This script attempts to delete a list of items. It uses 'stopOnError: false' to 
                     error: r.error // 'error' is automatically populated by the orchestrator
                 }));
 
-            // Return a final JSON summary object
             return {
                 message: \`Batch delete complete. \${successCount} succeeded, \${failureCount} failed.\`,
                 successCount: successCount,
@@ -665,7 +675,7 @@ This script attempts to delete a list of items. It uses 'stopOnError: false' to 
     });
 
 Example 8: Report Pages Published to Staging but Not Live
-This script finds all Pages in a Publication, efficiently gets the required Target Type IDs once in the setup phase, and then checks the publish status of each page against those specific IDs.
+This script finds all Pages in a Publication, efficiently gets the required Target Type IDs once in the setup phase, and then checks the publish status of each page.
 
     const result = await tools.toolOrchestrator({
         parameters: {
@@ -676,13 +686,13 @@ This script finds all Pages in a Publication, efficiently gets the required Targ
         // Phase 1 (Setup): Find pages and Target Type IDs ONCE
         preProcessingScript: \`
             context.log(\`Setup: Finding Pub ID for '\${context.parameters.publicationTitle}'...\`);
-            const publications = await context.tools.getPublications({ details: "IdAndTitle" });
+            const publications = await context.tools.getPublications();
             const publication = publications.find(p => p.Title === context.parameters.publicationTitle);
             if (!publication) throw new Error(\`Publication '\${context.parameters.publicationTitle}' not found.\`);
             context.log(\`Pub ID: \${publication.Id}\`);
 
             context.log('Setup: Finding Target Type IDs...');
-            const targetTypes = await context.tools.getTargetTypes({ details: "IdAndTitle" });
+            const targetTypes = await context.tools.getTargetTypes({});
             const stagingTarget = targetTypes.find(t => t.Title === context.parameters.stagingTargetTitle);
             const liveTarget = targetTypes.find(t => t.Title === context.parameters.liveTargetTitle);
             if (!stagingTarget) throw new Error(\`Target Type '\${context.parameters.stagingTargetTitle}' not found.\`);
@@ -693,8 +703,7 @@ This script finds all Pages in a Publication, efficiently gets the required Targ
             const pages = await context.tools.getItemsInContainer({
                 containerId: publication.Id,
                 itemTypes: ["Page"],
-                recursive: true,
-                details: "IdAndTitle"
+                recursive: true
             });
             const pageIds = pages.map(p => p.Id);
             context.log(\`Found \${pageIds.length} Pages.\`);
@@ -702,7 +711,7 @@ This script finds all Pages in a Publication, efficiently gets the required Targ
             // Return object containing itemIds and the target IDs for the map script
             return {
                 itemIds: pageIds,
-                preProcessingResult: { // <-- This object is passed to map/post scripts
+                preProcessingResult: { 
                     stagingTargetId: stagingTarget.Id,
                     liveTargetId: liveTarget.Id
                 }
@@ -717,27 +726,24 @@ This script finds all Pages in a Publication, efficiently gets the required Targ
             const stagingId = context.preProcessingResult.stagingTargetId;
             const liveId = context.preProcessingResult.liveTargetId;
 
+            // getPublishInfo returns array of { TargetType: { IdRef: ... }, PublishedAt: ... }
             const publishInfo = await context.tools.getPublishInfo({
-                itemId: pageId,
-                // Use 'IdRef' to get the ID from the TargetType Link object
-                includeProperties: ["TargetType.IdRef", "PublishedAt"]
+                itemId: pageId
             });
 
-            // Check if published to Staging (using IdRef)
+            // Check if published to Staging (using IdRef from Link object)
             const isPublishedToStaging = publishInfo.some(info => info.TargetType && info.TargetType.IdRef === stagingId);
-            // Check if published to Live (using IdRef)
+            // Check if published to Live
             const isPublishedToLive = publishInfo.some(info => info.TargetType && info.TargetType.IdRef === liveId);
             context.log(\`  Staging: \${isPublishedToStaging}, Live: \${isPublishedToLive}\`);
 
             // If published to Staging BUT NOT to Live, return details
             if (isPublishedToStaging && !isPublishedToLive) {
-                context.log(\`  Condition MET. Getting page title...\`);
+                // Fetch Title for the report (discovery tool doesn't guarantee it)
                 const page = await context.tools.getItem({ itemId: pageId, includeProperties: ["Title"] });
                 return { title: page.Title, id: page.Id };
             }
 
-            // Otherwise, return null (will be filtered out later)
-            context.log('  Condition NOT MET.');
             return null;
         \`,
         // Phase 3 (Reduce): Format the results
@@ -749,7 +755,7 @@ This script finds all Pages in a Publication, efficiently gets the required Targ
             context.log(\`Found \${pages.length} pages matching criteria.\`);
 
             if (pages.length === 0) {
-                return \`No pages found in '\${context.parameters.publicationTitle}' that are published to '\${context.parameters.stagingTargetTitle}' but not to '\${context.parameters.liveTargetTitle}'.\`;
+                return \`No pages found matching the criteria.\`;
             }
 
             let report = \`Found \${pages.length} pages published to '\${context.parameters.stagingTargetTitle}' but not '\${context.parameters.liveTargetTitle}':\\n\`;
@@ -767,7 +773,6 @@ This script uses the 'preProcessingScript' to call the dedicated 'createBluePrin
         preProcessingScript: \`
             context.log("Starting BluePrint Setup...");
 
-            // Define the hierarchy declaratively
             const hierarchy = {
                 nodes: [
                     // Level 1
@@ -790,8 +795,6 @@ This script uses the 'preProcessingScript' to call the dedicated 'createBluePrin
                 ]
             };
 
-            // Call the single tool to handle creation and sorting
-            // Note: We use JSON.stringify because the tool accepts strings to ensure agent compatibility
             const result = await context.tools.createBluePrintHierarchy({
                 rootPublicationJson: JSON.stringify({
                     title: "000 Root",
@@ -804,14 +807,12 @@ This script uses the 'preProcessingScript' to call the dedicated 'createBluePrin
 
             context.log("Hierarchy created. ID Map returned.");
             
-            // Pass the map of "tempID -> realID" to the next phase or output
             return {
                 itemIds: [], 
                 preProcessingResult: result.content[0].text 
             };
         \`,
         postProcessingScript: \`
-            // Output the mapping for the user
             const data = JSON.parse(context.preProcessingResult);
             return {
                 message: "Hierarchy Setup Complete",
@@ -831,8 +832,7 @@ Example 10: Generate "Missing Alt Text" Report for Images
             const allItems = await context.tools.getItemsInContainer({
                 containerId: "tcm:0-5-1",
                 itemTypes: ["Component"],
-                recursive: true,
-                details: "IdAndTitle"
+                recursive: true
             });
             const itemIds = allItems.map(item => item.Id);
             context.log(\`Found \${itemIds.length} total Components to check.\`);
@@ -917,8 +917,7 @@ Example 11: Find Large, Unused Multimedia Components
             const allItems = await context.tools.getItemsInContainer({
                 containerId: "tcm:0-5-1",
                 itemTypes: ["Component"],
-                recursive: true,
-                details: "IdAndTitle"
+                recursive: true
             });
             const itemIds = allItems.map(item => item.Id);
             context.log(\`Found \${itemIds.length} total Components to check.\`);
@@ -944,18 +943,16 @@ Example 11: Find Large, Unused Multimedia Components
             context.log(\`Found large file: \${item.Title} (\${item.BinaryContent.Size} bytes)\`);
 
             // 3. Find all Pages that use this component
-            // getDependencyGraph defaults to flatMode: true, so we get a flat array.
+            // getDependencyGraph returns a flat array of Ids and Titles.
             let graphItems = [];
             try {
                 graphItems = await context.tools.getDependencyGraph({
                     itemId: itemId,
                     direction: "UsedBy",
-                    rloItemTypes: ["Page"], // Only care about Page usages
-                    details: "IdAndTitle"
+                    rloItemTypes: ["Page"] // Only care about Page usages
                 });
             } catch (e) {
                 context.log(\`Error getting dependencies: \${e.message}\`);
-                // Treat as unused for safety, or skip
                 return null; 
             }
 
@@ -970,8 +967,7 @@ Example 11: Find Large, Unused Multimedia Components
             // 4. Check if ANY of the using Pages are published
             for (const pageId of pageIds) {
                 const publishInfo = await context.tools.getPublishInfo({ 
-                    itemId: pageId, 
-                    includeProperties: ["PublishedAt"] 
+                    itemId: pageId
                 });
                 
                 if (publishInfo && publishInfo.length > 0) {
@@ -1287,7 +1283,6 @@ This script would first be run by following the "Debugging Strategies" (test on 
     });
 `,
 
-    // The 'input' property is now the plain object
     input: toolOrchestratorInputProperties,
 
     execute: async (
