@@ -4,14 +4,13 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 export const copyItem = {
     name: "copyItem",
-    description: `Copies the specified item to a new location. This is different from the 'moveItem' tool, which relocates the original item.
-    It is only possible to copy an item to a destination where the 'BlueprintInfo.IsLocalized' and 'BlueprintInfo.IsShared' properties are both 'false'. You can check these properties using the 'getItem' tool.
-    The title of the copied item must be unique in the destination container.
+    description: `Creates a copy/duplicate of the item in the specified destination. This is different from the 'moveItem' tool, which relocates the original item.
+    The tool will automatically ensure that the title of the copied item is unique in the destination container.
     Items can only be copied to containers of the same type (Folder to Folder, StructureGroup to StructureGroup).
     The ID of an item's container is given by the 'LocationInfo/OrganizationalItem/IdRef' property.`,
     input: {
         itemId: z.string().regex(/^tcm:\d+-\d+(-\d+)?$/).describe("The TCM URI of the item to be copied. Use 'search' or 'getItemsInContainer' to find the item's ID."),
-        destinationId: z.string().regex(/^tcm:\d+-\d+-(2|4|512|1024)$/).describe("The TCM URI of the destination Folder, Structure Group, Category, or Keyword. Use 'search' or 'getItemsInContainer' to find a destination.")
+        destinationId: z.string().regex(/^tcm:\d+-\d+-(2|4|512|1024)$/).describe("The TCM URI of the destination Folder, Structure Group, Category, or Keyword. Use 'search' or 'getItemsInContainer' to find a destination. Setting this to the item's current location will create a duplicate with a unique title.")
     },
     execute: async ({ itemId, destinationId }: { itemId: string, destinationId: string },
         context: any
