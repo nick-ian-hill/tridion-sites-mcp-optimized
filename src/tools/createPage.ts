@@ -41,7 +41,6 @@ BluePrint Context & 404 Errors:
 Any ID parameters you provide (e.g., 'pageTemplateId', 'metadataSchemaId) MUST exist in the same Publication as 'locationId'.
 If any IDs reference items in a parent or other ancestor Publication, the items will be inherited by the context Publication, and the tool will map the IDs to the correct context automatically.
 For example, if you are in 'locationId' "tcm:107-..." (Child) and reference a metadataSchema from "tcm:105-..." (Parent), the tool correctly maps this to the inherited ID "tcm:107-...".
-As a result of the automatic mapping, you do not need to use the 'mapItemToContextPublication' tool for mapping purposes.
 
 If you get a 404 'Not Found' error for an item you trying to reference (e.g., a Keyword) it likely means the item is in a sibling or child Publication, not a parent or other ancestor.
 Items created in sibling/child Pubications are not inherited, and therefore the mapped ID will not correspond to a real item.

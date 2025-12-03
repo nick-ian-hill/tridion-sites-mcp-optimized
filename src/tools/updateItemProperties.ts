@@ -83,7 +83,7 @@ If you get a 404 'Not Found' error on an item you expect to inherit (like a Sche
 4.  This will show you your Publication's true parents.
 
 Any Schemas, TTBs, Components, etc. from a parent Publication can be used when creating/updating items in the current Publication.
-The tools automatically map Ids to the correct Publication context, you should not need to call mapItemToContextPublication.
+The tools automatically map Ids to the correct Publication context.
 
 When providing a value for a Component Link field, the linked Component must be based on a Schema specified in that field's 'AllowedTargetSchemas' list.
 If you encounter a schema validation error on a component link field, use the following strategy:
