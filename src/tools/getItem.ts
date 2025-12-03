@@ -28,8 +28,8 @@ You can request these properties using dot notation (e.g., 'VersionInfo.Revision
     * **ContextRepository**: Link to the Publication containing the item.
     * **WebDavUrl**: The WebDAV access path.
 * **BluePrintInfo** (Crucial for inheritance):
-    * **IsLocalized**: (boolean) True if item is a local copy.
-    * **IsShared**: (boolean) True if item is visible from a parent.
+    * **IsLocalized**: (boolean) True if item is a local (editable) copy.
+    * **IsShared**: (boolean) True if item is a shared (non-editable) copy from a parent.
     * **OwningRepository**: For shared items, a Link to the Publication from which the item is inherited (not necessarily the Primary item). For a Primary or Localized item, a link to the Publication containing the item.
     * **PrimaryBluePrintParentItem**: A Link to the Primary item. An item in a parent Publication is inherited by all child Publications. An item's Primary item is the original instance of that item, i.e., the instance of the item in an ancestor Publication from which all other instances are inherited.
 * **VersionInfo**:
