@@ -5,7 +5,7 @@ import { formatForAgent } from "../utils/fieldReordering.js";
 
 export const getKeywordsForCategory = {
     name: "getKeywordsForCategory",
-    description: `Retrieves the list of keywords for the specified category, including nested keywords. This is the second step in finding keywords, used after 'getCategories'. The keyword IDs returned by this tool are used as input for tools like 'classify', 'batchClassification', and 'getClassifiedItems'.
+    description: `Retrieves the list of keywords for the specified category, including nested keywords. This is the second step in finding keywords, used after 'getCategories'. The keyword IDs returned by this tool are used as input for tools like 'classify', and 'getClassifiedItems'.
         Keywords can be associated with items via 'keyword' fields in an item's content or metadata.
     Keywords with the 'Abstract' property set to true are typically used for definining hierarchical navigation.
     Keywords with the 'Abstract' property set to false can be used for both navigation and for classifying items.

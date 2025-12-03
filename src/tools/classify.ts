@@ -27,7 +27,7 @@ export const classify = {
 - If a Keyword to be added is already present in all relevant fields, it will be ignored.
 - If a Keyword to be removed is not present in any relevant field, it will be ignored.
 
-The tool will return a warning if no changes were made. For batch operations, use the 'batchClassification' tool.`,
+The tool will return a warning if no changes were made. For batch operations, use the 'toolOrchestrator' tool.`,
     
     input: classifyInputProperties,
 

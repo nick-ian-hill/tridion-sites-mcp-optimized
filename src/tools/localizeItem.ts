@@ -4,7 +4,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 export const localizeItem = {
     name: "localizeItem",
-    description: `Localizes a shared item in the BluePrint, creating a local copy that can be edited independently of its parent item. For localizing multiple items, the 'batchLocalizeItems' tool is more efficient.
+    description: `Localizes a shared item in the BluePrint, creating a local copy that can be edited independently of its parent item. For localizing multiple items, consider using the 'toolOrchestrator' tool.
 
 This tool is only applicable to items that are shared. This can be determined by calling the 'getItem' tool and inspecting the 'BluePrintInfo.IsShared' property.
 
