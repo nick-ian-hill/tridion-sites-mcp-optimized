@@ -1,4 +1,4 @@
-import { handleAxiosError } from "../utils/errorUtils.js";
+import { handleAxiosError } from "../../utils/errorUtils.js";
 
 export const getCurrentTime = {
     name: "getCurrentTime",
