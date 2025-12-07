@@ -9,20 +9,39 @@ import { formatForApi } from "../utils/fieldReordering.js";
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 
 const createMultimediaComponentFromPromptInputProperties = {
-    prompt: z.string().describe("The text prompt to generate an image from."),
+    prompt: z.string().describe("Instructions to guide the image generation model. Include both the subject description (what to draw) and explicit commands on how to use any provided 'contextItemIds' (e.g., 'Use the first image for the character's pose and the second for the color palette.' or 'Use a similar style to the context images.')."),
     title: z.string().describe("The title for the new multimedia component."),
-    fileName: z.string().describe("The desired file name for the multimedia component in the CMS (e.g., 'generated-image.jpg')."),
+    fileName: z.string().describe("The desired file name with a valid image extension (e.g., 'banner-v1.jpg' or 'icon.png'). Ensure the extension matches the expected output format."),
     locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new component will be created. Use 'search' or 'getItemsInContainer' to find a suitable Folder."),
     schemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the Multimedia Schema to use. If not provided, a default will be determined automatically. Use 'getSchemaLinks' with purpose 'Multimedia' to find available schemas."),
     metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields."),
-    aspectRatio: z.enum(['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9']).optional().describe("The desired aspect ratio for the generated image. Defaults to 1:1 square if not specified.")
+    aspectRatio: z.enum(['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9']).optional().describe("The desired aspect ratio for the generated image. Defaults to 1:1 square if not specified."),
+    contextItemIds: z.array(z.string().regex(/^tcm:\d+-\d+$/)).optional().describe("An optional array of TCM URIs for other multimedia components to use as context (e.g., for style reference, composition, or combining elements).")
 };
 
 const createMultimediaComponentFromPromptSchema = z.object(createMultimediaComponentFromPromptInputProperties);
 
 export const createMultimediaComponentFromPrompt = {
     name: "createMultimediaComponentFromPrompt",
-    description: "Generates an image from a text prompt using the Gemini API and creates a new multimedia component from it. This is one of three ways to create a multimedia component, with the others being 'createMultimediaComponentFromBase64' and 'createMultimediaComponentFromUrl'.",
+    description: `Generates an image from a text prompt using the Gemini API and creates a new multimedia component from it. Can optionally use existing multimedia components as context/style references. Be sure to explain in the prompt how any reference images should be used.
+
+Example: Style Transfer
+// Use an existing "Brand Style" image (tcm:5-88) as a reference to generate a new banner image.
+const result = await tools.createMultimediaComponentFromPrompt({
+    prompt: "A modern, collaborative workspace with a diverse team brainstorming around a whiteboard. High energy, professional atmosphere. Use the provided image as a reference.",
+    title: "Team Collaboration Banner",
+    fileName: "team-collab-banner.jpg",
+    locationId: "tcm:5-10-2",
+    aspectRatio: "16:9",
+    contextItemIds: ["tcm:5-88"]
+});
+
+Expected JSON Output:
+{
+  "type": "MultimediaComponent",
+  "Id": "tcm:5-2024",
+  "Message": "Successfully created tcm:5-2024"
+}`,
     input: createMultimediaComponentFromPromptInputProperties,
     async execute(input: z.infer<typeof createMultimediaComponentFromPromptSchema>,
         context: any
@@ -33,25 +52,71 @@ export const createMultimediaComponentFromPrompt = {
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
         const userSessionId = match ? match[1] : null;
 
-        const { prompt, title, fileName, locationId, schemaId, metadata, aspectRatio } = input;
+        const { prompt, title, fileName, locationId, schemaId, metadata, aspectRatio, contextItemIds } = input;
 
         try {
-            console.log(`Generating image for prompt: "${prompt}"`);
+            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
+            
+            // Build the contents array
+            const contents: any[] = [{ text: prompt }];
+
+            // If context items are provided, fetch their binaries and add them to the payload
+            if (contextItemIds && contextItemIds.length > 0) {
+                console.log(`Fetching ${contextItemIds.length} context items...`);
+                
+                for (const contextId of contextItemIds) {
+                    const restContextId = contextId.replace(':', '_');
+                    
+                    // 1. Verify item type
+                    const itemResponse = await authenticatedAxios.get(`/items/${restContextId}`);
+                    if (itemResponse.status !== 200) {
+                        console.warn(`Could not fetch context item ${contextId}. Skipping.`);
+                        continue;
+                    }
+                    if (itemResponse.data.ComponentType !== 'Multimedia') {
+                        console.warn(`Context item ${contextId} is not a Multimedia Component. Skipping.`);
+                        continue;
+                    }
+
+                    // 2. Download binary
+                    console.log(`Downloading binary for context item ${contextId}...`);
+                    const downloadResponse = await authenticatedAxios.get(`/items/${restContextId}/binary/download`, {
+                        responseType: 'arraybuffer'
+                    });
+
+                    if (downloadResponse.status === 200) {
+                        const buffer = Buffer.from(downloadResponse.data);
+                        const mimeType = downloadResponse.headers['content-type'] || 'image/jpeg';
+                        
+                        contents.push({
+                            inlineData: {
+                                mimeType: mimeType,
+                                data: buffer.toString('base64')
+                            }
+                        });
+                    } else {
+                        console.warn(`Failed to download binary for ${contextId}. Status: ${downloadResponse.status}`);
+                    }
+                }
+            }
+
+            console.log(`Generating image for prompt: "${prompt}" with ${contents.length - 1} context images.`);
             let base64Content: string | undefined;
             
             const ai = new GoogleGenAI({ vertexai: false, apiKey: GEMINI_API_KEY });
             
             const generationConfig: any = {
-                responseModalities: ['Image']
+                responseModalities: ['IMAGE']
             };
 
             if (aspectRatio) {
                 generationConfig.imageConfig = { aspectRatio };
             }
 
+            // Execute using the flat contents array
             const result = await ai.models.generateContent({
                 model: "gemini-2.5-flash-image",
-                contents: prompt,
+                contents: contents,
                 config: generationConfig
             });
 
@@ -81,7 +146,6 @@ export const createMultimediaComponentFromPrompt = {
 
             try {
                 console.log(`Fetching existing component titles from folder ${locationId} to ensure uniqueness.`);
-                const authenticatedAxios = createAuthenticatedAxios(userSessionId);
                 const response = await authenticatedAxios.get(`/items/${escapedContainerId}/items`, {
                     params: {
                         rloItemTypes: ['Component'],
@@ -95,8 +159,6 @@ export const createMultimediaComponentFromPrompt = {
                             existingTitles.add(item.Title.toLowerCase());
                         }
                     }
-                } else {
-                    console.warn(`Could not verify title uniqueness due to unexpected API response format.`);
                 }
             } catch (error) {
                 console.warn(`An error occurred while fetching items for uniqueness check. Proceeding with original title.`, error);
