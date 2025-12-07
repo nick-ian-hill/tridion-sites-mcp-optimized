@@ -127,6 +127,47 @@ const result = await tools.getRelatedBluePrintItems({
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const escapedItemId = itemId.replace(':', '_');
             
+            // --- OPTIMIZATION FOR PrimaryItem ---
+            // If the user wants the PrimaryItem, we can check the item directly first
+            // to avoid the expensive hierarchy traversal if the API provides the link.
+            if (relationship === "PrimaryItem" && !isPublicationId) {
+                const itemResponse = await authenticatedAxios.get(`/items/${escapedItemId}`, {
+                    params: { includeProperties: ["BluePrintInfo"] }
+                });
+                
+                if (itemResponse.status === 200 && itemResponse.data.BluePrintInfo?.PrimaryBluePrintParentItem?.IdRef) {
+                    const primaryId = itemResponse.data.BluePrintInfo.PrimaryBluePrintParentItem.IdRef;
+                    
+                    // We need to fetch the primary item's full details to match the tool's return format
+                    const primaryResponse = await authenticatedAxios.get(`/items/${primaryId.replace(':', '_')}`);
+                    if (primaryResponse.status === 200) {
+                        const item = primaryResponse.data;
+                        const pubId = item.LocationInfo?.ContextRepository?.IdRef;
+                        const pubTitle = item.LocationInfo?.ContextRepository?.Title;
+
+                        const resultObject = {
+                            Item: {
+                                Id: item.Id,
+                                Title: item.Title,
+                                type: item.$type
+                            },
+                            Publication: {
+                                Id: pubId,
+                                Title: pubTitle
+                            },
+                            State: "Primary"
+                        };
+                        return {
+                            content: [{
+                                type: "text",
+                                text: JSON.stringify(formatForAgent([resultObject]), null, 2)
+                            }]
+                        };
+                    }
+                }
+            }
+
+            // --- Standard Hierarchy Traversal ---
             // Fetch hierarchy with Contentless details.
             // We NEED BluePrintInfo to determine IsLocalized/IsShared.
             const response = await authenticatedAxios.get(`/items/${escapedItemId}/bluePrintHierarchy`, {
@@ -165,8 +206,6 @@ const result = await tools.getRelatedBluePrintItems({
                 nodeMap.set(pubId, node);
                 
                 // Identify Context Node
-                // The hierarchy endpoint returns the graph relative to the requested item.
-                // We identify the node belonging to the requested item's publication.
                 if (pubId === inputPubId) {
                     contextPubId = pubId;
                 }
@@ -176,7 +215,6 @@ const result = await tools.getRelatedBluePrintItems({
             }
 
             // Build Edges based on the API response.
-            // The API returns 'Parents' for each node, representing the EFFECTIVE BluePrint parents for this item.
             for (const node of rawItems) {
                 const childPubId = node.ContextRepositoryId;
                 if (node.Parents) {
@@ -223,23 +261,18 @@ const result = await tools.getRelatedBluePrintItems({
                 }
             };
 
-            // Helper: Find Root (Primary)
+            // Helper: Find Root (Primary) - Fallback logic if API property was missing
             const findRoot = (startPubId: string): string => {
                 const parents = parentsMap.get(startPubId);
                 if (!parents || parents.size === 0) return startPubId; // No parents, this is root
                 
-                // If multiple parents, pick the first one (arbitrary for Primary check, as all roads lead to Rome)
                 // In a valid BluePrint for a single item, there is strictly one Primary Parent chain 
                 // that leads to the Owning Repository.
                 const firstParent = parents.values().next().value;
                 
                 if (!firstParent) return startPubId;
                 
-                // CRITICAL LOGIC:
-                // Only recurse if the parent is actually part of our known graph (returned by API).
-                // AND if the parent node actually has the Item we are looking for.
-                // If 'firstParent' is a Publication where this Item does not exist, it won't be in nodeMap (or Item will be missing).
-                // In that case, 'startPubId' is the root of the ITEM'S hierarchy.
+                // Only recurse if the parent is actually part of our known graph
                 const parentNode = nodeMap.get(firstParent);
                 if (!parentNode || !parentNode.Item) {
                     return startPubId;
@@ -258,12 +291,9 @@ const result = await tools.getRelatedBluePrintItems({
                     const parents = parentsMap.get(current);
                     if (!parents || parents.size === 0) break;
 
-                    // In the context of a specific item's hierarchy, the API usually resolves 
-                    // priority conflicts, so an item effectively has one parent chain. 
-                    // We take the first mapped parent.
                     const nextParent = parents.values().next().value;
                     
-                    if (!nextParent) break; // Safety check for TS compliance
+                    if (!nextParent) break;
 
                     resultPubIds.add(nextParent);
                     current = nextParent;
@@ -310,7 +340,6 @@ const result = await tools.getRelatedBluePrintItems({
                 case "SharedFrom":
                 case "LocalizedFrom":
                     // These look Upstream (Immediate Parents only)
-                    // The API 'Parents' array represents the resolved source(s).
                     parentsMap.get(contextPubId)?.forEach(id => resultPubIds.add(id));
                     break;
 
@@ -336,7 +365,6 @@ const result = await tools.getRelatedBluePrintItems({
                 
                 // CRITICAL SAFETY CHECK: 
                 // If the graph contains nodes where the item itself is not accessible or not present in the returned data, skip it.
-                // This prevents "Cannot read properties of undefined (reading 'BluePrintInfo')" errors.
                 if (!item) continue;
 
                 const isLocalized = item.BluePrintInfo?.IsLocalized === true;
@@ -355,7 +383,6 @@ const result = await tools.getRelatedBluePrintItems({
                 }
                 // For SharedFrom / LocalizedFrom / InheritancePath / PrimaryItem, 
                 // we include the items found in the graph regardless of state (Localized/Shared/Primary).
-                // The relationship defines the traversal, not the state filtering.
 
                 if (include) {
                     const isPublication = item.$type === "Publication" || (item.Id && item.Id.endsWith("-1"));
