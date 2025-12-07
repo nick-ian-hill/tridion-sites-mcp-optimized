@@ -19,16 +19,18 @@ const getRelatedBluePrintItemsInputProperties = {
         "SharedIn",
         "SharedFrom",
         "LocalizedFrom",
-        "PrimaryItem"
+        "PrimaryItem",
+        "InheritancePath"
     ]).describe(`The relationship filter.
-    - 'Child'/'Descendant': Publications that inherit from the current location.
-    - 'Parent'/'Ancestor': Publications that the current location inherits from.
-    - 'Sibling': Publications that share the same parent(s).
+    - 'Child'/'Descendant': Publications that inherit from the specified Publication. (Requires a Publication ID).
+    - 'Parent'/'Ancestor': Publications that the specified Publication inherits from. (Requires a Publication ID).
+    - 'Sibling': Publications that share the same parent(s). (Requires a Publication ID).
     - 'LocalizedIn': Descendant locations where this item exists as a Localized (editable) copy.
     - 'SharedIn': Descendant locations where this item exists as a Shared (read-only) copy.
     - 'SharedFrom': The immediate parent item(s) from which this item inherits (valid for Shared items).
     - 'LocalizedFrom': The immediate parent item(s) from which this item *would* inherit if it were not localized (valid for Localized items).
-    - 'PrimaryItem': The original root item (Owning Item) in the hierarchy.`)
+    - 'PrimaryItem': The original root item (Owning Item) in the hierarchy.
+    - 'InheritancePath': The full upward chain of items from the current item to the Primary Item. Returns an ordered list [Self, Parent, Grandparent...].`)
 };
 
 const getRelatedBluePrintItemsSchema = z.object(getRelatedBluePrintItemsInputProperties);
@@ -55,6 +57,7 @@ For example, if a Publication inherits from two parents, 'SharedFrom' will retur
 - **Impact Analysis:** Use 'SharedIn' and 'LocalizedIn' to see exactly where a change to the current item will propagate (Shared) or be masked (Localized).
 - **Origin Tracing:** Use 'SharedFrom' or 'LocalizedFrom' to find the immediate source of the current item.
 - **Root Cause:** Use 'PrimaryItem' to find the master copy of the content.
+- **Debugging:** Use 'InheritancePath' to trace the exact lineage of an item to understand where properties are inherited from.
 - **Publication Navigation:** Use 'Child'/'Parent' (with a Publication ID) to navigate the repository structure.
 
 ### Example 1: Impact Analysis (Downstream)
@@ -78,38 +81,24 @@ const result = await tools.getRelatedBluePrintItems({
   }
 ]
 
-### Example 2: Origin Tracing (Upstream)
-// Find the immediate parent item that "tcm:12-123" inherits from.
+### Example 2: Inheritance Path (Upstream)
+// Trace the path of an item up to the Primary item.
 const result = await tools.getRelatedBluePrintItems({
     itemId: "tcm:12-123",
-    relationship: "SharedFrom"
+    relationship: "InheritancePath"
 });
 
 // Expected JSON Output:
 [
   {
+    "Item": { "Id": "tcm:12-123", "Title": "About Us (Local)", "type": "Component" },
+    "Publication": { "Id": "tcm:0-12-1", "Title": "400 Website DE" },
+    "State": "Localized"
+  },
+  {
     "Item": { "Id": "tcm:5-123", "Title": "About Us", "type": "Component" },
     "Publication": { "Id": "tcm:0-5-1", "Title": "100 Master Content" },
     "State": "Primary"
-  }
-]
-
-### Example 3: Publication Structure
-// Find the immediate child publications of "tcm:0-1-1".
-const result = await tools.getRelatedBluePrintItems({
-    itemId: "tcm:0-1-1",
-    relationship: "Child"
-});
-
-// Expected JSON Output (State is omitted for Publications):
-[
-  {
-    "Item": { "Id": "tcm:0-2-1", "Title": "010 Schemas", "type": "Publication" },
-    "Publication": { "Id": "tcm:0-2-1", "Title": "010 Schemas" }
-  },
-  {
-    "Item": { "Id": "tcm:0-3-1", "Title": "020 Templates", "type": "Publication" },
-    "Publication": { "Id": "tcm:0-3-1", "Title": "020 Templates" }
   }
 ]`,
     input: getRelatedBluePrintItemsInputProperties,
@@ -122,15 +111,24 @@ const result = await tools.getRelatedBluePrintItems({
         const { itemId, relationship } = input;
 
         try {
+            // --- Validation Logic ---
+            const publicationOnlyRelationships = new Set(["Child", "Descendant", "Parent", "Ancestor", "Sibling"]);
+            const isPublicationId = itemId.endsWith("-1") && itemId.startsWith("tcm:0-"); 
+
+            if (publicationOnlyRelationships.has(relationship) && !isPublicationId) {
+                // Assuming standard TCM URI format where Publications end in -1 (e.g., tcm:0-5-1)
+                throw new Error(
+                    `Validation Error: The relationship '${relationship}' is strictly for navigating Publication structure and requires a Publication ID (e.g., tcm:0-5-1).\n` +
+                    `You provided '${itemId}', which appears to be a Content Item.\n` +
+                    `To analyze how this item inherits, please use 'SharedIn', 'LocalizedIn', 'SharedFrom', or 'InheritancePath'.`
+                );
+            }
+
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const escapedItemId = itemId.replace(':', '_');
             
-            // Fetch hierarchy with basic details.
-            // We do NOT need full content, just Id, Title, and BluePrintInfo.
-            // The bluePrintHierarchy endpoint handles the resolution of Priority/Proximity for us.
-            const response = await authenticatedAxios.get(`/items/${escapedItemId}/bluePrintHierarchy`, {
-                params: { details: 'IdAndTitleOnly' }
-            });
+            // Fetch hierarchy with contentless details.
+            const response = await authenticatedAxios.get(`/items/${escapedItemId}/bluePrintHierarchy`);
 
             if (response.status !== 200) {
                 return handleUnexpectedResponse(response);
@@ -228,6 +226,28 @@ const result = await tools.getRelatedBluePrintItems({
                 return findRoot(firstParent);
             };
 
+            // Helper: Linear Chain Upstream
+            const tracePathUp = (startPubId: string) => {
+                let current = startPubId;
+                resultPubIds.add(current); // Include self
+
+                // Loop until we hit the top
+                while(true) {
+                    const parents = parentsMap.get(current);
+                    if (!parents || parents.size === 0) break;
+
+                    // In the context of a specific item's hierarchy, the API usually resolves 
+                    // priority conflicts, so an item effectively has one parent chain. 
+                    // We take the first mapped parent.
+                    const nextParent = parents.values().next().value;
+                    
+                    if (!nextParent) break; // Safety check for TS compliance
+
+                    resultPubIds.add(nextParent);
+                    current = nextParent;
+                }
+            }
+
             // --- 3. Execute Selection based on Relationship ---
             switch (relationship) {
                 // --- Publication Structure ---
@@ -276,6 +296,11 @@ const result = await tools.getRelatedBluePrintItems({
                     const rootPubId = findRoot(contextPubId);
                     resultPubIds.add(rootPubId);
                     break;
+
+                case "InheritancePath":
+                    // Returns ordered list [Self, Parent, Grandparent...]
+                    tracePathUp(contextPubId);
+                    break;
             }
 
             // --- 4. Filter & Format Results ---
@@ -300,9 +325,9 @@ const result = await tools.getRelatedBluePrintItems({
                     // Must be downstream AND shared (and not localized masking it)
                     if (!isShared || isLocalized) include = false;
                 }
-                // For SharedFrom / LocalizedFrom, we simply return the items found in the Parent nodes.
-                // We do not filter by state, because the parent could be Shared OR Localized/Primary.
-                // The relationship implies "This is the item I inherited from".
+                // For SharedFrom / LocalizedFrom / InheritancePath / PrimaryItem, 
+                // we include the items found in the graph regardless of state (Localized/Shared/Primary).
+                // The relationship defines the traversal, not the state filtering.
 
                 if (include) {
                     const isPublication = item.$type === "Publication" || (item.Id && item.Id.endsWith("-1"));
