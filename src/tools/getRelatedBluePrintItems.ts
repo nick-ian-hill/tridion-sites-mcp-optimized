@@ -38,30 +38,45 @@ const getRelatedBluePrintItemsSchema = z.object(getRelatedBluePrintItemsInputPro
 export const getRelatedBluePrintItems = {
     name: "getRelatedBluePrintItems",
     description: `Retrieves related items within the BluePrint hierarchy based on a specific relationship.
-This tool simplifies BluePrint analysis by returning a flat list of resolved items with their Publication context.
 
-**Return Format:**
-Returns an array of objects containing Item and Publication details.
-For standard items, a 'State' property is included. For Publications, 'State' is omitted.
-{
-  "Item": { "Id": "...", "Title": "...", "type": "..." },
-  "Publication": { "Id": "...", "Title": "..." },
-  "State": "Localized" | "Shared" | "Primary" // Optional
-}
+**Return Formats:**
+1. **For Publication Structure (itemId is a Publication):**
+   Returns a list of Publications.
+   [{ "Id": "tcm:0-5-1", "Title": "100 Master", "type": "Publication" }]
+
+2. **For Item Inheritance (itemId is a Content Item):**
+   Returns an array of objects containing Item context and State.
+   {
+     "Item": { "Id": "...", "Title": "...", "type": "..." },
+     "Publication": { "Id": "...", "Title": "..." },
+     "State": "Localized" | "Shared" | "Primary"
+   }
 
 **Logic & Priority:**
 This tool relies on the CMS to resolve BluePrint priority and proximity. The results reflect the *effective* inheritance path. 
-For example, if a Publication inherits from two parents, 'SharedFrom' will return the specific parent that "wins" the priority conflict.
 
 **Use Cases:**
-- **Impact Analysis:** Use 'SharedIn' and 'LocalizedIn' to see exactly where a change to the current item will propagate (Shared) or be masked (Localized).
-- **Origin Tracing:** Use 'SharedFrom' or 'LocalizedFrom' to find the immediate source of the current item.
-- **Root Cause:** Use 'PrimaryItem' to find the master copy of the content.
+- **Impact Analysis:** Use 'SharedIn' and 'LocalizedIn' to see exactly where a change to the current item will propagate.
+- **Origin Tracing:** Use 'SharedFrom' or 'LocalizedFrom' to find the immediate source of the current item. For example, when wanting to check whether the item the current item is localized from was modified more recently than the localied item.
+- **Root Cause:** Use 'PrimaryItem' to find the master copy of the content. Any non-localizable fields will always inherit their values from the PrimaryItem.
 - **Debugging:** Use 'InheritancePath' to trace the exact lineage of an item to understand where properties are inherited from.
 - **Publication Navigation:** Use 'Child'/'Parent' (with a Publication ID) to navigate the repository structure.
 
-### Example 1: Impact Analysis (Downstream)
-// Find all publications where the component "tcm:5-123" has been localized (edited).
+### Example 1: Publication Ancestors
+// Find all ancestors of Publication "tcm:0-12-1"
+const result = await tools.getRelatedBluePrintItems({
+    itemId: "tcm:0-12-1",
+    relationship: "Ancestor"
+});
+
+// Expected JSON Output:
+[
+  { "Id": "tcm:0-5-1", "Title": "100 Master Content", "type": "Publication" },
+  { "Id": "tcm:0-1-1", "Title": "000 Empty Root", "type": "Publication" }
+]
+
+### Example 2: Item Impact Analysis
+// Find all publications where "tcm:5-123" has been localized.
 const result = await tools.getRelatedBluePrintItems({
     itemId: "tcm:5-123",
     relationship: "LocalizedIn"
@@ -73,7 +88,7 @@ const result = await tools.getRelatedBluePrintItems({
     "Item": { "Id": "tcm:12-123", "Title": "About Us (Local)", "type": "Component" },
     "Publication": { "Id": "tcm:0-12-1", "Title": "400 Website DE" },
     "State": "Localized"
-  },
+    },
   {
     "Item": { "Id": "tcm:14-123", "Title": "About Us (FR)", "type": "Component" },
     "Publication": { "Id": "tcm:0-14-1", "Title": "400 Website FR" },
@@ -81,8 +96,8 @@ const result = await tools.getRelatedBluePrintItems({
   }
 ]
 
-### Example 2: Inheritance Path (Upstream)
-// Trace the path of an item up to the Primary item.
+### Example 3: Inheritance Path (Upstream)
+// Trace the path of an item up to its Primary item.
 const result = await tools.getRelatedBluePrintItems({
     itemId: "tcm:12-123",
     relationship: "InheritancePath"
@@ -381,37 +396,41 @@ const result = await tools.getRelatedBluePrintItems({
                     // Must be downstream AND shared (and not localized masking it)
                     if (!isShared || isLocalized) include = false;
                 }
-                // For SharedFrom / LocalizedFrom / InheritancePath / PrimaryItem, 
-                // we include the items found in the graph regardless of state (Localized/Shared/Primary).
-
+                
                 if (include) {
                     const isPublication = item.$type === "Publication" || (item.Id && item.Id.endsWith("-1"));
                     
-                    let state: string | undefined = "Primary";
-                    if (isLocalized) state = "Localized";
-                    else if (isShared) state = "Shared";
-
                     if (isPublication) {
-                        state = undefined; // State doesn't apply to Pubs
-                    }
-
-                    const resultObject: any = {
-                        Item: {
+                        // For Publication structure requests, we return a flat list.
+                        finalItems.push({
                             Id: item.Id,
                             Title: item.Title,
-                            type: item.$type
-                        },
-                        Publication: {
-                            Id: node.ContextRepositoryId,
-                            Title: node.ContextRepositoryTitle
+                            type: "Publication"
+                        });
+                    } else {
+                        // For Item inheritance, we need context (Item + Pub + State)
+                        let state: string | undefined = "Primary";
+                        if (isLocalized) state = "Localized";
+                        else if (isShared) state = "Shared";
+
+                        const resultObject: any = {
+                            Item: {
+                                Id: item.Id,
+                                Title: item.Title,
+                                type: item.$type
+                            },
+                            Publication: {
+                                Id: node.ContextRepositoryId,
+                                Title: node.ContextRepositoryTitle
+                            }
+                        };
+
+                        if (state) {
+                            resultObject.State = state;
                         }
-                    };
-
-                    if (state) {
-                        resultObject.State = state;
+                        
+                        finalItems.push(resultObject);
                     }
-
-                    finalItems.push(resultObject);
                 }
             }
 
