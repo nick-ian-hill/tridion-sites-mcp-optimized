@@ -127,8 +127,11 @@ const result = await tools.getRelatedBluePrintItems({
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const escapedItemId = itemId.replace(':', '_');
             
-            // Fetch hierarchy with contentless details.
-            const response = await authenticatedAxios.get(`/items/${escapedItemId}/bluePrintHierarchy`);
+            // Fetch hierarchy with Contentless details.
+            // We NEED BluePrintInfo to determine IsLocalized/IsShared.
+            const response = await authenticatedAxios.get(`/items/${escapedItemId}/bluePrintHierarchy`, {
+                params: { details: 'Contentless' } 
+            });
 
             if (response.status !== 200) {
                 return handleUnexpectedResponse(response);
@@ -144,9 +147,18 @@ const result = await tools.getRelatedBluePrintItems({
             
             let contextPubId = "";
 
-            // extract Publication ID from the input Item ID to identify "Self" in the graph
-            const uriMatch = itemId.match(/tcm:(\d+)-/);
-            const inputPubId = uriMatch ? `tcm:0-${uriMatch[1]}-1` : itemId; // Fallback to itemId if it looks like a pub
+            // Robustly extract the Publication ID from the input Item ID
+            let inputPubId = itemId;
+            if (itemId.startsWith("tcm:0-") && itemId.endsWith("-1")) {
+                // It is already a publication ID (e.g., tcm:0-19-1)
+                inputPubId = itemId;
+            } else {
+                // It is an item ID (e.g., tcm:107-2755), extract the Pub ID (107)
+                const uriMatch = itemId.match(/tcm:(\d+)-/);
+                if (uriMatch) {
+                    inputPubId = `tcm:0-${uriMatch[1]}-1`;
+                }
+            }
 
             for (const node of rawItems) {
                 const pubId = node.ContextRepositoryId;
@@ -221,7 +233,17 @@ const result = await tools.getRelatedBluePrintItems({
                 // that leads to the Owning Repository.
                 const firstParent = parents.values().next().value;
                 
-                if (!firstParent) return startPubId; // Should not happen due to size check, but satisfies TS
+                if (!firstParent) return startPubId;
+                
+                // CRITICAL LOGIC:
+                // Only recurse if the parent is actually part of our known graph (returned by API).
+                // AND if the parent node actually has the Item we are looking for.
+                // If 'firstParent' is a Publication where this Item does not exist, it won't be in nodeMap (or Item will be missing).
+                // In that case, 'startPubId' is the root of the ITEM'S hierarchy.
+                const parentNode = nodeMap.get(firstParent);
+                if (!parentNode || !parentNode.Item) {
+                    return startPubId;
+                }
                 
                 return findRoot(firstParent);
             };
@@ -311,6 +333,12 @@ const result = await tools.getRelatedBluePrintItems({
                 if (!node) continue;
 
                 const item = node.Item;
+                
+                // CRITICAL SAFETY CHECK: 
+                // If the graph contains nodes where the item itself is not accessible or not present in the returned data, skip it.
+                // This prevents "Cannot read properties of undefined (reading 'BluePrintInfo')" errors.
+                if (!item) continue;
+
                 const isLocalized = item.BluePrintInfo?.IsLocalized === true;
                 const isShared = item.BluePrintInfo?.IsShared === true;
 
