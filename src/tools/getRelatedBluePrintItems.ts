@@ -38,6 +38,7 @@ const getRelatedBluePrintItemsSchema = z.object(getRelatedBluePrintItemsInputPro
 export const getRelatedBluePrintItems = {
     name: "getRelatedBluePrintItems",
     description: `Retrieves related items within the BluePrint hierarchy based on a specific relationship.
+    Note: If the user asks for a visual diagram, image, or full graph structure, use 'getBluePrintHierarchy' instead.
 
 **Return Formats:**
 1. **For Publication Structure (itemId is a Publication):**

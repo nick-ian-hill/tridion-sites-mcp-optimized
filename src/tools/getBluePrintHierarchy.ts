@@ -165,14 +165,18 @@ const generateSvg = (nodes: any[], edges: any[]): string => {
 
 export const getBluePrintHierarchy = {
     name: "getBluePrintHierarchy",
-    description: `Retrieves the BluePrint hierarchy for a specified Content Manager item.
-The hierarchy shows the parent and child relationships for the item within the BluePrint, which is fundamental for content inheritance and reuse.
+    description: `Generates a visual representation or raw graph structure of the BluePrint hierarchy for an item.
+    
+### When to use this tool:
+- You need an **SVG image** to visualize the hierarchy (e.g., to display to a user).
+- You need the **full raw graph** structure (nodes and edges) for external rendering or complex custom analysis.
 
-### Output Structure
-This tool can return either a **JsonGraph** (for data processing) or an **Svg** image (for visualization).
+### When to use 'getRelatedBluePrintItems' instead:
+- You need to find **Children, Parents, or Ancestors** (logical relationships).
+- You need to find where an item is **Localized** or **Shared**.
+- You want a simple list of items rather than a complex graph object.
 
-1. **JsonGraph**: Returns a minimal directed graph structure with nodes (Id, Title) and edges.
-2. **Svg**: Returns an SVG string that visualizes the hierarchy. Green nodes indicate localized items, while purple nodes indicate shared items.
+Using 'getRelatedBluePrintItems' is preferred for all logical queries as it uses fewer tokens and provides direct answers.
 
 Example Structure:
 {
@@ -194,16 +198,10 @@ Example Structure:
       { "source": "tcm:0-1-1", "target": "tcm:0-2-1", "relation": "has child" }
     ]
   }
-}
-
-### "Find-Then-Fetch" Pattern
-When using 'JsonGraph' mode, this tool returns minimal identification data. It does **not** return deep details like 'VersionInfo' or 'BluePrintInfo' properties for every node.
-To analyze the hierarchy nodes (e.g., to find which specific user created the item in the Parent Publication):
-1.  **Find:** Use this tool to get the hierarchy graph.
-2.  **Fetch:** Iterate through the nodes in the graph using the 'toolOrchestrator' and call 'getItem' for the specific IDs you need to inspect.`,
+}`,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The TCM URI of the item for which to retrieve the BluePrint hierarchy."),
-        outputFormat: z.enum(["JsonGraph", "Svg"]).optional().default("JsonGraph").describe("Specifies the output format. Defaults to 'JsonGraph', which formats the data for efficient graph processing. 'Svg' generates and returns an SVG image of the hierarchy using a high-performance internal layout engine."),
+        outputFormat: z.enum(["JsonGraph", "Svg"]).optional().default("JsonGraph").describe("Specifies the output format. 'JsonGraph' returns the raw node/edge data. 'Svg' generates a visual diagram."),
     },
     execute: async ({ itemId, outputFormat = "JsonGraph" }: { itemId: string; outputFormat: "JsonGraph" | "Svg" }, context: any) => {
         const req = context?.request;
@@ -214,8 +212,6 @@ To analyze the hierarchy nodes (e.g., to find which specific user created the it
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             
-            // If output is SVG, we MUST fetch 'BluePrintInfo.IsLocalized' to render the colors correctly.
-            // If output is JsonGraph, we stick to the minimal "Find-then-Fetch" pattern (Id & Title only).
             const isSvgMode = outputFormat === 'Svg';
             const apiDetails = isSvgMode ? 'Contentless' : 'IdAndTitleOnly';
             const propsToInclude = isSvgMode ? ['BluePrintInfo.IsLocalized'] : [];
@@ -257,7 +253,6 @@ To analyze the hierarchy nodes (e.g., to find which specific user created the it
                     bpNode.Parents.forEach((parent: any) => {
                         const parentPubId = parent.IdRef;
                         if (!nodes.has(parentPubId)) {
-                            // For parent nodes not in the primary list, we create a stub.
                             nodes.set(parentPubId, { id: parentPubId, label: parent.Title });
                         }
                         const uniqueEdgeId = `${parentPubId}->${childPubId}`;
