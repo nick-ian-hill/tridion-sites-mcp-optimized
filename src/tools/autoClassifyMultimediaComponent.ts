@@ -11,6 +11,8 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const autoClassifyMultimediaInputProperties = {
     itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)
         .describe("The unique ID of the multimedia component to classify."),
+    restrictToAutoClassificationFields: z.boolean().default(true).optional()
+        .describe("If true (default), the tool strictly respects the Schema's 'AllowAutoClassification' property on Keyword fields. If false, it attempts to classify against ALL available keyword fields in the metadata."),
     maxSuggestions: z.number().int().default(5).optional()
         .describe("Maximum number of keywords to apply per category."),
     replaceExisting: z.boolean().default(false).optional()
@@ -39,7 +41,7 @@ export const autoClassifyMultimediaComponent = {
     input: autoClassifyMultimediaInputProperties,
 
     execute: async (input: z.infer<typeof autoClassifyMultimediaSchema>, context: any) => {
-        const { itemId, maxSuggestions, replaceExisting } = input;
+        const { itemId, restrictToAutoClassificationFields, maxSuggestions, replaceExisting } = input;
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -84,11 +86,11 @@ export const autoClassifyMultimediaComponent = {
             const metadataFields = schema.MetadataFields || {};
             const targetCategories: { id: string, title: string, fieldName: string }[] = [];
 
-            // Find keyword fields in metadata that allow auto-classification
+            // Find keyword fields in metadata
             for (const key in metadataFields) {
                 const def = metadataFields[key];
                 if (def.$type === 'KeywordFieldDefinition' && def.Category?.IdRef) {
-                    if (def.AllowAutoClassification === true) {
+                    if (def.AllowAutoClassification === true || !restrictToAutoClassificationFields) {
                         targetCategories.push({
                             id: def.Category.IdRef,
                             title: def.Name,
@@ -99,7 +101,10 @@ export const autoClassifyMultimediaComponent = {
             }
 
             if (targetCategories.length === 0) {
-                return { content: [{ type: "text", text: JSON.stringify({ message: "No metadata fields found marked for Auto Classification." }) }] };
+                const msg = restrictToAutoClassificationFields 
+                    ? "No metadata fields found marked for Auto Classification." 
+                    : "No Keyword fields found in the Metadata Schema.";
+                return { content: [{ type: "text", text: JSON.stringify({ message: msg }) }] };
             }
 
             // 4. Fetch Keywords for Targets & Build Prompt Context
