@@ -4,6 +4,7 @@ import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { classify } from "./classify.js";
 import { zodToJsonSchema } from "zod-to-json-schema";
+import { extractIds } from "../utils/links.js"; // <-- Updated: Import now comes from utils/links.js
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 
@@ -56,26 +57,6 @@ const extractAllText = (obj: any): string[] => {
     }
     return text;
 };
-
-// Helper to extract IDs (TCM URIs) from a field value which should represent a list of links (e.g., Keywords).
-const extractIds = (fieldValue: any): string[] => {
-    if (!fieldValue) return [];
-
-    // Handle array of links (multi-value)
-    if (Array.isArray(fieldValue)) {
-        return fieldValue
-            .map(link => link.IdRef)
-            .filter((id): id is string => !!id);
-    }
-
-    // Handle single link object
-    if (typeof fieldValue === 'object' && fieldValue.IdRef) {
-        return [fieldValue.IdRef];
-    }
-
-    return [];
-};
-
 
 export const autoClassifyItem = {
     name: "autoClassifyItem",

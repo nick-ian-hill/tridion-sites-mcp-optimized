@@ -42,8 +42,30 @@ export const toLinkArray = (ids: string[] | undefined | null): Link[] | undefine
   if (ids === null || ids.length === 0) {
     return [];
   }
-  return ids.map(id => ({
-    $type: "Link",
-    IdRef: id,
-  }));
+  return ids.map((id) => toLink(id) as Link);
+};
+
+/**
+ * Extracts the Item IDs (TCM URIs) from a field value representing one or more Core Service Link objects.
+ * This is useful for retrieving the currently linked items (like Keywords, Components, or Schemas) from an item's content or metadata.
+ *
+ * @param fieldValue - The value of a field, which can be a single Link object, an array of Link objects, or null/undefined.
+ * @returns An array of string IDs (TCM URIs). Returns an empty array if no IDs are found.
+ */
+export const extractIds = (fieldValue: any): string[] => {
+    if (!fieldValue) return [];
+
+    // Handle array of links (multi-value)
+    if (Array.isArray(fieldValue)) {
+        return fieldValue
+            .map(link => link.IdRef)
+            .filter((id): id is string => !!id);
+    }
+
+    // Handle single link object
+    if (typeof fieldValue === 'object' && fieldValue.IdRef) {
+        return [fieldValue.IdRef];
+    }
+
+    return [];
 };
