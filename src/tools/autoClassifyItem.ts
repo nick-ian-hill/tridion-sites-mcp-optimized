@@ -13,7 +13,9 @@ const autoClassifyItemInputProperties = {
     restrictToAutoClassifiableFields: z.boolean().default(true).optional()
         .describe("If true (default), the tool strictly respects the Schema's 'UseForAutoClassification' (source text) and 'AllowAutoClassification' (target keyword) properties. If false, it uses all text content and all available keyword fields."),
     maxSuggestions: z.number().int().default(5).optional()
-        .describe("Maximum number of keywords to apply per category.")
+        .describe("Maximum number of keywords to apply per category."),
+    replaceExisting: z.boolean().default(false).optional()
+        .describe("If true, removes ALL existing keywords from the target categories before adding the new suggestions. Use this to re-classify items."),
 };
 
 const autoClassifyItemSchema = z.object(autoClassifyItemInputProperties);
@@ -55,6 +57,26 @@ const extractAllText = (obj: any): string[] => {
     return text;
 };
 
+// Helper to extract IDs (TCM URIs) from a field value which should represent a list of links (e.g., Keywords).
+const extractIds = (fieldValue: any): string[] => {
+    if (!fieldValue) return [];
+
+    // Handle array of links (multi-value)
+    if (Array.isArray(fieldValue)) {
+        return fieldValue
+            .map(link => link.IdRef)
+            .filter((id): id is string => !!id);
+    }
+
+    // Handle single link object
+    if (typeof fieldValue === 'object' && fieldValue.IdRef) {
+        return [fieldValue.IdRef];
+    }
+
+    return [];
+};
+
+
 export const autoClassifyItem = {
     name: "autoClassifyItem",
     description: `Analyzes an item's content and automatically classifies it by applying relevant Keywords.
@@ -68,7 +90,8 @@ export const autoClassifyItem = {
     Example:
     const result = await tools.autoClassifyItem({
         itemId: "tcm:5-200",
-        restrictToAutoClassifiableFields: true
+        restrictToAutoClassifiableFields: true,
+        replaceExisting: true
     });
     
     Expected Output:
@@ -82,7 +105,7 @@ export const autoClassifyItem = {
     input: autoClassifyItemInputProperties,
 
     execute: async (input: z.infer<typeof autoClassifyItemSchema>, context: any) => {
-        const { itemId, restrictToAutoClassifiableFields, maxSuggestions } = input;
+        const { itemId, restrictToAutoClassifiableFields, maxSuggestions, replaceExisting } = input;
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -279,10 +302,31 @@ export const autoClassifyItem = {
             // 8. Execute Classify Action
             console.log(`Applying ${keywordIdsToAdd.length} keywords to ${itemId}...`);
 
+            let keywordIdsToRemove: string[] = [];
+            if (replaceExisting) {
+                // Collect existing keywords ONLY from the target categories/fields
+                for (const cat of targetCategories) {
+                    // Check Metadata
+                    if (item.Metadata) {
+                        const existing = extractIds(item.Metadata[cat.fieldName]);
+                        existing.forEach(id => keywordIdsToRemove.push(id));
+                    }
+                    // Check Content (less common for keywords, but possible)
+                    if (item.Content) {
+                        const existing = extractIds(item.Content[cat.fieldName]);
+                        existing.forEach(id => keywordIdsToRemove.push(id));
+                    }
+                }
+                // Filter out any IDs we are also adding, to avoid redundant operations/errors
+                const keywordsToAddSet = new Set(keywordIdsToAdd);
+                keywordIdsToRemove = keywordIdsToRemove.filter(id => !keywordsToAddSet.has(id));
+            }
+
             // Reuse the existing classify tool logic directly
             const classifyResult = await classify.execute({
                 itemId: itemId,
-                keywordIdsToAdd: keywordIdsToAdd
+                keywordIdsToAdd: keywordIdsToAdd,
+                keywordIdsToRemove: keywordIdsToRemove.length > 0 ? keywordIdsToRemove : undefined
             }, context);
 
             // Enhance result with details for the agent
