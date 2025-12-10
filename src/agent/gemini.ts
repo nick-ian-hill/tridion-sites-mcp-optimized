@@ -1,4 +1,4 @@
-import { GoogleGenAI, FunctionDeclaration, Content, Type, GenerateContentResponse, FunctionCallingConfigMode  } from "@google/genai";
+import { GoogleGenAI, FunctionDeclaration, Content, Type, GenerateContentResponse, FunctionCallingConfigMode } from "@google/genai";
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { PlanStep } from './types.js';
@@ -12,7 +12,7 @@ const getGenAI = (): GoogleGenAI => {
 };
 
 export interface DetectedIntent {
-  strategy: 'SIMPLE_ACTION' | 'MEDIUM_ACTION' | 'COMPLEX_OR_GENERAL';
+    strategy: 'SIMPLE_ACTION' | 'MEDIUM_ACTION' | 'COMPLEX_OR_GENERAL';
 }
 
 export interface NextStepResult {
@@ -65,7 +65,7 @@ export const detectIntent = async (prompt: string): Promise<DetectedIntent> => {
             console.log("[IntentDetector] Strategy: MEDIUM_ACTION");
             return { strategy: 'MEDIUM_ACTION' };
         }
-        
+
         console.log("[IntentDetector] Strategy: COMPLEX_OR_GENERAL");
         return { strategy: 'COMPLEX_OR_GENERAL' };
 
@@ -78,17 +78,48 @@ export const detectIntent = async (prompt: string): Promise<DetectedIntent> => {
 // Helper to clean Zod schemas for Gemini
 const removeUnsupportedProperties = (schema: any): any => {
     if (!schema || typeof schema !== 'object') return schema;
+    
+    // Recursively process arrays (e.g. "allOf", "anyOf", "items")
     if (Array.isArray(schema)) return schema.map(removeUnsupportedProperties);
 
+    // FIX 1: Remove unsupported root keywords
     delete schema.$schema;
     delete schema.additionalProperties;
-    // Allow 'null' type alongside others by picking the primary type
+    delete schema.title; 
+    delete schema.definitions;
+    delete schema.$defs;
+    delete schema.$ref;
+
+    // FIX 2: Convert "const" to "enum" (Crucial for Discriminated Unions)
+    // z.literal("Value") -> { "const": "Value" } -> { "enum": ["Value"] }
+    if ('const' in schema) {
+        schema.enum = [schema.const];
+        delete schema.const;
+    }
+
+    // FIX 3: Flatten "type" arrays (e.g. type: ["string", "null"])
     if (schema.type && Array.isArray(schema.type)) {
+        // Grab the first non-null type, or default to the first one
         schema.type = schema.type.find((t: string) => t !== 'null') || schema.type[0];
     }
-    for (const key in schema) {
-        schema[key] = removeUnsupportedProperties(schema[key]);
+
+    // Recurse into common schema containers
+    if (schema.anyOf) schema.anyOf = schema.anyOf.map(removeUnsupportedProperties);
+    if (schema.oneOf) schema.oneOf = schema.oneOf.map(removeUnsupportedProperties);
+    if (schema.allOf) schema.allOf = schema.allOf.map(removeUnsupportedProperties);
+
+    // Recurse into object "properties"
+    if (schema.properties) {
+        for (const key in schema.properties) {
+            schema.properties[key] = removeUnsupportedProperties(schema.properties[key]);
+        }
     }
+
+    // Recurse into array "items"
+    if (schema.items) {
+        schema.items = removeUnsupportedProperties(schema.items);
+    }
+
     return schema;
 };
 
@@ -96,7 +127,9 @@ const removeUnsupportedProperties = (schema: any): any => {
 const formatToolsForGemini = (tools: any[]): FunctionDeclaration[] => {
     return tools.map(tool => {
         const zodSchema = z.object(tool.input);
-        let jsonSchema = zodToJsonSchema(zodSchema);
+        let jsonSchema = zodToJsonSchema(zodSchema, {
+            $refStrategy: "none"
+        });
         jsonSchema = removeUnsupportedProperties(jsonSchema);
         return {
             name: tool.name,
@@ -141,7 +174,6 @@ export const determineNextStep = async (
 
         **Error Handling Rules:**
         - If the last tool execution resulted in an error, analyze the error message.
-        - If an action fails due to a BluePrint error (e.g., "Cannot paste across Publications"), your first recovery step should be to use the 'mapItemIdToContextPublication' tool. Provide it with the source item's ID and an ID from the target context (like the destination folder ID). Then, use 'getItem' with the 'mapped' ID from the result to check if the item exists before proceeding.
         - If the error is 'ItemAlreadyExists' or a '409 Conflict' because an item name is not unique, this can mean that an item with this name already exists in an inherited 'copy' of this container in a child or descendent publication.
         - Decide if you can fix the problem by calling the same tool with different arguments, by calling a different tool, or if the error is unrecoverable.
         - If you cannot recover from the error, call the 'finish' tool with a message explaining the failure.
@@ -171,7 +203,7 @@ export const determineNextStep = async (
             temperature: 0.0
         }
     });
-    
+
     const call = result.functionCalls?.[0];
     const modelResponseContent = result.candidates?.[0]?.content ?? null;
 
@@ -200,10 +232,10 @@ export const determineNextStep = async (
 };
 
 export const MANDATORY_TOOLS = [
-        'bulkReadItems', 'getItem', 'createItem', 'createPage', 'createRegionSchema', 'createComponent',
-        'createComponentSchema', 'search', 'getPublications', 'getCurrentTime', 'updateContent',
-        'updateMetadata', 'updatePage', 'localizeItem'
-    ];
+    'bulkReadItems', 'getItem', 'createItem', 'createPage', 'createRegionSchema', 'createComponent',
+    'createComponentSchema', 'search', 'getPublications', 'getCurrentTime', 'updateContent',
+    'updateMetadata', 'updatePage', 'localizeItem'
+];
 
 export const selectRelevantTools = async (prompt: string, allTools: any[], maxTools: number): Promise<any[]> => {
     const toolLister: FunctionDeclaration = {
@@ -260,9 +292,9 @@ export const selectRelevantTools = async (prompt: string, allTools: any[], maxTo
             const additionalToolNames = call.args.toolNames as string[];
             additionalToolNames.forEach(name => finalToolNames.add(name));
         } else {
-             console.warn("[ToolRouter] Model did not select any additional tools.");
+            console.warn("[ToolRouter] Model did not select any additional tools.");
         }
-        
+
         // Ensure 'finish' is always present
         finalToolNames.add('finish');
 

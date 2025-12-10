@@ -10,10 +10,8 @@ export const READ_ONLY_TOOLS = [
     'requestOpenInEditor',
     'generateContentFromPrompt',
     'search',
-    'getBatchOperationStatus',
     'getClassifiedItems',
     'getComponentTemplateLinks',
-    'getDefaultModel',
     'getIsComponentTemplateRequired',
     'getItem',
     'bulkReadItems',
@@ -42,5 +40,5 @@ export const READ_ONLY_TOOLS = [
     'getUsedByHistory',
     'getUsesForVersion',
     'getDependencyGraph',
-    'mapItemIdToContextPublication'
+    'getRelatedBluePrintItems'
 ];
