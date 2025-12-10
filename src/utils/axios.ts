@@ -18,8 +18,8 @@ const AUTH_CLIENT_SECRET = "l2J8vixf0NMHqcldUH3BM/vULPQaVQhx8gF9u7hrXZYhq3IQUEy9
 // To FORCE the use of a hardcoded cookie (e.g. for debugging without a chat panel),
 // comment out the 'null' line and uncomment the string line below it.
 
-//const DEBUG_USER_SESSION_ID: string | null = null;
-const DEBUG_USER_SESSION_ID = "CfDJ8HqChz77QTRDjHSWXedojsv4aXITmQAPcTnloj5dL8fesWUfg9pdK-isyR9py7iGyFW69dZO0p8UUQUx6dg9xCUOMok_f0yoIzlokxjuIAFZtrhLKdCY4bqeW3z6DWi0R1ThvEDqIFSYSM0MwHVg6K0kXH8sY_UwChFHMn_rk1enH584hL_Voh_j9CIAqAK-vtZsJWqvojTxXegS2yVONq8wafM2Ytn597-zUNy8WcMEDcWT6taYSnOY3AwxbjDqYo_XG3opWexwWjifB_TzoIrK3rOz4bfUwG0_4p57rzX8S2EU5riUDPGI6RDhxANJ2ejxbuNdvMUQO8elyPZHnHA";
+const DEBUG_USER_SESSION_ID: string | null = null;
+//const DEBUG_USER_SESSION_ID = "CfDJ8HqChz77QTRDjHSWXedojsv4aXITmQAPcTnloj5dL8fesWUfg9pdK-isyR9py7iGyFW69dZO0p8UUQUx6dg9xCUOMok_f0yoIzlokxjuIAFZtrhLKdCY4bqeW3z6DWi0R1ThvEDqIFSYSM0MwHVg6K0kXH8sY_UwChFHMn_rk1enH584hL_Voh_j9CIAqAK-vtZsJWqvojTxXegS2yVONq8wafM2Ytn597-zUNy8WcMEDcWT6taYSnOY3AwxbjDqYo_XG3opWexwWjifB_TzoIrK3rOz4bfUwG0_4p57rzX8S2EU5riUDPGI6RDhxANJ2ejxbuNdvMUQO8elyPZHnHA";
 
 
 // --- Token Cache ---
