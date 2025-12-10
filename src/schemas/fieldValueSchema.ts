@@ -51,7 +51,8 @@ export const singleLineTextFieldSchema = z.object({
     List: listDefinitionSchema.optional(),
     Pattern: z.string().optional().describe("A regular expression pattern that the field value must match."),
     MinLength: z.number().int().optional().describe("The minimum number of characters allowed in the field."),
-    MaxLength: z.number().int().optional().describe("The maximum number of characters allowed in the field.")
+    MaxLength: z.number().int().optional().describe("The maximum number of characters allowed in the field."),
+    UseForAutoClassification: z.boolean().optional().describe("Whether this field is used as a source for auto-classification logic.")
 });
 
 export const multiLineTextFieldSchema = z.object({
@@ -63,7 +64,8 @@ export const multiLineTextFieldSchema = z.object({
     IsIndexable: z.boolean().optional().describe("Whether the field value is included when performing a search."),
     IsLocalizable: z.boolean().optional().describe("Whether the field value can be changed in localized items."),
     IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing."),
-    Height: z.number().int().default(2).describe("The height of the text area in the UI.")
+    Height: z.number().int().default(2).describe("The height of the text area in the UI."),
+    UseForAutoClassification: z.boolean().optional().describe("Whether this field is used as a source for auto-classification logic.")
 });
 
 export const xhtmlFieldSchema = z.object({
@@ -76,7 +78,8 @@ export const xhtmlFieldSchema = z.object({
     IsLocalizable: z.boolean().optional().describe("Whether the field value can be changed in localized items."),
     IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing."),
     Height: z.number().int().default(5).describe("The height of the rich text editor in the UI."),
-    FormattingFeatures: formattingFeaturesSchema.optional().describe("Specifies the formatting options for the XHTML field.")
+    FormattingFeatures: formattingFeaturesSchema.optional().describe("Specifies the formatting options for the XHTML field."),
+    UseForAutoClassification: z.boolean().optional().describe("Whether this field is used as a source for auto-classification logic.")
 });
 
 export const keywordFieldSchema = z.object({
