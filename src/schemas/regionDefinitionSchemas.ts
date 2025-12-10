@@ -19,13 +19,15 @@ export const componentPresentationConstraintSchema = z.union([
     typeConstraintSchema
 ]);
 
-export const nestedRegionSchema: z.ZodTypeAny = z.lazy(() => z.object({
+export const nestedRegionSchema = z.object({
     "type": z.literal("NestedRegion"),
     RegionName: z.string().describe("The machine name of the nested Region."),
     IsMandatory: z.boolean().optional().describe("Whether this nested Region is mandatory."),
     RegionSchema: expandableLinkSchema.describe("A Link to another Region Schema that defines this nested Region. Must be an ExpandableLink."),
-    Regions: z.array(nestedRegionSchema).optional().describe("Deeper nested regions, if the schema supports it.")
-}));
+    Regions: z.array(z.record(z.any()))
+        .optional()
+        .describe("A recursive list of nested regions. Each item in this array must be a NestedRegion object following the exact same structure as this parent object.")
+});
 
 export const regionDefinitionSchema = z.object({
     "type": z.literal("RegionDefinition"),

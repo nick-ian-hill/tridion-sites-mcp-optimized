@@ -16,10 +16,12 @@ export type RegionForTyping = {
     Regions?: RegionForTyping[];
 };
 
-export const regionSchemaForTyping: z.ZodType<RegionForTyping> = z.lazy(() => z.object({
+export const regionSchemaForTyping = z.object({
     "type": z.literal("EmbeddedRegion"),
     RegionName: z.string().nonempty(),
     Metadata: z.record(fieldValueSchema).optional(),
     ComponentPresentations: z.array(componentPresentationSchemaForTyping).optional(),
-    Regions: z.array(regionSchemaForTyping).optional(),
-}));
+    Regions: z.array(z.record(z.any()))
+        .optional()
+        .describe("A recursive list of nested regions. Each item must be a valid Region object with the same structure as this parent.")
+});
