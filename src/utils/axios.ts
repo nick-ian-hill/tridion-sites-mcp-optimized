@@ -1,51 +1,124 @@
 import axios, { InternalAxiosRequestConfig } from "axios";
 
-// This is the single, correct URL for the Tridion backend API.
-const CMS_BASE_API_URL = "http://10.100.92.199:81/ui/api/v3.0";
+// --- Configuration Constants ---
 
-const DEBUG_USER_SESSION_ID = "CfDJ8PzgcQaZmn1NsXkfq43IXJXLyTyVFWtQV6TlOQaunKWgCdzwXzsyyjSU9zkxDT7IbKFkFWnnEP0xlStXzCYSiJat65YlYP0dvrn36O-P58LXirswr5LbG7aV87fFo9HI-T54x9RGV5QmmIR6acqMuIQjecsRpQe3Q1LPpM7ykR8znlm-zHrh58aDJXvNf8nJWMaovk1Nm7O-2uy-gEnTGSewHP5GmYD04vCbUQ0EmBo2FoDyNKcEXXkHhIEZo4eqvMhp-N9LDpwwZ9wPpfTVtgXJ0rYSsZA8C2e9Y6HN1ZHzpC5BjhhATx6raFjd_WatRAAnw4kepe0RK-URvAEPLlY";
+// 1. Service API (Bearer Token) - For automated/service-to-service calls
+const CORE_API_URL = "http://10.100.92.199:81/api/v3.0";
+
+// 2. Experience Space UI API (Session Cookie) - For Chat Panel/Browser calls
+const UI_API_URL = "http://10.100.92.199:81/ui/api/v3.0";
+
+// Auth Endpoint Configuration
+const AUTH_TOKEN_URL = "http://external-dxui-dev-sites-stg.ted.nl.sdldev.net/access-management/connect/token";
+const AUTH_CLIENT_ID = "78ffaefc-cd0e-4d12-90bf-c6be42cd7a10";
+const AUTH_CLIENT_SECRET = "l2J8vixf0NMHqcldUH3BM/vULPQaVQhx8gF9u7hrXZYhq3IQUEy9nQ==";
+
+// --- Fallback Session ID Configuration ---
+// By default, this is null.
+// To FORCE the use of a hardcoded cookie (e.g. for debugging without a chat panel),
+// comment out the 'null' line and uncomment the string line below it.
+
+//const DEBUG_USER_SESSION_ID: string | null = null;
+const DEBUG_USER_SESSION_ID = "CfDJ8HqChz77QTRDjHSWXedojsv4aXITmQAPcTnloj5dL8fesWUfg9pdK-isyR9py7iGyFW69dZO0p8UUQUx6dg9xCUOMok_f0yoIzlokxjuIAFZtrhLKdCY4bqeW3z6DWi0R1ThvEDqIFSYSM0MwHVg6K0kXH8sY_UwChFHMn_rk1enH584hL_Voh_j9CIAqAK-vtZsJWqvojTxXegS2yVONq8wafM2Ytn597-zUNy8WcMEDcWT6taYSnOY3AwxbjDqYo_XG3opWexwWjifB_TzoIrK3rOz4bfUwG0_4p57rzX8S2EU5riUDPGI6RDhxANJ2ejxbuNdvMUQO8elyPZHnHA";
+
+
+// --- Token Cache ---
+let cachedAccessToken: string | null = null;
+let tokenExpirationTime: number = 0;
+
+/**
+ * Fetches a new access token or returns a valid cached one.
+ */
+async function getDebugAccessToken(): Promise<string> {
+    if (cachedAccessToken && Date.now() < tokenExpirationTime - 30000) {
+        return cachedAccessToken;
+    }
+
+    try {
+        console.log("[AUTH] Fetching new debug access token...");
+        
+        // Basic Auth Header for Token Endpoint
+        const credentials = `${AUTH_CLIENT_ID}:${AUTH_CLIENT_SECRET}`;
+        const encodedCredentials = Buffer.from(credentials).toString('base64');
+        
+        // Body with grant_type
+        const params = new URLSearchParams();
+        params.append("grant_type", "client_credentials");
+
+        const response = await axios.post(AUTH_TOKEN_URL, params, {
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Authorization": `Basic ${encodedCredentials}`
+            }
+        });
+
+        if (response.data && response.data.access_token) {
+            cachedAccessToken = response.data.access_token;
+            // Calculate absolute expiry time (expires_in is in seconds)
+            const expiresIn = response.data.expires_in || 3600; 
+            tokenExpirationTime = Date.now() + (expiresIn * 1000);
+            return cachedAccessToken as string;
+        } else {
+            throw new Error("Invalid response format from token endpoint.");
+        }
+    } catch (error) {
+        console.error("[AUTH] Failed to fetch debug access token:", error);
+        throw error;
+    }
+}
 
 export const createAuthenticatedAxios = (userSessionId?: string | null, referer?: string) => {
-    const sessionId = userSessionId || DEBUG_USER_SESSION_ID;
+    
+    // --- Strategy Selection ---
+    
+    // Apply fallback if configured (default is null, so this does nothing unless you change the const above)
+    userSessionId = userSessionId || DEBUG_USER_SESSION_ID;
 
-    if (!sessionId) {
-        throw new Error("UserSessionID is missing.");
-    }
-    
-    if (!userSessionId) {
-        console.warn(`[AUTH] No UserSessionID provided. Falling back to DEBUG_USER_SESSION_ID.`);
-    }
-    
-    const headers: Record<string, string> = {
-        "Accept": "application/json",
-        "Cookie": `UserSessionID=${sessionId}`,
-        "x-csrf": "1",
-        "request-client": "experience-space"
+    // Decide Mode
+    const useSessionMode = !!userSessionId;
+    const activeBaseUrl = useSessionMode ? UI_API_URL : CORE_API_URL;
+
+    const config: any = {
+        baseURL: activeBaseUrl,
+        headers: {
+            "Accept": "application/json"
+        }
     };
 
-    // The Referer is only needed for browser-initiated flows.
-    if (referer) {
-        headers["Referer"] = referer;
+    // --- Mode 1: UI Session Mode (Cookie) ---
+    // Used when Chat Panel provides ID OR when DEBUG_USER_SESSION_ID is uncommented
+    if (useSessionMode) {
+        config.headers["Cookie"] = `UserSessionID=${userSessionId}`;
+        config.headers["x-csrf"] = "1";
+        config.headers["request-client"] = "experience-space";
+    } 
+    // --- Mode 2: Service Mode (Bearer Token) ---
+    // Used when running automated scripts with no user session
+    else {
+        // We purposefully do NOT set Cookie/x-csrf here.
+        // The Bearer token will be injected via interceptor.
     }
 
-    const instance = axios.create({
-        baseURL: CMS_BASE_API_URL,
-        headers: headers
-    });
+    if (referer) {
+        config.headers["Referer"] = referer;
+    }
+
+    const instance = axios.create(config);
 
     const LOGGING_ENABLED = true;
 
     if (LOGGING_ENABLED) {
         instance.interceptors.request.use(
             (config: InternalAxiosRequestConfig) => {
-                console.groupCollapsed(`[AXIOS] ${config.method?.toUpperCase()} Request to ${config.url}`);
+                const modeLabel = config.headers['Cookie'] ? "UI/Cookie Mode" : "Service/Bearer Mode";
+                console.groupCollapsed(`[AXIOS] (${modeLabel}) ${config.method?.toUpperCase()} Request to ${config.url}`);
                 console.log("Full URL:", `${config.baseURL}${config.url}`);
-                if (config.params) {
-                    console.log("Query Params:", config.params);
-                }
-                if (config.data) {
-                    console.log("Request Body:", config.data);
-                }
+                
+                if (config.headers['Authorization']) console.log("Auth:", "Bearer Token Set");
+                if (config.headers['Cookie']) console.log("Auth:", "UserSessionID Cookie Set");
+                
+                if (config.params) console.log("Query Params:", config.params);
+                if (config.data) console.log("Request Body:", config.data);
                 console.groupEnd();
                 return config;
             },
@@ -69,6 +142,23 @@ export const createAuthenticatedAxios = (userSessionId?: string | null, referer?
                 return Promise.reject(error);
             }
         );
+    }
+
+    // --- Async Interceptor for Service Mode ---
+    if (!useSessionMode) {
+        instance.interceptors.request.use(async (config) => {
+            try {
+                // Only inject Bearer token if we are NOT in Session Mode
+                if (!config.headers['Cookie']) { 
+                    const token = await getDebugAccessToken();
+                    config.headers['Authorization'] = `Bearer ${token}`;
+                }
+                return config;
+            } catch (error) {
+                console.error("[AUTH] Interceptor failed:", error);
+                return Promise.reject(error);
+            }
+        }, error => Promise.reject(error));
     }
 
     return instance;
