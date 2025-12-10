@@ -30,6 +30,7 @@ let tokenExpirationTime: number = 0;
  * Fetches a new access token or returns a valid cached one.
  */
 async function getDebugAccessToken(): Promise<string> {
+    // If we have a cached token and it's not expired (buffer of 30s), use it.
     if (cachedAccessToken && Date.now() < tokenExpirationTime - 30000) {
         return cachedAccessToken;
     }
@@ -135,6 +136,9 @@ export const createAuthenticatedAxios = (userSessionId?: string | null, referer?
             },
             (error) => {
                 if (axios.isAxiosError(error)) {
+                    // Only log as error if it's NOT a 401 that we are about to retry
+                    // (The retry interceptor below handles the 401 logic, but this logging one runs first or parallel depending on stack order)
+                    // We'll log it anyway for visibility.
                     console.error(`[AXIOS] Response Error from ${error.config?.url}:`, error.response?.status, error.response?.data);
                 } else {
                     console.error("[AXIOS] Non-Axios Response Error:", error);
@@ -144,8 +148,9 @@ export const createAuthenticatedAxios = (userSessionId?: string | null, referer?
         );
     }
 
-    // --- Async Interceptor for Service Mode ---
+    // --- Async Interceptor for Service Mode (Bearer Token) ---
     if (!useSessionMode) {
+        // 1. Request Interceptor: Inject Token
         instance.interceptors.request.use(async (config) => {
             try {
                 // Only inject Bearer token if we are NOT in Session Mode
@@ -159,6 +164,42 @@ export const createAuthenticatedAxios = (userSessionId?: string | null, referer?
                 return Promise.reject(error);
             }
         }, error => Promise.reject(error));
+
+        // 2. Response Interceptor: Handle 401 Retries
+        instance.interceptors.response.use(
+            (response) => response,
+            async (error) => {
+                const originalRequest = error.config;
+
+                // Check if it's a 401 and we haven't already retried this request
+                if (error.response?.status === 401 && !originalRequest._retry) {
+                    originalRequest._retry = true; // Mark as retried to prevent infinite loops
+                    console.warn("[AUTH] 401 Unauthorized detected. Clearing cache and refreshing token...");
+
+                    try {
+                        // Force clear the cache
+                        cachedAccessToken = null;
+                        tokenExpirationTime = 0;
+
+                        // Fetch a completely new token
+                        const newToken = await getDebugAccessToken();
+
+                        // Update the failed request's Authorization header
+                        originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
+
+                        // Retry the original request with the new token
+                        return instance(originalRequest);
+                    } catch (refreshError) {
+                        console.error("[AUTH] Token refresh failed:", refreshError);
+                        // Return the original error if refresh fails so the caller knows the request failed
+                        return Promise.reject(error);
+                    }
+                }
+
+                // If not 401 or already retried, just reject
+                return Promise.reject(error);
+            }
+        );
     }
 
     return instance;
