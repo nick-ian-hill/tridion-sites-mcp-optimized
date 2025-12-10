@@ -210,6 +210,7 @@ export function formatForApi(obj: any): any {
  * 1. Renames '$type' to 'type'.
  * 2. Ensures 'type' is the first key in any object.
  * 3. Strips '-v0' suffix from TCM URIs (unchecked-in new items) to ensure validation compatibility.
+ * 4. Removes 'ExtensionXml' to reduce cognitive load and prevent round-trip errors.
  * This function returns a new object and does not mutate the original.
  *
  * @param obj The raw API object or array to format.
@@ -234,6 +235,9 @@ export function formatForAgent(obj: any): any {
 
     // 1. Recurse into all properties
     for (const key in obj) {
+        // FILTER: Skip ExtensionXml to avoid exposing it to the agent
+        if (key === 'ExtensionXml') continue;
+
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
             const formattedValue = formatForAgent(obj[key]);
             if (key === '$type') {
