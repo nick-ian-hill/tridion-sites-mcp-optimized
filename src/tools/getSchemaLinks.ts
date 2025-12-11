@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { formatForAgent } from "../utils/fieldReordering.js";
+import { filterResponseData } from "../utils/responseFiltering.js";
 
 const schemaPurposeEnum = z.enum([
     "Component",
@@ -39,7 +40,12 @@ export const getSchemaLinks = {
             });
 
             if (response.status === 200) {
-                const formattedResponseData = formatForAgent(response.data);
+                const finalData = filterResponseData({ 
+                    responseData: response.data, 
+                    details: "IdAndTitle" 
+                });
+
+                const formattedResponseData = formatForAgent(finalData);
                 return {
                     content: [{
                         type: "text",

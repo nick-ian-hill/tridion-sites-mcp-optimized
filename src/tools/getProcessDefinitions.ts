@@ -2,10 +2,11 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { formatForAgent } from "../utils/fieldReordering.js";
+import { filterResponseData } from "../utils/responseFiltering.js";
 
 export const getProcessDefinitions = {
     name: "getProcessDefinitions",
-    description: `Retrieves the list of available workflow process definitions for a specified publication. A process definition's ID is required to start a new workflow process for an item.`,
+    description: "Retrieves the list of available workflow process definitions for a specified publication. A process definition's ID is required to start a new workflow process for an item.",
     input: {
         publicationId: z.string().regex(/^tcm:0-[1-9]\d*-1$/).describe("The unique ID of a Publication (e.g., 'tcm:0-5-1'). Use the 'getPublications' tool to find a Publication ID."),
     },
@@ -22,7 +23,12 @@ export const getProcessDefinitions = {
             const response = await authenticatedAxios.get(endpoint);
 
             if (response.status === 200) {
-                const formattedResponseData = formatForAgent(response.data);
+                const finalData = filterResponseData({ 
+                    responseData: response.data, 
+                    details: "IdAndTitle" 
+                });
+
+                const formattedResponseData = formatForAgent(finalData);
                 return {
                     content: [{
                         type: "text",

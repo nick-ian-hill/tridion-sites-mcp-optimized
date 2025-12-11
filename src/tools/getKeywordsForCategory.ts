@@ -2,15 +2,15 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { formatForAgent } from "../utils/fieldReordering.js";
+import { filterResponseData } from "../utils/responseFiltering.js";
 
 export const getKeywordsForCategory = {
     name: "getKeywordsForCategory",
     description: `Retrieves the list of keywords for the specified category, including nested keywords. This is the second step in finding keywords, used after 'getCategories'. The keyword IDs returned by this tool are used as input for tools like 'classify', and 'getClassifiedItems'.
-        Keywords can be associated with items via 'keyword' fields in an item's content or metadata.
-    Keywords with the 'Abstract' property set to true are typically used for definining hierarchical navigation.
+    Keywords can be associated with items via 'keyword' fields in an item's content or metadata.
+    Keywords with the 'Abstract' property set to true are typically used for defining hierarchical navigation.
     Keywords with the 'Abstract' property set to false can be used for both navigation and for classifying items.
-    When used in classification, the keywords' title property is usually assumed to reflect some aspect of the item's content/metadata.
-    typically used to determine whether a keywordof the keyword typically what would be to navigatiofor a given parent Category or Keyword.`,
+    When used in classification, the keywords' title property is usually assumed to reflect some aspect of the item's content/metadata.`,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the category (e.g., 'tcm:5-123-512'). Use 'getCategories' to find a Category ID."),
     },
@@ -27,7 +27,12 @@ export const getKeywordsForCategory = {
             const response = await authenticatedAxios.get(endpoint);
 
             if (response.status === 200) {
-                const formattedResponseData = formatForAgent(response.data);
+                const finalData = filterResponseData({ 
+                    responseData: response.data, 
+                    includeProperties: ["IsAbstract"] 
+                });
+                
+                const formattedResponseData = formatForAgent(finalData);
                 return {
                     content: [{
                         type: "text",

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { formatForAgent } from "../utils/fieldReordering.js";
+import { filterResponseData } from "../utils/responseFiltering.js";
 
 const getComponentTemplateLinksInputProperties = {
     schemaId: z.string().regex(/^tcm:\d+-\d+-8$/).describe("The TCM URI of the Schema. Use 'getSchemaLinks' or 'search' to find a Schema ID."),
@@ -35,7 +36,12 @@ export const getComponentTemplateLinks = {
             });
 
             if (response.status === 200) {
-                const formattedResponseData = formatForAgent(response.data);
+                const finalData = filterResponseData({ 
+                    responseData: response.data, 
+                    details: "IdAndTitle" 
+                });
+
+                const formattedResponseData = formatForAgent(finalData);
                 return {
                     content: [{
                         type: "text",
