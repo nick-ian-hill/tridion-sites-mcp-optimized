@@ -9,6 +9,7 @@ import { convertLinksRecursively, processSchemaFieldDefinitions, reorderFieldsBy
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 import { regionDefinitionSchema } from "../schemas/regionDefinitionSchemas.js";
 import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
+import { xmlNameSchema } from "../schemas/xmlNameSchema.js";
 
 const updateItemPropertiesInputProperties = {
     itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the CMS item to update."),
@@ -33,7 +34,10 @@ const updateItemPropertiesInputProperties = {
     metadataFields: z.record(fieldDefinitionSchema).optional().describe(`For Schema updates only. Replaces the entire collection of metadata fields. The ONLY way to create a component with metadata fields is to use a component schema for which this property is defined.
     Use this for structural changes like adding, removing, or reordering fields.
     For modifying properties of existing fields (e.g., changing a description), the 'updateSchemaFieldProperties' tool is strongly recommended as it is safer and more efficient.`),
+    rootElementName: xmlNameSchema.optional().describe("For Component and Embedded Schema updates only. The name of the root element for the XML structure defined by the Schema (e.g., 'Article')."),
+    allowedMultimediaTypes: z.array(z.string().regex(/^tcm:0-\d+-65544$/)).optional().describe("For Multimedia Schema updates only. An array of TCM URIs for allowed Multimedia Types. Replaces the existing list."),
     regionDefinition: regionDefinitionSchema.optional().describe(`For Region Schema updates only. Replaces the entire 'RegionDefinition' block.`),
+    directory: z.string().optional().describe("For Structure Groups. The directory name used in the URL path (e.g., 'pages')."),
     fileExtension: z.string().optional().describe("A new file extension for the Page Template. (Applicable to PageTemplate)"),
     pageSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("A new Page Schema URI for the Page Template. (Applicable to PageTemplate)"),
     templateBuildingBlocks: z.array(z.string().regex(/^tcm:\d+-\d+-2048$/)).optional().describe("A new array of Template Building Block URIs. Replaces existing TBBs. (Applicable to PageTemplate/ComponentTemplate)"),
@@ -67,9 +71,10 @@ To update a Workflow Process Definition, use the dedicated 'updateProcessDefinit
 
 Example use cases by item type:
 - All types: update 'title', 'description', and 'metadataSchemaId'. The 'metadata' can also be provided at the same time.
-- Schema: update the content and metadata field definitions using the 'fields' and 'metadataFields' properties. Can also update the 'regionDefinition' for Region Schemas.
+- Schema: update the content/metadata fields, 'rootElementName', or 'allowedMultimediaTypes'.
 - Keyword: update 'isAbstract', 'key', 'parentKeywords', and 'relatedKeywords'.
 - Bundle: update the list of 'itemsInBundle'.
+- StructureGroup: update the 'directory' property.
 - PageTemplate/ComponentTemplate: update the associated 'templateBuildingBlocks' and other template-specific properties.
 
 When updating collection properties like 'fields', 'metadataFields', 'itemsInBundle', or 'relatedSchemaIds', the entire existing collection is replaced by the new value provided.
@@ -259,6 +264,9 @@ This example updates a basic Region Schema (e.g., 'tcm:5-3875-8') to make it non
             if (updates.relatedSchemaIds) {
                 updates.relatedSchemaIds = updates.relatedSchemaIds.map((id: string) => convertItemIdToContextPublication(id, itemId));
             }
+            if (updates.allowedMultimediaTypes) {
+                updates.allowedMultimediaTypes = updates.allowedMultimediaTypes.map((id: string) => convertItemIdToContextPublication(id, itemId));
+            }
             if (updates.searchQuery) {
                 const contextId = updates.searchQuery.SearchIn || itemId;
 
@@ -325,6 +333,9 @@ This example updates a basic Region Schema (e.g., 'tcm:5-3875-8') to make it non
             if (itemType === 'Bundle' && updates.itemsInBundle) {
                 itemToUpdate.Items = toLinkArray(updates.itemsInBundle);
             }
+            if (itemType === 'StructureGroup' && updates.directory) {
+                itemToUpdate.Directory = updates.directory;
+            }
             if (itemType === 'SearchFolder' && updates.searchQuery) {
                 itemToUpdate.Configuration = generateSearchFolderXmlConfiguration(updates.searchQuery, updates.resultLimit || itemToUpdate.ResultLimit);
             }
@@ -341,7 +352,12 @@ This example updates a basic Region Schema (e.g., 'tcm:5-3875-8') to make it non
                     const processedMetadataFields = await processSchemaFieldDefinitions(updates.metadataFields, schemaLocationId, authenticatedAxios);
                     itemToUpdate.MetadataFields = { "$type": "FieldsDefinitionDictionary", ...processedMetadataFields };
                 }
-
+                if (updates.allowedMultimediaTypes) {
+                    itemToUpdate.AllowedMultimediaTypes = toLinkArray(updates.allowedMultimediaTypes);
+                }
+                if (updates.rootElementName) {
+                    itemToUpdate.RootElementName = updates.rootElementName;
+                }
                 if (updates.regionDefinition) {
                     convertLinksRecursively(updates.regionDefinition, itemId);
                     itemToUpdate.RegionDefinition = updates.regionDefinition;
