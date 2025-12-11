@@ -7,7 +7,6 @@ import { formatForAgent } from "../utils/fieldReordering.js";
 export const getMultimediaTypes = {
     name: "getMultimediaTypes",
     description: `Retrieves a list of all Multimedia Types available in the system (Id, Title).
-    
     Multimedia Types define allowed file extensions and MIME types.
     
     ### "Find-Then-Fetch" Pattern
@@ -25,6 +24,7 @@ export const getMultimediaTypes = {
 
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
+
             // Generate an array of potential Multimedia Type IDs to check.
             const potentialIds = [];
             for (let i = 1; i <= maxId; i++) {
@@ -46,14 +46,17 @@ export const getMultimediaTypes = {
 
             if (response.status === 200) {
                 // The response is a dictionary where keys are the found IDs.
-                const foundItems = Object.values(response.data);
+                // We MUST filter out the "$type" string property or any non-object entries 
+                // to ensure the result is a clean array of item objects.
+                const foundItems = Object.values(response.data).filter((item: any) => typeof item === 'object' && item !== null);
                 
                 const finalData = filterResponseData({ 
                     responseData: foundItems, 
                     details: "IdAndTitle" 
                 });
-                
+
                 const formattedFinalData = formatForAgent(finalData);
+
                 return {
                     content: [
                         {
