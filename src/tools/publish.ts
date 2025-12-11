@@ -16,8 +16,8 @@ const resolveInstructionSchema = z.object({
         .describe("If true, items in workflow are published (if the user has rights)."),
     publishInChildPublications: z.array(z.string().regex(/^tcm:0-\d+-1$/)).optional().default([])
         .describe("A list of specific Publication TCM URIs to publish to. Use this for targeted publishing. Overrides 'includeChildPublications'."),
-    publishNewContent: z.boolean().optional().default(true)
-        .describe("If true, new (unpublished) items are published. If false, only items already published are updated."),
+    includeUnpublishedItems: z.boolean().optional().default(true)
+        .describe("If true (default), items that have NOT yet been published to the target are included. If set to false, the action becomes 'Republish Only': only items that have been previously published are updated, and currently unpublished items are ignored."),
     structureResolveOption: z.enum(["OnlyItems", "ItemsAndStructure"]).optional().default("OnlyItems")
         .describe("Defines how Structure Groups are resolved. 'OnlyItems' publishes items in the SG; 'ItemsAndStructure' publishes the SG itself and its items.")
 }).optional();
@@ -72,7 +72,7 @@ export const publish = {
                 includeDynamicVersion: userInputResolveInstruction?.includeDynamicVersion ?? true,
                 includeWorkflow: userInputResolveInstruction?.includeWorkflow ?? true,
                 publishInChildPublications: userInputResolveInstruction?.publishInChildPublications ?? [],
-                publishNewContent: userInputResolveInstruction?.publishNewContent ?? true,
+                publishNewContent: userInputResolveInstruction?.includeUnpublishedItems ?? true,
                 structureResolveOption: userInputResolveInstruction?.structureResolveOption ?? "OnlyItems"
             };
 
@@ -101,7 +101,7 @@ export const publish = {
                         type: "PublishingWarning",
                         Message: "No items were resolved for publishing. 0 transactions created.",
                         PossibleCauses: [
-                            "The item has never been published, but 'publishNewContent' was set to false (Republish Only).",
+                            "The item has never been published, but 'includeUnpublishedItems' was set to false (Republish Only).",
                             "The item has not reached the required Minimum Approval Status for the selected Target Type.",
                             "The Page is missing a Page Template, or contains Components missing Component Templates.",
                             "The Structure Group containing the Page has its 'Publishable' property set to false.",
