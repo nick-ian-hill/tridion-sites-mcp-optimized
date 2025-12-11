@@ -95,6 +95,29 @@ export const publish = {
 
             if (response.status === successStatus) {
                 const transactionIds = response.data?.PublishTransactionIds || [];
+                
+                if (transactionIds.length === 0) {
+                    const warningData = {
+                        type: "PublishingWarning",
+                        Message: "No items were resolved for publishing. 0 transactions created.",
+                        PossibleCauses: [
+                            "The item has never been published, but 'publishNewContent' was set to false (Republish Only).",
+                            "The item has not reached the required Minimum Approval Status for the selected Target Type.",
+                            "The Page is missing a Page Template, or contains Components missing Component Templates.",
+                            "The Structure Group containing the Page has its 'Publishable' property set to false.",
+                            "You are trying to publish a Structure Group or Folder that contains no publishable items.",
+                            "The item is in a Workflow state that prevents publishing."
+                        ],
+                        Suggestion: "Check the item's properties, workflow status, and the 'resolveInstruction' parameters."
+                    };
+                    return {
+                        content: [{
+                            type: "text",
+                            text: JSON.stringify(warningData, null, 2)
+                        }],
+                    };
+                }
+
                 const responseData = {
                     type: dryRun ? "PublishPreview" : "PublishResult",
                     Message: dryRun
