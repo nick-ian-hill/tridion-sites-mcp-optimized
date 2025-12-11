@@ -3,12 +3,16 @@ import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { filterResponseData } from "../utils/responseFiltering.js";
 import { formatForAgent } from "../utils/fieldReordering.js";
+import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 
 export const getItem = {
     name: "getItem",
     description: `Retrieves read-only details for a single Content Manager System (CMS) item.
 This is the primary tool for fetching the FULL data of an item.
 To avoid polluting the context window, use the 'includeProperties' parameter to request only what you need.
+
+### Contextual Retrieval
+You can inspect the state of an item in a specific Publication (e.g., to check if it is localized or shared) by providing the 'contextPublicationId' parameter. The tool will automatically resolve the correct ID for that context.
 
 ### MASTER PROPERTY REFERENCE
 You can request these properties using dot notation (e.g., 'VersionInfo.RevisionDate', 'BinaryContent.MimeType').
@@ -146,11 +150,13 @@ You can request these properties using dot notation (e.g., 'VersionInfo.Revision
         * **Publication**: Link to the Publication.`,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the item."),
+        contextPublicationId: z.string().regex(/^tcm:0-\d+-1$/).optional().describe("The TCM URI of a Publication (e.g., 'tcm:0-10-1'). If provided, the tool will return details of the item in the specified context."),
         useDynamicVersion: z.boolean().optional().default(true).describe("Defaults to true. For versioned items, retrieves the latest saved state (dynamic version), including minor revisions (checked-out). Set to false to strictly retrieve the last checked-in major version."),
         includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names (supports dot notation like 'BinaryContent.MimeType'). 'Id', 'Title', and 'type' are always included.`)
     },
-    execute: async ({ itemId, useDynamicVersion = true, includeProperties }: { 
+    execute: async ({ itemId, contextPublicationId, useDynamicVersion = true, includeProperties }: { 
         itemId: string, 
+        contextPublicationId?: string,
         useDynamicVersion?: boolean,
         includeProperties?: string[] 
     }, context: any) => {
@@ -161,7 +167,13 @@ You can request these properties using dot notation (e.g., 'VersionInfo.Revision
 
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
-            const restItemId = itemId.replace(':', '_');
+
+            let targetItemId = itemId;
+            if (contextPublicationId) {
+                targetItemId = convertItemIdToContextPublication(itemId, contextPublicationId);
+            }
+
+            const restItemId = targetItemId.replace(':', '_');
             const params: { useDynamicVersion?: boolean } = {};
             if (useDynamicVersion) {
                 params.useDynamicVersion = true;
