@@ -5,7 +5,7 @@ import { formatForApi } from "../utils/fieldReordering.js";
 
 const resolveInstructionSchema = z.object({
     includeChildPublications: z.boolean().optional().default(false)
-        .describe("DEPRECATED. Use 'publishInChildPublications' instead."),
+        .describe("If true, the item is published in all child Publications where it exists. Use 'publishInChildPublications' to select specific children."),
     includeComponentLinks: z.boolean().optional().default(true)
         .describe("If true, linked Components are resolved and published."),
     includeCurrentPublication: z.boolean().optional().default(true)
@@ -15,7 +15,7 @@ const resolveInstructionSchema = z.object({
     includeWorkflow: z.boolean().optional().default(true)
         .describe("If true, items in workflow are published (if the user has rights)."),
     publishInChildPublications: z.array(z.string().regex(/^tcm:0-\d+-1$/)).optional().default([])
-        .describe("A list of Publication TCM URIs to publish to. Overrides 'includeChildPublications'."),
+        .describe("A list of specific Publication TCM URIs to publish to. Use this for targeted publishing. Overrides 'includeChildPublications'."),
     publishNewContent: z.boolean().optional().default(true)
         .describe("If true, new (unpublished) items are published. If false, only items already published are updated."),
     structureResolveOption: z.enum(["OnlyItems", "ItemsAndStructure"]).optional().default("OnlyItems")
