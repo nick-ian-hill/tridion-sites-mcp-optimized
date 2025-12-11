@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isAxiosError } from "axios";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { filterResponseData } from "../utils/responseFiltering.js";
@@ -12,7 +13,41 @@ This is the primary tool for fetching the FULL data of an item.
 To avoid polluting the context window, use the 'includeProperties' parameter to request only what you need.
 
 ### Contextual Retrieval
-You can inspect the state of an item in a specific Publication (e.g., to check if it is localized or shared) by providing the 'contextPublicationId' parameter. The tool will automatically resolve the correct ID for that context.
+You can inspect the state of an item in a specified Publication context (e.g., to check if it is localized, shared, or accessible in a sibling/parent) by providing the 'contextPublicationId' parameter. The tool will automatically resolve the correct ID for that context.
+
+**Example 1: Contextual Retrieval (Success)**
+Request:
+getItem({ itemId: "tcm:5-123", contextPublicationId: "tcm:0-10-1" })
+
+Response:
+{
+  "Id": "tcm:10-123",
+  "Title": "About Us",
+  "BluePrintInfo": { "IsShared": true, "OwningRepository": { "Title": "05 Master" } }
+}
+
+**Example 2: Contextual Retrieval (Error / Not Found)**
+If the item does not exist in the requested context (e.g., it is in a sibling publication), the tool returns a helpful error map instead of a generic 404.
+
+Response:
+{
+  "type": "BluePrintContextError",
+  "Message": "The item 'tcm:5-123' exists, but it is NOT visible in ... 'tcm:0-12-1'.",
+  "ValidContexts": [
+        { 
+            "PublicationId": "tcm:0-5-1", 
+            "PublicationTitle": "05 Master",
+            "ItemId": "tcm:5-123",
+            "Title": "About Us" 
+        },
+        { 
+            "PublicationId": "tcm:0-10-1", 
+            "PublicationTitle": "10 Website EN",
+            "ItemId": "tcm:10-123",
+            "Title": "About Us" 
+        }
+    ]
+}
 
 ### MASTER PROPERTY REFERENCE
 You can request these properties using dot notation (e.g., 'VersionInfo.RevisionDate', 'BinaryContent.MimeType').
@@ -150,24 +185,23 @@ You can request these properties using dot notation (e.g., 'VersionInfo.Revision
         * **Publication**: Link to the Publication.`,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the item."),
-        contextPublicationId: z.string().regex(/^tcm:0-\d+-1$/).optional().describe("The TCM URI of a Publication (e.g., 'tcm:0-10-1'). If provided, the tool will return details of the item in the specified context."),
+        contextPublicationId: z.string().regex(/^tcm:0-\d+-1$/).optional().describe("The TCM URI of a Publication (e.g., 'tcm:0-10-1'). If provided, the tool will automatically resolve the item within this publication context. Use this to check inheritance, localization status, field values etc. in a specific publication."),
         useDynamicVersion: z.boolean().optional().default(true).describe("Defaults to true. For versioned items, retrieves the latest saved state (dynamic version), including minor revisions (checked-out). Set to false to strictly retrieve the last checked-in major version."),
         includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names (supports dot notation like 'BinaryContent.MimeType'). 'Id', 'Title', and 'type' are always included.`)
     },
-    execute: async ({ itemId, contextPublicationId, useDynamicVersion = true, includeProperties }: { 
-        itemId: string, 
+    execute: async ({ itemId, contextPublicationId, useDynamicVersion = true, includeProperties }: {
+        itemId: string,
         contextPublicationId?: string,
         useDynamicVersion?: boolean,
-        includeProperties?: string[] 
+        includeProperties?: string[]
     }, context: any) => {
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
         const userSessionId = match ? match[1] : null;
+        const authenticatedAxios = createAuthenticatedAxios(userSessionId);
 
         try {
-            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
-
             let targetItemId = itemId;
             if (contextPublicationId) {
                 targetItemId = convertItemIdToContextPublication(itemId, contextPublicationId);
@@ -194,6 +228,51 @@ You can request these properties using dot notation (e.g., 'VersionInfo.Revision
                 return handleUnexpectedResponse(response);
             }
         } catch (error) {
+            // --- Advanced Error Handling for BluePrint Context ---
+            if (contextPublicationId && isAxiosError(error) && error.response?.status === 404) {
+                try {
+                    // The item does not exist in the requested context.
+                    // Let's verify if the ORIGINAL item exists, and if so, where else it lives.
+                    const originalRestId = itemId.replace(':', '_');
+                    const hierarchyResponse = await authenticatedAxios.get(`/items/${originalRestId}/bluePrintHierarchy`, {
+                        params: { details: 'IdAndTitleOnly' }
+                    });
+
+                    if (hierarchyResponse.status === 200 && hierarchyResponse.data.Items) {
+                        // Filter the hierarchy to find nodes where the item DOES exist (Item property is not null)
+                        const validContexts = hierarchyResponse.data.Items
+                            .filter((node: any) => node.Item !== null)
+                            .map((node: any) => ({
+                                PublicationId: node.ContextRepositoryId,
+                                PublicationTitle: node.ContextRepositoryTitle,
+                                ItemId: node.Item.Id,
+                                Title: node.Item.Title
+                            }));
+
+                        const helpfulError = {
+                            $type: "BluePrintContextError",
+                            Message: `The item '${itemId}' exists, but it is NOT visible in the requested context publication ('${contextPublicationId}').`,
+                            Explanation: "This typically means the context publication is not part of the inheritance path (e.g. it is a sibling or ancestor where the item is not shared).",
+                            ValidContexts: validContexts
+                        };
+
+                        const formattedError = formatForAgent(helpfulError);
+
+                        return {
+                            content: [{
+                                type: "text",
+                                text: JSON.stringify(formattedError, null, 2)
+                            }],
+                            // We return this as a successful tool result (no 'isError') so the agent can read the helpful data.
+                        };
+                    }
+                } catch (hierarchyError) {
+                    // If the original item doesn't exist either, or hierarchy fetch fails, 
+                    // we fall back to the standard error handler below.
+                    console.error("Failed to fetch hierarchy for diagnostic:", hierarchyError);
+                }
+            }
+
             return handleAxiosError(error, "Failed to authenticate or retrieve item");
         }
     }
