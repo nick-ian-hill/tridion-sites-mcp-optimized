@@ -31,6 +31,9 @@ Versioning is handled automatically. If the item is not checked out, it will be 
 
 IMPORTANT: When updating 'componentPresentations' or 'regions', the entire existing set of CPs or regions on the page will be replaced by the new values provided. To reorder or remove an item, you must provide the complete, modified list. The content provided must adhere to any constraints defined in the Page Template's Region Schemas, such as limits on the number of items or allowed Component/Template types.
 
+Verification: API success (200 OK) guarantees the request was received, but not necessarily that complex nested structures (like Regions) were populated as intended. For critical updates, you should fetch the item using getItem to verify the changes were persisted correctly before reporting completion to the user.
+If called from the toolOrchestrator, consider auditing one or more updated pages to validate that the script performed as intended.
+
 Examples:
 
 Example 1: Update the title and file name of a Page.
