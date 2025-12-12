@@ -201,6 +201,15 @@ const primitiveFieldValueSchema = z.union([
 
 export const fieldValueSchema = z.union([
   primitiveFieldValueSchema,
-  z.array(z.unknown()),
-  z.record(z.unknown()).describe("For an embedded schema field, this represents the object containing the embedded fields. The tool will automatically reorder the fields to match the schema definition."),
-]).nullable();
+  z.array(z.unknown()).describe("For multi-value fields, provide an array of the base type (e.g., array of Strings, Numbers, or Links)."),
+  z.record(z.unknown()).describe("For an Embedded Schema field, provide a flat JSON object where the keys are the machine names of the fields defined in the embedded schema."),
+]).nullable().describe(`
+The value for a content or metadata field. You must provide a JSON type that corresponds to the field's definition in the Schema:
+- **SingleLineText, MultiLineText, Xhtml**: Provide a 'string'. (For XHTML, pass the HTML string directly, DO NOT wrap it in an object).
+- **Number**: Provide a 'number'.
+- **Date**: Provide a 'string' in ISO 8601 format (e.g., "2023-10-27T10:00:00Z").
+- **ExternalLink**: Provide a 'string' (the URL).
+- **ComponentLink, MultimediaLink, Keyword**: Provide a 'Link' object ({ "type": "Link", "IdRef": "tcm:..." }).
+- **EmbeddedSchema**: Provide a JSON object where keys match the embedded fields.
+- **Multi-value fields**: Provide an 'array' containing items of the above types.
+`);
