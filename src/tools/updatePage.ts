@@ -6,7 +6,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 import { reorderFieldsBySchema, convertLinksRecursively, formatForApi } from "../utils/fieldReordering.js";
 import { processComponentPresentations, processRegions } from "../utils/pageUtils.js";
-import { componentPresentationSchemaForTyping, regionSchemaForTyping } from "../schemas/pageSchemas.js";
+import { componentPresentationSchemaForTyping, regionSchemaForTyping, RegionForTyping } from "../schemas/pageSchemas.js";
 
 const updatePageInputProperties = {
     itemId: z.string().regex(/^tcm:\d+-\d+-64$/).describe("The unique ID (TCM URI) of the Page to update."),
@@ -163,7 +163,7 @@ Example 5: Remove the Metadata Schema from a Page.
                 if (!pageTemplateId) {
                     throw new Error(`Could not determine the Page Template for Page ${itemId} to process regions.`);
                 }
-                itemToUpdate.Regions = await processRegions(updates.regions, itemId, pageTemplateId, authenticatedAxios);
+                itemToUpdate.Regions = await processRegions(updates.regions as RegionForTyping[], itemId, pageTemplateId, authenticatedAxios);
             }
 
             const updateResponse = await authenticatedAxios.put(`/items/${restItemId}`, itemToUpdate);

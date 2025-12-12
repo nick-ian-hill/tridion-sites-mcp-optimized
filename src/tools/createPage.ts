@@ -6,7 +6,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 import { reorderFieldsBySchema, convertLinksRecursively, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
 import { processComponentPresentations, processRegions } from "../utils/pageUtils.js";
-import { componentPresentationSchemaForTyping, regionSchemaForTyping } from "../schemas/pageSchemas.js";
+import { componentPresentationSchemaForTyping, regionSchemaForTyping, RegionForTyping } from "../schemas/pageSchemas.js";
 import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
 
 const createPageInputProperties = {
@@ -293,7 +293,7 @@ This example shows a two-column layout within the main content area.
             payload.ComponentPresentations = processComponentPresentations(parsedComponentPresentations, locationId);
 
             if (contextualPageTemplateId) {
-                payload.Regions = await processRegions(parsedRegions, locationId, contextualPageTemplateId, authenticatedAxios);
+                payload.Regions = await processRegions(parsedRegions as RegionForTyping[], locationId, contextualPageTemplateId, authenticatedAxios);
             } else if (parsedRegions && parsedRegions.length > 0) {
                 return createErrorResponse(`Error: Regions were provided, but no Page Template could be determined.`);
             } else {
