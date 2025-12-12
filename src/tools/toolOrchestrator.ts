@@ -139,27 +139,23 @@ export const toolOrchestrator = {
     Discovery tools (like 'search', 'getItemsInContainer', 'getDependencyGraph') ONLY return identification data (Id, Title, type). They do not return deep properties.
     
     To inspect properties like Metadata, Content, or Revision Dates:
-    1.  **Find:** Use a discovery tool in 'preProcessingScript' to get IDs, and then either use 'bulkReadItems' in the same script, or
-    2.  **Fetch:** Use 'mapScript' to call 'getItem' for the specific details you need.
+    1.  Find: Use a discovery tool in 'preProcessingScript' to get IDs, and then either use 'bulkReadItems' in the same script, or
+    2.  Fetch: Use 'mapScript' to call 'getItem' for the specific details you need.
     
     You MUST provide a 'mapScript' if your task involves filtering or checking items based on properties that are not available in the discovery phase.
 
-    By default, up to 5 scripts can run in parallel in the 'map' phase. Setting a higher 'maxConcurrency' value can increase speed at the cost of overall server load. Only use a value of 1 when debugging a script or when explicitly requested by the user.
+    CRITICAL SCRIPT DESIGN PRINCIPLES
+    1.  Mandatory Error Handling: If a required operation fails (e.g., a lookup returns undefined, an item creation is impossible), your script MUST throw an Error (e.g., 'throw new Error("Missing dependency ID")'). A script that returns without throwing an Error will be marked as 'Success' by the orchestrator, leading to false reporting. Logging a warning is insufficient for critical failures.
+    2.  Post-Processing Audit: For bulk create or update operations (e.g., 'updateContent', 'createPage'), do not blindly rely on the absence of errors to report success. Use the 'postProcessingScript' to audit one or more updated items (via 'context.tools.getItem') to validate that the changes were persisted as intended.
+    3.  Handling Heavy Data (Excel/JSON): Do not read entire Excel files or large JSON blobs directly into the chat context. This consumes the context window and causes "output truncated" errors.
+        - First: Use a script to read the Excel file, parse it, and return a summary (e.g., column headers or a row count) to help you understand the structure.
+        - Then: Process the data entirely within the 'toolOrchestrator' scripts. Read the file in 'preProcessingScript' and pass the data rows to 'mapScript' via 'context.preProcessingResult'.
 
-    ### Available Context and Utilities
-    The 'context' object available in scripts provides:
-    - context.tools: Dictionary of async tools (e.g., context.tools.getItem).
-    - context.log(msg): Function to log progress.
-    - context.utils: Dictionary of synchronous utility functions.
-      - **context.utils.convertItemIdToContextPublication(itemId, contextItemId)**: Returns a string ID mapped to the new context. Use this instead of the 'mapItemIdToContextPublication' tool for simpler, synchronous logic.
-
-    RECOMMENDED STRATEGY FOR COMPLEX TASKS
-    For complex, multi-stage tasks (like bulk-importing relational data from an Excel file), it is highly recommended to break the operation into separate, sequential 'toolOrchestrator' calls.
-    For example:
-    1.  Call 1: Create all shared prerequisites (Schemas, Folders, etc.) and all unique *dependencies* (e.g., all "Article" Components).
-    2.  Call 2: Take the results of Call 1 (e.g., the map of created Component IDs) and create the *consumers* (e.g., all the "Pages") in parallel, linking to the items from Call 1.
+    RECOMMENDED STRATEGY FOR COMPLEX TASKS (e.g., Data Import)
     
-    This 'multi-call' pattern (demonstrated in Example 12) is the most robust strategy. It avoids script timeouts by parallelizing work in the 'map' phase, and it prevents race conditions by creating all shared dependencies before they are consumed.
+    1.  Preferred: The Single-Call Pattern: For stability, execute the entire multi-stage task (Setup, Create Dependencies, Create Consumers) within a single 'toolOrchestrator' call. Use the 'preProcessingScript' to create all prerequisite data maps (e.g., Article ID to Component ID) and pass them in-memory to the 'mapScript' via the 'context.preProcessingResult' object. This method completely avoids token-wasting and error-prone manual serialization/copy-pasting of complex data across multiple 'toolOrchestrator' calls.
+    2.  Alternative: The Stateless Multi-Call Pattern (For massive jobs only): If the job is so large that it risks hitting the 60-second execution timeout, you must split it. However, do not manually pass large, complex data maps (like ID lists) as strings in the 'parameters' argument between calls. Instead, design the second script to re-discover the items created by the first script (e.g., "Script 2 uses 'search' to find all components created by Script 1").
+
     
     DEBUGGING STRATEGIES
     This is a powerful tool. For any complex script, or if you get an error, follow this debugging process:
@@ -992,200 +988,134 @@ Example 11: Find Large, Unused Multimedia Components
         \`
     });
 
-Example 12: Robust Relational Import (e.g., Articles & Pages)
-This example shows the recommended multi-stage pattern to import relational data (e.g., from an Excel file) while avoiding timeouts and race conditions.
-This pattern uses *two sequential 'toolOrchestrator' calls*:
-1.  Call 1 (Create Dependencies): Creates all the unique 'Article' components in parallel.
-2.  Call 2 (Create Consumers): Creates all the 'Pages' in parallel, safely linking to the components created in Call 1.
+Example 12: Robust Relational Import (Single-Call Strategy)
+This example demonstrates the PREFERRED Single-Call strategy for importing relational data (e.g., Articles & Pages).
+It uses 'preProcessingScript' to load the data (from Excel or JSON) and create the dependencies (Articles) first.
+Then, it uses 'mapScript' to create the consumers (Pages) in parallel, referring to the dependency map from the setup phase.
+Finally, it uses 'postProcessingScript' to AUDIT the results (validating a sample item).
 
-// --- Call 1: Create all prerequisite items AND all unique Article Components ---
-// (This first call assumes schemas, folders, etc., are created in the preProcessingScript,
-// as shown in the previous agent attempts. For brevity, this example focuses on
-// creating components from a pre-defined 'articlesSheet'.)
-
-const result1 = await tools.toolOrchestrator({
-    parameters: {
-        // This 'prerequisites' object would be the result of a *previous* setup step
-        // or could be constructed by reading the Excel file in the preProcessingScript.
-        "prerequisites": {
-            "articleSchemaId": "tcm:5-3574-8",
-            "componentsFolderId": "tcm:5-637-2",
-            "tagNameKeywordIdMap": { "AI": "tcm:5-3532-1024", /* ... */ },
-            "articlesSheet": [ { "uniqueKey": "ai-001", "headline": "The Future of AI", "bodyText": "...", "tags": "AI;Future" } /*, ... */ ],
-            "authorsSheet": [ { "articleKey": "ai-001", "firstName": "Jane" } /*, ... */ ],
-            "pageMapSheet": [ { "pageTitle": "Home", "articleKey": "ai-001" } /*, ... */ ],
-            "presentationTypeToTemplateIdMap": { "Hero": "tcm:5-3576-32" /*, ... */ },
-            "pageTemplateId": "tcm:5-3581-128",
-            "structureGroupId": "tcm:5-638-4"
-        }
-    },
-    // 'preProcessingScript' just reads the data and passes the *article keys* as itemIds
-    preProcessingScript: \`
-        context.log("Phase 1: Starting Article Component creation...");
-        const articles = context.parameters.prerequisites.articlesSheet;
-        if (!articles) throw new Error("articlesSheet is missing from parameters.");
-        
-        // Return one 'itemId' for each article to be created
-        return {
-            itemIds: articles.map(a => a.uniqueKey),
-            preProcessingResult: {
-                // Pass all data through to the map/post scripts
-                ...context.parameters.prerequisites
+    const result = await tools.toolOrchestrator({
+        parameters: {
+            // In a real scenario, this data would come from context.tools.readExcelFileFromMultimediaComponent()
+            // inside the preProcessingScript.
+            "prerequisites": {
+                "articleSchemaId": "tcm:5-3574-8",
+                "componentsFolderId": "tcm:5-637-2",
+                "tagNameKeywordIdMap": { "AI": "tcm:5-3532-1024", "Future": "tcm:5-3532-1025" },
+                "articlesSheet": [ { "uniqueKey": "ai-001", "headline": "The Future of AI", "bodyText": "...", "tags": "AI;Future" } ],
+                "authorsSheet": [ { "articleKey": "ai-001", "firstName": "Jane", "lastName": "Doe", "bio": "..." } ],
+                "pageMapSheet": [ { "pageTitle": "Home", "fileName": "index", "articleKey": "ai-001", "regionName": "Main", "presentationType": "Hero" } ],
+                "presentationTypeToTemplateIdMap": { "Hero": "tcm:5-3576-32" },
+                "pageTemplateId": "tcm:5-3581-128",
+                "structureGroupId": "tcm:5-638-4"
             }
-        };
-    \`,
-    // 'mapScript' creates ONE component. This can run with high concurrency.
-    mapScript: \`
-        const articleKey = context.currentItemId;
-        context.log(\`Creating component for article: \${articleKey}\`);
+        },
+        // Phase 1 (Setup): Create dependencies and prepare the "Map" phase
+        preProcessingScript: \`
+            context.log("Phase 1: Setup & Dependency Creation");
+            const { 
+                articlesSheet, authorsSheet, tagNameKeywordIdMap, 
+                articleSchemaId, componentsFolderId 
+            } = context.parameters.prerequisites;
 
-        const { 
-            articlesSheet, authorsSheet,
-            articleSchemaId, componentsFolderId, tagNameKeywordIdMap
-        } = context.preProcessingResult;
+            const articleKeyToComponentIdMap = {};
 
-        const article = articlesSheet.find(a => a.uniqueKey === articleKey);
-        if (!article) throw new Error(\`Article data for \${articleKey} not found.\`);
-
-        const authorsForArticle = authorsSheet
-            .filter(a => a.articleKey === article.uniqueKey)
-            .map(a => ({ firstName: a.firstName, lastName: a.lastName, bio: a.bio }));
-        
-        const tagsForArticle = article.tags.split(';')
-            .map(tagName => ({ "type": "Link", "IdRef": tagNameKeywordIdMap[tagName] }))
-            .filter(tag => tag.IdRef);
-
-        const component = await context.tools.createComponent({
-            title: article.headline,
-            locationId: componentsFolderId,
-            schemaId: articleSchemaId,
-            content: {
-                "headline": article.headline,
-                "body": \`<p>\${article.bodyText}</p>\`,
-                "authors": authorsForArticle,
-                "tags": tagsForArticle
+            // Loop through articles and create them (or mock creation)
+            // Ideally, we do this here to ensure dependencies exist before pages are created.
+            for (const article of articlesSheet) {
+                 context.log(\`Creating dependency Component for: \${article.uniqueKey}\`);
+                 
+                 // In a real scenario, call await context.tools.createComponent(...)
+                 // For this example, we simulate a successful creation:
+                 const mockId = \`tcm:5-\${Math.floor(Math.random() * 10000)}-16\`; 
+                 articleKeyToComponentIdMap[article.uniqueKey] = mockId;
             }
-        });
 
-        // Return a key-value pair for the post-script
-        return {
-            key: articleKey,
-            id: component.Id,
-            title: component.Title
-        };
-    \`,
-    // 'postProcessingScript' collects the results into a map for the next stage
-    postProcessingScript: \`
-        context.log("Phase 1 Complete: Aggregating created components...");
-        
-        // Convert the array of {key, id} objects into a simple Map
-        const articleKeyToComponentIdMap = new Map(
-            context.successes.map(s => [s.result.key, s.result.id])
-        );
+            // Identify the unique Pages we need to create in the Map phase
+            const pageMap = context.parameters.prerequisites.pageMapSheet;
+            const uniquePageTitles = [...new Set(pageMap.map(p => p.pageTitle))];
+            context.log(\`Setup complete. \${uniquePageTitles.length} Pages to create.\`);
 
-        // Return all the data needed for the *next* tool call
-        return {
-            summary: \`Created \${context.successes.length} components.\`,
-            articleKeyToComponentIdMap: Object.fromEntries(articleKeyToComponentIdMap),
+            // Pass the itemIds (Page Titles) and the map of Created IDs to the next phase
+            return {
+                itemIds: uniquePageTitles,
+                preProcessingResult: {
+                    articleKeyToComponentIdMap,
+                    ...context.parameters.prerequisites
+                }
+            };
+        \`,
+        // Phase 2 (Map): Create the consumers (Pages) using the map
+        mapScript: \`
+            const pageTitle = context.currentItemId;
+            context.log(\`Creating Page: \${pageTitle}\`);
             
-            // Pass the other prerequisite data along
-            pageMapSheet: context.preProcessingResult.pageMapSheet,
-            presentationTypeToTemplateIdMap: context.preProcessingResult.presentationTypeToTemplateIdMap,
-            pageTemplateId: context.preProcessingResult.pageTemplateId,
-            structureGroupId: context.preProcessingResult.structureGroupId
-        };
-    \`
-});
+            const {
+                pageMapSheet,
+                articleKeyToComponentIdMap,
+                presentationTypeToTemplateIdMap,
+                pageTemplateId,
+                structureGroupId
+            } = context.preProcessingResult;
 
-// --- Call 2: Create all Pages in Parallel ---
-// 'result1' holds the output from the first call.
-// We parse its JSON and pass it as a parameter to the second call.
-const pageCreationParams = JSON.parse(result1.content[0].text);
+            // 1. Find all content rows for this page
+            const pageEntries = pageMapSheet.filter(row => row.pageTitle === pageTitle);
+            if (pageEntries.length === 0) throw new Error(\`No data for page \${pageTitle}\`);
 
-const result2 = await tools.toolOrchestrator({
-    parameters: {
-        "pageCreationParams": pageCreationParams
-    },
-    // Use 'preProcessingScript' to find all *unique page titles*
-    preProcessingScript: \`
-        context.log("Phase 2: Starting Page creation...");
-        const pageMap = context.parameters.pageCreationParams.pageMapSheet;
-        const uniquePageTitles = [...new Set(pageMap.map(p => p.pageTitle))];
-        context.log(\`Found \${uniquePageTitles.length} unique pages to create.\`);
-        
-        return {
-            itemIds: uniquePageTitles,
-            preProcessingResult: context.parameters.pageCreationParams
-        };
-    \`,
-    // 'mapScript' creates ONE page. This is now safe to run in parallel.
-    mapScript: \`
-        const pageTitle = context.currentItemId;
-        context.log(\`Assembling page: \${pageTitle}\`);
-        
-        const {
-            pageMapSheet,
-            articleKeyToComponentIdMap,
-            presentationTypeToTemplateIdMap,
-            pageTemplateId,
-            structureGroupId
-        } = context.preProcessingResult;
+            const fileName = pageEntries[0].fileName;
+            const regions = {};
 
-        // Find all rows in the Excel sheet for this specific page
-        const pageEntries = pageMapSheet.filter(row => row.pageTitle === pageTitle);
-        if (pageEntries.length === 0) throw new Error(\`No data for page \${pageTitle}\`);
-        
-        const fileName = pageEntries[0].fileName;
-        const regions = {};
+            // 2. Assemble Component Presentations
+            for (const entry of pageEntries) {
+                // Critical: Look up the component ID created in Phase 1
+                const componentId = articleKeyToComponentIdMap[entry.articleKey];
+                
+                if (!componentId) {
+                    // Critical Principle: THROW ERROR, do not just log warning
+                    throw new Error(\`Dependency missing: Component not found for key \${entry.articleKey}\`);
+                }
 
-        // Assemble all component presentations for this page
-        for (const entry of pageEntries) {
-            const regionName = entry.regionName;
-            if (!regions[regionName]) regions[regionName] = [];
-
-            // SAFELY LOOKUP the component ID (no race condition)
-            const componentId = articleKeyToComponentIdMap[entry.articleKey];
-            const templateId = presentationTypeToTemplateIdMap[entry.presentationType];
-
-            if (!componentId) {
-                context.log(\`WARN: Skipping component '\${entry.articleKey}' (ID not found).\`);
-                continue;
+                if (!regions[entry.regionName]) regions[entry.regionName] = [];
+                
+                regions[entry.regionName].push({
+                    "type": "ComponentPresentation",
+                    "Component": { "IdRef": componentId },
+                    "ComponentTemplate": { "IdRef": presentationTypeToTemplateIdMap[entry.presentationType] }
+                });
             }
 
-            regions[regionName].push({
-                "type": "ComponentPresentation",
-                "Component": { "type": "Link", "IdRef": componentId },
-                "ComponentTemplate": { "type": "Link", "IdRef": templateId }
-            });
-        }
+            // 3. Create the Page (Simulated)
+            // await context.tools.createPage({ ... });
+            
+            // Return data for the audit/report
+            return { pageTitle, fileName, componentCount: pageEntries.length, createdId: "tcm:5-999-64" };
+        \`,
+        // Phase 3 (Reduce): Audit and Report
+        postProcessingScript: \`
+            context.log("Phase 3: Audit and Report");
+            
+            const successes = context.successes.map(s => s.result);
+            context.log(\`Successfully created \${successes.length} pages.\`);
 
-        const regionsForPage = Object.keys(regions).map(regionName => ({
-            "type": "EmbeddedRegion",
-            "RegionName": regionName,
-            "ComponentPresentations": regions[regionName]
-        }));
+            // --- MANDATORY AUDIT STEP ---
+            // Don't just assume success. Fetch one item to verify it exists and has content.
+            if (successes.length > 0) {
+                const samplePage = successes[0];
+                context.log(\`AUDIT: Verifying page '\${samplePage.pageTitle}' (\${samplePage.createdId})...\`);
+                
+                // In real scenario: const check = await context.tools.getItem({ itemId: samplePage.createdId });
+                // if (!check) throw new Error("Audit Failed: Item not found.");
+                context.log("AUDIT PASSED: Page exists.");
+            }
+            // ----------------------------
 
-        // Create the page
-        const page = await context.tools.createPage({
-            title: pageTitle,
-            locationId: structureGroupId,
-            fileName: fileName,
-            pageTemplateId: pageTemplateId,
-            regions: JSON.stringify(regionsForPage)
-        });
-
-        return { id: page.Id, title: page.Title };
-    \`,
-    // 'postProcessingScript' provides the final summary
-    postProcessingScript: \`
-        context.log("Phase 2 Complete: Summarizing page creation.");
-        return {
-            message: \`Successfully created \${context.successes.length} pages.\`,
-            createdPages: context.successes.map(s => s.result),
-            errors: context.failures.map(f => ({ page: f.itemId, error: f.error }))
-        };
-    \`
-});
+            return {
+                message: "Import Complete",
+                createdPages: successes,
+                failedPages: context.failures.map(f => ({ page: f.itemId, error: f.error }))
+            };
+        \`
+    });
 
 Example 13: Advanced Debugging with \`try...catch\`
 This script shows how to safely test logic. It finds items, but one (tcm:5-9999) is intentionally non-existent.
