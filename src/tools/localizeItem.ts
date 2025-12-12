@@ -4,15 +4,22 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 export const localizeItem = {
     name: "localizeItem",
-    description: `Localizes a shared item in the BluePrint, creating a local copy that can be edited independently of its parent item. For localizing multiple items, consider using the 'toolOrchestrator' tool.
+    description: `Localizes a shared item in the BluePrint, creating a local copy that can be edited independently of its parent item.
+    
+    ### Idempotency
+    This operation is idempotent. If the item is already localized, the tool will return a success message indicating no action was needed, along with the item details.
 
-This tool is only applicable to items that are shared. This can be determined by calling the 'getItem' tool and inspecting the 'BluePrintInfo.IsShared' property.
+    For localizing multiple items, consider using the 'toolOrchestrator' tool.
 
-Shared items are essentially identical copies of a parent item and cannot be edited directly. However, a shared item will change whenever the parent item changes.
-To edit a shared item, it first needs to be localized. Localizing a shared item makes many properties and content/metadata field values independent of the parent item.
-Unless a content/metadata field is set to non-localizable, changes to the field value in the parent will not modify the value in the localized item.
-Similarly, the values of fields that are not marked as non-localizable can be freely changed in the localized item.
-A common use case for localizing an item is to translate content inherited from a parent item into a different language.`,
+    This tool is only applicable to items that are shared.
+    This can be determined by calling the 'getItem' tool and inspecting the 'BluePrintInfo.IsShared' property.
+    Shared items are essentially identical copies of a parent item and cannot be edited directly.
+    However, a shared item will change whenever the parent item changes.
+    To edit a shared item, it first needs to be localized.
+    Localizing a shared item makes many properties and content/metadata field values independent of the parent item.
+    Unless a content/metadata field is set to non-localizable, changes to the field value in the parent will not modify the value in the localized item.
+    Similarly, the values of fields that are not marked as non-localizable can be freely changed in the localized item.
+    A common use case for localizing an item is to translate content inherited from a parent item into a different language.`,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID (TCM URI) of the shared item to localize."),
     },
@@ -21,10 +28,10 @@ A common use case for localizing an item is to translate content inherited from 
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
         const userSessionId = match ? match[1] : null;
+        const authenticatedAxios = createAuthenticatedAxios(userSessionId);
+        const escapedItemId = itemId.replace(':', '_');
 
         try {
-            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
-            const escapedItemId = itemId.replace(':', '_');
             const response = await authenticatedAxios.post(`/items/${escapedItemId}/localize`);
 
             if (response.status === 201) {
@@ -49,6 +56,31 @@ A common use case for localizing an item is to translate content inherited from 
                 return handleUnexpectedResponse(response);
             }
         } catch (error) {
+            // If it failed, check if it's because it was already done.
+            try {
+                const getItemResponse = await authenticatedAxios.get(`/items/${escapedItemId}`);
+
+                if (getItemResponse.status === 200) {
+                    const item = getItemResponse.data;
+                    if (item.BluePrintInfo?.IsLocalized) {
+                        // Success Case: It failed because it's already localized.
+                        return {
+                            content: [{
+                                type: "text",
+                                text: JSON.stringify({
+                                    type: item['$type'],
+                                    Id: item.Id,
+                                    Message: `Item ${item.Id} is already localized. No action taken.`
+                                }, null, 2)
+                            }],
+                        };
+                    }
+                }
+            } catch (checkError) {
+                // If the check also fails, ignore it and throw the original error below.
+            }
+
+            // If we are here, it wasn't an idempotency issue. Throw the original error.
             return handleAxiosError(error, `Failed to localize item ${itemId}. Check that BluePrintInfo.IsShared is true.`);
         }
     }

@@ -5,11 +5,14 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 export const unlocalizeItem = {
     name: "unlocalizeItem",
     description: `Unlocalizes a localized item, discarding any local changes and returing the item to a copy of its parent.
+    
+    ### Idempotency
+    This operation is idempotent. If the item is already unlocalized (shared), the tool will return a success message indicating no action was needed.
 
-This tool is only applicable to items that are localized (i.e., where BluePrintInfo.IsLocalized is true).
-It will return an error if the item is a primary item (BluePrintInfo.IsShared: false and BluePrintInfo.IsLocalized: false).
-The tool returns a confirmation that the item has been successfully unlocalized.
-`,
+    This tool is only applicable to items that are localized (i.e., where BluePrintInfo.IsLocalized is true).
+    It will return an error if the item is a primary item (BluePrintInfo.IsShared: false and BluePrintInfo.IsLocalized: false).
+    The tool returns a confirmation that the item has been successfully unlocalized.
+    `,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID (TCM URI) of the local item to unlocalize."),
         useDynamicVersion: z.boolean().optional().default(true).describe("Loads the latest saved version of the item if available."),
@@ -22,7 +25,8 @@ The tool returns a confirmation that the item has been successfully unlocalized.
                     input: "confirmed",
                     content: [{
                         type: "text",
-                        text: `Are you sure you want to unlocalize the item ${itemId}? This action will discard all local changes and cannot be undone.`
+                        text: `Are you sure you want to unlocalize the item ${itemId}?
+This action will discard all local changes and cannot be undone.`
                     }],
                 }
             };
@@ -32,14 +36,12 @@ The tool returns a confirmation that the item has been successfully unlocalized.
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
         const userSessionId = match ? match[1] : null;
+        const authenticatedAxios = createAuthenticatedAxios(userSessionId);
+        const escapedItemId = itemId.replace(':', '_');
 
         try {
-            const authenticatedAxios = createAuthenticatedAxios(userSessionId);
-            const escapedItemId = itemId.replace(':', '_');
             const response = await authenticatedAxios.post(`/items/${escapedItemId}/unlocalize`, null, {
-                params: {
-                    useDynamicVersion
-                }
+                params: { useDynamicVersion }
             });
 
             if (response.status === 200) {
@@ -58,6 +60,29 @@ The tool returns a confirmation that the item has been successfully unlocalized.
                 return handleUnexpectedResponse(response);
             }
         } catch (error) {
+            try {
+                const getItemResponse = await authenticatedAxios.get(`/items/${escapedItemId}`);
+
+                if (getItemResponse.status === 200) {
+                    const item = getItemResponse.data;
+                    // If it is NOT localized, it is already in the desired state.
+                    if (item.BluePrintInfo?.IsLocalized === false) {
+                        return {
+                            content: [{
+                                type: "text",
+                                text: JSON.stringify({
+                                    type: item['$type'],
+                                    Id: item.Id,
+                                    Message: `Item ${item.Id} is already unlocalized. No action taken.`
+                                }, null, 2)
+                            }],
+                        };
+                    }
+                }
+            } catch (checkError) {
+                // Ignore
+            }
+
             return handleAxiosError(error, `Failed to unlocalize item ${itemId}`);
         }
     }
