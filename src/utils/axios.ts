@@ -10,8 +10,8 @@ const UI_API_URL = "http://10.100.92.199:81/ui/api/v3.0";
 
 // Auth Endpoint Configuration
 const AUTH_TOKEN_URL = "http://external-dxui-dev-sites-stg.ted.nl.sdldev.net/access-management/connect/token";
-const AUTH_CLIENT_ID = "78ffaefc-cd0e-4d12-90bf-c6be42cd7a10";
-const AUTH_CLIENT_SECRET = "l2J8vixf0NMHqcldUH3BM/vULPQaVQhx8gF9u7hrXZYhq3IQUEy9nQ==";
+const AUTH_CLIENT_ID = process.env.AUTH_CLIENT_ID;
+const AUTH_CLIENT_SECRET = process.env.AUTH_CLIENT_SECRET;
 
 // --- Fallback Session ID Configuration ---
 // By default, this is null.
