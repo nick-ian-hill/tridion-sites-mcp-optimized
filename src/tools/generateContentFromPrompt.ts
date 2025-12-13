@@ -5,53 +5,63 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 
 export const generateContentFromPrompt = {
     name: "generateContentFromPrompt",
-    description: `The only tool for generating creative, marketing-oriented, or suggestive text. This tool uses a special configuration optimized for creativity. Use this for all requests for webpage copy, product descriptions, blog posts, or marketing ideas.
-The generated text can then be used as input for other tools, such as the 'content' parameter in 'createComponent' or 'updateContent', or to populate metadata fields with 'updateMetadata'.`,
+    description: `Generates text content based on a prompt, with optional context and stylistic guidance.
+    This tool is designed to be a flexible generation engine. 
+    - Use 'prompt' for the specific task (e.g., "Summarize this", "Translate to Spanish").
+    - Use 'sourceText' to provide the source material.
+    - Use 'guidance' to enforce a specific voice, tone, or brand style (e.g., "Use a professional, concise tone", "Format as a LinkedIn post").
+    
+    This separation allows you to use the tool in loops to generate multiple variants of the same content with different guidelines.`,
+    
     input: {
-        prompt: z.string().describe("A detailed prompt describing the content to be generated, including the desired topic, tone, style, and approximate length."),
-        creativityLevel: z.enum(["low", "medium", "high"]).optional().default("medium").describe("Controls the creativity of the response. 'low' is for more factual, predictable text. 'medium' offers a good balance. 'high' is for more imaginative and unexpected content."),
-        contextualText: z.string().optional().describe("Optional. A block of existing text to use as context for the generation (e.g., for summarization, rewriting, or expansion).")
+        prompt: z.string()
+            .describe("The core instruction for the content generation."),
+        
+        sourceText: z.string().optional()
+            .describe("The source text to operate on (e.g., the body of an article to be rewritten or translated)."),
+            
+        guidance: z.string().optional()
+            .describe("Stylistic instructions, brand guidelines, or formatting rules. This sets the 'persona' of the AI for this generation."),
+            
+        creativityLevel: z.enum(["low", "medium", "high"]).optional().default("medium")
+            .describe("Controls the temperature. 'low' for factual tasks, 'high' for creative writing.")
     },
+
     async execute(
-        { prompt, creativityLevel = "medium", contextualText }: { prompt: string; creativityLevel?: "low" | "medium" | "high"; contextualText?: string },
+        { prompt, sourceText, guidance, creativityLevel = "medium" }: 
+        { prompt: string; sourceText?: string; guidance?: string; creativityLevel?: "low" | "medium" | "high" },
         context: any
     ) {
         if (!GEMINI_API_KEY) {
-            const errorResponse = {
-                type: 'Error',
-                Message: "Error: GEMINI_API_KEY is not configured for this tool."
-            };
-            return { content: [{ type: "text", text: JSON.stringify(errorResponse, null, 2) }] };
+            return { content: [{ type: "text", text: JSON.stringify({ type: 'Error', Message: "GEMINI_API_KEY not configured." }, null, 2) }] };
         }
 
         try {
-            // Map the user-friendly creativity level to a specific temperature value.
-            const temperatureMap = {
-                low: 0.2,
-                medium: 0.5,
-                high: 0.8
-            };
+            const temperatureMap = { low: 0.2, medium: 0.5, high: 0.8 };
             const temperature = temperatureMap[creativityLevel];
 
-            let finalPrompt = prompt;
-            if (contextualText) {
-                finalPrompt = `Based on the following text, perform this instruction.
-
-Instruction: "${prompt}"
-
-Text to use as context:
----
-${contextualText}
----`;
+            // Construct a structured prompt
+            const parts = [];
+            
+            // 1. Guidance (System/Persona instruction)
+            if (guidance) {
+                parts.push(`--- GUIDELINES & VOICE ---\n${guidance}\n`);
             }
 
-            console.log(`[generateContent] Calling Gemini with temperature: ${temperature}`);
+            // 2. Context (The data to work on)
+            if (sourceText) {
+                parts.push(`--- SOURCE CONTENT ---\n${sourceText}\n`);
+            }
+
+            // 3. The Task
+            parts.push(`--- INSTRUCTION ---\n${prompt}`);
+
+            console.log(`[generateContent] Calling Gemini (Temp: ${temperature})...`);
             
-            const genAI = new GoogleGenAI({apiKey: GEMINI_API_KEY});
-            
+            const genAI = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
             const result = await genAI.models.generateContent({
                 model: "gemini-2.5-flash-lite",
-                contents: finalPrompt,
+                contents: [{ role: 'user', parts: [{ text: parts.join("\n\n") }] }],
                 config: {
                     temperature: temperature,
                     safetySettings: [{
@@ -63,25 +73,21 @@ ${contextualText}
 
             const generatedText = (result.text ?? "").trim();
 
-            const responseData = {
-                type: "GeneratedContent",
-                Content: generatedText
-            };
             return {
                 content: [{
                     type: "text",
-                    text: JSON.stringify(responseData, null, 2)
+                    text: JSON.stringify({
+                        type: "GeneratedContent",
+                        Content: generatedText
+                    }, null, 2)
                 }],
             };
 
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            console.error(`[generateContent] Error: ${errorMessage}`);
-            const errorResponse = {
-                type: 'Error',
-                Message: `Error generating content: ${errorMessage}`
+            return { 
+                content: [{ type: "text", text: JSON.stringify({ type: 'Error', Message: `Generation failed: ${errorMessage}` }, null, 2) }] 
             };
-            return { content: [{ type: "text", text: JSON.stringify(errorResponse, null, 2) }] };
         }
     }
 };
