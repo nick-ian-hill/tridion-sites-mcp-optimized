@@ -14,10 +14,12 @@ export const search = {
     This tool is the entry point for finding items based on full-text queries, schemas, modification dates, and lock statuses.
     
     ### CRITICAL: Search and Versioned Items
-    Changes to versioned items (Components, Pages, Templates, Schemas, and Template Building Blocks) are only indexed when the item in checked in.
-    This means that new items (items that have been saved but do not yet have a major version) will not appear in the results.
-    Similarly, changes to existing versioned items that are not yet present in a major version will not be picked up by a search.
-    In scenarios where potentially non-indexed changes in versioned items need to be considered (e.g., stale content analysis), you should first find every item of the required type using 'getItemsInContainer', and then check the relevant property (or properties) using 'getItem' in mapScript of a toolOrchestrator call.
+    Changes to versioned items (Components, Pages, Templates, Schemas, and Template Building Blocks) are only indexed once the item is checked in.
+    This means that
+    - when performing a search immediately after checking in an item, the item may not be returned (due to an indexing delay),
+    - items that have been saved but do not yet have a major version will also appear in the results,
+    - changes to existing versioned items (e.g., field value updates) not yet present in a major version will also not be picked up by a search.
+    When trying to look up a versioned item where one of the above scenarios may apply, a more reliable strategy is to first find every item of the required type using 'getItemsInContainer', and then check the relevant property (or properties) using 'getItem' in the mapScript of a toolOrchestrator call.
 
     ### The "Find-Then-Fetch" Pattern
     This tool returns **ONLY** the 'Id', 'Title', and 'type' of matching items.
