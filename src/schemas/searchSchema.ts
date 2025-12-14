@@ -22,7 +22,7 @@ export const SearchQueryValidation = z.object({
   ])).optional().describe("An array of item types to limit the search results to. If asked to search for a 'Bundle' or 'SearchFolder', use the 'VirtualFolder' type and then review the 'type' property of any returned items. To find 'MultimediaComponents', search for 'Component' and then review the 'ComponentType' property."),
 
   // --- Location and Scope ---
-  SearchIn: z.string().regex(/^(tcm:\d+-\d+-[124]|ecl:[a-zA-Z0-9-]+)$/).optional().describe("The unique TCM URI of the publication or folder to search within. MUST be provided as a string. Required when using the 'BasedOnSchemas', 'UsedKeywords', 'ProcessDefinition', or 'ActivityDefinition' query parameters."),
+  SearchIn: z.string().regex(/^(tcm:\d+-\d+-[124]|tcm:\d+-\d+-512|ecl:[a-zA-Z0-9-]+)$/).optional().describe("The unique TCM URI of the publication, folder, or category to search within. MUST be provided as a string. Required when using the 'BasedOnSchemas', 'UsedKeywords', 'ProcessDefinition', or 'ActivityDefinition' query parameters."),
   SearchInSubtree: z.boolean().default(true).optional().describe("When true, searches recursively in the publication/folder specified in SearchIn. Defaults to true."),
 
   // --- Schema and Keyword Criteria ---

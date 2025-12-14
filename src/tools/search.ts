@@ -21,6 +21,10 @@ export const search = {
     - changes to existing versioned items (e.g., field value updates) not yet present in a major version will also not be picked up by a search.
     When trying to look up a versioned item where one of the above scenarios may apply, a more reliable strategy is to first find every item of the required type using 'getItemsInContainer', and then check the relevant property (or properties) using 'getItem' in the mapScript of a toolOrchestrator call.
 
+    Searching in Categories
+    Normally, the search API searches within Publications or Folders. This tool has been enhanced to also support searching *inside* a Category (ItemType 512).
+    If you provide a Category ID in the 'SearchIn' field, the tool will automatically switch strategies to fetch all keywords in that category and filter them based on your 'Title' criteria.
+
     ### The "Find-Then-Fetch" Pattern
     This tool returns **ONLY** the 'Id', 'Title', and 'type' of matching items.
     
@@ -49,6 +53,61 @@ export const search = {
 
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
+
+            // --- Interception Logic: Search inside Category ---
+            if (searchQuery && searchQuery.SearchIn && searchQuery.SearchIn.endsWith("-512")) {
+                console.log(`[Search] Intercepting search request for Category: ${searchQuery.SearchIn}`);
+                
+                // If ItemTypes are specified but do NOT include 'Keyword', return empty immediately
+                // because Categories only contain Keywords.
+                if (searchQuery.ItemTypes && searchQuery.ItemTypes.length > 0 && !searchQuery.ItemTypes.includes("Keyword")) {
+                    return { content: [{ type: "text", text: "[]" }] };
+                }
+
+                const categoryId = searchQuery.SearchIn.replace(':', '_');
+                const keywordsResponse = await authenticatedAxios.get(`/items/${categoryId}/keywords`);
+                
+                if (keywordsResponse.status === 200) {
+                    let keywords = keywordsResponse.data;
+
+                    // Client-side filtering for Title
+                    if (searchQuery.Title) {
+                        const searchTitle = searchQuery.Title;
+                        const isCaseSensitive = searchQuery.IsTitleCaseSensitive === true;
+                        
+                        keywords = keywords.filter((k: any) => {
+                            const kTitle = k.Title || "";
+                            if (isCaseSensitive) {
+                                return kTitle.includes(searchTitle);
+                            }
+                            return kTitle.toLowerCase().includes(searchTitle.toLowerCase());
+                        });
+                    }
+
+                    // Apply Result Limit
+                    if (resultLimit > 0 && keywords.length > resultLimit) {
+                        keywords = keywords.slice(0, resultLimit);
+                    }
+
+                    // Format
+                    const finalData = filterResponseData({ 
+                        responseData: keywords, 
+                        details: "IdAndTitle" 
+                    });
+                    const formattedFinalData = formatForAgent(finalData);
+                    
+                    return {
+                        content: [{
+                            type: "text",
+                            text: JSON.stringify(formattedFinalData, null, 2)
+                        }],
+                    };
+                } else {
+                    return handleUnexpectedResponse(keywordsResponse);
+                }
+            }
+            // --- End Interception Logic ---
+
             if (searchQuery && searchQuery.SearchIn) {
                 const contextId = searchQuery.SearchIn;
                 if (searchQuery.BasedOnSchemas) {
