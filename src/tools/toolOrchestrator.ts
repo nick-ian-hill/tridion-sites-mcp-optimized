@@ -103,11 +103,13 @@ const toolOrchestratorInputProperties = {
         .optional()
         .describe("An optional array of unique IDs (TCM URIs) to be processed. If provided, these are passed to the 'mapScript'. If a 'preProcessingScript' is also provided, the IDs returned by that script take precedence."),
     preProcessingScript: z.string().optional()
-        .describe("An optional first JavaScript string (as an async function body) that runs once before the main loop. It must return either a string[] of item IDs, or an object { itemIds: string[], preProcessingResult?: any } to pass data to subsequent scripts. This is the 'setup' phase, perfect for dynamically fetching or filtering items, or for one-time setup operations (e.g. creating a folder structure)."),
+        .describe("Phase 1 (Setup): An optional async function body that runs once before the loop. Must return `string[]` (item IDs) or `{ itemIds: string[], preProcessingResult?: any }`. Use this for dynamic discovery (e.g. `search`) or setup."),
     mapScript: z.string().optional()
-        .describe("An optional JavaScript string (as an async function body) to execute for each item. The mapScript has access to a 'context' object. This is the 'map' phase. CRITICAL: This script is MANDATORY if 'itemIds' are provided or found. You cannot filter items by property (like Size, Usage, or Metadata) in the 'postProcessingScript'; you must inspect each item individually here."),
+        .describe("Phase 2 (Map): An optional async function body that runs for EACH item. Mandatory if 'itemIds' are present. Use `context.currentItemId` to inspect or modify the item."),
     postProcessingScript: z.string().optional()
-        .describe("An optional second JavaScript string (as an async function body) that runs once after all items are processed (or immediately after the setup phase if no items/mapScript exist). The script has access to a 'context' object containing: `results` (an array of all execution results from the 'map' phase), `successes`, `failures`, `parameters` (the JSON object passed to the tool), and `preProcessingResult` (the 'context' object from the setup phase). Its return value becomes the final output of the tool. This is the 'reduce' phase."),
+        .describe("Phase 3 (Reduce): An optional async function body that runs once after all items are processed. Has access to `context.results`, `context.successes`, and `context.failures`. Returns the final output."),
+    validationScript: z.string().optional()
+        .describe("Phase 4 (Validation): An async function body that runs LAST. MANDATORY if 'mapScript' is used. It receives `context.output`. You MUST use this to AUDIT the operation (e.g., fetch one of the created items and check if the content fields were populated correctly). Throw an Error if validation fails."),
     parameters: z.record(z.any()).optional()
         .describe("An optional JSON object of parameters to pass into all scripts. Use this for simple, static values like search queries, find/replace strings, or target TCM URIs. Note: Complex objects (like data from other tools) passed as parameters are treated as literal values. If you pass a stringified JSON object as a parameter value, you must manually call JSON.parse() on it inside your script. (Note: this only applies to input parameters, not to the responses from tool calls, which are always auto-parsed)."),
     stopOnError: z.boolean().optional().default(true)
@@ -120,1081 +122,248 @@ const toolOrchestratorInputProperties = {
         .describe("If true, the full execution log is included in the JSON response. Defaults to false. Only consider setting this to true when debugging.")
 };
 
-const toolOrchestratorSchema = z.object(toolOrchestratorInputProperties);
+const toolOrchestratorSchema = z.object(toolOrchestratorInputProperties)
+    .refine(data => !data.mapScript || data.validationScript, {
+        message: "Safety Guardrail: You provided a 'mapScript' to process items, but you did not provide a 'validationScript'. You MUST provide a validation script to audit the results (e.g., fetch a sample item to verify it was created/updated correctly).",
+        path: ["validationScript"]
+    });
 
 export const toolOrchestrator = {
     name: "toolOrchestrator",
-    description: `Executes an advanced, multi-step JavaScript script. 
+    description: `Executes an advanced, multi-step JavaScript script to perform batch operations, aggregations, or complex workflows.
     
-    This is the recommended tool for tasks involving repetitive actions on many items, especially aggregate queries (like "find the most...", "count all...", or "tabulate...").
-    Using this tool for aggregation (e.g., running 'search' in 'preProcessingScript' and processing the results in 'postProcessingScript') is far more scalable, token-efficient and reliable than calling 'search', 'getActivities', 'getItemsInContainer', etc. directly and processing a massive JSON result in the context window.
-    
-    The tool supports up to three phases. You can mix and match these phases based on your needs.
-    
-    Phase 1 ('setup'): The optional 'preProcessingScript' runs once to dynamically fetch (e.g., via 'search' with a large resultLimit) the list of item IDs to be processed.
-    Phase 2 ('map'): The optional 'mapScript' runs for each item found in Phase 1.
-    Phase 3 ('reduce'): The optional 'postProcessingScript' runs once on the collected results from Phase 2.
+    The tool supports up to four phases:
+    1.  Setup (preProcessingScript): Dynamically find items (e.g., via 'search') or prepare data.
+    2.  Map (mapScript): Process each item individually (e.g., 'updateContent', 'getItem').
+    3.  Reduce (postProcessingScript): Aggregate results or generate a summary.
+    4.  Validate (validationScript): Audit the final state to ensure success.
 
-    ### CRITICAL RULE: "Find-Then-Fetch" Pattern
-    Discovery tools (like 'search', 'getItemsInContainer', 'getDependencyGraph') ONLY return identification data (Id, Title, type). They do not return deep properties.
-    
-    To inspect properties like Metadata, Content, or Revision Dates:
-    1.  Find: Use a discovery tool in 'preProcessingScript' to get IDs, and then either use 'bulkReadItems' in the same script, or
-    2.  Fetch: Use 'mapScript' to call 'getItem' for the specific details you need.
-    
-    You MUST provide a 'mapScript' if your task involves filtering or checking items based on properties that are not available in the discovery phase.
+    CRITICAL RULE: "Find-Then-Fetch" Pattern
+    Discovery tools (like 'search', 'getItemsInContainer', 'getDependencyGraph') ONLY return identification data (Id, Title, type).
+    To inspect properties (Metadata, Content, RevisionDate), you MUST:
+    1.  Find: Use 'search' in 'preProcessingScript' to get IDs.
+    2.  Fetch: Use 'mapScript' to call 'getItem' for specific details.
 
     CRITICAL SCRIPT DESIGN PRINCIPLES
     1.  Mandatory Error Handling: If a required operation fails (e.g., a lookup returns undefined, an item creation is impossible), your script MUST throw an Error (e.g., 'throw new Error("Missing dependency ID")'). A script that returns without throwing an Error will be marked as 'Success' by the orchestrator, leading to false reporting. Logging a warning is insufficient for critical failures.
-    2.  Post-Processing Audit: For bulk create or update operations (e.g., 'updateContent', 'createPage'), do not blindly rely on the absence of errors to report success. Use the 'postProcessingScript' to audit one or more updated items (via 'context.tools.getItem') to validate that the changes were persisted as intended.
+    2.  Validation/Audit: For bulk create or update operations (e.g., 'updateContent', 'createPage'), do not blindly rely on the absence of errors to report success. Use the 'validationScript' (Phase 4) to audit one or more updated items (via 'context.tools.getItem') to validate that the changes were persisted as intended.
     3.  Handling Heavy Data (Excel/JSON): Do not read entire Excel files or large JSON blobs directly into the chat context. This consumes the context window and causes "output truncated" errors.
         - First: Use a script to read the Excel file, parse it, and return a summary (e.g., column headers or a row count) to help you understand the structure.
         - Then: Process the data entirely within the 'toolOrchestrator' scripts. Read the file in 'preProcessingScript' and pass the data rows to 'mapScript' via 'context.preProcessingResult'.
 
     RECOMMENDED STRATEGY FOR COMPLEX TASKS (e.g., Data Import)
-    
     1.  Preferred: The Single-Call Pattern: For stability, execute the entire multi-stage task (Setup, Create Dependencies, Create Consumers) within a single 'toolOrchestrator' call. Use the 'preProcessingScript' to create all prerequisite data maps (e.g., Article ID to Component ID) and pass them in-memory to the 'mapScript' via the 'context.preProcessingResult' object. This method completely avoids token-wasting and error-prone manual serialization/copy-pasting of complex data across multiple 'toolOrchestrator' calls.
     2.  Alternative: The Stateless Multi-Call Pattern (For massive jobs only): If the job is so large that it risks hitting the 60-second execution timeout, you must split it. However, do not manually pass large, complex data maps (like ID lists) as strings in the 'parameters' argument between calls. Instead, design the second script to re-discover the items created by the first script (e.g., "Script 2 uses 'search' to find all components created by Script 1").
 
-    
     DEBUGGING STRATEGIES
     This is a powerful tool. For any complex script, or if you get an error, follow this debugging process:
-    
     1.  Test on a Single Item: Do not run your script on 500 items at once. First, run it with a single, non-critical item (e.g.,'itemIds': ["tcm:5-100"]).
-    2.  Set 'maxConcurrency: 1'. This makes the execution log sequential and easy to read.
-    3.  Set 'debug: true. This includes a streamlined execution log in the response so you can see what happened.
+    2.  Set 'maxConcurrency: 1': This makes the execution log sequential and easy to read.
+    3.  Set 'debug: true': This includes a streamlined execution log in the response so you can see what happened.
     4.  Inspect the Result: This single-item test will either succeed, proving your tool calls and parameter logic are valid, or it will fail, giving you a specific, real-world error from the API.
-    5.  Use 'context.log()' calls in your scripts to check variables and data. These will appear in the debug log.
-    
+    5.  Use 'context.log()': Calls in your scripts to check variables and data. These will appear in the debug log.
     Only after you have confirmed the single-item test works should you run the script on your full list of 'itemIds'.
 
-The 'preProcessingScript' receives a 'context' object with:
-- context.parameters (object): The JavaScript object you passed to the 'parameters' input.
-- context.tools (object): A dictionary of all available tools (e.g., context.tools.search).
-- context.utils (object): Utilities like convertItemIdToContextPublication.
-- context.log(message) (function): A function to log progress.
-This script *must* return either:
-1. An array of item ID strings (string[]).
-2. An object: { itemIds: string[], preProcessingResult?: any }. The preProcessingResult object is passed to the 'map' and 'post' scripts as context.preProcessingResult. Any data or objects you add to preProcessingResult (e.g., preProcessingResult: { myData: [...] }) are passed as live JavaScript objects. You can access them directly (e.g., context.preProcessingResult.myData) with no JSON.parse() required.
+    ADVANCED RESILIENCE STRATEGIES
+    1.  Resilient Batch (Partial Failures): By default, the tool stops on the first error. For bulk operations where some failures are acceptable, set \`stopOnError: false\`. In \`postProcessingScript\`, inspect \`context.failures\` to report on failed items.
+    2.  Safe Execution (Try/Catch): Wrap risky tool calls (like 'getItem') in \`try...catch\` blocks within your \`mapScript\` to handle expected errors (like "Item Not Found") gracefully.
 
-The optional 'mapScript' receives a 'context' object with:
-- context.currentItemId (string): The ID of the item currently being processed.
-- context.parameters (object): The JavaScript object you passed to the 'parameters' input.
-- context.preProcessingResult (any): The live JavaScript object returned by the preProcessingScript (if any). No JSON.parse() is needed.
-- context.tools (object): A dictionary of all available tools (e.g., context.tools.getItem, context.tools.updateContent).
-- context.utils (object): Utilities like convertItemIdToContextPublication.
-- context.log(message) (function): A function to log progress.
+    SCRIPT CONTEXT DETAILS
+    The 'preProcessingScript' receives a 'context' object with:
+    - context.parameters: The JavaScript object passed to the 'parameters' input.
+    - context.tools: A dictionary of all available tools (e.g., context.tools.search).
+    - context.utils: Utilities like convertItemIdToContextPublication.
+    - context.log(message): A function to log progress.
+    Must return \`string[]\` (item IDs) or \`{ itemIds: string[], preProcessingResult?: any }\`.
 
-The optional 'postProcessingScript' receives a 'context' object with:
-- context.results (array): The read-only array of all results from the 'map' phase.
-- context.successes (array): A pre-filtered array of all successful results ({ status: 'success', ... }).
-- context.failures (array): A pre-filtered array of all failed results ({ status: 'error', ... }).
-- context.parameters (object): The JavaScript object you passed to the 'parameters' input.
-- context.preProcessingResult (any): The live JavaScript object returned by the preProcessingScript (if any). No JSON.parse() is needed.
-- context.tools (object): A dictionary of all available tools (e.g., context.tools.getItem, context.tools.updateContent).
-- context.utils (object): Utilities like convertItemIdToContextPublication.
-- context.log(message) (function): A function to log progress.
-This script's return value is the final output of the tool.
+    The 'mapScript' receives a 'context' object with:
+    - context.currentItemId: The ID of the item currently being processed.
+    - context.parameters: The JavaScript object passed to the 'parameters' input.
+    - context.preProcessingResult: The live JavaScript object returned by the preProcessingScript (if any). No JSON.parse() is needed.
+    - context.tools: A dictionary of all available tools.
+    - context.utils: Utilities.
+    - context.log(message): Logging function.
 
-All scripts must be 'async' and can 'await' tool calls.
-All tool calls (e.g., 'await context.tools.getItem(...)') are automatically authenticated.
+    The 'postProcessingScript' receives a 'context' object with:
+    - context.results: The read-only array of all results from the 'map' phase.
+    - context.successes: A pre-filtered array of all successful results.
+    - context.failures: A pre-filtered array of all failed results.
+    - context.parameters, context.preProcessingResult, context.tools, context.utils, context.log.
 
-Automatic JSON parsing
-All tools have their JSON string responses automatically parsed into JavaScript objects. You do not need to parse tool responses in a script.
+    The 'validationScript' (Phase 4) receives a 'context' object with:
+    - context.output: The final result returned by the postProcessingScript (or the default summary).
+    - context.results, context.successes, context.failures, context.parameters, context.preProcessingResult, context.tools, context.utils, context.log.
 
-// Example of correct usage inside toolOrchestrator:
-const item = await context.tools.getItem({ itemId: 'tcm:1-234-64' });
-if (item) {
-  context.log("Item title: " + item.Title + ", type: " + item.type);
-}
+    NOTES
+    - Automatic JSON parsing: All tools have their JSON string responses automatically parsed into JavaScript objects. You do not need to parse tool responses in a script.
+    - Script Limits: All scripts are sandboxed. Sync code max 5s, Async max 60s.
+    - Disallowed Tools: 'toolOrchestrator' and 'deleteItem' cannot be called recursively.
+    - Data Passing: DO NOT pass large JSON strings via parameters. Use 'preProcessingScript' to fetch data and pass via 'preProcessingResult'.
 
-To use the AI, call the 'generateContentFromPrompt' tool:
-const aiResult = await context.tools.generateContentFromPrompt({ prompt: '...' });
-const generatedText = aiResult.Content;
+    ### EXAMPLES
 
-Note that calling one of the following tools in a toolOrchestrator script is disallowed and will result in an error:
-    - toolOrchestrator,
-    - deleteItem
-
-Note on Script Limits:
-All scripts are sandboxed for security and stability.
-A single script is not allowed to run synchronous (blocking) code for more than 5 seconds,
-and no single script (including all its await calls) can run for more than 60 seconds.
-This is to prevent runaway scripts. For processing large numbers of items, always use the mapScript phase.
-
-Best practice for passing complex Data (like Excel/Search Results):
-DO NOT pass large JSON strings via the parameters object. This is inefficient and requires manual JSON.parse(), which can lead to errors.
-The correct method is to fetch the data inside the preProcessingScript and pass the parsed object to the other scripts via the context return value.
-
-Note: IDs (e.g., "tcm:5-100", "tcm:0-5-1") used in the following examples are fictional.
-NEVER hardcode these IDs in your scripts.
-You can use the 'preProcessingScript' (Phase 1) to dynamically discover real IDs based on the user's request (e.g., using 'search', 'getItemsInContainer', or 'getPublications').
-
-Examples:
-
-Example 1: Find and Replace in a Component Field (Map only)
-This script finds 'Old Product Name' and replaces it with 'New Product Name' in the 'TextField' of several components. It runs up to 10 in parallel.
-
+    **Example 1: Batch Search & Update (Setup -> Map)**
+    Finds all Components using a specific Schema and updates a field.
+    \`\`\`javascript
     const result = await tools.toolOrchestrator({
-        itemIds: ["tcm:5-100", "tcm:5-101", "tcm:5-102"],
-        parameters: {
-            "find": "Old Product Name",
-            "replace": "New Product Name"
-        },
-        maxConcurrency: 10,
-        mapScript: \`
-            // Get the item's content
-            // The JSON is automatically parsed. 'item' is the data object.
-            const item = await context.tools.getItem({ 
-                itemId: context.currentItemId,
-                includeProperties: ["Content.TextField"]
-            });
-            
-            // BEST PRACTICE: Check if the item exists
-            if (!item) {
-                context.log("Item not found or is inaccessible. Skipping.");
-                return; // Stop execution for this item
-            }
-
-            // Check and replace
-            let content = item.Content;
-            let updated = false;
-            if (content && content.TextField && content.TextField.includes(context.parameters.find)) {
-                const newValue = content.TextField.replace(
-                    new RegExp(context.parameters.find, 'g'), 
-                    context.parameters.replace
-                );
-                
-                // Note: We only need to pass the updated field. 
-                // The tool handles merging this with the rest of the content.
-                const updateResult = await context.tools.updateContent({
-                    itemId: context.currentItemId,
-                    content: {
-                        "TextField": newValue
-                    }
-                });
-                context.log(updateResult.Message);
-            } else {
-                context.log('No changes needed.');
-            }
-        \`
-    });
-
-Example 2: AI-Driven Content Rewrite (Map only)
-This script uses the AI to rewrite the 'Summary' field of several articles to have a 'professional' tone. It runs sequentially (maxConcurrency: 1).
-
-    const result = await tools.toolOrchestrator({
-        itemIds: ["tcm:5-200", "tcm:5-201"],
-        parameters: {
-            "tone": "professional and engaging"
-        },
-        maxConcurrency: 1,
-        mapScript: \`
-            // Get the item's content
-            // The JSON is automatically parsed.
-            const item = await context.tools.getItem({ 
-                itemId: context.currentItemId,
-                includeProperties: ["Content.Summary"]
-            });
-
-            // BEST PRACTICE: Check if the item exists
-            if (!item) {
-                context.log("Item not found or is inaccessible. Skipping.");
-                return; // Stop execution for this item
-            }
-            
-            const originalSummary = item.Content ? item.Content.Summary : null;
-            if (!originalSummary) {
-                context.log('Item has no Content or Summary field. Skipping.');
-                return;
-            }
-            context.log(\`Original summary: \${originalSummary.substring(0, 50)}...\`);
-
-            // Use AI to rewrite the summary
-            const aiPrompt = \`Rewrite the following summary to have a \${context.parameters.tone} tone:\\n\\n\${originalSummary}\`;
-            // generateContentFromPrompt returns a simple text wrapper
-            const aiResult = await context.tools.generateContentFromPrompt({ prompt: aiPrompt });
-            const newSummary = aiResult.content[0].text;
-            context.log(\`New summary: \${newSummary.substring(0, 50)}...\`);
-
-            // Update the component
-            // We pass ONLY the 'Summary' field. The tool merges it.
-            await context.tools.updateContent({
-                itemId: context.currentItemId,
-                content: { "Summary": newSummary }
-            });
-            context.log('Successfully updated with AI-generated content.');
-        \`
-    });
-
-Example 3: Report on Component Schema and Author (Map only)
-This script retrieves the Schema and Author (from metadata) for a list of components and returns this data.
-
-    const result = await tools.toolOrchestrator({
-        itemIds: ["tcm:5-300", "tcm:5-301"],
-        includeScriptResults: true, // <-- Set to true to get the return values
-        mapScript: \`
-            // Get the item's data
-            // The JSON is automatically parsed.
-            const item = await context.tools.getItem({ 
-                itemId: context.currentItemId,
-                includeProperties: ["Schema.Title", "Metadata.author", "Info.LastModifiedDate"]
-            });
-
-            // BEST PRACTICE: Check if the item exists
-                if (!item) {
-                    context.log("Item not found or is inaccessible. Skipping.");
-                    return null; // Return null to skip
-                }
-
-            const schemaTitle = item.Schema ? item.Schema.Title : "N/A";
-            const author = item.Metadata ? item.Metadata.author : "N/A";
-            const modified = item.Info ? item.Info.LastModifiedDate : "N/A";
-
-            context.log(\`Item \${item.Id} uses Schema '\${schemaTitle}' and author is '\${author}'.\`);
-
-            // Return a custom object. This will be in the 'Script Results' section.
-            return { 
-                schema: schemaTitle, 
-                author: author,
-                lastModified: modified
-            };
-        \`
-    });
-
-Example 4: Find Component with the Most Versions (Map and Reduce)
-This script first gets the version count for each component, then the post-processing script finds the one with the highest count. This completes the entire task in a single tool call.
-
-    const result = await tools.toolOrchestrator({
-        itemIds: ["tcm:5-100", "tcm:5-101", "tcm:5-102"],
-        mapScript: \`
-            // Phase 2 (Map): Get version count for EACH item.
-            // This script runs for every single item in the 'itemIds' array.
-
-            // The JSON is automatically parsed.
-            const history = await context.tools.getItemHistory({ itemId: context.currentItemId });
-            
-            // Return an object. This will be collected into an array for the next phase.
-            return {
-                versionCount: history.length,
-                title: history[0].Title // Get title from the first version entry
-            };
-        \`,
-        postProcessingScript: \`
-            // Phase 3 (Reduce): Find the single best item from ALL results.
-            context.log(\`Processing \${context.results.length} total results (\${context.successes.length} success, \${context.failures.length} fail).\`);
-
-            if (context.failures.length > 0) {
-                context.log(\`Warning: \${context.failures.length} items failed to process.\`);
-                // You could even log the specific errors
-                // for (const failure of context.failures) {
-                //    context.log(\`  - \${failure.itemId}: \${failure.error}\`);
-                // }
-            }
-
-            // 3. Check if there are ANY successes to process
-            if (context.successes.length === 0) {
-                context.log("No items were processed successfully.");
-                
-                // Return a meaningful error object instead of a default value
-                return {
-                    message: "Could not determine component with most versions: All item operations failed.",
-                    totalItems: context.results.length,
-                    successCount: 0,
-                    failureCount: context.failures.length,
-                    failures: context.failures.map(f => ({ item: f.itemId, error: f.error }))
-                };
-            }
-            
-            // 4. If we are here, we have at least one success.
-            //    We can now safely run the 'reduce' logic.
-            context.log(\`Finding max versions from \${context.successes.length} successful items.\`);
-
-            const componentWithMostVersions = context.successes
-                .reduce((max, current) => {
-                    // Get counts, with a fallback for safety
-                    const currentVersions = current.result?.versionCount || 0;
-                    const maxVersions = max.result?.versionCount || 0;
-                    
-                    if (currentVersions > maxVersions) {
-                        return current; // This item is the new max
-                    } else {
-                        return max; // Keep the existing max
-                    }
-                }); // No initial value is needed, since we know the array is not empty.
-
-            // The return value of this script is the final output of the tool.
-            return componentWithMostVersions;
-            \`
-    });
-
-Example 5: Find and Process Items from a Search Result (Setup and Map)
-This script uses the 'setup' phase to find all Components based on a specific Schema, and then the 'map' phase to update a field in each one.
-
-    const result = await tools.toolOrchestrator({
-        parameters: {
-            "schemaId": "tcm:5-20-8", // The Schema to search for
-            "newValue": "This content was bulk updated."
-        },
+        parameters: { "schemaId": "tcm:5-20-8", "newValue": "Updated Value" },
         preProcessingScript: \`
-            // Phase 1 (Setup): Find all components to process.
-            context.log(\`Searching for Components based on Schema: \${context.parameters.schemaId}\`);
-
-            // WARNING: tools.search() will NOT find changes that have not been checked-in, or items that do not yet have a major version.
-            // Therefore, when searching for versioned items (e.g., Components, Pages, Schemas), use the less efficient
-            // context.tools.getItemsInContainer() instead to guarantee no relevant items are missed.
-
-            // The JSON is automatically parsed. 'items' is an array of objects { Id, Title, type }.
-            // Note: search returns ONLY Id and Title in the find-then-fetch pattern.
+            context.log('Phase 1: Finding items...');
             const items = await context.tools.search({
-                searchQuery: {
-                    ItemTypes: ["Component"],
+                searchQuery: { 
+                    ItemTypes: ["Component"], 
                     BasedOnSchemas: [{ schemaUri: context.parameters.schemaId }],
-                    SearchIn: "tcm:0-5-1" // Search in '200 Example Content'
-                },
-                resultLimit: 500
+                    SearchIn: "tcm:0-5-1" 
+                }
             });
-
-            // The pre-script MUST return an array of strings (item IDs)
-            const itemIds = items.map(item => item.Id);
-            
-            context.log(\`Found \${itemIds.length} items to process.\`);
-            return itemIds;
+            return items.map(i => i.Id);
         \`,
         mapScript: \`
-            // Phase 2 (Map): Update the 'TextField' for EACH item.
-            // NOTE: updateContent automatically handles checking out, updating, and checking in.
-            // Partial updates are supported, so we do NOT need to fetch the existing content first.
+            // Phase 2: Update each item
             await context.tools.updateContent({
                 itemId: context.currentItemId,
-                content: {
-                    "TextField": context.parameters.newValue
-                }
-            });
-            context.log("Content updated.");
-        \`
-    });
-
-Example 6: Comprehensive "Stale Content" Report (Checks all Dependencies)
-This script finds all Pages in a Publication and checks if they OR any of their dependent items (components, images, etc.) have been modified since the last publish date.
-This example strictly follows the find-then-fetch pattern.
-
-    const result = await tools.toolOrchestrator({
-        preProcessingScript: \`
-            // Phase 1 (Setup): Find ALL pages in the Publication.
-            // We use getItemsInContainer because tools.search() will
-            // NOT return pages that do not yet have a major version.
-            context.log('Finding ALL pages in Publication tcm:0-5-1...');
-            
-            const allItems = await context.tools.getItemsInContainer({
-                containerId: "tcm:0-5-1",
-                itemTypes: ["Page"],
-                recursive: true
-            });
-
-            const itemIds = allItems.map(item => item.Id);
-            context.log(\`Found \${itemIds.length} total Pages to check.\`);
-            return itemIds;
-        \`,
-        mapScript: \`
-            context.log(\`Checking Page: \${context.currentItemId}\`);
-            
-            // 1. Get Page's own info (fetch detailed props)
-            const item = await context.tools.getItem({ 
-                itemId: context.currentItemId,
-                includeProperties: ["Title", "VersionInfo.RevisionDate"]
-            });
-
-            if (!item || !item.VersionInfo) {
-                context.log("Page not found or lacks VersionInfo. Skipping.");
-                return null;
-            }
-            context.log(\`  Page Title: \${item.Title}\`);
-
-            // 2. Get Publish info for the Page
-            // getPublishInfo returns status objects { TargetType: { IdRef, Title }, PublishedAt, ... }
-            const publishInfos = await context.tools.getPublishInfo({ 
-                itemId: context.currentItemId
-            });
-
-            if (!publishInfos || publishInfos.length === 0) {
-                context.log("  No publish info found. Skipping page.");
-                return null; // Page has never been published
-            }
-
-            // 3. Get *all* dependencies (direct and indirect)
-            context.log('  Fetching dependency graph...');
-            
-            // getDependencyGraph returns a flat array of { Id, Title, type } only.
-            let dependencyIds = [];
-            try {
-                const graphItems = await context.tools.getDependencyGraph({
-                    itemId: context.currentItemId,
-                    direction: "Uses"
-                });
-                
-                if (graphItems && graphItems.length > 0) {
-                    dependencyIds = graphItems.map(g => g.Id);
-                    context.log(\`  Found \${dependencyIds.length} total dependencies.\`);
-                } else {
-                    context.log(\`  No dependencies found.\`);
-                    dependencyIds = [];
-                }
-            } catch (e) {
-                context.log(\`  ERROR: Failed to get dependency graph: \${e.message}\`);
-                return null;
-            }
-
-            // 4. Fetch details for dependencies to find LATEST modification date.
-            // We must use bulkReadItems because getDependencyGraph does not return VersionInfo.
-            let latestModificationDate = new Date(item.VersionInfo.RevisionDate);
-            let latestModifiedItem = { 
-                title: \`\${item.Title} (Page)\`, 
-                date: latestModificationDate 
-            };
-
-            if (dependencyIds.length > 0) {
-                // Fetch the actual VersionInfo for all dependencies in one batch
-                const dependencies = await context.tools.bulkReadItems({
-                    itemIds: dependencyIds,
-                    includeProperties: ["VersionInfo.RevisionDate", "Title"]
-                });
-                
-                // bulkReadItems returns a dictionary object
-                for (const depId in dependencies) {
-                    const comp = dependencies[depId];
-                    if (comp && comp.VersionInfo && comp.VersionInfo.RevisionDate) {
-                        const compRevisionDate = new Date(comp.VersionInfo.RevisionDate);
-                        if (compRevisionDate > latestModificationDate) {
-                            latestModificationDate = compRevisionDate;
-                            latestModifiedItem = { 
-                                title: \`\${comp.Title} (\${comp.Id})\`, 
-                                date: latestModificationDate 
-                            };
-                        }
-                    }
-                }
-            }
-            
-            context.log(\`  Latest modification: \${latestModificationDate.toISOString()} from "\${latestModifiedItem.title}"\`);
-            
-            // 5. Loop through each target and compare dates
-            const staleOnTargets = {};
-            for (const info of publishInfos) {
-                // Check if published
-                if (!info || !info.PublishedAt || !info.TargetType || !info.TargetType.IdRef) {
-                    continue;
-                }
-                
-                const targetId = info.TargetType.IdRef;
-                const publishedAt = new Date(info.PublishedAt);
-                context.log(\`  -> Checking Target: "\${targetId}", Published: \${publishedAt.toISOString()}\`);
-
-                if (latestModificationDate > publishedAt) {
-                    context.log('     Comparison: TRUE (Stale)');
-                    staleOnTargets[targetId] = {
-                        reason: 'Content modified',
-                        staleItem: latestModifiedItem.title,
-                        modifiedDate: latestModificationDate.toISOString(),
-                        publishedDate: publishedAt.toISOString()
-                    };
-                } else {
-                    context.log('     Comparison: FALSE (Up to date)');
-                }
-            }
-            
-            // 6. Return a result ONLY if any target was found to be stale
-            if (Object.keys(staleOnTargets).length > 0) {
-                return {
-                    id: context.currentItemId,
-                    title: item.Title,
-                    staleTargets: staleOnTargets
-                };
-            }
-            
-            return null; // Not stale on any target
-        \`,
-        postProcessingScript: \`
-            context.log(\`Aggregating \${context.results.length} results.\`);
-            // Use the pre-filtered 'successes' array
-            const modifiedItems = context.successes
-                .filter(r => r.result !== null)
-                .map(r => r.result);
-
-            return {
-                totalChecked: context.results.length,
-                totalStalePages: modifiedItems.length,
-                stalePages: modifiedItems
-            };
-        \`
-    });
-
-Example 7: Robust Batch Operation with Error Reporting (stopOnError: false)
-This script attempts to delete a list of items. It uses 'stopOnError: false' to ensure it tries all items, even if some fail. The post-script then provides a summary of successes and failures.
-
-    const result = await tools.toolOrchestrator({
-        itemIds: ["tcm:5-400", "tcm:5-9999", "tcm:5-401"], // Assume tcm:5-9999 does not exist
-        stopOnError: false, // <-- Key hint: Continue processing even if one fails
-        mapScript: \`
-            // Phase 2 (Map): Attempt to delete one item.
-            // If 'deleteItem' fails, the orchestrator will automatically catch
-            // the error, log it, and add a { status: "error" } to the results.
-            context.log(\`Attempting to delete \${context.currentItemId}...\`);
-            await context.tools.deleteItem({ itemId: context.currentItemId });
-            return "Successfully deleted."; 
-        \`,
-        postProcessingScript: \`
-            // Phase 3 (Reduce): Summarize successes and failures.
-            const successCount = context.successes.length;
-            const failureCount = context.failures.length;
-
-            context.log(\`Batch complete with \${successCount} successes and \${failureCount} failures.\`);
-
-            // Collect details for the failed items
-            const failedItems = context.failures
-                .map(r => ({ 
-                    item: r.itemId, 
-                    error: r.error // 'error' is automatically populated by the orchestrator
-                }));
-
-            return {
-                message: \`Batch delete complete. \${successCount} succeeded, \${failureCount} failed.\`,
-                successCount: successCount,
-                failureCount: failureCount,
-                failedItems: failedItems
-            };
-        \`
-    });
-
-Example 8: Report Pages Published to Staging but Not Live
-This script finds all Pages in a Publication, efficiently gets the required Target Type IDs once in the setup phase, and then checks the publish status of each page.
-
-    const result = await tools.toolOrchestrator({
-        parameters: {
-            "publicationTitle": "400 Example Site",
-            "stagingTargetTitle": "DXA Staging",
-            "liveTargetTitle": "DXA Live"
-        },
-        // Phase 1 (Setup): Find pages and Target Type IDs ONCE
-        preProcessingScript: \`
-            context.log(\`Setup: Finding Pub ID for '\${context.parameters.publicationTitle}'...\`);
-            const publications = await context.tools.getPublications();
-            const publication = publications.find(p => p.Title === context.parameters.publicationTitle);
-            if (!publication) throw new Error(\`Publication '\${context.parameters.publicationTitle}' not found.\`);
-            context.log(\`Pub ID: \${publication.Id}\`);
-
-            context.log('Setup: Finding Target Type IDs...');
-            const targetTypes = await context.tools.getTargetTypes({});
-            const stagingTarget = targetTypes.find(t => t.Title === context.parameters.stagingTargetTitle);
-            const liveTarget = targetTypes.find(t => t.Title === context.parameters.liveTargetTitle);
-            if (!stagingTarget) throw new Error(\`Target Type '\${context.parameters.stagingTargetTitle}' not found.\`);
-            if (!liveTarget) throw new Error(\`Target Type '\${context.parameters.liveTargetTitle}' not found.\`);
-            context.log(\`Staging ID: \${stagingTarget.Id}, Live ID: \${liveTarget.Id}\`);
-
-            context.log('Setup: Finding all Pages in Publication...');
-            const pages = await context.tools.getItemsInContainer({
-                containerId: publication.Id,
-                itemTypes: ["Page"],
-                recursive: true
-            });
-            const pageIds = pages.map(p => p.Id);
-            context.log(\`Found \${pageIds.length} Pages.\`);
-
-            // Return object containing itemIds and the target IDs for the map script
-            return {
-                itemIds: pageIds,
-                preProcessingResult: { 
-                    stagingTargetId: stagingTarget.Id,
-                    liveTargetId: liveTarget.Id
-                }
-            };
-        \`,
-        // Phase 2 (Map): Check publish status using IDs from preProcessingResult
-        mapScript: \`
-            const pageId = context.currentItemId;
-            context.log(\`Map: Checking publish info for Page \${pageId}...\`);
-
-            // Access Target IDs passed from the setup phase's 'preProcessingResult' object
-            const stagingId = context.preProcessingResult.stagingTargetId;
-            const liveId = context.preProcessingResult.liveTargetId;
-
-            // getPublishInfo returns array of { TargetType: { IdRef: ... }, PublishedAt: ... }
-            const publishInfo = await context.tools.getPublishInfo({
-                itemId: pageId
-            });
-
-            // Check if published to Staging (using IdRef from Link object)
-            const isPublishedToStaging = publishInfo.some(info => info.TargetType && info.TargetType.IdRef === stagingId);
-            // Check if published to Live
-            const isPublishedToLive = publishInfo.some(info => info.TargetType && info.TargetType.IdRef === liveId);
-            context.log(\`  Staging: \${isPublishedToStaging}, Live: \${isPublishedToLive}\`);
-
-            // If published to Staging BUT NOT to Live, return details
-            if (isPublishedToStaging && !isPublishedToLive) {
-                // Fetch Title for the report (discovery tool doesn't guarantee it)
-                const page = await context.tools.getItem({ itemId: pageId, includeProperties: ["Title"] });
-                return { title: page.Title, id: page.Id };
-            }
-
-            return null;
-        \`,
-        // Phase 3 (Reduce): Format the results
-        postProcessingScript: \`
-            context.log('Reduce: Filtering and formatting results...');
-            const pages = context.successes
-                .filter(r => r.result !== null)
-                .map(r => r.result);
-            context.log(\`Found \${pages.length} pages matching criteria.\`);
-
-            if (pages.length === 0) {
-                return \`No pages found matching the criteria.\`;
-            }
-
-            let report = \`Found \${pages.length} pages published to '\${context.parameters.stagingTargetTitle}' but not '\${context.parameters.liveTargetTitle}':\\n\`;
-            for (const page of pages) {
-                report += \`- \${page.title} (\${page.id})\\n\`;
-            }
-            return report.trim();
-        \`
-    });
-
-Example 9: Create a 'Diamond' BluePrint Hierarchy (Declarative Setup)
-This script uses the 'preProcessingScript' to call the dedicated 'createBluePrintHierarchy' tool.
-
-    const result = await tools.toolOrchestrator({
-        preProcessingScript: \`
-            context.log("Starting BluePrint Setup...");
-
-            const hierarchy = {
-                nodes: [
-                    // Level 1
-                    { id: "schema", data: { title: "100 Schema Master", publicationType: "Content" } },
-                    // Level 2 (Split)
-                    { id: "design", data: { title: "200 Design Master", publicationType: "Content" } },
-                    { id: "global", data: { title: "210 Global Content", publicationType: "Content" } },
-                    // Level 3 (Merge)
-                    { id: "master", data: { title: "300 Master Content", publicationType: "Content" } },
-                    // Level 4 (Web)
-                    { id: "web", data: { title: "400 Website Master", publicationType: "Web", publicationUrl: "/" } }
-                ],
-                edges: [
-                    { source: "ROOT", target: "schema" },
-                    { source: "schema", target: "design" },
-                    { source: "schema", target: "global" },
-                    { source: "design", target: "master" },
-                    { source: "global", target: "master" },
-                    { source: "master", target: "web" }
-                ]
-            };
-
-            const result = await context.tools.createBluePrintHierarchy({
-                rootPublicationJson: JSON.stringify({
-                    title: "000 Root",
-                    key: "000-Root",
-                    locale: "en-US"
-                }),
-                rootStructureGroupTitle: "Root",
-                hierarchyJson: JSON.stringify(hierarchy)
-            });
-
-            context.log("Hierarchy created. ID Map returned.");
-            
-            return {
-                itemIds: [], 
-                preProcessingResult: result.content[0].text 
-            };
-        \`,
-        postProcessingScript: \`
-            const data = JSON.parse(context.preProcessingResult);
-            return {
-                message: "Hierarchy Setup Complete",
-                idMap: data.idMap
-            };
-        \`
-    });
-
-Example 10: Generate "Missing Alt Text" Report for Images
-    This script finds all image components in a Publication, then "fetches" the full data for each one
-    to inspect its MimeType and Metadata fields for alt text.
-
-    const result = await tools.toolOrchestrator({
-        preProcessingScript: \`
-            // Phase 1 (Setup): Find ALL components in the Publication.
-            context.log('Finding ALL components in Publication tcm:0-5-1...');
-            const allItems = await context.tools.getItemsInContainer({
-                containerId: "tcm:0-5-1",
-                itemTypes: ["Component"],
-                recursive: true
-            });
-            const itemIds = allItems.map(item => item.Id);
-            context.log(\`Found \${itemIds.length} total Components to check.\`);
-            return itemIds;
-        \`,
-        mapScript: \`
-            // Phase 2 (Map): Fetch and inspect EACH component.
-            const itemId = context.currentItemId;
-            context.log(\`Checking: \${itemId}\`);
-            
-            // 1. Fetch the full item data, including Metadata and BinaryContent
-            const item = await context.tools.getItem({ 
-                itemId: itemId,
-                // We MUST include these properties to check them
-                includeProperties: ["Title", "ComponentType", "BinaryContent.MimeType", "Metadata"]
-            });
-
-            // 2. Filter for Images
-            if (!item || item.ComponentType !== 'Multimedia') {
-                context.log("  -> Not a Multimedia Component. Skipping.");
-                return null;
-            }
-            const mimeType = item.BinaryContent ? item.BinaryContent.MimeType : '';
-            const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/bmp', 'image/webp'];
-            if (!allowedTypes.includes(mimeType)) {
-                context.log(\`  -> Not an image (MimeType: \${mimeType}). Skipping.\`);
-                return null;
-            }
-
-            // 3. Inspect Metadata for 'alt' or 'description'
-            const metadata = item.Metadata;
-            if (!metadata) {
-                context.log("  -> Is image, but has NO Metadata block. Adding to report.");
-                return { id: item.Id, title: item.Title, reason: "Missing Metadata block" };
-            }
-
-            // Find a field with 'alt' or 'description' in its name
-            const altFieldKey = Object.keys(metadata).find(key => 
-                key.toLowerCase().includes('alt') || key.toLowerCase().includes('description')
-            );
-
-            if (!altFieldKey) {
-                context.log("  -> Is image, but has NO field matching 'alt' or 'description'. Adding to report.");
-                return { id: item.Id, title: item.Title, reason: "No 'alt' or 'description' field" };
-            }
-
-            // Check if the found field is empty
-            const altValue = metadata[altFieldKey];
-            if (!altValue || (typeof altValue === 'string' && altValue.trim() === '')) {
-                context.log(\`  -> Is image, has field '\${altFieldKey}', but it is EMPTY. Adding to report.\`);
-                return { id: item.Id, title: item.Title, reason: \`Empty '\${altFieldKey}' field\` };
-            }
-
-            context.log(\`  -> OK: Found '\${altFieldKey}' with value.\`);
-            return null; // This item is compliant
-        \`,
-        postProcessingScript: \`
-            // Phase 3 (Reduce): Collect all non-compliant items
-            context.log('Aggregating report...');
-            const nonCompliantItems = context.successes
-                .filter(r => r.result !== null)
-                .map(r => r.result);
-
-            return {
-                totalChecked: context.results.length,
-                totalNonCompliant: nonCompliantItems.length,
-                itemsToFix: nonCompliantItems
-            };
-        \`
-    });
-
-Example 11: Find Large, Unused Multimedia Components
-    This script finds all Components, filters them by size, and then checks if they are used by any *published* Page.
-
-    const result = await tools.toolOrchestrator({
-        parameters: {
-            "minFileSizeMB": 10
-        },
-        preProcessingScript: \`
-            // Phase 1 (Setup): Find ALL components in the Publication.
-            context.log('Finding ALL components in Publication tcm:0-5-1...');
-            const allItems = await context.tools.getItemsInContainer({
-                containerId: "tcm:0-5-1",
-                itemTypes: ["Component"],
-                recursive: true
-            });
-            const itemIds = allItems.map(item => item.Id);
-            context.log(\`Found \${itemIds.length} total Components to check.\`);
-            return itemIds;
-        \`,
-        mapScript: \`
-            const itemId = context.currentItemId;
-            const minBytes = context.parameters.minFileSizeMB * 1024 * 1024;
-
-            // 1. Fetch item data, including BinaryContent for FileSize
-            const item = await context.tools.getItem({ 
-                itemId: itemId,
-                includeProperties: ["Title", "ComponentType", "BinaryContent.Size"]
-            });
-
-            // 2. Filter for large Multimedia Components
-            if (!item || item.ComponentType !== 'Multimedia' || !item.BinaryContent) {
-                return null; // Not a multimedia component
-            }
-            if (item.BinaryContent.Size < minBytes) {
-                return null; // Too small
-            }
-            context.log(\`Found large file: \${item.Title} (\${item.BinaryContent.Size} bytes)\`);
-
-            // 3. Find all Pages that use this component
-            // getDependencyGraph returns a flat array of Ids and Titles.
-            let graphItems = [];
-            try {
-                graphItems = await context.tools.getDependencyGraph({
-                    itemId: itemId,
-                    direction: "UsedBy",
-                    rloItemTypes: ["Page"] // Only care about Page usages
-                });
-            } catch (e) {
-                context.log(\`Error getting dependencies: \${e.message}\`);
-                return null; 
-            }
-
-            const pageIds = graphItems.map(item => item.Id);
-            
-            if (pageIds.length === 0) {
-                context.log('  -> Unused by any Page. Adding to report.');
-                return { id: item.Id, title: item.Title, size: item.BinaryContent.Size, reason: "Unused by any Page" };
-            }
-            context.log(\`  -> Used by \${pageIds.length} Page(s). Checking if any are published...\`);
-
-            // 4. Check if ANY of the using Pages are published
-            for (const pageId of pageIds) {
-                const publishInfo = await context.tools.getPublishInfo({ 
-                    itemId: pageId
-                });
-                
-                if (publishInfo && publishInfo.length > 0) {
-                    // This component is used by at least one published page. It's safe.
-                    context.log(\`  -> Used by published Page \${pageId}. Skipping.\`);
-                    return null;
-                }
-            }
-            
-            // 5. If loop finishes, it's used, but only by UNPUBLISHED pages
-            context.log('  -> Used only by UNPUBLISHED pages. Adding to report.');
-            return { id: item.Id, title: item.Title, size: item.BinaryContent.Size, reason: "Used only by unpublished Pages" };
-        \`,
-        postProcessingScript: \`
-            // Phase 3 (Reduce): Collect all items to delete
-            context.log('Aggregating report...');
-            const itemsToReport = context.successes
-                .filter(r => r.result !== null)
-                .map(r => r.result);
-
-            return {
-                totalChecked: context.results.length,
-                totalFilesToReview: itemsToReport.length,
-                filesToReview: itemsToReport
-            };
-        \`
-    });
-
-Example 12: Robust Relational Import (Single-Call Strategy)
-This example demonstrates the PREFERRED Single-Call strategy for importing relational data (e.g., Articles & Pages).
-It uses 'preProcessingScript' to load the data (from Excel or JSON) and create the dependencies (Articles) first.
-Then, it uses 'mapScript' to create the consumers (Pages) in parallel, referring to the dependency map from the setup phase.
-Finally, it uses 'postProcessingScript' to AUDIT the results (validating a sample item).
-
-    const result = await tools.toolOrchestrator({
-        parameters: {
-            // In a real scenario, this data would come from context.tools.readExcelFileFromMultimediaComponent()
-            // inside the preProcessingScript.
-            "prerequisites": {
-                "articleSchemaId": "tcm:5-3574-8",
-                "componentsFolderId": "tcm:5-637-2",
-                "tagNameKeywordIdMap": { "AI": "tcm:5-3532-1024", "Future": "tcm:5-3532-1025" },
-                "articlesSheet": [ { "uniqueKey": "ai-001", "headline": "The Future of AI", "bodyText": "...", "tags": "AI;Future" } ],
-                "authorsSheet": [ { "articleKey": "ai-001", "firstName": "Jane", "lastName": "Doe", "bio": "..." } ],
-                "pageMapSheet": [ { "pageTitle": "Home", "fileName": "index", "articleKey": "ai-001", "regionName": "Main", "presentationType": "Hero" } ],
-                "presentationTypeToTemplateIdMap": { "Hero": "tcm:5-3576-32" },
-                "pageTemplateId": "tcm:5-3581-128",
-                "structureGroupId": "tcm:5-638-4"
-            }
-        },
-        // Phase 1 (Setup): Create dependencies and prepare the "Map" phase
-        preProcessingScript: \`
-            context.log("Phase 1: Setup & Dependency Creation");
-            const { 
-                articlesSheet, authorsSheet, tagNameKeywordIdMap, 
-                articleSchemaId, componentsFolderId 
-            } = context.parameters.prerequisites;
-
-            const articleKeyToComponentIdMap = {};
-
-            // Loop through articles and create them (or mock creation)
-            // Ideally, we do this here to ensure dependencies exist before pages are created.
-            for (const article of articlesSheet) {
-                 context.log(\`Creating dependency Component for: \${article.uniqueKey}\`);
-                 
-                 // In a real scenario, call await context.tools.createComponent(...)
-                 // For this example, we simulate a successful creation:
-                 const mockId = \`tcm:5-\${Math.floor(Math.random() * 10000)}-16\`; 
-                 articleKeyToComponentIdMap[article.uniqueKey] = mockId;
-            }
-
-            // Identify the unique Pages we need to create in the Map phase
-            const pageMap = context.parameters.prerequisites.pageMapSheet;
-            const uniquePageTitles = [...new Set(pageMap.map(p => p.pageTitle))];
-            context.log(\`Setup complete. \${uniquePageTitles.length} Pages to create.\`);
-
-            // Pass the itemIds (Page Titles) and the map of Created IDs to the next phase
-            return {
-                itemIds: uniquePageTitles,
-                preProcessingResult: {
-                    articleKeyToComponentIdMap,
-                    ...context.parameters.prerequisites
-                }
-            };
-        \`,
-        // Phase 2 (Map): Create the consumers (Pages) using the map
-        mapScript: \`
-            const pageTitle = context.currentItemId;
-            context.log(\`Creating Page: \${pageTitle}\`);
-            
-            const {
-                pageMapSheet,
-                articleKeyToComponentIdMap,
-                presentationTypeToTemplateIdMap,
-                pageTemplateId,
-                structureGroupId
-            } = context.preProcessingResult;
-
-            // 1. Find all content rows for this page
-            const pageEntries = pageMapSheet.filter(row => row.pageTitle === pageTitle);
-            if (pageEntries.length === 0) throw new Error(\`No data for page \${pageTitle}\`);
-
-            const fileName = pageEntries[0].fileName;
-            const regions = {};
-
-            // 2. Assemble Component Presentations
-            for (const entry of pageEntries) {
-                // Critical: Look up the component ID created in Phase 1
-                const componentId = articleKeyToComponentIdMap[entry.articleKey];
-                
-                if (!componentId) {
-                    // Critical Principle: THROW ERROR, do not just log warning
-                    throw new Error(\`Dependency missing: Component not found for key \${entry.articleKey}\`);
-                }
-
-                if (!regions[entry.regionName]) regions[entry.regionName] = [];
-                
-                regions[entry.regionName].push({
-                    "type": "ComponentPresentation",
-                    "Component": { "IdRef": componentId },
-                    "ComponentTemplate": { "IdRef": presentationTypeToTemplateIdMap[entry.presentationType] }
-                });
-            }
-
-            // 3. Create the Page (Simulated)
-            // await context.tools.createPage({ ... });
-            
-            // Return data for the audit/report
-            return { pageTitle, fileName, componentCount: pageEntries.length, createdId: "tcm:5-999-64" };
-        \`,
-        // Phase 3 (Reduce): Audit and Report
-        postProcessingScript: \`
-            context.log("Phase 3: Audit and Report");
-            
-            const successes = context.successes.map(s => s.result);
-            context.log(\`Successfully created \${successes.length} pages.\`);
-
-            // --- MANDATORY AUDIT STEP ---
-            // Don't just assume success. Fetch one item to verify it exists and has content.
-            if (successes.length > 0) {
-                const samplePage = successes[0];
-                context.log(\`AUDIT: Verifying page '\${samplePage.pageTitle}' (\${samplePage.createdId})...\`);
-                
-                // In real scenario: const check = await context.tools.getItem({ itemId: samplePage.createdId });
-                // if (!check) throw new Error("Audit Failed: Item not found.");
-                context.log("AUDIT PASSED: Page exists.");
-            }
-            // ----------------------------
-
-            return {
-                message: "Import Complete",
-                createdPages: successes,
-                failedPages: context.failures.map(f => ({ page: f.itemId, error: f.error }))
-            };
-        \`
-    });
-
-Example 13: Advanced Debugging with \`try...catch\`
-This script shows how to safely test logic. It finds items, but one (tcm:5-9999) is intentionally non-existent.
-It uses \`stopOnError: false\` and a \`try...catch\` block to handle the expected failure gracefully.
-This script would first be run by following the "Debugging Strategies" (test on one item), then run on the full list.
-
-    const result = await tools.toolOrchestrator({
-        itemIds: ["tcm:5-100", "tcm:5-9999", "tcm:5-101"], // tcm:5-9999 does not exist
-        parameters: { "newValue": "New Value" },
-        // --- DEBUGGING SETUP ---
-        stopOnError: false,     // <-- 1. Continue if one item fails
-        maxConcurrency: 1,      // <-- 2. Make log sequential
-        debug: true,            // <-- 3. Get the full log
-        // ---
-        mapScript: \`
-            const itemId = context.currentItemId;
-            context.log(\`Processing \${itemId}...\`);
-            let item;
-
-            // 1. ADVANCED: Use try...catch to handle tool errors
-            try {
-                // Note: We only need to fetch 'Title' for logging. 
-                // We do NOT need to fetch 'Content.TextField' to update it, because 
-                // updateContent supports partial updates.
-                item = await context.tools.getItem({ 
-                    itemId: itemId,
-                    includeProperties: ["Title"]
-                });
-                
-                if (!item) {
-                    context.log("Item was null or inaccessible.");
-                    return { error: "Item was null or inaccessible" };
-                }
-
-            } catch (e) {
-                context.log(\`Failed to get item: \${e.message}\`);
-                return { error: e.message };
-            }
-
-            // 2. Logic: If we are here, 'item' is valid
-            context.log(\`Got item: \${item.Title}. Updating content...\`);
-            
-            // 3. Update
-            // The tool handles the deep merge. We just send the field we want to change.
-            await context.tools.updateContent({
-                itemId: itemId,
                 content: { "TextField": context.parameters.newValue }
             });
-            
-            context.log("Update logic complete.");
-            return { updated: true, title: item.Title };
+            context.log("Updated.");
+        \`
+    });
+    \`\`\`
+
+    **Example 2: Data Aggregation (Map -> Reduce)**
+    Finds the Component with the most versions in a provided list.
+    \`\`\`javascript
+    const result = await tools.toolOrchestrator({
+        itemIds: ["tcm:5-100", "tcm:5-101", "tcm:5-102"],
+        mapScript: \`
+            const history = await context.tools.getItemHistory({ itemId: context.currentItemId });
+            return { id: context.currentItemId, count: history.length };
         \`,
         postProcessingScript: \`
-            // Phase 3: We can now report on our custom return objects
-            context.log("Aggregating custom results...");
+            // Find max in context.successes
+            if (context.successes.length === 0) throw new Error("No items processed.");
+            return context.successes.reduce((max, curr) => 
+                (curr.result.count > max.result.count) ? curr : max
+            ).result;
+        \`
+    });
+    \`\`\`
 
-            // We must now check 'r.result.error'
-            const mySuccesses = context.successes
-                .filter(r => r.result && !r.result.error)
-                .map(r => r.result);
-                
-            // Combine failures from the orchestrator (status: 'error')
-            // with our own *handled* errors (status: 'success', result: {error: ...})
-            const myFailures = context.results
-                .filter(r => r.status === 'error' || (r.result && r.result.error))
-                .map(r => ({
-                    itemId: r.itemId,
-                    error: r.result?.error || r.error
-                }));
-
-            return {
-                message: "Batch complete. See report.",
-                itemsUpdated: mySuccesses.filter(r => r.updated).length,
-                itemsSkipped: mySuccesses.filter(r => !r.updated).length,
-                itemsFailed: myFailures.length,
-                failures: myFailures
+    **Example 3: Complex Analysis / Stale Content Report (Find-Then-Fetch)**
+    Finds Pages, checks their Publish status, and deep-inspects dependencies to find stale content.
+    \`\`\`javascript
+    const result = await tools.toolOrchestrator({
+        preProcessingScript: \`
+            const items = await context.tools.getItemsInContainer({ 
+                containerId: "tcm:0-5-1", itemTypes: ["Page"], recursive: true 
+            });
+            return items.map(i => i.Id);
+        \`,
+        mapScript: \`
+            // 1. Fetch Page Details (Revision Date)
+            const item = await context.tools.getItem({ 
+                itemId: context.currentItemId, 
+                includeProperties: ["VersionInfo.RevisionDate", "Title"] 
+            });
+            // 2. Check if Published
+            const pubInfo = await context.tools.getPublishInfo({ itemId: context.currentItemId });
+            if (!pubInfo || pubInfo.length === 0) return null; // Not published
+            
+            // ... (Logic to compare dates and check dependencies via getDependencyGraph) ...
+            
+            return { id: item.Id, title: item.Title, status: "Stale" };
+        \`,
+        postProcessingScript: \`
+            return { 
+                stalePages: context.successes.map(s => s.result).filter(r => r !== null) 
             };
         \`
     });
+    \`\`\`
+
+    **Example 4: Import with Validation (Setup -> Map -> Validate)**
+    Imports data and creates items, then audits the result.
+    \`\`\`javascript
+    const result = await tools.toolOrchestrator({
+        parameters: { 
+            "data": [{ "title": "Page 1", "file": "p1.html" }, { "title": "Page 2", "file": "p2.html" }] 
+        },
+        preProcessingScript: \`
+            return {
+                itemIds: context.parameters.data.map(d => d.title),
+                preProcessingResult: { sourceData: context.parameters.data }
+            };
+        \`,
+        mapScript: \`
+            // Create Page logic here...
+            // const newId = await context.tools.createPage(...);
+            return { title: context.currentItemId, status: "Created", id: "tcm:5-99-64" };
+        \`,
+        validationScript: \`
+            context.log("Phase 4: Auditing...");
+            const results = context.output.results; // Access results from map phase
+            if (!results || results.length === 0) return;
+
+            // Audit a sample item
+            const sample = results[0];
+            const check = await context.tools.getItem({ itemId: sample.result.id });
+            if (!check) throw new Error(\`Audit Failed: Created item \${sample.result.id} not found.\`);
+            
+            context.log("Audit Passed: Item exists.");
+        \`
+    });
+    \`\`\`
+
+    **Example 5: Compliance Report (Staging vs. Live)**
+    Finds Pages published to Staging that are NOT published to Live (Review needed).
+    \`\`\`javascript
+    const result = await tools.toolOrchestrator({
+        parameters: { "stagingId": "tcm:0-1-65537", "liveId": "tcm:0-2-65537" },
+        preProcessingScript: \`
+            // Setup: Find all Pages in Publication
+            const pages = await context.tools.getItemsInContainer({
+               containerId: "tcm:0-5-1", itemTypes: ["Page"], recursive: true
+            });
+            return pages.map(p => p.Id);
+        \`,
+        mapScript: \`
+            // Map: Check Publish Status for each page
+            const info = await context.tools.getPublishInfo({ itemId: context.currentItemId });
+            
+            const onStaging = info.some(i => i.TargetType.IdRef === context.parameters.stagingId);
+            const onLive = info.some(i => i.TargetType.IdRef === context.parameters.liveId);
+
+            if (onStaging && !onLive) return { id: context.currentItemId, status: "Needs Live Publish" };
+            return null;
+        \`,
+        postProcessingScript: \`
+            // Reduce: Filter nulls and report
+            return { itemsToReview: context.successes.map(s => s.result).filter(r => r !== null) };
+        \`
+    });
+    \`\`\`
+
+    **Example 6: Cleanup - Find Unused Assets**
+    Finds images that are not used by any other item.
+    \`\`\`javascript
+    const result = await tools.toolOrchestrator({
+        preProcessingScript: \`
+            const items = await context.tools.getItemsInContainer({
+               containerId: "tcm:0-5-1", itemTypes: ["Component"], recursive: true
+            });
+            return items.map(i => i.Id);
+        \`,
+        mapScript: \`
+            // Map: Check "UsedBy" dependencies
+            // 1. Filter for Multimedia (MimeType check via getItem)...
+            // 2. Check usages:
+            const usages = await context.tools.getDependencyGraph({
+               itemId: context.currentItemId, direction: "UsedBy"
+            });
+            if (usages.length === 0) return { id: context.currentItemId, status: "Unused" };
+            return null;
+        \`
+    });
+    \`\`\`
 `,
 
     input: toolOrchestratorInputProperties,
@@ -1210,6 +379,7 @@ This script would first be run by following the "Debugging Strategies" (test on 
             preProcessingScript,
             mapScript,
             postProcessingScript,
+            validationScript,
             parameters = {},
             stopOnError,
             maxConcurrency,
@@ -1393,7 +563,7 @@ This script would first be run by following the "Debugging Strategies" (test on 
                     }
                 } else {
                     if (preScriptResult && typeof preScriptResult === 'object') {
-                         if (preScriptResult.preProcessingResult) {
+                          if (preScriptResult.preProcessingResult) {
                             preScriptContextData = Object.freeze(preScriptResult.preProcessingResult);
                         }
                     }
@@ -1556,20 +726,23 @@ This script would first be run by following the "Debugging Strategies" (test on 
             if (mapScript) {
                  log("No items found to process. Skipping map phase.");
             } else {
-                 // This is the valid "Setup Only" path (like Example 9)
+                 // This is the valid "Setup Only" path
                  log("No items found and no mapScript provided. Skipping map phase (valid setup-only execution).");
             }
         }
         // --- End of Map Phase ---
 
+        // Prepare the summary or post-script input
+        const successes = results.filter(r => r.status === 'success');
+        const failures = results.filter(r => r.status === 'error');
+        const successCount = successes.length;
+        const errorCount = failures.length;
 
         // --- Phase 3: Post-Processing Logic (Reduce Phase) ---
+        let responsePayload: any = null;
+
         if (postProcessingScript) {
             logs.push("\nStarting post-processing script (reduce phase)...");
-
-            // Pre-filter results for the post-script
-            const successes = results.filter(r => r.status === 'success');
-            const failures = results.filter(r => r.status === 'error');
 
             let compiledPostScript: vm.Script;
             try {
@@ -1619,37 +792,11 @@ This script would first be run by following the "Debugging Strategies" (test on 
                 const finalResult = await Promise.race([scriptPromise, timeoutPromise]);
                 logs.push("Post-processing script finished successfully.");
 
-                let responsePayload: any = finalResult;
-
-                if (debug) {
-                    // Truncate the log to the first 25 and last 25 lines
-                    let logOutput = logs;
-                    if (logs.length > 50) {
-                        logOutput = [
-                            ...logs.slice(0, 25),
-                            `\n... (log truncated - ${logs.length - 50} lines hidden) ...\n`,
-                            ...logs.slice(-25)
-                        ];
-                    }
-                    responsePayload = {
-                        result: finalResult,
-                        executionLog: logOutput.join('\n')
-                    };
-                }
-
-                return {
-                    content: [{
-                        type: "text",
-                        text: JSON.stringify(responsePayload, null, 2)
-                    }],
-                };
+                responsePayload = finalResult;
 
             } catch (error: any) {
                 const errorMessage = extractErrorMessage(error);
                 logs.push(`Post-Processing Script FAILED: ${errorMessage}`);
-
-                const successCount = successes.length;
-                const errorCount = failures.length;
 
                 // Create a small, safe JSON error object.
                 const finalErrorSummary = {
@@ -1670,31 +817,108 @@ This script would first be run by following the "Debugging Strategies" (test on 
                     content: [{ type: "text", text: JSON.stringify(formattedFinalErrorSummary, null, 2) }],
                 };
             }
+        } else {
+            // --- Final Summary (if no post-processing) ---
+            responsePayload = {
+                summary: "ToolOrchestrator Summary",
+                totalItemsProcessed: finalItemIds.length,
+                succeeded: successCount,
+                failed: errorCount
+            };
+
+            if (errorCount > 0) {
+                responsePayload.errors = results
+                    .filter(r => r.status === 'error')
+                    .map(r => ({ itemId: r.itemId, error: r.error }));
+            }
+
+            if (includeScriptResults) {
+                responsePayload.results = results
+                    .filter(r => r.status === 'success')
+                    .map(r => ({ itemId: r.itemId, result: r.result }));
+            }
         }
 
-        // --- Final Summary (if no post-processing) ---
-        const successCount = results.filter(r => r.status === 'success').length;
-        const errorCount = results.filter(r => r.status === 'error').length;
+        // --- Phase 4: Validation Logic (Audit Phase) ---
+        if (validationScript) {
+            logs.push("\nStarting validation script (audit phase)...");
 
-        // Create a JSON summary object        
-        const summaryObject: any = {
-            summary: "ToolOrchestrator Summary",
-            totalItemsProcessed: finalItemIds.length,
-            succeeded: successCount,
-            failed: errorCount
-        };
+            let compiledValidationScript: vm.Script;
+            try {
+                compiledValidationScript = new vm.Script(`
+                    (async () => {
+                        "use strict";
+                        ${validationScript}
+                    })();
+                `, { filename: 'validationScript.js' });
+            } catch (error: any) {
+                return {
+                    content: [{ type: "text", text: `Validation Script Compilation Error: ${extractErrorMessage(error)}` }]
+                };
+            }
 
-        if (errorCount > 0) {
-            summaryObject.errors = results
-                .filter(r => r.status === 'error')
-                .map(r => ({ itemId: r.itemId, error: r.error }));
+            const valScriptLog = (message: string) => logs.push(`[Validation] ${message}`);
+            const valScriptErrorLog = (message: string) => logs.push(`[Validation] [ERROR] ${message}`);
+            const valScriptWarnLog = (message: string) => logs.push(`[Validation] [WARN] ${message}`);
+
+            const sandboxContext = { ...baseSandbox };
+            sandboxContext.context = {
+                output: Object.freeze(responsePayload), // The result from Phase 3 (or the summary)
+                results: Object.freeze(results),
+                successes: Object.freeze(successes),
+                failures: Object.freeze(failures),
+                parameters: Object.freeze(parameters),
+                preProcessingResult: preScriptContextData,
+                tools: toolWrappers,
+                utils: {
+                    convertItemIdToContextPublication
+                },
+                log: valScriptLog
+            };
+            sandboxContext.console = { log: valScriptLog, error: valScriptErrorLog, warn: valScriptWarnLog };
+            const sandbox = vm.createContext(sandboxContext, {
+                codeGeneration: { strings: false, wasm: false }
+            });
+
+            try {
+                const scriptPromise = compiledValidationScript.runInContext(sandbox, {
+                    timeout: SYNC_SCRIPT_TIMEOUT_MS
+                });
+
+                const timeoutPromise = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error(`Script timed out after ${TOTAL_SCRIPT_TIMEOUT_MS}ms`)), TOTAL_SCRIPT_TIMEOUT_MS)
+                );
+
+                const validationResult = await Promise.race([scriptPromise, timeoutPromise]);
+                logs.push("Validation script finished successfully.");
+
+                // If the validation script returns a value, use it to augment or replace the output
+                if (validationResult !== undefined) {
+                    responsePayload = validationResult;
+                }
+
+            } catch (error: any) {
+                const errorMessage = extractErrorMessage(error);
+                logs.push(`Validation Script FAILED: ${errorMessage}`);
+
+                // Return a specific Validation Failure response
+                const validationErrorSummary = {
+                    summary: "ToolOrchestrator FAILED",
+                    phase: "validation",
+                    originalOutput: responsePayload, // Include the work that was done
+                    error: `Validation Failed: ${errorMessage}`,
+                    logSample: logs.slice(-10).join('\n')
+                };
+
+                const formattedError = formatForAgent(validationErrorSummary);
+                return {
+                    content: [{ type: "text", text: JSON.stringify(formattedError, null, 2) }],
+                };
+            }
         }
 
-        if (includeScriptResults) {
-            summaryObject.results = results
-                .filter(r => r.status === 'success')
-                .map(r => ({ itemId: r.itemId, result: r.result }));
-        }
+        // --- Final Output Construction ---
+        let finalOutput: any = responsePayload;
 
         if (debug) {
             // Truncate the log to the first 25 and last 25 lines
@@ -1706,12 +930,18 @@ This script would first be run by following the "Debugging Strategies" (test on 
                     ...logs.slice(-25)
                 ];
             }
-            summaryObject.executionLog = logOutput.join('\n');
+            
+            // Wrap the result to include debug info
+            finalOutput = {
+                result: responsePayload,
+                executionLog: logOutput.join('\n')
+            };
         }
+
         return {
             content: [{
                 type: "text",
-                text: JSON.stringify(summaryObject, null, 2)
+                text: JSON.stringify(finalOutput, null, 2)
             }],
         };
     }
