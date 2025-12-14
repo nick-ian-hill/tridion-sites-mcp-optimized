@@ -25,47 +25,62 @@ const DEBUG_USER_SESSION_ID: string | null = null;
 // --- Token Cache ---
 let cachedAccessToken: string | null = null;
 let tokenExpirationTime: number = 0;
+let refreshPromise: Promise<string> | null = null;
 
 /**
  * Fetches a new access token or returns a valid cached one.
+ * Implements promise locking to handle concurrent refresh requests.
  */
 async function getDebugAccessToken(): Promise<string> {
-    // If we have a cached token and it's not expired (buffer of 30s), use it.
+    // 1. If we have a cached token and it's not expired (buffer of 30s), use it.
     if (cachedAccessToken && Date.now() < tokenExpirationTime - 30000) {
         return cachedAccessToken;
     }
 
-    try {
-        console.log("[AUTH] Fetching new debug access token...");
-        
-        // Basic Auth Header for Token Endpoint
-        const credentials = `${AUTH_CLIENT_ID}:${AUTH_CLIENT_SECRET}`;
-        const encodedCredentials = Buffer.from(credentials).toString('base64');
-        
-        // Body with grant_type
-        const params = new URLSearchParams();
-        params.append("grant_type", "client_credentials");
-
-        const response = await axios.post(AUTH_TOKEN_URL, params, {
-            headers: {
-                "Content-Type": "application/x-www-form-urlencoded",
-                "Authorization": `Basic ${encodedCredentials}`
-            }
-        });
-
-        if (response.data && response.data.access_token) {
-            cachedAccessToken = response.data.access_token;
-            // Calculate absolute expiry time (expires_in is in seconds)
-            const expiresIn = response.data.expires_in || 3600; 
-            tokenExpirationTime = Date.now() + (expiresIn * 1000);
-            return cachedAccessToken as string;
-        } else {
-            throw new Error("Invalid response format from token endpoint.");
-        }
-    } catch (error) {
-        console.error("[AUTH] Failed to fetch debug access token:", error);
-        throw error;
+    // 2. If a refresh is already in progress, wait for it instead of starting a new one.
+    if (refreshPromise) {
+        return refreshPromise;
     }
+
+    // 3. Start a new refresh operation
+    refreshPromise = (async () => {
+        try {
+            console.log("[AUTH] Fetching new debug access token...");
+            
+            // Basic Auth Header for Token Endpoint
+            const credentials = `${AUTH_CLIENT_ID}:${AUTH_CLIENT_SECRET}`;
+            const encodedCredentials = Buffer.from(credentials).toString('base64');
+            
+            // Body with grant_type
+            const params = new URLSearchParams();
+            params.append("grant_type", "client_credentials");
+
+            const response = await axios.post(AUTH_TOKEN_URL, params, {
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Authorization": `Basic ${encodedCredentials}`
+                }
+            });
+
+            if (response.data && response.data.access_token) {
+                cachedAccessToken = response.data.access_token;
+                // Calculate absolute expiry time (expires_in is in seconds)
+                const expiresIn = response.data.expires_in || 3600; 
+                tokenExpirationTime = Date.now() + (expiresIn * 1000);
+                return cachedAccessToken as string;
+            } else {
+                throw new Error("Invalid response format from token endpoint.");
+            }
+        } catch (error) {
+            console.error("[AUTH] Failed to fetch debug access token:", error);
+            throw error;
+        } finally {
+            // Always clear the lock when the promise settles (success or fail)
+            refreshPromise = null;
+        }
+    })();
+
+    return refreshPromise;
 }
 
 export const createAuthenticatedAxios = (userSessionId?: string | null, referer?: string) => {
@@ -177,11 +192,12 @@ export const createAuthenticatedAxios = (userSessionId?: string | null, referer?
                     console.warn("[AUTH] 401 Unauthorized detected. Clearing cache and refreshing token...");
 
                     try {
-                        // Force clear the cache
+                        // Force clear the cache to ensure getDebugAccessToken triggers a refresh
+                        // (or joins an existing one)
                         cachedAccessToken = null;
                         tokenExpirationTime = 0;
 
-                        // Fetch a completely new token
+                        // Fetch a completely new token (or await the pending refresh)
                         const newToken = await getDebugAccessToken();
 
                         // Update the failed request's Authorization header
