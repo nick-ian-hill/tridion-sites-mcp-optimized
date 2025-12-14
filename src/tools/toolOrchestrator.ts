@@ -14,7 +14,7 @@ const SYNC_SCRIPT_TIMEOUT_MS = 5000; // 5 seconds
  * Defines the maximum total time an async script can run (including awaiting tools).
  * This prevents runaway scripts or long-running operations.
  */
-const TOTAL_SCRIPT_TIMEOUT_MS = 60000; // 60 seconds
+const TOTAL_SCRIPT_TIMEOUT_MS = 120000; // 120 seconds
 
 /**
  * A strict deny-list of tool names that *cannot* be passed to the sandboxed script.
@@ -153,7 +153,7 @@ export const toolOrchestrator = {
 
     RECOMMENDED STRATEGY FOR COMPLEX TASKS (e.g., Data Import)
     1.  Preferred: The Single-Call Pattern: For stability, execute the entire multi-stage task (Setup, Create Dependencies, Create Consumers) within a single 'toolOrchestrator' call. Use the 'preProcessingScript' to create all prerequisite data maps (e.g., Article ID to Component ID) and pass them in-memory to the 'mapScript' via the 'context.preProcessingResult' object. This method completely avoids token-wasting and error-prone manual serialization/copy-pasting of complex data across multiple 'toolOrchestrator' calls.
-    2.  Alternative: The Stateless Multi-Call Pattern (For massive jobs only): If the job is so large that it risks hitting the 60-second execution timeout, you must split it. However, do not manually pass large, complex data maps (like ID lists) as strings in the 'parameters' argument between calls. Instead, design the second script to re-discover the items created by the first script (e.g., "Script 2 uses 'search' to find all components created by Script 1").
+    2.  Alternative: The Stateless Multi-Call Pattern (For massive jobs only): If the job is so large that it risks hitting the 120-second execution timeout, you must split it. However, do not manually pass large, complex data maps (like ID lists) as strings in the 'parameters' argument between calls. Instead, design the second script to re-discover the items created by the first script (e.g., "Script 2 uses 'search' to find all components created by Script 1").
 
     DEBUGGING STRATEGIES
     This is a powerful tool. For any complex script, or if you get an error, follow this debugging process:
@@ -196,7 +196,7 @@ export const toolOrchestrator = {
 
     NOTES
     - Automatic JSON parsing: All tools have their JSON string responses automatically parsed into JavaScript objects. You do not need to parse tool responses in a script.
-    - Script Limits: All scripts are sandboxed. Sync code max 5s, Async max 60s.
+    - Script Limits: All scripts are sandboxed. Sync code max 5s, Async max 120s.
     - Disallowed Tools: 'toolOrchestrator' and 'deleteItem' cannot be called recursively.
     - Data Passing: DO NOT pass large JSON strings via parameters. Use 'preProcessingScript' to fetch data and pass via 'preProcessingResult'.
 
