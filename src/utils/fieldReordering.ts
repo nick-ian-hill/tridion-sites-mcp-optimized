@@ -1,10 +1,84 @@
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 import { AxiosInstance } from "axios";
 
+// --- Cache Configuration ---
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 Minutes
+const MAX_CACHE_SIZE = 500; // Maximum number of items to store
+
+interface CacheEntry<T> {
+    timestamp: number;
+    value: T;
+}
+
+/**
+ * A lightweight Least Recently Used (LRU) cache with Time-To-Live (TTL).
+ * Prevents memory leaks by limiting size and expiring old entries.
+ */
+class SimpleLRUCache<T> {
+    private cache = new Map<string, CacheEntry<T>>();
+
+    get(key: string): T | undefined {
+        const entry = this.cache.get(key);
+        if (!entry) return undefined;
+
+        // Check TTL
+        if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
+            this.cache.delete(key);
+            return undefined;
+        }
+
+        // Refresh LRU position (delete and re-insert puts it at the end)
+        this.cache.delete(key);
+        this.cache.set(key, entry);
+        return entry.value;
+    }
+
+    set(key: string, value: T): void {
+        if (this.cache.has(key)) {
+            // Update existing
+            this.cache.delete(key);
+        } else if (this.cache.size >= MAX_CACHE_SIZE) {
+            // Evict oldest (first inserted)
+            const firstKey = this.cache.keys().next().value;
+            if (firstKey !== undefined) {
+                this.cache.delete(firstKey);
+            }
+        }
+        this.cache.set(key, { timestamp: Date.now(), value });
+    }
+
+    delete(key: string): void {
+        this.cache.delete(key);
+    }
+
+    /**
+     * Deletes all keys starting with the given prefix.
+     * Useful for composite keys like `id-content`.
+     */
+    deleteByPrefix(prefix: string): void {
+        for (const key of this.cache.keys()) {
+            if (key.startsWith(prefix)) {
+                this.cache.delete(key);
+            }
+        }
+    }
+}
+
 // Cache for storing ordered field names from schemas to reorder data.
-const schemaFieldOrderCache = new Map<string, string[]>();
+const schemaFieldOrderCache = new SimpleLRUCache<string[]>();
 // Cache for storing full schema definitions to avoid refetching when processing definitions.
-const schemaDefinitionCache = new Map<string, any>();
+const schemaDefinitionCache = new SimpleLRUCache<any>();
+
+/**
+ * Explicitly invalidates a Schema from the cache.
+ * Must be called by tools that modify Schema definitions.
+ * @param schemaId The TCM URI of the Schema to invalidate.
+ */
+export function invalidateSchemaCache(schemaId: string) {
+    schemaDefinitionCache.delete(schemaId);
+    // schemaFieldOrderCache uses keys formatted as `${schemaId}-${fieldType}`
+    schemaFieldOrderCache.deleteByPrefix(`${schemaId}-`);
+}
 
 /**
  * Fetches the ordered list of field names from a Schema definition for data objects.
@@ -16,8 +90,10 @@ const schemaDefinitionCache = new Map<string, any>();
  */
 async function getOrderedFieldNames(schemaId: string, fieldType: 'content' | 'metadata', axiosInstance: AxiosInstance): Promise<string[]> {
     const cacheKey = `${schemaId}-${fieldType}`;
-    if (schemaFieldOrderCache.has(cacheKey)) {
-        return schemaFieldOrderCache.get(cacheKey)!;
+    const cachedOrder = schemaFieldOrderCache.get(cacheKey);
+    
+    if (cachedOrder) {
+        return cachedOrder;
     }
 
     const restSchemaId = schemaId.replace(':', '_');
@@ -69,7 +145,13 @@ export async function reorderFieldsBySchema(data: Record<string, any>, schemaId:
         if (data.hasOwnProperty(fieldName)) {
             const fieldValue = data[fieldName];
 
-            const schemaDefinition = schemaDefinitionCache.get(schemaId) || (await axiosInstance.get(`/items/${schemaId.replace(':', '_')}`)).data;
+            // Try to get from cache first, otherwise fetch
+            let schemaDefinition = schemaDefinitionCache.get(schemaId);
+            if (!schemaDefinition) {
+                schemaDefinition = (await axiosInstance.get(`/items/${schemaId.replace(':', '_')}`)).data;
+                schemaDefinitionCache.set(schemaId, schemaDefinition);
+            }
+
             const fieldDefinition = (fieldType === 'content' ? schemaDefinition.Fields : schemaDefinition.MetadataFields)?.[fieldName];
 
             if (fieldDefinition?.$type === 'EmbeddedSchemaFieldDefinition' && fieldDefinition.EmbeddedSchema?.IdRef) {

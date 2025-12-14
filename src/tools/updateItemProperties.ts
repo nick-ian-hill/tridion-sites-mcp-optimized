@@ -5,7 +5,7 @@ import { generateSearchFolderXmlConfiguration } from "../utils/generateSearchFol
 import { toLink, toLinkArray } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldDefinitionSchema, fieldValueSchema } from "../schemas/fieldValueSchema.js";
-import { convertLinksRecursively, processSchemaFieldDefinitions, reorderFieldsBySchema, formatForApi } from "../utils/fieldReordering.js";
+import { convertLinksRecursively, processSchemaFieldDefinitions, reorderFieldsBySchema, formatForApi, invalidateSchemaCache } from "../utils/fieldReordering.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 import { regionDefinitionSchema } from "../schemas/regionDefinitionSchemas.js";
 import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
@@ -389,6 +389,14 @@ This example updates a basic Region Schema (e.g., 'tcm:5-3875-8') to make it non
             if (updateResponse.status !== 200) {
                 return handleUnexpectedResponse(updateResponse);
             }
+
+            // --- Cache Invalidation ---
+            // If the updated item was a Schema, we must clear the server-side memory cache
+            // so subsequent requests fetch the fresh definition.
+            if (itemType === 'Schema') {
+                invalidateSchemaCache(itemId);
+            }
+
             const updatedItem = updateResponse.data;
             const responseData = {
                 type: updatedItem['$type'],

@@ -1,7 +1,7 @@
 import { z, ZodIssue } from "zod";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
-import { processSchemaFieldDefinitions, formatForApi } from "../utils/fieldReordering.js";
+import { processSchemaFieldDefinitions, formatForApi, invalidateSchemaCache } from "../utils/fieldReordering.js";
 import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
 
 import {
@@ -218,8 +218,13 @@ Example 3: Update a validation constraint on a field.
             // Save the updated Schema
             const updateResponse = await authenticatedAxios.put(`/items/${restItemId}`, itemToUpdate);
             if (updateResponse.status !== 200) return handleUnexpectedResponse(updateResponse);
-            const updatedItem = updateResponse.data;
+            
+            // --- Cache Invalidation ---
+            // Clear the cache for this Schema so the next fetch gets the updated fields
+            invalidateSchemaCache(schemaId);
 
+            const updatedItem = updateResponse.data;
+            
             const responseData = {
                 type: updatedItem['$type'],
                 Id: updatedItem.Id,
