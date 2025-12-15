@@ -128,8 +128,11 @@ async function getOrderedFieldNames(schemaId: string, fieldType: 'content' | 'me
 export async function reorderFieldsBySchema(data: Record<string, any>, schemaId: string, fieldType: 'content' | 'metadata', axiosInstance: AxiosInstance): Promise<Record<string, any>> {
     const orderedFieldNames = await getOrderedFieldNames(schemaId, fieldType, axiosInstance);
 
-    // Validate that all fields in 'data' exist in the schema (ignoring the system property '$type')
-    const inputKeys = Object.keys(data).filter(key => key !== '$type');
+    // Validate that all fields in 'data' exist in the schema (ignoring system properties)
+    const inputKeys = Object.keys(data).filter(key => 
+        key !== '$type' &&
+        key !== '@id'
+    );
     const unknownKeys = inputKeys.filter(key => !orderedFieldNames.includes(key));
 
     if (unknownKeys.length > 0) {
@@ -170,6 +173,15 @@ export async function reorderFieldsBySchema(data: Record<string, any>, schemaId:
                 reorderedData[fieldName] = fieldValue;
             }
         }
+    }
+
+    // --- PRESERVE SYSTEM PROPERTIES ---
+    if (data['$type']) {
+        reorderedData['$type'] = data['$type'];
+    }
+
+    if (data['@id']) {
+        reorderedData['@id'] = data['@id'];
     }
 
     return reorderedData;
