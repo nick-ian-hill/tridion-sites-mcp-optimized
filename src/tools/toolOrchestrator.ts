@@ -34,7 +34,6 @@ const DISALLOWED_TOOLS: string[] = [
  */
 const createBaseSandbox = (): any => {
     const sandbox = Object.create(null);
-
     // Add back safe, standard JS globals
     sandbox.Object = Object;
     sandbox.Array = Array;
@@ -51,20 +50,19 @@ const createBaseSandbox = (): any => {
     sandbox.Set = Set;
     sandbox.URL = URL;
     sandbox.URLSearchParams = URLSearchParams;
-
     // Common Error types
     sandbox.TypeError = TypeError;
     sandbox.SyntaxError = SyntaxError;
     sandbox.RangeError = RangeError;
     sandbox.ReferenceError = ReferenceError;
-
     return sandbox;
 };
 // --- End Security Configuration ---
 
 // --- Utilities for Scripts ---
 const scriptUtils = {
-    /** Converts an item ID to match a specific publication context. Returns the string ID directly. */
+    /** Converts an item ID to match a specific publication context.
+        Returns the string ID directly. */
     convertItemIdToContextPublication,
     
     /**
@@ -129,7 +127,7 @@ const toolOrchestratorInputProperties = {
     postProcessingScript: z.string().optional()
         .describe("Phase 3 (Reduce): An optional async function body that runs once after all items are processed. Has access to `context.results`, `context.successes`, `context.warnings`, and `context.failures`. Returns the final output."),
     validationScript: z.string().optional()
-        .describe("Phase 4 (Validation): An async function body that runs LAST. MANDATORY if 'mapScript' is used. It receives `context.output`. You MUST use this to AUDIT the operation (e.g., verify the count of created items matches the input, fetch one of the created items and check if the content fields were populated correctly). Throw an Error if validation fails."),
+        .describe("Phase 4 (Validation): An async function body that runs LAST. MANDATORY if 'mapScript' is used. It receives `context.output` and boolean flags like `context.hasSuccesses`. You MUST use this to AUDIT the operation (e.g., verify the count of created items matches the input, fetch one of the created items and check if the content fields were populated correctly). Throw an Error if validation fails."),
     parameters: z.record(z.any()).optional()
         .describe("An optional JSON object of parameters to pass into all scripts. Use this for simple, static values like search queries, find/replace strings, or target TCM URIs. Note: Complex objects (like data from other tools) passed as parameters are treated as literal values. If you pass a stringified JSON object as a parameter value, you must manually call JSON.parse() on it inside your script. (Note: this only applies to input parameters, not to the responses from tool calls, which are always auto-parsed)."),
     stopOnError: z.boolean().optional().default(true)
@@ -167,6 +165,10 @@ export const toolOrchestrator = {
     Agents often assume a task is complete because no errors were thrown. This leads to hallucinations of success.
     You MUST use the 'validationScript' to inspect a random sample of the processed items.
     
+    Validation Context:
+    The 'validationScript' receives 'context.hasSuccesses', 'context.hasFailures', and 'context.hasWarnings' boolean flags.
+    ALWAYS check 'if (context.hasSuccesses)' before attempting to access 'context.successes'.
+
     Validation Utilities:
     - 'context.utils.sample(array, n)': Returns 'n' random items from the array. Use this on 'context.successes'.
     - 'context.utils.assert(condition, message)': Throws an error if the condition is false.
@@ -176,15 +178,24 @@ export const toolOrchestrator = {
     In your 'mapScript', use 'console.warn("Reason")' to flag these items. They will appear in 'context.warnings' in the validation phase, allowing you to double-check them.
 
     CRITICAL SCRIPT DESIGN PRINCIPLES
-    1.  Mandatory Error Handling: If a required operation fails (e.g., a lookup returns undefined, an item creation is impossible), your script MUST throw an Error (e.g., 'throw new Error("Missing dependency ID")'). A script that returns without throwing an Error will be marked as 'Success' by the orchestrator, leading to false reporting. Logging a warning is insufficient for critical failures.
-    2.  Validation/Audit: For bulk create or update operations (e.g., 'updateContent', 'createPage'), do not blindly rely on the absence of errors to report success. Use the 'validationScript' (Phase 4) to audit one or more updated items (via 'context.tools.getItem') to validate that the changes were persisted as intended.
-    3.  Handling Heavy Data (Excel/JSON): Do not read entire Excel files or large JSON blobs directly into the chat context. This consumes the context window and causes "output truncated" errors.
+    1.  Mandatory Error Handling: If a required operation fails (e.g., a lookup returns undefined, an item creation is impossible), your script MUST throw an Error (e.g., 'throw new Error("Missing dependency ID")').
+        A script that returns without throwing an Error will be marked as 'Success' by the orchestrator, leading to false reporting.
+        Logging a warning is insufficient for critical failures.
+    2.  Validation/Audit: For bulk create or update operations (e.g., 'updateContent', 'createPage'), do not blindly rely on the absence of errors to report success.
+        Use the 'validationScript' (Phase 4) to audit one or more updated items (via 'context.tools.getItem') to validate that the changes were persisted as intended.
+    3.  Handling Heavy Data (Excel/JSON): Do not read entire Excel files or large JSON blobs directly into the chat context.
+        This consumes the context window and causes "output truncated" errors.
         - First: Use a script to read the Excel file, parse it, and return a summary (e.g., column headers or a row count) to help you understand the structure.
-        - Then: Process the data entirely within the 'toolOrchestrator' scripts. Read the file in 'preProcessingScript' and pass the data rows to 'mapScript' via 'context.preProcessingResult'.
+        - Then: Process the data entirely within the 'toolOrchestrator' scripts.
+        Read the file in 'preProcessingScript' and pass the data rows to 'mapScript' via 'context.preProcessingResult'.
 
     RECOMMENDED STRATEGY FOR COMPLEX TASKS (e.g., Data Import)
-    1.  Preferred: The Single-Call Pattern: For stability, execute the entire multi-stage task (Setup, Create Dependencies, Create Consumers) within a single 'toolOrchestrator' call. Use the 'preProcessingScript' to create all prerequisite data maps (e.g., Article ID to Component ID) and pass them in-memory to the 'mapScript' via the 'context.preProcessingResult' object. This method completely avoids token-wasting and error-prone manual serialization/copy-pasting of complex data across multiple 'toolOrchestrator' calls.
-    2.  Alternative: The Stateless Multi-Call Pattern (For massive jobs only): If the job is so large that it risks hitting the 120-second execution timeout, you must split it. However, do not manually pass large, complex data maps (like ID lists) as strings in the 'parameters' argument between calls. Instead, design the second script to re-discover the items created by the first script (e.g., "Script 2 uses 'search' to find all components created by Script 1").
+    1.  Preferred: The Single-Call Pattern: For stability, execute the entire multi-stage task (Setup, Create Dependencies, Create Consumers) within a single 'toolOrchestrator' call.
+        Use the 'preProcessingScript' to create all prerequisite data maps (e.g., Article ID to Component ID) and pass them in-memory to the 'mapScript' via the 'context.preProcessingResult' object.
+        This method completely avoids token-wasting and error-prone manual serialization/copy-pasting of complex data across multiple 'toolOrchestrator' calls.
+    2.  Alternative: The Stateless Multi-Call Pattern (For massive jobs only): If the job is so large that it risks hitting the 120-second execution timeout, you must split it.
+        However, do not manually pass large, complex data maps (like ID lists) as strings in the 'parameters' argument between calls.
+        Instead, design the second script to re-discover the items created by the first script (e.g., "Script 2 uses 'search' to find all components created by Script 1").
 
     DEBUGGING STRATEGIES
     This is a powerful tool. For any complex script, or if you get an error, follow this debugging process:
@@ -224,6 +235,9 @@ export const toolOrchestrator = {
 
     The 'validationScript' (Phase 4) receives a 'context' object with:
     - context.output: The final result returned by the postProcessingScript (or the default summary).
+    - context.hasSuccesses: Boolean flag (true if successes.length > 0).
+    - context.hasFailures: Boolean flag (true if failures.length > 0).
+    - context.hasWarnings: Boolean flag (true if warnings.length > 0).
     - context.results, context.successes, context.warnings, context.failures, context.parameters, context.preProcessingResult, context.tools, context.utils, context.log.
 
     NOTES
@@ -260,7 +274,7 @@ export const toolOrchestrator = {
             return { id: context.currentItemId };
         \`,
         validationScript: \`
-            if (context.successes.length === 0) return;
+            if (!context.hasSuccesses) return;
             
             // 1. Pick a random sample of 3 successful items
             const sample = context.utils.sample(context.successes, 3);
@@ -322,7 +336,7 @@ export const toolOrchestrator = {
         \`,
         validationScript: \`
             // The agent can now see which items were skipped
-            if (context.warnings.length > 0) {
+            if (context.hasWarnings) {
                 context.log(\`Warning: \${context.warnings.length} items were skipped.\`);
             }
         \`
@@ -399,8 +413,9 @@ export const toolOrchestrator = {
         \`,
         validationScript: \`
             context.log("Phase 4: Auditing...");
-            const results = context.output.results; // Access results from map phase
-            if (!results || results.length === 0) return;
+            
+            if (!context.hasSuccesses) return;
+            const results = context.output.results; 
 
             // Audit a sample item
             const sample = results[0];
@@ -550,10 +565,8 @@ export const toolOrchestrator = {
 
                         // Dynamically create a Zod schema from the tool's input properties
                         const toolInputSchema = z.object(toolInputProperties);
-
                         // Now, run safeParse on the schema we just built
                         const validationResult = toolInputSchema.safeParse(validatedArgs);
-
                         if (!validationResult.success) {
                             // Throw a clear Zod error that the script can catch
                             throw new Error(`Invalid arguments for tool '${toolName}': ${validationResult.error.message}`);
@@ -599,7 +612,6 @@ export const toolOrchestrator = {
 
         // --- Create a secure base sandbox ---
         const baseSandbox = createBaseSandbox();
-
         let finalItemIds: string[] = initialItemIds || [];
         let hasFailed = false;
         let preScriptContextData: any = {}; // <-- For data from pre-script
@@ -607,7 +619,6 @@ export const toolOrchestrator = {
         // --- Phase 1: Pre-Processing Logic (Setup Phase) ---
         if (preProcessingScript) {
             logs.push("Starting pre-processing script (setup phase)...");
-
             let compiledPreScript: vm.Script;
             try {
                 compiledPreScript = new vm.Script(`
@@ -631,7 +642,6 @@ export const toolOrchestrator = {
                 utils: scriptUtils,
                 log: preScriptLog
             };
-
             // Create a dedicated sandbox for this script
             const sandboxContext = { ...baseSandbox };
             sandboxContext.context = preScriptContext;
@@ -639,16 +649,13 @@ export const toolOrchestrator = {
             const sandbox = vm.createContext(sandboxContext, {
                 codeGeneration: { strings: false, wasm: false }
             });
-
             try {
                 const scriptPromise = compiledPreScript.runInContext(sandbox, {
                     timeout: SYNC_SCRIPT_TIMEOUT_MS
                 });
-
                 const timeoutPromise = new Promise((_, reject) =>
                     setTimeout(() => reject(new Error(`Script timed out after ${TOTAL_SCRIPT_TIMEOUT_MS}ms`)), TOTAL_SCRIPT_TIMEOUT_MS)
                 );
-
                 const preScriptResult = await Promise.race([scriptPromise, timeoutPromise]);
 
                 if (Array.isArray(preScriptResult) && preScriptResult.every(item => typeof item === 'string')) {
@@ -667,7 +674,6 @@ export const toolOrchestrator = {
                 }
 
                 logs.push(`Pre-processing script finished. Found ${finalItemIds.length} items to process.`);
-
             } catch (error: any) {
                 const errorMessage = extractErrorMessage(error);
                 logs.push(`Pre-processing Script FAILED: ${errorMessage}`);
@@ -677,7 +683,6 @@ export const toolOrchestrator = {
                     error: `Pre-processing Script FAILED: ${errorMessage}`,
                     executionLog: debug ? logs.join('\n') : undefined
                 };
-
                 const formattedFinalErrorSummary = formatForAgent(finalErrorSummary);
                 return {
                     content: [{ type: "text", text: JSON.stringify(formattedFinalErrorSummary, null, 2) }],
@@ -706,7 +711,6 @@ export const toolOrchestrator = {
             }
 
             log(`\nStarting map phase for ${finalItemIds.length} items with maxConcurrency: ${maxConcurrency}`);
-
             // --- Create ONE reusable sandbox for the entire Map phase ---
             let compiledMapScript: vm.Script;
             try {
@@ -728,7 +732,6 @@ export const toolOrchestrator = {
              */
             const runTask = async (itemId: string, index: number): Promise<void> => {
                 logs.push(`\n[${index + 1}/${finalItemIds.length}] Processing item: ${itemId}`);
-
                 // Warning State Tracking
                 let itemHasWarning = false;
                 let itemWarningMessage = "";
@@ -749,7 +752,6 @@ export const toolOrchestrator = {
                     utils: scriptUtils,
                     log: perItemLog
                 };
-
                 const sandboxContext = { ...baseSandbox };
                 sandboxContext.context = perItemContext;
                 sandboxContext.console = {
@@ -757,20 +759,16 @@ export const toolOrchestrator = {
                     error: perItemErrorLog,
                     warn: perItemWarnLog
                 };
-
                 const sandbox = vm.createContext(sandboxContext, {
                     codeGeneration: { strings: false, wasm: false }
                 });
-
                 try {
                     const scriptPromise = compiledMapScript.runInContext(sandbox, {
                         timeout: SYNC_SCRIPT_TIMEOUT_MS
                     });
-
                     const timeoutPromise = new Promise((_, reject) =>
                         setTimeout(() => reject(new Error(`Script timed out after ${TOTAL_SCRIPT_TIMEOUT_MS}ms`)), TOTAL_SCRIPT_TIMEOUT_MS)
                     );
-
                     const result = await Promise.race([scriptPromise, timeoutPromise]);
                     
                     // Categorize based on warning state
@@ -826,7 +824,6 @@ export const toolOrchestrator = {
                     }
 
                     const taskPromise = runTask(itemId, index++);
-
                     const onFinally = () => {
                         workerPool.delete(taskPromise);
                     };
@@ -860,10 +857,8 @@ export const toolOrchestrator = {
 
         // --- Phase 3: Post-Processing Logic (Reduce Phase) ---
         let responsePayload: any = null;
-
         if (postProcessingScript) {
             logs.push("\nStarting post-processing script (reduce phase)...");
-
             let compiledPostScript: vm.Script;
             try {
                 compiledPostScript = new vm.Script(`
@@ -881,7 +876,6 @@ export const toolOrchestrator = {
             const postScriptLog = (message: string) => logs.push(`[PostScript] ${message}`);
             const postScriptErrorLog = (message: string) => logs.push(`[PostScript] [ERROR] ${message}`);
             const postScriptWarnLog = (message: string) => logs.push(`[PostScript] [WARN] ${message}`);
-
             const sandboxContext = { ...baseSandbox };
             sandboxContext.context = {
                 results: Object.freeze(results),
@@ -898,21 +892,17 @@ export const toolOrchestrator = {
             const sandbox = vm.createContext(sandboxContext, {
                 codeGeneration: { strings: false, wasm: false }
             });
-
             try {
                 const scriptPromise = compiledPostScript.runInContext(sandbox, {
                     timeout: SYNC_SCRIPT_TIMEOUT_MS
                 });
-
                 const timeoutPromise = new Promise((_, reject) =>
                     setTimeout(() => reject(new Error(`Script timed out after ${TOTAL_SCRIPT_TIMEOUT_MS}ms`)), TOTAL_SCRIPT_TIMEOUT_MS)
                 );
-
                 const finalResult = await Promise.race([scriptPromise, timeoutPromise]);
                 logs.push("Post-processing script finished successfully.");
 
                 responsePayload = finalResult;
-
             } catch (error: any) {
                 const errorMessage = extractErrorMessage(error);
                 logs.push(`Post-Processing Script FAILED: ${errorMessage}`);
@@ -931,7 +921,6 @@ export const toolOrchestrator = {
                     // Add a *small, truncated* piece of the log for context.
                     logSample: logs.slice(-10).join('\n')
                 };
-
                 const formattedFinalErrorSummary = formatForAgent(finalErrorSummary);
                 return {
                     content: [{ type: "text", text: JSON.stringify(formattedFinalErrorSummary, null, 2) }],
@@ -946,7 +935,6 @@ export const toolOrchestrator = {
                 warnings: warningCount,
                 failed: errorCount
             };
-
             if (errorCount > 0) {
                 responsePayload.errors = failures.map(r => ({ itemId: r.itemId, error: r.error }));
             }
@@ -965,7 +953,6 @@ export const toolOrchestrator = {
         // --- Phase 4: Validation Logic (Audit Phase) ---
         if (validationScript) {
             logs.push("\nStarting validation script (audit phase)...");
-
             let compiledValidationScript: vm.Script;
             try {
                 compiledValidationScript = new vm.Script(`
@@ -983,14 +970,20 @@ export const toolOrchestrator = {
             const valScriptLog = (message: string) => logs.push(`[Validation] ${message}`);
             const valScriptErrorLog = (message: string) => logs.push(`[Validation] [ERROR] ${message}`);
             const valScriptWarnLog = (message: string) => logs.push(`[Validation] [WARN] ${message}`);
-
             const sandboxContext = { ...baseSandbox };
+            
             sandboxContext.context = {
                 output: Object.freeze(responsePayload), // The result from Phase 3 (or the summary)
                 results: Object.freeze(results),
                 successes: Object.freeze(successes),
-                warnings: Object.freeze(warnings), // New
+                warnings: Object.freeze(warnings), 
                 failures: Object.freeze(failures),
+                
+                // --- Context Flags for Safer Scripting ---
+                hasSuccesses: successCount > 0,
+                hasFailures: errorCount > 0,
+                hasWarnings: warningCount > 0,
+
                 parameters: Object.freeze(parameters),
                 preProcessingResult: preScriptContextData,
                 tools: toolWrappers,
@@ -1001,19 +994,15 @@ export const toolOrchestrator = {
             const sandbox = vm.createContext(sandboxContext, {
                 codeGeneration: { strings: false, wasm: false }
             });
-
             try {
                 const scriptPromise = compiledValidationScript.runInContext(sandbox, {
                     timeout: SYNC_SCRIPT_TIMEOUT_MS
                 });
-
                 const timeoutPromise = new Promise((_, reject) =>
                     setTimeout(() => reject(new Error(`Script timed out after ${TOTAL_SCRIPT_TIMEOUT_MS}ms`)), TOTAL_SCRIPT_TIMEOUT_MS)
                 );
-
                 const validationResult = await Promise.race([scriptPromise, timeoutPromise]);
                 logs.push("Validation script finished successfully.");
-
                 // If the validation script returns a value, use it to augment or replace the output
                 if (validationResult !== undefined) {
                     responsePayload = validationResult;
@@ -1023,15 +1012,14 @@ export const toolOrchestrator = {
                 const errorMessage = extractErrorMessage(error);
                 logs.push(`Validation Script FAILED: ${errorMessage}`);
 
-                // Return a specific Validation Failure response
+                // Return a specific Validation Failure response that includes the work done so far
                 const validationErrorSummary = {
-                    summary: "ToolOrchestrator FAILED",
+                    summary: "ToolOrchestrator Execution Completed (Validation Script Failed)",
                     phase: "validation",
                     originalOutput: responsePayload, // Include the work that was done
                     error: `Validation Failed: ${errorMessage}`,
                     logSample: logs.slice(-10).join('\n')
                 };
-
                 const formattedError = formatForAgent(validationErrorSummary);
                 return {
                     content: [{ type: "text", text: JSON.stringify(formattedError, null, 2) }],
@@ -1041,7 +1029,6 @@ export const toolOrchestrator = {
 
         // --- Final Output Construction ---
         let finalOutput: any = responsePayload;
-
         if (debug) {
             // Truncate the log to the first 25 and last 25 lines
             let logOutput = logs;
