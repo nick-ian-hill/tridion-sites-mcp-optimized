@@ -5,7 +5,7 @@ import { linkSchema } from "./linkSchema.js";
 export const componentPresentationSchemaForTyping = z.object({
     "type": z.literal("ComponentPresentation"),
     Component: linkSchema,
-    ComponentTemplate: linkSchema.optional()
+    ComponentTemplate: linkSchema.optional().describe("Defines how the component is rendered. MANDATORY for 'Template-based' publishing (legacy) to generate HTML. OPTIONAL for 'Data-only' publishing (headless) where content is output as raw JSON. Use 'getIsComponentTemplateRequired' to check the specific system configuration.")
 });
 
 export type RegionForTyping = {
