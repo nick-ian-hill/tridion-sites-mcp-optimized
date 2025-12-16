@@ -3,13 +3,15 @@ import axios, { InternalAxiosRequestConfig } from "axios";
 // --- Configuration Constants ---
 
 // 1. Service API (Bearer Token) - For automated/service-to-service calls
-const CORE_API_URL = "http://10.100.92.199:81/api/v3.0";
+const CORE_API_URL = process.env.CORE_API_URL ||
+    "http://10.100.92.199:81/api/v3.0";
 
 // 2. Experience Space UI API (Session Cookie) - For Chat Panel/Browser calls
 const UI_API_URL = "http://10.100.92.199:81/ui/api/v3.0";
 
 // Auth Endpoint Configuration
-const AUTH_TOKEN_URL = "http://external-dxui-dev-sites-stg.ted.nl.sdldev.net/access-management/connect/token";
+const AUTH_TOKEN_URL = process.env.AUTH_TOKEN_URL ||
+    "http://external-dxui-dev-sites-stg.ted.nl.sdldev.net/access-management/connect/token";
 const AUTH_CLIENT_ID = process.env.AUTH_CLIENT_ID;
 const AUTH_CLIENT_SECRET = process.env.AUTH_CLIENT_SECRET;
 
@@ -46,11 +48,11 @@ async function getDebugAccessToken(): Promise<string> {
     refreshPromise = (async () => {
         try {
             console.log("[AUTH] Fetching new debug access token...");
-            
+
             // Basic Auth Header for Token Endpoint
             const credentials = `${AUTH_CLIENT_ID}:${AUTH_CLIENT_SECRET}`;
             const encodedCredentials = Buffer.from(credentials).toString('base64');
-            
+
             // Body with grant_type
             const params = new URLSearchParams();
             params.append("grant_type", "client_credentials");
@@ -65,7 +67,7 @@ async function getDebugAccessToken(): Promise<string> {
             if (response.data && response.data.access_token) {
                 cachedAccessToken = response.data.access_token;
                 // Calculate absolute expiry time (expires_in is in seconds)
-                const expiresIn = response.data.expires_in || 3600; 
+                const expiresIn = response.data.expires_in || 3600;
                 tokenExpirationTime = Date.now() + (expiresIn * 1000);
                 return cachedAccessToken as string;
             } else {
@@ -84,9 +86,9 @@ async function getDebugAccessToken(): Promise<string> {
 }
 
 export const createAuthenticatedAxios = (userSessionId?: string | null, referer?: string) => {
-    
+
     // --- Strategy Selection ---
-    
+
     // Apply fallback if configured (default is null, so this does nothing unless you change the const above)
     userSessionId = userSessionId || DEBUG_USER_SESSION_ID;
 
@@ -107,7 +109,7 @@ export const createAuthenticatedAxios = (userSessionId?: string | null, referer?
         config.headers["Cookie"] = `UserSessionID=${userSessionId}`;
         config.headers["x-csrf"] = "1";
         config.headers["request-client"] = "experience-space";
-    } 
+    }
     // --- Mode 2: Service Mode (Bearer Token) ---
     // Used when running automated scripts with no user session
     else {
@@ -129,10 +131,10 @@ export const createAuthenticatedAxios = (userSessionId?: string | null, referer?
                 const modeLabel = config.headers['Cookie'] ? "UI/Cookie Mode" : "Service/Bearer Mode";
                 console.groupCollapsed(`[AXIOS] (${modeLabel}) ${config.method?.toUpperCase()} Request to ${config.url}`);
                 console.log("Full URL:", `${config.baseURL}${config.url}`);
-                
+
                 if (config.headers['Authorization']) console.log("Auth:", "Bearer Token Set");
                 if (config.headers['Cookie']) console.log("Auth:", "UserSessionID Cookie Set");
-                
+
                 if (config.params) console.log("Query Params:", config.params);
                 if (config.data) console.log("Request Body:", config.data);
                 console.groupEnd();
@@ -169,7 +171,7 @@ export const createAuthenticatedAxios = (userSessionId?: string | null, referer?
         instance.interceptors.request.use(async (config) => {
             try {
                 // Only inject Bearer token if we are NOT in Session Mode
-                if (!config.headers['Cookie']) { 
+                if (!config.headers['Cookie']) {
                     const token = await getDebugAccessToken();
                     config.headers['Authorization'] = `Bearer ${token}`;
                 }
