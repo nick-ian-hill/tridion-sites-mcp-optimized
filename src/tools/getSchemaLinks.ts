@@ -42,7 +42,7 @@ export const getSchemaLinks = {
             if (response.status === 200) {
                 const finalData = filterResponseData({ 
                     responseData: response.data, 
-                    details: "IdAndTitle" 
+                    includeProperties: ["IdRef"]
                 });
 
                 const formattedResponseData = formatForAgent(finalData);
