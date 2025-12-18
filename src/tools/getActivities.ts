@@ -23,7 +23,7 @@ export const getActivities = {
                 "Finished", 
                 "Suspended", 
                 "Failed", 
-                "Aborted"
+                "WaitingForWorkflowAgent"
             ]))
             .optional()
             .default(['Assigned'])
@@ -31,7 +31,7 @@ export const getActivities = {
     },
     execute: async ({ userId, activityStates = ['Assigned'] }: { 
         userId?: string, 
-        activityStates?: ("Assigned" | "Started" | "Finished" | "Suspended" | "Failed" | "Aborted")[]
+        activityStates?: ("Assigned" | "Started" | "Finished" | "Suspended" | "Failed" | "WaitingForWorkflowAgent")[]
     }, context: any) => {
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
