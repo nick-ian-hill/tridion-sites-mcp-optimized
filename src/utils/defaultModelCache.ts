@@ -1,9 +1,9 @@
+// src/utils/defaultModelCache.ts
 import { AxiosInstance } from "axios";
+import { SimpleLRUCache } from "./lruCache.js"; 
 
-// Reuse the LRU Cache logic or import if exported. 
-// For independence, we define a minimal version here.
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 Minutes
-const modelCache = new Map<string, { timestamp: number; value: any }>();
+// Instantiate the shared cache class
+const modelCache = new SimpleLRUCache<any>();
 
 export async function getCachedDefaultModel(
     itemType: string,
@@ -11,19 +11,12 @@ export async function getCachedDefaultModel(
     axiosInstance: AxiosInstance
 ): Promise<any> {
     const cacheKey = `${itemType}:${containerId}`;
-    const now = Date.now();
     
     // 1. Check Cache
-    const entry = modelCache.get(cacheKey);
-    if (entry) {
-        if (now - entry.timestamp < CACHE_TTL_MS) {
-            // Cache Hit
-            // Return a DEEP COPY to prevent tools from mutating the cached model
-            return JSON.parse(JSON.stringify(entry.value));
-        } else {
-            // Expired
-            modelCache.delete(cacheKey);
-        }
+    const cachedValue = modelCache.get(cacheKey);
+    if (cachedValue) {
+        // Return a DEEP COPY to prevent tools from mutating the cached model
+        return JSON.parse(JSON.stringify(cachedValue));
     }
 
     // 2. Cache Miss - Fetch from API
@@ -33,8 +26,7 @@ export async function getCachedDefaultModel(
     });
 
     if (response.status === 200) {
-        modelCache.set(cacheKey, { timestamp: now, value: response.data });
-        // Return a copy
+        modelCache.set(cacheKey, response.data);
         return JSON.parse(JSON.stringify(response.data));
     } else {
         throw new Error(`Failed to fetch default model: ${response.status} ${response.statusText}`);

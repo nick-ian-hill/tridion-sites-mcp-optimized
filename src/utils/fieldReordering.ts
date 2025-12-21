@@ -1,68 +1,6 @@
+import { SimpleLRUCache } from "./lruCache.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 import { AxiosInstance } from "axios";
-
-// --- Cache Configuration ---
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 Minutes
-const MAX_CACHE_SIZE = 500; // Maximum number of items to store
-
-interface CacheEntry<T> {
-    timestamp: number;
-    value: T;
-}
-
-/**
- * A lightweight Least Recently Used (LRU) cache with Time-To-Live (TTL).
- * Prevents memory leaks by limiting size and expiring old entries.
- */
-class SimpleLRUCache<T> {
-    private cache = new Map<string, CacheEntry<T>>();
-
-    get(key: string): T | undefined {
-        const entry = this.cache.get(key);
-        if (!entry) return undefined;
-
-        // Check TTL
-        if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
-            this.cache.delete(key);
-            return undefined;
-        }
-
-        // Refresh LRU position (delete and re-insert puts it at the end)
-        this.cache.delete(key);
-        this.cache.set(key, entry);
-        return entry.value;
-    }
-
-    set(key: string, value: T): void {
-        if (this.cache.has(key)) {
-            // Update existing
-            this.cache.delete(key);
-        } else if (this.cache.size >= MAX_CACHE_SIZE) {
-            // Evict oldest (first inserted)
-            const firstKey = this.cache.keys().next().value;
-            if (firstKey !== undefined) {
-                this.cache.delete(firstKey);
-            }
-        }
-        this.cache.set(key, { timestamp: Date.now(), value });
-    }
-
-    delete(key: string): void {
-        this.cache.delete(key);
-    }
-
-    /**
-     * Deletes all keys starting with the given prefix.
-     * Useful for composite keys like `id-content`.
-     */
-    deleteByPrefix(prefix: string): void {
-        for (const key of this.cache.keys()) {
-            if (key.startsWith(prefix)) {
-                this.cache.delete(key);
-            }
-        }
-    }
-}
 
 // Cache for storing ordered field names from schemas to reorder data.
 const schemaFieldOrderCache = new SimpleLRUCache<string[]>();
