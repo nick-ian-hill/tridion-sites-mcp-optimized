@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const activityDefinitionSchema = z.object({
     title: z.string().nonempty({ message: "Activity title cannot be empty." }),
-    description: z.string().optional(),
+    description: z.string().nonempty({ message: "Activity description is required." }),
     activityType: z.enum(["Normal", "Decision"]).default("Normal")
         .describe("The type of the activity. 'Normal' for a standard task, 'Decision' for a point where the workflow can branch."),
     assigneeId: z.string().regex(/^(tcm:0-\d+-(65552|65568)|tcm:0-0-0)$/).optional()
