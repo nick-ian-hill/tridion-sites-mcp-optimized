@@ -62,6 +62,7 @@ Example 2: Updates a specific field deep inside an embedded schema, preserving s
     },
     execute: async ({ itemId, content }: { itemId: string, content: Record<string, any> }, context: any) => {
         formatForApi(content);
+        const diagnosticsArgs = JSON.parse(JSON.stringify(content));
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -110,7 +111,7 @@ Example 2: Updates a specific field deep inside an embedded schema, preserving s
             };
             
         } catch (error) {
-            await diagnoseBluePrintError(error, content, itemId, authenticatedAxios);
+            await diagnoseBluePrintError(error, diagnosticsArgs, itemId, authenticatedAxios);
             return handleAxiosError(error, "Failed to update component");
         }
     }

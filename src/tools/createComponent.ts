@@ -6,6 +6,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 import { reorderFieldsBySchema, convertLinksRecursively, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
 import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
+import { getCachedDefaultModel } from "../utils/defaultModelCache.js";
 
 const createComponentInputProperties = {
     title: z.string().nonempty().describe("The title for the new Component. Note that creation will fail if a Component with the same title already exists in the target Folder."),
@@ -23,6 +24,9 @@ export const createComponent = {
     name: "createComponent",
     description: `Creates a new Content Manager System (CMS) item of type 'Component'.
 This is the dedicated tool for creating content Components. It simplifies the process and ensures correct metadata handling.
+
+BluePrint Inheritance Note:
+The Component will be created in the specified location and be automatically inherited by all descendant Publications.
 
 IMPORTANT: To add metadata to a Component, you must use a Component Schema that has the 'metadataFields' property defined (use 'createComponentSchema' to create such a schema).
 You then provide the metadata values using the 'metadata' parameter of THIS tool.
@@ -91,6 +95,7 @@ Example 2: Create a Component with both content fields and metadata fields.
         context: any
     ) => {
         formatForApi(args);
+        const diagnosticsArgs = JSON.parse(JSON.stringify(args));
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -117,17 +122,14 @@ Example 2: Create a Component with both content fields and metadata fields.
                 metadata = await reorderFieldsBySchema(metadata, schemaId, 'metadata', authenticatedAxios);
             }
 
-            // 1. Get the default model for the item type and location
-            const defaultModelResponse = await authenticatedAxios.get(`/item/defaultModel/Component`, {
-                params: {
-                    containerId: locationId
-                }
-            });
-            if (defaultModelResponse.status !== 200) {
-                return handleUnexpectedResponse(defaultModelResponse);
+            // 1. Get the cached default model
+            let payload;
+            try {
+                payload = await getCachedDefaultModel("Component", locationId, authenticatedAxios);
+            } catch (error: any) {
+                 return handleAxiosError(error, "Failed to load default model for Component");
             }
-            const payload = defaultModelResponse.data;
-
+            
             // 2. Customize the payload
             payload.Title = title;
             payload.Schema = toLink(schemaId);
@@ -163,7 +165,7 @@ Example 2: Create a Component with both content fields and metadata fields.
                 return handleUnexpectedResponse(createResponse);
             }
         } catch (error) {
-            await diagnoseBluePrintError(error, args, locationId, authenticatedAxios);
+            await diagnoseBluePrintError(error, diagnosticsArgs, locationId, authenticatedAxios);
             return handleAxiosError(error, "Failed to create Component");
         }
     }

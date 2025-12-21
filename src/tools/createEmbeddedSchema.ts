@@ -6,11 +6,15 @@ import { xmlNameSchema } from "../schemas/xmlNameSchema.js";
 import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
 import { processSchemaFieldDefinitions, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
 import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
+import { getCachedDefaultModel } from "../utils/defaultModelCache.js";
 
 export const createEmbeddedSchema = {
     name: "createEmbeddedSchema",
     description: `Creates a new Content Manager System (CMS) item of type 'Schema' with a purpose of 'Embedded'.
-    
+
+BluePrint Inheritance Note:
+The Schema will be created in the specified Folder and be automatically inherited by all descendant Publications.
+
 Embedded Schemas are reusable groups of fields that can be inserted into other Schemas (both Component and Metadata) using an 'EmbeddedSchemaFieldDefinition'.
 The 'rootElementName' is mandatory and must be a valid XML name.
 The structure of an Embedded Schema is defined using the 'fields' property.
@@ -68,14 +72,12 @@ This schema can then be used inside other schemas (like an 'Article' schema) to 
         try {
             const processedFields = fields ? await processSchemaFieldDefinitions(fields, locationId, authenticatedAxios) : undefined;
 
-            const defaultModelResponse = await authenticatedAxios.get('/item/defaultModel/Schema', {
-                params: { containerId: locationId }
-            });
-            if (defaultModelResponse.status !== 200) {
-                return handleUnexpectedResponse(defaultModelResponse);
+            let payload;
+            try {
+                payload = await getCachedDefaultModel("Schema", locationId, authenticatedAxios);
+            } catch (error: any) {
+                return handleAxiosError(error, "Failed to load default model for Schema");
             }
-
-            const payload = defaultModelResponse.data;
             payload.Title = title;
             payload.Purpose = "Embedded";
             payload.RootElementName = rootElementName;

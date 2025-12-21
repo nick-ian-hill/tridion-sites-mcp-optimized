@@ -6,11 +6,15 @@ import { xmlNameSchema } from "../schemas/xmlNameSchema.js";
 import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
 import { processSchemaFieldDefinitions, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
 import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
+import { getCachedDefaultModel } from "../utils/defaultModelCache.js";
 
 export const createComponentSchema = {
     name: "createComponentSchema",
     description: `Creates a new Content Manager System (CMS) item of type 'Schema' with a purpose of 'Component'.
 Component Schemas define the structure for Components, which are the primary content items in the CMS.
+
+BluePrint Inheritance Note:
+The Schema will be created in the specified Folder and be automatically inherited by all descendant Publications.
 
 A Component Schema can have both content fields (specified via the 'fields' property) and metadata fields (specified via the 'metadataFields' property).
 The 'metadataFields' property is the ONLY way to define metafields for a Component (you cannot link a component to a standalone metadata schema).
@@ -311,14 +315,13 @@ Example 8: Create a Schema with advanced constraints.
             const processedFields = fields ? await processSchemaFieldDefinitions(fields, locationId, authenticatedAxios) : undefined;
             const processedMetadataFields = metadataFields ? await processSchemaFieldDefinitions(metadataFields, locationId, authenticatedAxios) : undefined;
 
-            const defaultModelResponse = await authenticatedAxios.get('/item/defaultModel/Schema', {
-                params: { containerId: locationId }
-            });
-            if (defaultModelResponse.status !== 200) {
-                return handleUnexpectedResponse(defaultModelResponse);
+            let payload;
+            try {
+                payload = await getCachedDefaultModel("Schema", locationId, authenticatedAxios);
+            } catch (error: any) {
+                return handleAxiosError(error, "Failed to load default model for Schema");
             }
 
-            const payload = defaultModelResponse.data;
             payload.Title = title;
             payload.Purpose = "Component";
             payload.RootElementName = rootElementName;

@@ -5,6 +5,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
 import { processSchemaFieldDefinitions, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
 import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
+import { getCachedDefaultModel } from "../utils/defaultModelCache.js";
 
 export const createMetadataSchema = {
     name: "createMetadataSchema",
@@ -14,6 +15,9 @@ Metadata Schemas define the structure for metadata fields that can be applied to
 (Note: To add metadata to a Component, you must define 'metadataFields' on the Component Schema using 'createComponentSchema'.)
 
 The schema's structure is defined using the 'metadataFields' property, which is a dictionary of field definitions.
+
+BluePrint Inheritance Note:
+The Schema will be created in the specified Folder and be automatically inherited by all descendant Publications.
 
 Examples:
 
@@ -82,14 +86,13 @@ Example 2: Create a Metadata Schema with a multi-value checkbox field using a pr
         try {
             const processedMetadataFields = metadataFields ? await processSchemaFieldDefinitions(metadataFields, locationId, authenticatedAxios) : undefined;
 
-            const defaultModelResponse = await authenticatedAxios.get('/item/defaultModel/Schema', {
-                params: { containerId: locationId }
-            });
-            if (defaultModelResponse.status !== 200) {
-                return handleUnexpectedResponse(defaultModelResponse);
+            let payload;
+            try {
+                payload = await getCachedDefaultModel("Schema", locationId, authenticatedAxios);
+            } catch (error: any) {
+                return handleAxiosError(error, "Failed to load default model for Schema");
             }
-
-            const payload = defaultModelResponse.data;
+            
             payload.Title = title;
             payload.Purpose = "Metadata";
             delete payload.RootElementName;

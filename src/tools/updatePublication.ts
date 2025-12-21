@@ -82,6 +82,7 @@ export const updatePublication = {
     },
     execute: async (params: any, context: any) => {
         formatForApi(params);
+        const diagnosticsArgs = JSON.parse(JSON.stringify(params));
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -169,7 +170,7 @@ export const updatePublication = {
             }
 
         } catch (error) {
-            await diagnoseBluePrintError(error, params, itemId, authenticatedAxios);
+            await diagnoseBluePrintError(error, diagnosticsArgs, itemId, authenticatedAxios);
             return handleAxiosError(error, `Failed to update Publication ${itemId}`);
         }
     }

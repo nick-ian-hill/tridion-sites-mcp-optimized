@@ -65,6 +65,7 @@ Example 2: Updates a metadata value for a 'Folder' containing a multi-value embe
     },
     execute: async ({ itemId, metadata }: { itemId: string, metadata: Record<string, any> }, context: any) => {
         formatForApi(metadata);
+        const diagnosticsArgs = JSON.parse(JSON.stringify(metadata));
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -119,7 +120,7 @@ Example 2: Updates a metadata value for a 'Folder' containing a multi-value embe
                 content: [{ type: "text", text: JSON.stringify(responseData, null, 2) }],
             };
         } catch (error) {
-            await diagnoseBluePrintError(error, metadata, itemId, authenticatedAxios);
+            await diagnoseBluePrintError(error, diagnosticsArgs, itemId, authenticatedAxios);
             return handleAxiosError(error, "Failed to update item metadata");
         }
     }

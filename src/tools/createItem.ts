@@ -8,6 +8,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 import { fieldValueSchema } from "../schemas/fieldValueSchema.js";
 import { reorderFieldsBySchema, convertLinksRecursively, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
 import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
+import { getCachedDefaultModel } from "../utils/defaultModelCache.js";
 
 const createItemInputProperties = {
     itemType: z.enum([
@@ -60,37 +61,102 @@ type CreateItemInput = z.infer<typeof createItemInputSchema>;
 
 export const createItem = {
     name: "createItem",
-    description: `Creates a new Content Manager System (CMS) item of a specified type.
-This is a general-purpose creation tool for Folders, Structure Groups, Keywords, Categories, Bundles, etc.
+    description: `Creates a new item in the Content Management System (CMS) of a specified type.
 
-**Container Rules (Where to create what):**
-* **Folders** contain: Folders, Bundles, SearchFolders, PageTemplates, ComponentTemplates, Components, and Schemas.
-* **Structure Groups** contain: Structure Groups and Pages.
-* **Categories** contain: Keywords.
-* **Publications** contain: Root Folders, Root Structure Groups, and Categories.
+This is a **general-purpose creation tool** used for creating:
+Folders, Structure Groups, Keywords, Categories, Bundles, Search Folders, Page Templates, and Component Templates.
 
-**Notes on BluePrint structure:**
-* **Schema Master:** Content-related schemas and Categories are typically created in a child of the Root Publication.
-* **Design Master:** Templates and Region Schemas are typically created in a sibling of the Schema Master.
-* **Content Master:** Actual content (Components) is created in a publication inheriting from both.
+## 1. Where Items Can Be Created (Container Rules)
 
-**BluePrint Context & Automatic Mapping (Important):**
-The tool automatically transforms any parent/ancestor ID you provide (e.g., 'metadataSchemaId', 'parentKeywords') to match the context of the 'locationId' publication.
-* **Mechanism:** It purely replaces the Publication ID in the URI string. It does *not* verify existence.
-* **Assumption:** This works if the item exists in the target context via BluePrint inheritance (i.e., it is a Parent/Ancestor).
-* **404 Errors:** If the source item is in a **Sibling** or **Child** publication, the transformed ID will not point to a real item, resulting in a 404 error.
-* **Resolution:** If you get a 404 on a dependency ID:
-    1.  Verify the item exists in a Parent/Ancestor of the target 'locationId'.
-    2.  If it is in a Sibling/Child, you must 'promote' it to a common Parent (using 'promoteItem') or find an alternative item in the correct context.
+Different item types must be created within specific container types:
 
-**Troubleshooting Component Links:**
-If you encounter a schema validation error on a Component Link field (ComponentLinkFieldDefinition):
-1.  Use 'getItem' to retrieve the main Schema's definition.
-2.  Inspect the 'AllowedTargetSchemas' property for the specific field causing the error.
-3.  Use the 'search' tool with the 'BasedOnSchemas' filter to find a valid Component URI that matches one of those schemas.
+- **Folders** can contain:
+  - Folders
+  - Bundles
+  - Search Folders
+  - Page Templates
+  - Component Templates
+  - Components (not supported by this tool. Use createComponent or one of the createMultimediaComponent tools)
+  - Schemas (not supported by this tool. Use createComponentSchema, createEmbeddedSchema, createMetadataSchema, or createRegionSchema)
 
-**Validation:**
-Creation will fail if an item of the same type and title already exists in the folder/structure group.
+- **Structure Groups** can contain:
+  - Structure Groups
+  - Pages
+
+- **Categories** can contain:
+  - Keywords
+
+- **Publications** can contain:
+  - Root Folder
+  - Root Structure Group
+  - Categories
+
+Attempting to create an item in an invalid container will result in a validation error.
+
+## 2. BluePrint Hierarchy Conventions (Recommended Practices)
+
+While not enforced by the tool, the following conventions are commonly used in BluePrint-based CMS setups:
+
+- **Schema Master**
+  - Schemas and Categories are typically created in a child Publication of the Root Publication.
+
+- **Design Master**
+  - Component Templates and Page Templates are usually created in a child Publication of the Schema Master.
+
+- **Content Master**
+  - Master content (Components), often in the primary language, is typically created in a sibling Publication of the Design Master.
+
+- **Website Master**
+  - Inherits from both Design Master and Content Master.
+  - Contains Pages populated with Components inherited from the Content Master.
+
+These conventions help maintain clean separation of schema, design, content, and delivery concerns.
+
+## 3. BluePrint Context & Automatic ID Mapping (Important)
+
+When creating an item, the tool automatically adapts referenced IDs to the BluePrint context of the target Publication ('locationId').
+
+### How Automatic Mapping Works
+- Any provided parent or dependency ID (e.g. 'metadataSchemaId', 'parentKeywords') is transformed by **replacing only the Publication ID segment** in the TCM URI.
+- The tool does **not** verify whether the transformed item actually exists.
+
+### Assumptions
+- Automatic mapping works **only if** the referenced item exists in a **Parent or Ancestor Publication**.
+
+### Common Failure Mode (404 Errors)
+A 404 error will occur if the referenced item exists in a **Sibling or Child Publication** of the target publication, but not in an ancestor publication.
+In this scenario, the transformed URI will not correspond to a real item in the CMS.
+
+### How to Resolve 404 Dependency Errors
+1. Verify that the referenced item exists in a Sibling or Child Publication of the target Publication.
+2. If the item does exist:
+   - Promote it to a common Parent Publication using 'promoteItem', or
+   - Select an alternative item that already exists in the correct BluePrint context.
+
+## 4. BluePrint Inheritance Behavior of Newly Created Items
+
+- Any item created with this tool becomes a **Primary item** in the target Publication.
+- It will be inherited as a **Shared item** by all descendant Publications (children, grandchildren, etc.).
+
+### ID Behavior Across Publications
+- The item’s numeric identifier remains the same.
+- The Publication portion of the TCM URI changes per context.
+
+**Example:**
+- Created item ID: \`tcm:5-3456\`
+- In Publication \`tcm:0-29-1\`, the inherited ID becomes: \`tcm:29-3456\`
+
+## 5. Troubleshooting Component Link Validation Errors When Providing Metadata
+
+If creation fails due to a schema validation error on a Component Link field ('ComponentLinkFieldDefinition'):
+
+1. Use 'getItem' to retrieve the Schema definition.
+2. Inspect the 'AllowedTargetSchemas' property of the failing field.
+3. Use the 'search' tool with the 'BasedOnSchemas' filter to find a valid Component URI that matches one of the allowed schemas.
+
+## 6. Validation Rules
+
+- Creation will fail if an item of the **same type and title** already exists in the target Folder or Structure Group.
 
 Examples:
 
@@ -135,6 +201,7 @@ Example 3: Create a new Keyword.
         context: any
     ) => {
         formatForApi(args);
+        const diagnosticsArgs = JSON.parse(JSON.stringify(args));
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -230,16 +297,13 @@ The provided 'locationId' (${locationId}) is a '${locationType}'.`;
                 }
             }
 
-            // 1. Get the default model for the item type and location
-            const defaultModelResponse = await authenticatedAxios.get(`/item/defaultModel/${itemType}`, {
-                params: {
-                    containerId: locationId
-                }
-            });
-            if (defaultModelResponse.status !== 200) {
-                return handleUnexpectedResponse(defaultModelResponse);
+            // 1. Get the cached default model
+            let payload;
+            try {
+                payload = await getCachedDefaultModel(itemType, locationId, authenticatedAxios);
+            } catch (error: any) {
+                 return handleAxiosError(error, `Failed to load default model for ${itemType}`);
             }
-            const payload = defaultModelResponse.data;
             // 2. Customize the payload
             payload.Title = title;
             if (metadataSchemaId) payload.MetadataSchema = { IdRef: metadataSchemaId };
@@ -341,7 +405,7 @@ The provided 'locationId' (${locationId}) is a '${locationType}'.`;
                 return handleUnexpectedResponse(createResponse);
             }
         } catch (error) {
-            await diagnoseBluePrintError(error, args, locationId, authenticatedAxios);
+            await diagnoseBluePrintError(error, diagnosticsArgs, locationId, authenticatedAxios);
             return handleAxiosError(error, "Failed to create CMS item");
         }
     }

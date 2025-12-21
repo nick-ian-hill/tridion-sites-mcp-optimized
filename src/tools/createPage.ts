@@ -8,6 +8,7 @@ import { reorderFieldsBySchema, convertLinksRecursively, formatForApi, formatFor
 import { processComponentPresentations, processRegions } from "../utils/pageUtils.js";
 import { componentPresentationSchemaForTyping, regionSchemaForTyping, RegionForTyping } from "../schemas/pageSchemas.js";
 import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
+import { getCachedDefaultModel } from "../utils/defaultModelCache.js";
 
 const createPageInputProperties = {
     title: z.string().nonempty().describe("The title for the new Page."),
@@ -27,6 +28,9 @@ type CreatePageInput = z.infer<typeof createPageInputSchema>;
 export const createPage = {
     name: "createPage",
     description: `Creates a new Page in the Content Management System (CMS). A Page is a container for content that is structured by a Page Template. Note that pages are contained in Structure Groups (e.g., tcm:5-5-4) not Folders (e.g., tcm:5-1-2).
+
+BluePrint Inheritance Note:
+The Page will be created in the specified Structure Group and be automatically inherited by all descendant Publications.
 
 IMPORTANT: Before creating a Page with regions, you MUST first use the 'getItem' tool to inspect the 'pageTemplateId'. This will reveal the required region names, whether they are repeatable, and the schemas for their metadata, which is crucial for correctly formatting the 'regions' parameter.
 
@@ -162,6 +166,7 @@ This example shows a two-column layout within the main content area.
         context: any
     ) => {
         formatForApi(args);
+        const diagnosticsArgs = JSON.parse(JSON.stringify(args));
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -183,14 +188,13 @@ This example shows a two-column layout within the main content area.
             let parsedComponentPresentations = componentPresentations;
             let parsedRegions = regions;
 
-            // Fetch the default model to use as a base
-            const defaultModelResponse = await authenticatedAxios.get('/item/defaultModel/Page', {
-                params: { containerId: locationId }
-            });
-            if (defaultModelResponse.status !== 200) {
-                return handleUnexpectedResponse(defaultModelResponse);
+            // Fetch the cached default model to use as a base
+            let payload;
+            try {
+                payload = await getCachedDefaultModel("Page", locationId, authenticatedAxios);
+            } catch (error: any) {
+                return handleAxiosError(error, "Failed to load default model for Page");
             }
-            const payload = defaultModelResponse.data;
 
             // If agent provided no PT or regions, fall back to default model's regions.
             if (!pageTemplateId && !regions && payload.Regions?.length > 0) {
@@ -322,7 +326,7 @@ This example shows a two-column layout within the main content area.
                 return handleUnexpectedResponse(createResponse);
             }
         } catch (error) {
-            await diagnoseBluePrintError(error, args, locationId, authenticatedAxios);
+            await diagnoseBluePrintError(error, diagnosticsArgs, locationId, authenticatedAxios);
             return handleAxiosError(error, "Failed to create CMS item");
         }
     }

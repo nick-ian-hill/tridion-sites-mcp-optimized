@@ -8,6 +8,7 @@ import { reorderFieldsBySchema, convertLinksRecursively, formatForApi } from "..
 import { processComponentPresentations, processRegions } from "../utils/pageUtils.js";
 import { componentPresentationSchemaForTyping, regionSchemaForTyping, RegionForTyping } from "../schemas/pageSchemas.js";
 import { linkSchema } from "../schemas/linkSchema.js";
+import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
 
 const componentPresentationUpdateOperationSchema = z.object({
     regionPath: z.string().optional().describe("The path to the target region (e.g., 'Main' or 'Main/Sidebar'). If omitted or empty, the operation applies to the Page's top-level Component Presentations."),
@@ -210,6 +211,7 @@ Example 7: Remove the Metadata Schema from a Page.
         }
 
         formatForApi(params);
+        const diagnosticsArgs = JSON.parse(JSON.stringify(params));
         
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
@@ -340,6 +342,7 @@ Example 7: Remove the Metadata Schema from a Page.
             };
 
         } catch (error) {
+            await diagnoseBluePrintError(error, diagnosticsArgs, params.itemId, authenticatedAxios);
             return handleAxiosError(error, `Failed to update Page ${itemId}`);
         }
     }

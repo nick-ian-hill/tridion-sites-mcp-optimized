@@ -236,6 +236,7 @@ This example updates a basic Region Schema (e.g., 'tcm:5-3875-8') to make it non
         }
 
         formatForApi(params);
+        const diagnosticsArgs = JSON.parse(JSON.stringify(params));
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -407,7 +408,7 @@ This example updates a basic Region Schema (e.g., 'tcm:5-3875-8') to make it non
                 content: [{ type: "text", text: JSON.stringify(responseData, null, 2) }],
             };
         } catch (error) {
-            await diagnoseBluePrintError(error, params, itemId, authenticatedAxios);
+            await diagnoseBluePrintError(error, diagnosticsArgs, itemId, authenticatedAxios);
             return handleAxiosError(error, `Failed to update ${itemType} ${itemId}`);
         }
     }

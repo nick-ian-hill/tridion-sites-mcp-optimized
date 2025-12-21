@@ -6,10 +6,14 @@ import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
 import { convertLinksRecursively, processSchemaFieldDefinitions, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
 import { regionDefinitionSchema } from "../schemas/regionDefinitionSchemas.js";
 import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
+import { getCachedDefaultModel } from "../utils/defaultModelCache.js";
 
 export const createRegionSchema = {
     name: "createRegionSchema",
     description: `Creates a new Content Manager System (CMS) item of type 'Schema' with a purpose of 'Region'.
+
+BluePrint Inheritance Note:
+The Schema will be created in the specified Folder and be automatically inherited by all descendant Publications.
 
 Region Schemas are used by Page Templates to define the layout and content areas (regions) of a Page. This tool is the correct choice for creating the "Page Schema" that a Page Template links to.
 
@@ -121,14 +125,13 @@ Note the use of "type": "ExpandableLink" for the 'RegionSchema' property inside 
                 convertLinksRecursively(regionDefinition, locationId);
             }
 
-            const defaultModelResponse = await authenticatedAxios.get('/item/defaultModel/Schema', {
-                params: { containerId: locationId }
-            });
-            if (defaultModelResponse.status !== 200) {
-                return handleUnexpectedResponse(defaultModelResponse);
+            let payload;
+            try {
+                payload = await getCachedDefaultModel("Schema", locationId, authenticatedAxios);
+            } catch (error: any) {
+                return handleAxiosError(error, "Failed to load default model for Schema");
             }
 
-            const payload = defaultModelResponse.data;
             payload.Title = title;
             payload.Purpose = "Region";
             delete payload.RootElementName;
