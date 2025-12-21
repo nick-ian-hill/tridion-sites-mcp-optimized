@@ -30,7 +30,7 @@ export async function diagnoseBluePrintError(
     if (!status) return;
 
     // =================================================================================
-    // CHECK 1: SIBLING ISOLATION (Trigger on 404)
+    // CHECK 1: SIBLING ISOLATION (Trigger on 404 or 400)
     // Referenced item exists elsewhere but not here.
     // =================================================================================
     if (status === 404 || status === 400) {
@@ -43,17 +43,14 @@ export async function diagnoseBluePrintError(
 
             try {
                 // 1. Verify it fails in the current context
-                // Use GET with $select=Id to be lightweight but reliable
                 try {
                     await axiosInstance.get(`/items/${mappedId.replace(':', '_')}?$select=Id`);
-                    // If this succeeds, the item DOES exist here, so isolation isn't the issue.
                     continue; 
                 } catch (localErr) {
                     // Expected: Item is missing in this context
                 }
 
                 // 2. CRITICAL CHECK: Does the ORIGINAL item exist?
-                // We use GET here because HEAD is often unreliable for existence checks
                 await axiosInstance.get(`/items/${originalId.replace(':', '_')}?$select=Id`);
 
                 // SUCCESS: The original exists, but mapped does not.
@@ -64,61 +61,76 @@ export async function diagnoseBluePrintError(
                 );
 
             } catch (checkError: any) {
-                // If we threw the Isolation Error above, strictly re-throw it.
                 if (checkError.message?.includes("BluePrint Isolation Error")) {
                     throw checkError;
                 }
-                // Otherwise, the original item likely doesn't exist either. Ignore.
             }
         }
     }
 
     // =================================================================================
-    // CHECK 2: INHERITANCE COLLISION (Trigger on 409 AND 400)
+    // CHECK 2: INHERITANCE COLLISION (Trigger on 409 or 400)
     // Trying to create an item that already exists from a parent.
     // =================================================================================
     if (status === 409 || status === 400) {
         const collisionCandidateName = args?.title || args?.name;
-        const collisionCandidateId = args?.id;
         const parentFolderId = args?.folderId || args?.locationId;
-
-        try {
-            let existingItem: any = null;
-
-            if (collisionCandidateId) {
-                const checkResponse = await axiosInstance.get(`/items/${contextId}-${collisionCandidateId}`);
-                existingItem = checkResponse.data;
-            } else if (collisionCandidateName && parentFolderId) {
-                const listResponse = await axiosInstance.get(`/items/${parentFolderId}/children`);
+        
+        let existingItem: any = null;
+        
+        // Strategy A: Parse ID from Error Message (Most Reliable)
+        // Error format example: "Source or sources of conflict: tcm:286-780-2."
+        const errorMessage = error.response?.data?.Message || "";
+        const conflictMatch = errorMessage.match(/Source or sources of conflict:\s*(tcm:\d+-\d+(?:-\d+)?)/);
+        
+        if (conflictMatch) {
+            const conflictSourceId = conflictMatch[1];
+            try {
+                // IMPORTANT: The API returns the ID of the *original* item (Parent).
+                // We must map this to the *current* context (Child) to check if it's inherited (IsShared).
+                const localConflictId = convertItemIdToContextPublication(conflictSourceId, contextId);
+                
+                const conflictResponse = await axiosInstance.get(`/items/${localConflictId.replace(':', '_')}`);
+                existingItem = conflictResponse.data;
+            } catch (e) {
+                // Swallow error if we can't fetch the conflict item
+            }
+        } 
+        
+        // Strategy B: Fallback to listing children (Less Reliable due to pagination/latency)
+        if (!existingItem && collisionCandidateName && parentFolderId) {
+            try {
+                const listResponse = await axiosInstance.get(`/items/\${parentFolderId}/children`);
                 const children = listResponse.data?.value || listResponse.data || [];
                 existingItem = children.find((child: any) =>
                     child.Title === collisionCandidateName || child.Name === collisionCandidateName
                 );
+            } catch (e) {
+                // Swallow
             }
+        }
 
-            if (existingItem && existingItem.BluePrintInfo?.IsShared && error.response) {
-                const bpInfo = existingItem.BluePrintInfo;
-                const isPureInherited = !bpInfo.IsLocalized;
-                const owningPub = bpInfo.OwningRepository?.Title || "Parent Publication";
+        if (existingItem && error.response) {
+            const bpInfo = existingItem.BluePrintInfo;
+            const owningPub = bpInfo?.OwningRepository?.Title || "an ancestor Publication";
+            
+            // Check context. If IsShared is true, it means the item exists here purely because of inheritance.
+            const isPureInherited = bpInfo?.IsShared && !bpInfo?.IsLocalized;
 
-                // MUTATE the error object for safe handling in orchestrator (Idempotency)
-                if (isPureInherited) {
-                    error.response.data = {
-                        "BluePrint Efficiency Warning": `Item '${collisionCandidateName}' already exists via inheritance from '${owningPub}'.`,
-                        "Instruction": "STOP: You do NOT need to create this item. It is already available.",
-                        "ExistingItemID": existingItem.Id,
-                        "Status": "409 Conflict (Inherited)"
-                    };
-                } else {
-                    error.response.data = {
-                        "Naming Collision": `Item '${collisionCandidateName}' already exists as a Localized copy from '${owningPub}'.`,
-                        "Instruction": "Update the existing item or choose a new name.",
-                        "Status": "409 Conflict (Localized)"
-                    };
-                }
+            if (isPureInherited) {
+                error.response.data = {
+                    "BluePrint Efficiency Warning": `Item '${collisionCandidateName}' already exists via inheritance from '${owningPub}'.`,
+                    "Instruction": "STOP: You do NOT need to create this item. It is already available.",
+                    "ExistingItemID": existingItem.Id,
+                    "Status": "409 Conflict (Inherited)"
+                };
+            } else if (bpInfo?.IsLocalized) {
+                 error.response.data = {
+                    "Naming Collision": `Item '${collisionCandidateName}' already exists as a Localized copy from '${owningPub}'.`,
+                    "Instruction": "Update the existing item or choose a new name.",
+                    "Status": "409 Conflict (Localized)"
+                };
             }
-        } catch (checkError) {
-            // Ignore lookup failures; preserve original error
         }
     }
 }
