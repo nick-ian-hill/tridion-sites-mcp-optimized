@@ -14,7 +14,7 @@ const SYNC_SCRIPT_TIMEOUT_MS = 5000; // 5 seconds
  * Defines the maximum total time an async script can run (including awaiting tools).
  * This prevents runaway scripts or long-running operations.
  */
-const TOTAL_SCRIPT_TIMEOUT_MS = 120000; // 120 seconds
+const TOTAL_SCRIPT_TIMEOUT_MS = 300000; // 5 minutes
 
 /**
  * A strict deny-list of tool names that *cannot* be passed to the sandboxed script.
@@ -60,11 +60,39 @@ const createBaseSandbox = (): any => {
 // --- End Security Configuration ---
 
 // --- Utilities for Scripts ---
+
+/**
+ * Deep equality check for idempotency verification.
+ * Recursively compares objects to ensure args match existing item properties.
+ */
+const isDeepEqual = (obj1: any, obj2: any): boolean => {
+    if (obj1 === obj2) return true;
+    if (typeof obj1 !== 'object' || typeof obj2 !== 'object' || obj1 == null || obj2 == null) return false;
+
+    // Handle Date objects specifically
+    if (obj1 instanceof Date && obj2 instanceof Date) {
+        return obj1.getTime() === obj2.getTime();
+    }
+
+    // Handle Arrays
+    if (Array.isArray(obj1) !== Array.isArray(obj2)) return false;
+
+    const keys1 = Object.keys(obj1);
+    const keys2 = Object.keys(obj2);
+
+    if (keys1.length !== keys2.length) return false;
+
+    for (const key of keys1) {
+        if (!keys2.includes(key) || !isDeepEqual(obj1[key], obj2[key])) return false;
+    }
+    return true;
+};
+
 const scriptUtils = {
     /** Converts an item ID to match a specific publication context.
         Returns the string ID directly. */
     convertItemIdToContextPublication,
-    
+
     /**
      * Throws an error if the condition is false.
      * Useful for validation scripts.
@@ -176,6 +204,14 @@ export const toolOrchestrator = {
     - Find: Use 'search' in 'preProcessingScript' to get IDs.
     - Fetch: Use 'mapScript' to call 'getItem' for specific details.
 
+    4. Built-in idempotency (Creation Tools)
+    You do not need to write "check if exists" logic for creation tools (createItem, createPage, createComponent, createPublication, createComponentSchema, createRegionSchema, createMetadataSchema).
+    These tools automatically handle "409 Conflict" errors internally:
+    1. If the item already exists, the tool fetches it.
+    2. It compares your input parameters against the existing item.
+    3. If they match (subset match), it returns the existing item as a Success with the status "Success (Idempotent)".
+    4. It only throws an error if the item exists but has DIFFERENT content/metadata than what you requested.
+
     --- SCRIPT CONTEXT DETAILS ---
 
     The 'preProcessingScript' receives a 'context' object with:
@@ -226,7 +262,7 @@ export const toolOrchestrator = {
 
     NOTES
     - Automatic JSON parsing: All tools have their JSON string responses automatically parsed into JavaScript objects. You do not need to parse tool responses in a script.
-    - Script Limits: All scripts are sandboxed. Sync code max 5s, Async max 120s.
+    - Script Limits: All scripts are sandboxed. Sync code max 5s, Async max 300s.
     - Disallowed Tools: 'toolOrchestrator' and 'deleteItem' cannot be called recursively.
 
     ### EXAMPLES
@@ -646,7 +682,8 @@ export const toolOrchestrator = {
                 const originalToolExecute = originalTool.execute;
                 const toolInputProperties = originalTool.input;
 
-                toolWrappers[toolName] = async (args: any) => {
+                // Create the standard wrapper
+                const standardWrapper = async (args: any) => {
 
                     let validatedArgs = args || {};
 
@@ -697,6 +734,175 @@ export const toolOrchestrator = {
                     // Default: return the raw result
                     return result;
                 };
+
+// --- Helper: Subset Matching (Deep Compare) ---
+                const containsSubset = (subset: any, original: any): boolean => {
+                    // 1. Handle strict equality (primitives, null, undefined)
+                    if (subset === original) return true;
+
+                    // 2. Handle Dates
+                    if (subset instanceof Date && original instanceof Date) {
+                        return subset.getTime() === original.getTime();
+                    }
+
+                    // 3. Handle Arrays (Subset is Array)
+                    if (Array.isArray(subset)) {
+                        if (!Array.isArray(original)) {
+                            // Edge case: Input is [value], CMS returns value
+                            return containsSubset(subset[0], original);
+                        }
+                        if (subset.length !== original.length) return false;
+                        return subset.every((item, index) => containsSubset(item, original[index]));
+                    }
+
+                    // 4. Handle Arrays (Subset is Scalar, Original is Array)
+                    // Edge case: Input="Val", CMS=["Val"]
+                    if (Array.isArray(original)) {
+                        return original.length > 0 && containsSubset(subset, original[0]);
+                    }
+
+                    // 5. Handle Objects
+                    if (typeof subset === 'object' && subset !== null) {
+                        if (typeof original !== 'object' || original === null) return false;
+
+                        // Iterate ONLY keys present in the INPUT (subset)
+                        return Object.keys(subset).every(key => {
+                            const subsetVal = subset[key];
+                            let originalVal = original[key];
+
+                            // 5a. PascalCase Fallback
+                            if (originalVal === undefined) {
+                                const pascalKey = key.charAt(0).toUpperCase() + key.slice(1);
+                                originalVal = original[pascalKey];
+                            }
+
+                            // 5b. Special ID Mappings (Link Object -> String ID)
+                            if (key === 'schemaId' && original.Schema) originalVal = original.Schema.IdRef;
+                            if (key === 'pageTemplateId' && original.PageTemplate) originalVal = original.PageTemplate.IdRef;
+                            if (key === 'metadataSchemaId' && original.MetadataSchema) originalVal = original.MetadataSchema.IdRef;
+                            if (key === 'metadataFields' && original.MetadataFields) originalVal = original.MetadataFields;
+                            if (key === 'regionDefinition' && original.RegionDefinition) originalVal = original.RegionDefinition;
+
+                            // 5c. Special Array Mappings (Array of Links -> Array of String IDs)
+                            if ((key === 'parentKeywords' || key === 'relatedKeywords' || key === 'parentPublications') && Array.isArray(originalVal)) {
+                                originalVal = originalVal.map((item: any) => item.IdRef || item);
+                            }
+
+                            // 5d. Recurse
+                            return containsSubset(subsetVal, originalVal);
+                        });
+                    }
+
+                    return false;
+                };
+
+                // --- Generic Idempotency Wrapper ---
+                if (toolName === "createItem" ||
+                    toolName === "createPage" ||
+                    toolName === "createComponent" ||
+                    toolName === "createComponentSchema" ||
+                    toolName === "createRegionSchema" ||
+                    toolName === "createMetadataSchema" ||
+                    toolName === "createPublication") {
+
+                    toolWrappers[toolName] = async (args: any) => {
+                        try {
+                            return await standardWrapper(args);
+                        } catch (error: any) {
+                            // 1. Detect Conflict
+                            const errorMessage = (error?.message || error?.toString() || "").toLowerCase();
+                            const errorContent = (error?.content) ? JSON.stringify(error.content).toLowerCase() : "";
+
+                            const isConflict =
+                                (error?.status === 409) ||
+                                errorMessage.includes("already exists") ||
+                                errorMessage.includes("itemalreadyexists") ||
+                                errorMessage.includes("status 409") ||
+                                errorContent.includes("already exists") ||
+                                errorContent.includes("itemalreadyexists");
+
+                            if (!isConflict) throw error;
+
+                            // 2. Prerequisites
+                            const title = args.title || args.Title;
+                            const containerId = args.locationId || args.parentId || args.ContainerId;
+
+                            // Publications don't have a containerId.
+                            if (toolName !== "createPublication" && !containerId) throw error;
+                            if (!title) throw error;
+
+                            // 3. Select List Tool & Strategy
+                            let siblings: any[] = [];
+                            
+                            if (toolName === "createPublication") {
+                                const listPubsTool = toolWrappers["getPublications"];
+                                if (!listPubsTool) throw error;
+                                siblings = await listPubsTool({});
+                            } else {
+                                const listTool = toolWrappers["getItemsInContainer"] || toolWrappers["getList"];
+                                if (!listTool) throw error;
+
+                                let itemTypesToCheck: string[] | undefined;
+                                if (args.itemType) {
+                                    itemTypesToCheck = [args.itemType];
+                                } else if (toolName === 'createPage') {
+                                    itemTypesToCheck = ['Page'];
+                                } else if (toolName === 'createComponent') {
+                                    itemTypesToCheck = ['Component'];
+                                } else if (toolName.includes('Schema')) {
+                                    itemTypesToCheck = ['Schema'];
+                                }
+
+                                // FIX: Keywords must use recursive search because locationId is the Category, 
+                                // but the keyword might be deeply nested.
+                                const isKeyword = args.itemType === 'Keyword' || (itemTypesToCheck && itemTypesToCheck.includes('Keyword'));
+
+                                siblings = await listTool({
+                                    containerId: containerId,
+                                    itemTypes: itemTypesToCheck,
+                                    recursive: isKeyword // <--- Forced Recursive for Keywords
+                                });
+                            }
+
+                            // 4. Find existing item
+                            const existingHeader = siblings?.find((i: any) => i.Title === title);
+                            if (!existingHeader) throw error;
+
+                            // 5. Fetch full item
+                            const getTool = toolWrappers["getItem"];
+                            if (!getTool) throw error;
+                            
+                            const fullExistingItem = await getTool({
+                                itemId: existingHeader.Id
+                            });
+
+                            // 6. Compare using Subset Logic
+                            const keysToIgnore = ["locationId", "parentId", "ContainerId", "recursive", "itemType"];
+                            const inputSubset: any = {};
+                            
+                            for (const key of Object.keys(args)) {
+                                if (!keysToIgnore.includes(key)) {
+                                    inputSubset[key] = args[key];
+                                }
+                            }
+
+                            if (containsSubset(inputSubset, fullExistingItem)) {
+                                return {
+                                    ...fullExistingItem,
+                                    Status: "Success (Idempotent)",
+                                    Message: `Existing item matched all ${Object.keys(inputSubset).length} provided properties.`,
+                                    IdempotentMatch: true
+                                };
+                            } else {
+                                throw new Error(
+                                    `Idempotency Failure: Item '${title}' exists but the provided properties do not match the existing item's content.`
+                                );
+                            }
+                        }
+                    }
+                } else {
+                    toolWrappers[toolName] = standardWrapper;
+                }
             }
         }
 
@@ -757,7 +963,7 @@ export const toolOrchestrator = {
                     }
                 } else {
                     if (preScriptResult && typeof preScriptResult === 'object') {
-                          if (preScriptResult.preProcessingResult) {
+                        if (preScriptResult.preProcessingResult) {
                             preScriptContextData = Object.freeze(preScriptResult.preProcessingResult);
                         }
                     }
@@ -783,7 +989,7 @@ export const toolOrchestrator = {
         // --- Phase 2: Execution Logic (Map Phase) ---
         // Only run if we have items AND a map script.
         if (finalItemIds.length > 0) {
-            
+
             if (!mapScript) {
                 // GUARDRAIL: Throw error if items are present but no map script is provided.
                 // This prevents silent failure where the agent assumes work was done.
@@ -792,11 +998,13 @@ export const toolOrchestrator = {
                 If you intended to skip the map phase, ensure your pre-processing script returns an empty 'itemIds' array.`;
                 logs.push(errorMsg);
                 return {
-                    content: [{ type: "text", text: JSON.stringify({
-                        type: "Error",
-                        Message: errorMsg,
-                        Hint: "Check the tool description: mapScript is mandatory when iterating over items."
-                    }, null, 2)}]
+                    content: [{
+                        type: "text", text: JSON.stringify({
+                            type: "Error",
+                            Message: errorMsg,
+                            Hint: "Check the tool description: mapScript is mandatory when iterating over items."
+                        }, null, 2)
+                    }]
                 };
             }
 
@@ -860,7 +1068,7 @@ export const toolOrchestrator = {
                         setTimeout(() => reject(new Error(`Script timed out after ${TOTAL_SCRIPT_TIMEOUT_MS}ms`)), TOTAL_SCRIPT_TIMEOUT_MS)
                     );
                     const result = await Promise.race([scriptPromise, timeoutPromise]);
-                    
+
                     // Categorize based on warning state
                     if (itemHasWarning) {
                         results.push({
@@ -928,10 +1136,10 @@ export const toolOrchestrator = {
         } else {
             // Logic: itemIds is empty.
             if (mapScript) {
-                 log("No items found to process. Skipping map phase.");
+                log("No items found to process. Skipping map phase.");
             } else {
-                 // This is the valid "Setup Only" path
-                 log("No items found and no mapScript provided. Skipping map phase (valid setup-only execution).");
+                // This is the valid "Setup Only" path
+                log("No items found and no mapScript provided. Skipping map phase (valid setup-only execution).");
             }
         }
         // --- End of Map Phase ---
@@ -940,7 +1148,7 @@ export const toolOrchestrator = {
         const successes = results.filter(r => r.status === 'success');
         const warnings = results.filter(r => r.status === 'warning');
         const failures = results.filter(r => r.status === 'error');
-        
+
         const successCount = successes.length;
         const warningCount = warnings.length;
         const errorCount = failures.length;
@@ -1028,7 +1236,7 @@ export const toolOrchestrator = {
             if (errorCount > 0) {
                 responsePayload.errors = failures.map(r => ({ itemId: r.itemId, error: r.error }));
             }
-            
+
             if (warningCount > 0) {
                 responsePayload.warnings = warnings.map(r => ({ itemId: r.itemId, warning: r.warning, result: r.result }));
             }
@@ -1061,14 +1269,14 @@ export const toolOrchestrator = {
             const valScriptErrorLog = (message: string) => logs.push(`[Validation] [ERROR] ${message}`);
             const valScriptWarnLog = (message: string) => logs.push(`[Validation] [WARN] ${message}`);
             const sandboxContext = { ...baseSandbox };
-            
+
             sandboxContext.context = {
                 output: Object.freeze(responsePayload), // The result from Phase 3 (or the summary)
                 results: Object.freeze(results),
                 successes: Object.freeze(successes),
-                warnings: Object.freeze(warnings), 
+                warnings: Object.freeze(warnings),
                 failures: Object.freeze(failures),
-                
+
                 // --- Context Flags for Safer Scripting ---
                 hasSuccesses: successCount > 0,
                 hasFailures: errorCount > 0,
@@ -1129,7 +1337,7 @@ export const toolOrchestrator = {
                     ...logs.slice(-25)
                 ];
             }
-            
+
             // Wrap the result to include debug info
             finalOutput = {
                 result: responsePayload,
