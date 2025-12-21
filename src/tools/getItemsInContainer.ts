@@ -4,6 +4,28 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 import { filterResponseData } from "../utils/responseFiltering.js";
 import { formatForAgent } from "../utils/fieldReordering.js";
 
+const itemTypeEnum = z.enum([
+    "Bundle",
+    "BusinessProcessType",
+    "Category",
+    "Component",
+    "ComponentTemplate",
+    "ExternalCategory",
+    "ExternalComponent",
+    "ExternalContainer",
+    "ExternalKeyword",
+    "Folder",
+    "Keyword",
+    "Page",
+    "PageTemplate",
+    "ResolvedBundle",
+    "Schema",
+    "SearchFolder",
+    "StructureGroup",
+    "TargetGroup",
+    "TemplateBuildingBlock"
+]);
+
 export const getItemsInContainer = {
     name: "getItemsInContainer",
     description: `Gets a list of items (Id, Title, type) inside a specified container (e.g., a Publication, Folder, Structure Group).
@@ -16,7 +38,7 @@ export const getItemsInContainer = {
         containerId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The TCM URI or ECL URI of the container item."),
         recursive: z.boolean().optional().default(false).describe("Set to `true` to include items from all nested sub-containers."),
         useDynamicVersion: z.boolean().optional().default(true).describe("The default setting of `true` ensures that the latest data is returned for versioned items."),
-        itemTypes: z.array(z.string()).optional().describe("An array of item types to filter the results, e.g., ['Component', 'Page', 'Folder']. If omitted, all item types are returned."),
+        itemTypes: z.array(itemTypeEnum).optional().describe("An array of item types to filter the results, e.g., ['Component', 'Page', 'Folder']. If omitted, all item types are returned."),
     },
     execute: async ({ containerId, recursive = false, useDynamicVersion = true, itemTypes }: { 
         containerId: string, 
