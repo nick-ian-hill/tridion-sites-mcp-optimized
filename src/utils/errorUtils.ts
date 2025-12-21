@@ -28,12 +28,11 @@ export function handleAxiosError(error: unknown, contextMessage: string): ToolRe
 
     const fullMessage = `${contextMessage}: ${errorMessage}`;
 
-    // Also log the full error for server-side debugging
-    console.error(fullMessage, error);
+    const sanitizedMessage = fullMessage.replace(/\$type/g, 'type');
 
     const errorResponse = {
         $type: 'Error',
-        Message: fullMessage
+        Message: sanitizedMessage
     };
 
     const formattedError = formatForAgent(errorResponse);
