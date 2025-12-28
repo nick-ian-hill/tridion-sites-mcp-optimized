@@ -10,17 +10,25 @@ export const getItem = {
     name: "getItem",
     description: `Retrieves read-only details for a single Content Manager System (CMS) item.
 This is the primary tool for fetching the FULL data of an item.
+The default response includes extensive system metadata and HATEOAS links.
 To avoid polluting the context window, use the 'includeProperties' parameter to request only what you need.
 
 ### Contextual Retrieval
 You can inspect the state of an item in a specified Publication context (e.g., to check if it is localized, shared, or accessible in a sibling/parent) by providing the 'contextPublicationId' parameter. The tool will automatically resolve the correct ID for that context.
 
-**Example 1: Contextual Retrieval (Success)**
+**Example 1: Contextual Retrieval (Success). Using includeProperties to request only the information needed.**
 Request:
-getItem({ itemId: "tcm:5-123", contextPublicationId: "tcm:0-10-1" })
+getItem({
+  itemId: "tcm:5-123",
+  contextPublicationId: "tcm:0-10-1",
+  includeProperties: [
+    "BluePrintInfo.IsShared",
+    "BluePrintInfo.OwningRepository.Title"
+]})
 
 Response:
 {
+  "type": "Component",
   "Id": "tcm:10-123",
   "Title": "About Us",
   "BluePrintInfo": { "IsShared": true, "OwningRepository": { "Title": "05 Master" } }
@@ -44,13 +52,13 @@ Response:
             "PublicationId": "tcm:0-10-1", 
             "PublicationTitle": "10 Website EN",
             "ItemId": "tcm:10-123",
-            "Title": "About Us" 
+            "Title": "About Us - EN" 
         }
     ]
 }
 
 ### MASTER PROPERTY REFERENCE
-You can request these properties using dot notation (e.g., 'VersionInfo.RevisionDate', 'BinaryContent.MimeType').
+You can limit the response to combinations of the following properties by providing the path in the 'includeProperties' array using dot notation (e.g., 'VersionInfo.RevisionDate', 'BinaryContent.MimeType').
 
 **1. Standard Properties (Always Returned)**
 * **Id**: The TCM URI (e.g., 'tcm:5-123').
