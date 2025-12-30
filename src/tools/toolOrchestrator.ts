@@ -707,8 +707,8 @@ export const toolOrchestrator = {
                 };
 
                 // Idempotency Wrapper
-                if (["createItem", "createPage", "createComponent", "createComponentSchema", 
-                     "createRegionSchema", "createMetadataSchema", "createPublication"].includes(toolName)) {
+                if (["createItem", "createPage", "createComponent", "createComponentSchema",
+                    "createRegionSchema", "createMetadataSchema", "createPublication"].includes(toolName)) {
                     toolWrappers[toolName] = async (args: any) => {
                         try {
                             return await standardWrapper(args);
@@ -783,7 +783,6 @@ export const toolOrchestrator = {
 
         // --- Phase 2: Execution Logic (Map Phase) ---
         let wasStoppedOnError = false;
-        let stoppingError: { id: string; error: string } | null = null;
 
         if (finalItemIds.length > 0) {
             if (!mapScript) {
@@ -830,14 +829,13 @@ export const toolOrchestrator = {
                 } catch (error: any) {
                     const errorMessage = extractErrorMessage(error);
                     logs.push(`[${itemId}] FAILED: ${errorMessage}`);
-                    
+
                     // Always record the failure
                     results.push({ itemId: itemId, status: "error", error: errorMessage });
 
                     if (stopOnError) {
                         // Mark global stop flag. The loop controller will handle the break.
                         wasStoppedOnError = true;
-                        stoppingError = { id: itemId, error: errorMessage };
                     }
                 }
             };
@@ -876,20 +874,32 @@ export const toolOrchestrator = {
         const failures = results.filter(r => r.status === 'error');
 
         // --- STOPPED ON ERROR EXIT ---
-        // If execution stopped early, return the Partial Success Report immediately.
-        // We skip Post-Processing and Validation as data is incomplete.
-        const actualStoppingError = stoppingError as { id: string; error: string } | null;
-        if (wasStoppedOnError && actualStoppingError) {
+        if (wasStoppedOnError && failures.length > 0) {
+            // We use the first failure as the "primary" reason for the stop,
+            // but we acknowledge that concurrent threads may have produced other errors.
+            const primaryFailure = failures[0];
+            const otherFailures = failures.slice(1);
+
+            let summaryText = `Execution stopped due to error on item '${primaryFailure.itemId}'.`;
+
+            if (otherFailures.length > 0) {
+                summaryText += ` ${otherFailures.length} other item(s) also failed concurrently (IDs: ${otherFailures.map(f => f.itemId).join(", ")}).`;
+            }
+
+            summaryText += ` Processed ${successes.length} items successfully before stop.`;
+
             const stoppedResult: OrchestratorResult = {
                 status: "StoppedOnError",
-                summary: `Execution stopped due to error on item '${actualStoppingError.id}'. Processed ${successes.length} items successfully before stop.`,
+                summary: summaryText,
                 processedItems: successes.map(s => ({ id: s.itemId, result: s.result })),
-                failedItem: actualStoppingError
+                // We strictly map the structure to match the interface expected
+                failedItem: { id: primaryFailure.itemId, error: primaryFailure.error }
             };
-            
-            // Log debug info if requested, but return the structured result
+
+            // If debug is on, we can include the full details of all failures in the log
             if (debug) {
                 (stoppedResult as any).executionLog = logs.join('\n');
+                (stoppedResult as any).allFailures = failures; // Extra debug data
             }
 
             return {
@@ -900,7 +910,7 @@ export const toolOrchestrator = {
         // --- Phase 3: Post-Processing Logic (Reduce Phase) ---
         // Runs only if we completed the loop (even with failures, if stopOnError=false)
         let responsePayload: any = null;
-        
+
         if (postProcessingScript) {
             logs.push("\nStarting post-processing script (reduce phase)...");
             let compiledPostScript: vm.Script;
@@ -911,7 +921,8 @@ export const toolOrchestrator = {
             }
 
             const postScriptLog = (message: string) => logs.push(`[PostScript] ${message}`);
-            const sandboxContext = { ...baseSandbox, 
+            const sandboxContext = {
+                ...baseSandbox,
                 context: {
                     results: Object.freeze(results),
                     successes: Object.freeze(successes),
@@ -923,7 +934,7 @@ export const toolOrchestrator = {
                     utils: scriptUtils,
                     log: postScriptLog
                 },
-                console: { log: postScriptLog } 
+                console: { log: postScriptLog }
             };
             const sandbox = vm.createContext(sandboxContext);
             try {
@@ -934,10 +945,10 @@ export const toolOrchestrator = {
             } catch (error: any) {
                 // Return structured error for Post-Processing failure
                 const postError: OrchestratorResult = {
-                     status: "StoppedOnError",
-                     summary: "Map phase completed, but Post-Processing script failed.",
-                     processedItems: successes.map(s => ({ id: s.itemId, result: s.result })),
-                     failedItem: { id: "PostProcessingScript", error: extractErrorMessage(error) }
+                    status: "StoppedOnError",
+                    summary: "Map phase completed, but Post-Processing script failed.",
+                    processedItems: successes.map(s => ({ id: s.itemId, result: s.result })),
+                    failedItem: { id: "PostProcessingScript", error: extractErrorMessage(error) }
                 };
                 return { content: [{ type: "text", text: JSON.stringify(postError, null, 2) }] };
             }
@@ -964,7 +975,8 @@ export const toolOrchestrator = {
             }
 
             const valScriptLog = (message: string) => logs.push(`[Validation] ${message}`);
-            const sandboxContext = { ...baseSandbox,
+            const sandboxContext = {
+                ...baseSandbox,
                 context: {
                     output: Object.freeze(responsePayload),
                     results: Object.freeze(results),
@@ -1008,7 +1020,7 @@ export const toolOrchestrator = {
         // We wrap the final result (even if custom) in the OrchestratorResult envelope
         // to ensure the agent receives the standard structure requested.
         const finalStatus = failures.length > 0 ? "PartialSuccess" : "Completed";
-        
+
         const finalOutput: OrchestratorResult = {
             status: finalStatus,
             summary: (typeof responsePayload === 'string') ? responsePayload : (responsePayload?.summary || `Operation ${finalStatus}`),
@@ -1017,11 +1029,11 @@ export const toolOrchestrator = {
         };
 
         if (debug) {
-             let logOutput = logs;
-             if (logs.length > 50) {
-                 logOutput = [...logs.slice(0, 25), `... (log truncated - ${logs.length - 50} lines hidden) ...`, ...logs.slice(-25)];
-             }
-             (finalOutput as any).executionLog = logOutput.join('\n');
+            let logOutput = logs;
+            if (logs.length > 50) {
+                logOutput = [...logs.slice(0, 25), `... (log truncated - ${logs.length - 50} lines hidden) ...`, ...logs.slice(-25)];
+            }
+            (finalOutput as any).executionLog = logOutput.join('\n');
         }
 
         return {
