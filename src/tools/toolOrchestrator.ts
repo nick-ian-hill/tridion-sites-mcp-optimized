@@ -61,33 +61,6 @@ const createBaseSandbox = (): any => {
 
 // --- Utilities for Scripts ---
 
-/**
- * Deep equality check for idempotency verification.
- * Recursively compares objects to ensure args match existing item properties.
- */
-const isDeepEqual = (obj1: any, obj2: any): boolean => {
-    if (obj1 === obj2) return true;
-    if (typeof obj1 !== 'object' || typeof obj2 !== 'object' || obj1 == null || obj2 == null) return false;
-
-    // Handle Date objects specifically
-    if (obj1 instanceof Date && obj2 instanceof Date) {
-        return obj1.getTime() === obj2.getTime();
-    }
-
-    // Handle Arrays
-    if (Array.isArray(obj1) !== Array.isArray(obj2)) return false;
-
-    const keys1 = Object.keys(obj1);
-    const keys2 = Object.keys(obj2);
-
-    if (keys1.length !== keys2.length) return false;
-
-    for (const key of keys1) {
-        if (!keys2.includes(key) || !isDeepEqual(obj1[key], obj2[key])) return false;
-    }
-    return true;
-};
-
 const scriptUtils = {
     /** Converts an item ID to match a specific publication context.
         Returns the string ID directly. */
@@ -158,6 +131,8 @@ const toolOrchestratorInputProperties = {
         .describe("Phase 4 (Validation): An async function body that runs LAST. MANDATORY if 'mapScript' is used. You MUST use this to AUDIT the operation by using `tools.getItem` on a sample of the results. Do NOT rely solely on `context.hasSuccesses`. Verify that the items actually contain the data you intended to add (e.g., check `ComponentPresentations.length > 0`)."),
     parameters: z.record(z.any()).optional()
         .describe("An optional JSON object of parameters to pass into all scripts. Use this for simple, static values like search queries, find/replace strings, or target TCM URIs. Note: Complex objects (like data from other tools) passed as parameters are treated as literal values. If you pass a stringified JSON object as a parameter value, you must manually call JSON.parse() on it inside your script. (Note: this only applies to input parameters, not to the responses from tool calls, which are always auto-parsed)."),
+    forceSkipIfPresent: z.boolean().optional().default(false)
+        .describe("If true, any '409 Conflict' (Item Already Exists) error during creation is treated as an immediate Success without checking if the item properties match. Use this only if you are certain that existing items are correct, e.g., when re-running (a modification of) a script that partially succeeded."),
     stopOnError: z.boolean().optional().default(true)
         .describe("If true (default), the entire operation stops if any single item fails during the 'map' phase. If false, it logs the error and continues to the next item."),
     maxConcurrency: z.number().int().min(1).max(10).optional().default(5)
@@ -204,13 +179,11 @@ export const toolOrchestrator = {
     - Find: Use 'search' in 'preProcessingScript' to get IDs.
     - Fetch: Use 'mapScript' to call 'getItem' for specific details.
 
-    4. Built-in idempotency (Creation Tools)
-    You do not need to write "check if exists" logic for creation tools (createItem, createPage, createComponent, createPublication, createComponentSchema, createRegionSchema, createMetadataSchema).
-    These tools automatically handle "409 Conflict" errors internally:
-    1. If the item already exists, the tool fetches it.
-    2. It compares your input parameters against the existing item.
-    3. If they match (subset match), it returns the existing item as a Success with the status "Success (Idempotent)".
-    4. It only throws an error if the item exists but has DIFFERENT content/metadata than what you requested.
+4. Idempotency (Creation Tools)
+    If you use creation tools (createItem, createPage, etc.) and the item already exists:
+    - DEFAULT: The tool will FAIL with a "409 Conflict" error.
+    - OPTIONAL: Set 'forceSkipIfPresent: true' in the parameters. The tool will NOT fail; instead, it will skip the item and mark it as "Success (Skipped)".
+    - Note: This skip is "blind". It does not check if the existing item matches your input.
 
     --- SCRIPT CONTEXT DETAILS ---
 
@@ -735,68 +708,7 @@ export const toolOrchestrator = {
                     return result;
                 };
 
-// --- Helper: Subset Matching (Deep Compare) ---
-                const containsSubset = (subset: any, original: any): boolean => {
-                    // 1. Handle strict equality (primitives, null, undefined)
-                    if (subset === original) return true;
-
-                    // 2. Handle Dates
-                    if (subset instanceof Date && original instanceof Date) {
-                        return subset.getTime() === original.getTime();
-                    }
-
-                    // 3. Handle Arrays (Subset is Array)
-                    if (Array.isArray(subset)) {
-                        if (!Array.isArray(original)) {
-                            // Edge case: Input is [value], CMS returns value
-                            return containsSubset(subset[0], original);
-                        }
-                        if (subset.length !== original.length) return false;
-                        return subset.every((item, index) => containsSubset(item, original[index]));
-                    }
-
-                    // 4. Handle Arrays (Subset is Scalar, Original is Array)
-                    // Edge case: Input="Val", CMS=["Val"]
-                    if (Array.isArray(original)) {
-                        return original.length > 0 && containsSubset(subset, original[0]);
-                    }
-
-                    // 5. Handle Objects
-                    if (typeof subset === 'object' && subset !== null) {
-                        if (typeof original !== 'object' || original === null) return false;
-
-                        // Iterate ONLY keys present in the INPUT (subset)
-                        return Object.keys(subset).every(key => {
-                            const subsetVal = subset[key];
-                            let originalVal = original[key];
-
-                            // 5a. PascalCase Fallback
-                            if (originalVal === undefined) {
-                                const pascalKey = key.charAt(0).toUpperCase() + key.slice(1);
-                                originalVal = original[pascalKey];
-                            }
-
-                            // 5b. Special ID Mappings (Link Object -> String ID)
-                            if (key === 'schemaId' && original.Schema) originalVal = original.Schema.IdRef;
-                            if (key === 'pageTemplateId' && original.PageTemplate) originalVal = original.PageTemplate.IdRef;
-                            if (key === 'metadataSchemaId' && original.MetadataSchema) originalVal = original.MetadataSchema.IdRef;
-                            if (key === 'metadataFields' && original.MetadataFields) originalVal = original.MetadataFields;
-                            if (key === 'regionDefinition' && original.RegionDefinition) originalVal = original.RegionDefinition;
-
-                            // 5c. Special Array Mappings (Array of Links -> Array of String IDs)
-                            if ((key === 'parentKeywords' || key === 'relatedKeywords' || key === 'parentPublications') && Array.isArray(originalVal)) {
-                                originalVal = originalVal.map((item: any) => item.IdRef || item);
-                            }
-
-                            // 5d. Recurse
-                            return containsSubset(subsetVal, originalVal);
-                        });
-                    }
-
-                    return false;
-                };
-
-                // --- Generic Idempotency Wrapper ---
+// --- Generic Idempotency Wrapper ---
                 if (toolName === "createItem" ||
                     toolName === "createPage" ||
                     toolName === "createComponent" ||
@@ -823,81 +735,19 @@ export const toolOrchestrator = {
 
                             if (!isConflict) throw error;
 
-                            // 2. Prerequisites
-                            const title = args.title || args.Title;
-                            const containerId = args.locationId || args.parentId || args.ContainerId;
-
-                            // Publications don't have a containerId.
-                            if (toolName !== "createPublication" && !containerId) throw error;
-                            if (!title) throw error;
-
-                            // 3. Select List Tool & Strategy
-                            let siblings: any[] = [];
-                            
-                            if (toolName === "createPublication") {
-                                const listPubsTool = toolWrappers["getPublications"];
-                                if (!listPubsTool) throw error;
-                                siblings = await listPubsTool({});
-                            } else {
-                                const listTool = toolWrappers["getItemsInContainer"] || toolWrappers["getList"];
-                                if (!listTool) throw error;
-
-                                let itemTypesToCheck: string[] | undefined;
-                                if (args.itemType) {
-                                    itemTypesToCheck = [args.itemType];
-                                } else if (toolName === 'createPage') {
-                                    itemTypesToCheck = ['Page'];
-                                } else if (toolName === 'createComponent') {
-                                    itemTypesToCheck = ['Component'];
-                                } else if (toolName.includes('Schema')) {
-                                    itemTypesToCheck = ['Schema'];
-                                }
-
-                                // FIX: Keywords must use recursive search because locationId is the Category, 
-                                // but the keyword might be deeply nested.
-                                const isKeyword = args.itemType === 'Keyword' || (itemTypesToCheck && itemTypesToCheck.includes('Keyword'));
-
-                                siblings = await listTool({
-                                    containerId: containerId,
-                                    itemTypes: itemTypesToCheck,
-                                    recursive: isKeyword // <--- Forced Recursive for Keywords
-                                });
-                            }
-
-                            // 4. Find existing item
-                            const existingHeader = siblings?.find((i: any) => i.Title === title);
-                            if (!existingHeader) throw error;
-
-                            // 5. Fetch full item
-                            const getTool = toolWrappers["getItem"];
-                            if (!getTool) throw error;
-                            
-                            const fullExistingItem = await getTool({
-                                itemId: existingHeader.Id
-                            });
-
-                            // 6. Compare using Subset Logic
-                            const keysToIgnore = ["locationId", "parentId", "ContainerId", "recursive", "itemType"];
-                            const inputSubset: any = {};
-                            
-                            for (const key of Object.keys(args)) {
-                                if (!keysToIgnore.includes(key)) {
-                                    inputSubset[key] = args[key];
-                                }
-                            }
-
-                            if (containsSubset(inputSubset, fullExistingItem)) {
+                            // 2. Handle Conflict based on 'forceSkipIfPresent'
+                            if (input.forceSkipIfPresent) {
                                 return {
-                                    ...fullExistingItem,
-                                    Status: "Success (Idempotent)",
-                                    Message: `Existing item matched all ${Object.keys(inputSubset).length} provided properties.`,
-                                    IdempotentMatch: true
+                                    type: "Skipped",
+                                    Id: "Existing-Unknown",
+                                    Message: "Item already exists. Skipped by request (forceSkipIfPresent=true).",
+                                    Status: "Success (Skipped)"
                                 };
-                            } else {
-                                throw new Error(
-                                    `Idempotency Failure: Item '${title}' exists but the provided properties do not match the existing item's content.`
-                                );
                             }
+                            
+                            // If we are here, it's a conflict but forceSkip is false.
+                            // We explicitly throw a helpful error message explaining why it failed.
+                            throw new Error(`Idempotency Error: Item already exists. To skip existing items, set 'forceSkipIfPresent: true' in the tool parameters.`);
                         }
                     }
                 } else {
