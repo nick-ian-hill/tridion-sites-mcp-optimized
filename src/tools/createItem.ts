@@ -22,7 +22,7 @@ Constraints by Item Type:
 - StructureGroup -> Must be in a Structure Group (tcm:x-y-4).
 - Keyword -> Must be in a Category (tcm:x-y-512).
 - Category -> Must be in a Publication (tcm:0-x-1).`),
-    metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("Optional. The TCM URI of the Metadata Schema. Use 'getSchemaLinks' to find available Schemas."),
+    metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("Optional. The TCM URI of the 'Metadata' Schema (or 'Bundle' Schema for Bundles). Use 'getSchemaLinks' (with SchemaPurpose 'Metadata' or 'Bundle') to find available Schemas."),
     metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields. The order of keys in your JSON object does not matter - the tool will automatically order the fields to match the Schema definition."),
     isAbstract: z.boolean().optional().describe("Only for 'Keyword' type. Set to true to create an abstract Keyword."),
     description: z.string().optional().describe("A description for the item. Applicable to Keyword, Category, Bundle, and Search Folder types."),
