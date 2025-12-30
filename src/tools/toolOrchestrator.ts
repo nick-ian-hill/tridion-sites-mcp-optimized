@@ -14,7 +14,7 @@ const SYNC_SCRIPT_TIMEOUT_MS = 5000; // 5 seconds
  * Defines the maximum total time an async script can run (including awaiting tools).
  * This prevents runaway scripts or long-running operations.
  */
-const TOTAL_SCRIPT_TIMEOUT_MS = 300000; // 5 minutes
+const TOTAL_SCRIPT_TIMEOUT_MS = 600000; // 10 minutes
 
 /**
  * A strict deny-list of tool names that *cannot* be passed to the sandboxed script.
@@ -88,11 +88,13 @@ const scriptUtils = {
     }
 };
 
+// --- Interfaces ---
+
 // Define the shape of the context object for the pre-processing script.
 interface PreScriptContext {
     /** The JSON object passed to the 'parameters' input of the toolOrchestrator tool. */
     parameters: Record<string, any>;
-    /** A dictionary of all available tools, wrapped for execution (e.g., `tools.search`, `tools.getItemsInContainer`). */
+    /** A dictionary of all available tools, wrapped for execution. */
     tools: { [toolName: string]: (args: any) => Promise<any> };
     /** A set of synchronous utility functions. */
     utils: typeof scriptUtils;
@@ -108,12 +110,28 @@ interface MapScriptContext {
     parameters: Record<string, any>;
     /** The 'preProcessingResult' object returned by the 'preProcessingScript' (if any). */
     preProcessingResult: any;
-    /** A dictionary of all available tools, wrapped for execution (e.g., `tools.getItem`, `tools.updateContent`). */
+    /** A dictionary of all available tools, wrapped for execution. */
     tools: { [toolName: string]: (args: any) => Promise<any> };
     /** A set of synchronous utility functions. */
     utils: typeof scriptUtils;
     /** A function to log messages, which will be included in the final summary. */
     log: (message: string) => void;
+}
+
+/**
+ * The structured result returned by the orchestrator.
+ * This structure ensures the agent always knows the state of the operation,
+ * even if it stopped midway.
+ */
+interface OrchestratorResult {
+    status: "Completed" | "StoppedOnError" | "PartialSuccess";
+    summary: string;
+    /** List of items that were successfully processed before any stop/completion. */
+    processedItems: Array<{ id: string, result: any }>;
+    /** The specific item that caused the stop (if stopOnError was true). */
+    failedItem?: { id: string, error: string };
+    /** The final output data (from postProcessingScript or default summary). */
+    output?: any;
 }
 
 // This plain object defines the input properties, matching your other tools
@@ -130,22 +148,22 @@ const toolOrchestratorInputProperties = {
     validationScript: z.string().optional()
         .describe("Phase 4 (Validation): An async function body that runs LAST. MANDATORY if 'mapScript' is used. You MUST use this to AUDIT the operation by using `tools.getItem` on a sample of the results. Do NOT rely solely on `context.hasSuccesses`. Verify that the items actually contain the data you intended to add (e.g., check `ComponentPresentations.length > 0`)."),
     parameters: z.record(z.any()).optional()
-        .describe("An optional JSON object of parameters to pass into all scripts. Use this for simple, static values like search queries, find/replace strings, or target TCM URIs. Note: Complex objects (like data from other tools) passed as parameters are treated as literal values. If you pass a stringified JSON object as a parameter value, you must manually call JSON.parse() on it inside your script. (Note: this only applies to input parameters, not to the responses from tool calls, which are always auto-parsed)."),
+        .describe("An optional JSON object of parameters to pass into all scripts. Use this for simple, static values like search queries, find/replace strings, or target TCM URIs."),
     forceSkipIfPresent: z.boolean().optional().default(false)
-        .describe("If true, any '409 Conflict' (Item Already Exists) error during creation is treated as an immediate Success without checking if the item properties match. Use this only if you are certain that existing items are correct, e.g., when re-running (a modification of) a script that partially succeeded."),
+        .describe("If true, any '409 Conflict' (Item Already Exists) error during creation is treated as an immediate Success without checking if the item properties match."),
     stopOnError: z.boolean().optional().default(true)
         .describe("If true (default), the entire operation stops if any single item fails during the 'map' phase. If false, it logs the error and continues to the next item."),
     maxConcurrency: z.number().int().min(1).max(10).optional().default(5)
-        .describe("The maximum number of 'map' scripts to run in parallel. Set to 1 for sequential execution (e.g., for script validation and debugging, or if the server is under heavy load)."),
+        .describe("The maximum number of 'map' scripts to run in parallel. Set to 1 for sequential execution."),
     includeScriptResults: z.boolean().optional().default(false)
-        .describe("Controls whether the final output includes the individual results from the 'mapScript'. Defaults to false to save tokens. CRITICAL: Set this to 'true' if you are debugging a script where items are succeeding but the output seems wrong. This allows you to see if your script is returning `null` or `{status: 'skipped'}`."),
+        .describe("Controls whether the final output includes the individual results from the 'mapScript'. Defaults to false to save tokens."),
     debug: z.boolean().optional().default(false)
-        .describe("If true, the full execution log is included in the JSON response. Defaults to false. Only consider setting this to true when debugging.")
+        .describe("If true, the full execution log is included in the JSON response.")
 };
 
 const toolOrchestratorSchema = z.object(toolOrchestratorInputProperties)
     .refine(data => !data.mapScript || data.validationScript, {
-        message: "Safety Guardrail: You provided a 'mapScript' to process items, but you did not provide a 'validationScript'. You MUST provide a validation script to audit the results (e.g., fetch a sample item to verify it was created/updated correctly).",
+        message: "Safety Guardrail: You provided a 'mapScript' to process items, but you did not provide a 'validationScript'. You MUST provide a validation script to audit the results.",
         path: ["validationScript"]
     });
 
@@ -157,6 +175,11 @@ export const toolOrchestrator = {
     2.  Map (mapScript): Process each item individually (e.g., 'updateContent', 'getItem').
     3.  Reduce (postProcessingScript): Aggregate results or generate a summary.
     4.  Validate (validationScript): Audit the final state to ensure success.
+
+    --- PARTIAL SUCCESS & ERROR HANDLING ---
+    This tool implements specific logic for handling failures:
+    - StopOnError = true (Default): The tool stops immediately upon the first error. It returns a "StoppedOnError" status, a list of all items successfully processed *before* the crash, and the specific error details. You should use this data to fix the issue and RESUME operation from the next item.
+    - StopOnError = false: The tool attempts to process all items. Failures are recorded in the final "PartialSuccess" report.
 
     --- CRITICAL RULES FOR SUCCESS ---
     
@@ -179,7 +202,7 @@ export const toolOrchestrator = {
     - Find: Use 'search' in 'preProcessingScript' to get IDs.
     - Fetch: Use 'mapScript' to call 'getItem' for specific details.
 
-4. Idempotency (Creation Tools)
+    4. Idempotency (Creation Tools)
     If you use creation tools (createItem, createPage, etc.) and the item already exists:
     - DEFAULT: The tool will FAIL with a "409 Conflict" error.
     - OPTIONAL: Set 'forceSkipIfPresent: true' in the parameters. The tool will NOT fail; instead, it will skip the item and mark it as "Success (Skipped)".
@@ -235,7 +258,7 @@ export const toolOrchestrator = {
 
     NOTES
     - Automatic JSON parsing: All tools have their JSON string responses automatically parsed into JavaScript objects. You do not need to parse tool responses in a script.
-    - Script Limits: All scripts are sandboxed. Sync code max 5s, Async max 300s.
+    - Script Limits: All scripts are sandboxed. Sync code max 5s, Async max 600s.
     - Disallowed Tools: 'toolOrchestrator' and 'deleteItem' cannot be called recursively.
 
     ### EXAMPLES
@@ -582,7 +605,6 @@ export const toolOrchestrator = {
     input: toolOrchestratorInputProperties,
 
     execute: async (
-        // Type inference for 'input' now uses the internal schema
         input: z.infer<typeof toolOrchestratorSchema>,
         mcpContext: any
     ) => {
@@ -600,15 +622,12 @@ export const toolOrchestrator = {
             debug
         } = input;
 
-        /**
-         * Helper function to extract a clear error message from various error types.
-         */
+        /** Helper to extract a clear error message. */
         const extractErrorMessage = (e: any): string => {
             try {
                 if (!e) return 'Unknown error';
                 if (e.message) return e.message;
                 if (typeof e === 'string') return e;
-                // Standard tool error
                 if (e.content && Array.isArray(e.content) && e.content[0]?.type === 'text') {
                     try {
                         const errorObj = JSON.parse(e.content[0].text);
@@ -621,11 +640,9 @@ export const toolOrchestrator = {
                     }
                     return e.content[0].text;
                 }
-                // Axios-like error
-                if (e.data && e.data.content && Array.isArray(e.data.content) && e.data.content[0]?.type === 'text') return e.data.content[0].text;
                 return JSON.stringify(e);
             } catch {
-                return String(e); // Fallback for circular structures or un-stringifiable errors
+                return String(e);
             }
         }
 
@@ -642,7 +659,6 @@ export const toolOrchestrator = {
         // --- Create Tool Wrappers ---
         const toolWrappers: { [toolName: string]: (args: any) => Promise<any> } = {};
         for (const toolName in mcpContext.tools) {
-            // Add a wrapper that throws a clear error for disallowed tools.
             if (DISALLOWED_TOOLS.includes(toolName)) {
                 toolWrappers[toolName] = async (_args: any) => {
                     throw new Error(`ToolError: The tool "${toolName}" is not permitted to be called from within the toolOrchestrator for security reasons.`);
@@ -655,30 +671,19 @@ export const toolOrchestrator = {
                 const originalToolExecute = originalTool.execute;
                 const toolInputProperties = originalTool.input;
 
-                // Create the standard wrapper
                 const standardWrapper = async (args: any) => {
-
                     let validatedArgs = args || {};
-
-                    // Check if the tool has a non-null input object
                     if (toolInputProperties && typeof toolInputProperties === 'object') {
-
-                        // Dynamically create a Zod schema from the tool's input properties
                         const toolInputSchema = z.object(toolInputProperties);
-                        // Now, run safeParse on the schema we just built
                         const validationResult = toolInputSchema.safeParse(validatedArgs);
                         if (!validationResult.success) {
-                            // Throw a clear Zod error that the script can catch
                             throw new Error(`Invalid arguments for tool '${toolName}': ${validationResult.error.message}`);
                         }
-                        // Use the validated (and possibly transformed) args
                         validatedArgs = validationResult.data;
                     }
 
-                    // Pass the validated args to the execute function
                     const result = await originalToolExecute(validatedArgs, mcpContext);
 
-                    // Robust JSON parsing with trim() and try/catch
                     if (result && result.content && Array.isArray(result.content) &&
                         result.content[0] && result.content[0].type === 'text' &&
                         typeof result.content[0].text === 'string') {
@@ -686,47 +691,31 @@ export const toolOrchestrator = {
                         if (maybeText.startsWith('{') || maybeText.startsWith('[')) {
                             try {
                                 const parsedObject = JSON.parse(maybeText);
-                                // Check if the successfully parsed object is actually an error.
                                 if (parsedObject && parsedObject.type === 'Error' && parsedObject.Message) {
                                     throw new Error(parsedObject.Message);
                                 }
-
-                                return parsedObject; // Return the successful object
-
+                                return parsedObject;
                             } catch (err) {
                                 throw err;
                             }
                         }
                     }
-
-                    // Fallback: if tool already returned a plain object (not a standard content wrapper), return it.
                     if (result && typeof result === 'object' && !Array.isArray(result) && !result.content) {
                         return result;
                     }
-
-                    // Default: return the raw result
                     return result;
                 };
 
-// --- Generic Idempotency Wrapper ---
-                if (toolName === "createItem" ||
-                    toolName === "createPage" ||
-                    toolName === "createComponent" ||
-                    toolName === "createComponentSchema" ||
-                    toolName === "createRegionSchema" ||
-                    toolName === "createMetadataSchema" ||
-                    toolName === "createPublication") {
-
+                // Idempotency Wrapper
+                if (["createItem", "createPage", "createComponent", "createComponentSchema", 
+                     "createRegionSchema", "createMetadataSchema", "createPublication"].includes(toolName)) {
                     toolWrappers[toolName] = async (args: any) => {
                         try {
                             return await standardWrapper(args);
                         } catch (error: any) {
-                            // 1. Detect Conflict
                             const errorMessage = (error?.message || error?.toString() || "").toLowerCase();
                             const errorContent = (error?.content) ? JSON.stringify(error.content).toLowerCase() : "";
-
-                            const isConflict =
-                                (error?.status === 409) ||
+                            const isConflict = (error?.status === 409) ||
                                 errorMessage.includes("already exists") ||
                                 errorMessage.includes("itemalreadyexists") ||
                                 errorMessage.includes("status 409") ||
@@ -734,8 +723,6 @@ export const toolOrchestrator = {
                                 errorContent.includes("itemalreadyexists");
 
                             if (!isConflict) throw error;
-
-                            // 2. Handle Conflict based on 'forceSkipIfPresent'
                             if (input.forceSkipIfPresent) {
                                 return {
                                     type: "Skipped",
@@ -744,9 +731,6 @@ export const toolOrchestrator = {
                                     Status: "Success (Skipped)"
                                 };
                             }
-                            
-                            // If we are here, it's a conflict but forceSkip is false.
-                            // We explicitly throw a helpful error message explaining why it failed.
                             throw new Error(`Idempotency Error: Item already exists. To skip existing items, set 'forceSkipIfPresent: true' in the tool parameters.`);
                         }
                     }
@@ -756,141 +740,71 @@ export const toolOrchestrator = {
             }
         }
 
-        // --- Create a secure base sandbox ---
         const baseSandbox = createBaseSandbox();
         let finalItemIds: string[] = initialItemIds || [];
-        let hasFailed = false;
-        let preScriptContextData: any = {}; // <-- For data from pre-script
+        let preScriptContextData: any = {};
 
         // --- Phase 1: Pre-Processing Logic (Setup Phase) ---
         if (preProcessingScript) {
             logs.push("Starting pre-processing script (setup phase)...");
             let compiledPreScript: vm.Script;
             try {
-                compiledPreScript = new vm.Script(`
-                    (async () => {
-                        "use strict";
-                        ${preProcessingScript}
-                    })();
-                `, { filename: 'preProcessingScript.js' });
+                compiledPreScript = new vm.Script(`(async () => { "use strict"; ${preProcessingScript} })();`, { filename: 'preProcessingScript.js' });
             } catch (error: any) {
-                return {
-                    content: [{ type: "text", text: `Pre-processing Script Compilation Error: ${extractErrorMessage(error)}` }]
-                };
+                return { content: [{ type: "text", text: `Pre-processing Script Compilation Error: ${extractErrorMessage(error)}` }] };
             }
 
             const preScriptLog = (message: string) => logs.push(`[PreScript] ${message}`);
-            const preScriptErrorLog = (message: string) => logs.push(`[PreScript] [ERROR] ${message}`);
-            const preScriptWarnLog = (message: string) => logs.push(`[PreScript] [WARN] ${message}`);
             const preScriptContext: PreScriptContext = {
-                parameters: Object.freeze(parameters), // Freeze parameters for security
+                parameters: Object.freeze(parameters),
                 tools: toolWrappers,
                 utils: scriptUtils,
                 log: preScriptLog
             };
-            // Create a dedicated sandbox for this script
-            const sandboxContext = { ...baseSandbox };
-            sandboxContext.context = preScriptContext;
-            sandboxContext.console = { log: preScriptLog, error: preScriptErrorLog, warn: preScriptWarnLog };
-            const sandbox = vm.createContext(sandboxContext, {
-                codeGeneration: { strings: false, wasm: false }
-            });
+            const sandboxContext = { ...baseSandbox, context: preScriptContext, console: { log: preScriptLog } };
+            const sandbox = vm.createContext(sandboxContext);
             try {
-                const scriptPromise = compiledPreScript.runInContext(sandbox, {
-                    timeout: SYNC_SCRIPT_TIMEOUT_MS
-                });
-                const timeoutPromise = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error(`Script timed out after ${TOTAL_SCRIPT_TIMEOUT_MS}ms`)), TOTAL_SCRIPT_TIMEOUT_MS)
-                );
+                const scriptPromise = compiledPreScript.runInContext(sandbox, { timeout: SYNC_SCRIPT_TIMEOUT_MS });
+                const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error(`Script timed out after ${TOTAL_SCRIPT_TIMEOUT_MS}ms`)), TOTAL_SCRIPT_TIMEOUT_MS));
                 const preScriptResult = await Promise.race([scriptPromise, timeoutPromise]);
 
                 if (Array.isArray(preScriptResult) && preScriptResult.every(item => typeof item === 'string')) {
                     finalItemIds = preScriptResult;
                 } else if (typeof preScriptResult === 'object' && preScriptResult !== null && Array.isArray(preScriptResult.itemIds)) {
                     finalItemIds = preScriptResult.itemIds;
-                    if (preScriptResult.preProcessingResult) {
-                        preScriptContextData = Object.freeze(preScriptResult.preProcessingResult);
-                    }
-                } else {
-                    if (preScriptResult && typeof preScriptResult === 'object') {
-                        if (preScriptResult.preProcessingResult) {
-                            preScriptContextData = Object.freeze(preScriptResult.preProcessingResult);
-                        }
-                    }
+                    if (preScriptResult.preProcessingResult) preScriptContextData = Object.freeze(preScriptResult.preProcessingResult);
                 }
-
-                logs.push(`Pre-processing script finished. Found ${finalItemIds.length} items to process.`);
+                logs.push(`Pre-processing script finished. Found ${finalItemIds.length} items.`);
             } catch (error: any) {
                 const errorMessage = extractErrorMessage(error);
-                logs.push(`Pre-processing Script FAILED: ${errorMessage}`);
-                const finalErrorSummary = {
-                    summary: "ToolOrchestrator FAILED",
-                    phase: "pre-processing",
-                    error: `Pre-processing Script FAILED: ${errorMessage}`,
-                    executionLog: debug ? logs.join('\n') : undefined
-                };
-                const formattedFinalErrorSummary = formatForAgent(finalErrorSummary);
-                return {
-                    content: [{ type: "text", text: JSON.stringify(formattedFinalErrorSummary, null, 2) }],
-                };
+                return { content: [{ type: "text", text: JSON.stringify({ summary: "ToolOrchestrator FAILED", phase: "pre-processing", error: errorMessage }, null, 2) }] };
             }
         }
 
         // --- Phase 2: Execution Logic (Map Phase) ---
-        // Only run if we have items AND a map script.
-        if (finalItemIds.length > 0) {
+        let wasStoppedOnError = false;
+        let stoppingError: { id: string; error: string } | null = null;
 
+        if (finalItemIds.length > 0) {
             if (!mapScript) {
-                // GUARDRAIL: Throw error if items are present but no map script is provided.
-                // This prevents silent failure where the agent assumes work was done.
-                const errorMsg = `Configuration Error: The pre-processing phase found ${finalItemIds.length} items, but no 'mapScript' was provided to process them.
-                You must provide a 'mapScript' to inspect or modify these items.
-                If you intended to skip the map phase, ensure your pre-processing script returns an empty 'itemIds' array.`;
-                logs.push(errorMsg);
-                return {
-                    content: [{
-                        type: "text", text: JSON.stringify({
-                            type: "Error",
-                            Message: errorMsg,
-                            Hint: "Check the tool description: mapScript is mandatory when iterating over items."
-                        }, null, 2)
-                    }]
-                };
+                return { content: [{ type: "text", text: JSON.stringify({ type: "Error", Message: "Items found but no mapScript provided." }, null, 2) }] };
             }
 
-            log(`\nStarting map phase for ${finalItemIds.length} items with maxConcurrency: ${maxConcurrency}`);
-            // --- Create ONE reusable sandbox for the entire Map phase ---
+            log(`\nStarting map phase for ${finalItemIds.length} items...`);
             let compiledMapScript: vm.Script;
             try {
-                compiledMapScript = new vm.Script(`
-                    (async () => {
-                        "use strict";
-                        ${mapScript}
-                    })();
-                `, { filename: 'mapScript.js' });
+                compiledMapScript = new vm.Script(`(async () => { "use strict"; ${mapScript} })();`, { filename: 'mapScript.js' });
             } catch (error: any) {
-                return {
-                    content: [{ type: "text", text: `Map Script Compilation Error: ${extractErrorMessage(error)}` }]
-                };
+                return { content: [{ type: "text", text: `Map Script Compilation Error: ${extractErrorMessage(error)}` }] };
             }
 
-            /**
-             * A single, reusable function to run the script for one item
-             * and handle logging, results, and errors.
-             */
             const runTask = async (itemId: string, index: number): Promise<void> => {
                 logs.push(`\n[${index + 1}/${finalItemIds.length}] Processing item: ${itemId}`);
-                // Warning State Tracking
                 let itemHasWarning = false;
                 let itemWarningMessage = "";
 
                 const perItemLog = (message: string) => logs.push(`[${itemId}] ${message}`);
-                const perItemErrorLog = (message: string) => logs.push(`[${itemId}] [ERROR] ${message}`);
-                const perItemWarnLog = (message: string) => {
-                    logs.push(`[${itemId}] [WARN] ${message}`);
-                    itemHasWarning = true;
-                    itemWarningMessage = message;
-                };
+                const perItemWarnLog = (message: string) => { logs.push(`[${itemId}] [WARN] ${message}`); itemHasWarning = true; itemWarningMessage = message; };
 
                 const perItemContext: MapScriptContext = {
                     currentItemId: itemId,
@@ -900,202 +814,143 @@ export const toolOrchestrator = {
                     utils: scriptUtils,
                     log: perItemLog
                 };
-                const sandboxContext = { ...baseSandbox };
-                sandboxContext.context = perItemContext;
-                sandboxContext.console = {
-                    log: perItemLog,
-                    error: perItemErrorLog,
-                    warn: perItemWarnLog
-                };
-                const sandbox = vm.createContext(sandboxContext, {
-                    codeGeneration: { strings: false, wasm: false }
-                });
+                const sandboxContext = { ...baseSandbox, context: perItemContext, console: { log: perItemLog, warn: perItemWarnLog, error: perItemLog } };
+                const sandbox = vm.createContext(sandboxContext);
+
                 try {
-                    const scriptPromise = compiledMapScript.runInContext(sandbox, {
-                        timeout: SYNC_SCRIPT_TIMEOUT_MS
-                    });
-                    const timeoutPromise = new Promise((_, reject) =>
-                        setTimeout(() => reject(new Error(`Script timed out after ${TOTAL_SCRIPT_TIMEOUT_MS}ms`)), TOTAL_SCRIPT_TIMEOUT_MS)
-                    );
+                    const scriptPromise = compiledMapScript.runInContext(sandbox, { timeout: SYNC_SCRIPT_TIMEOUT_MS });
+                    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error(`Script timed out after ${TOTAL_SCRIPT_TIMEOUT_MS}ms`)), TOTAL_SCRIPT_TIMEOUT_MS));
                     const result = await Promise.race([scriptPromise, timeoutPromise]);
 
-                    // Categorize based on warning state
                     if (itemHasWarning) {
-                        results.push({
-                            itemId: itemId,
-                            status: "warning",
-                            result: (result === undefined) ? "No return value" : result,
-                            warning: itemWarningMessage
-                        });
-                        logs.push(`[${itemId}] Completed with Warning.`);
+                        results.push({ itemId, status: "warning", result: result ?? "No return value", warning: itemWarningMessage });
                     } else {
-                        results.push({
-                            itemId: itemId,
-                            status: "success",
-                            result: (result === undefined) ? "No return value" : result
-                        });
-                        logs.push(`[${itemId}] Success.`);
+                        results.push({ itemId, status: "success", result: result ?? "No return value" });
                     }
-
                 } catch (error: any) {
-                    // Use the new helper function for clean, consistent error messages
                     const errorMessage = extractErrorMessage(error);
                     logs.push(`[${itemId}] FAILED: ${errorMessage}`);
+                    
+                    // Always record the failure
                     results.push({ itemId: itemId, status: "error", error: errorMessage });
-                    hasFailed = true;
+
+                    if (stopOnError) {
+                        // Mark global stop flag. The loop controller will handle the break.
+                        wasStoppedOnError = true;
+                        stoppingError = { id: itemId, error: errorMessage };
+                    }
                 }
             };
 
-            // --- Run tasks (sequentially or in parallel) ---
+            // Execution Loop
             if (maxConcurrency === 1) {
-                log("Running in sequential mode.");
                 for (const [index, itemId] of finalItemIds.entries()) {
-                    if (stopOnError && hasFailed) {
-                        logs.push("\nOperation stopped due to error.");
-                        break;
-                    }
+                    if (wasStoppedOnError) break; // STOP Condition
                     await runTask(itemId, index);
                 }
             } else {
-                log(`Running in parallel mode with ${maxConcurrency} workers.`);
                 const workerPool = new Set<Promise<void>>();
                 let index = 0;
-
                 for (const itemId of finalItemIds) {
-                    if (stopOnError && hasFailed) {
-                        logs.push("\nOperation stopping due to error. No new tasks will be started.");
-                        break;
-                    }
+                    if (wasStoppedOnError) break; // STOP Condition (prevents NEW tasks)
 
                     while (workerPool.size >= maxConcurrency) {
                         await Promise.race(workerPool);
                     }
+                    // Double check in case a worker failed while we were waiting
+                    if (wasStoppedOnError) break;
 
                     const taskPromise = runTask(itemId, index++);
-                    const onFinally = () => {
-                        workerPool.delete(taskPromise);
-                    };
-
+                    const onFinally = () => workerPool.delete(taskPromise);
                     taskPromise.then(onFinally, onFinally);
                     workerPool.add(taskPromise);
                 }
-
                 await Promise.allSettled(Array.from(workerPool));
             }
             logs.push("\nMap phase finished.");
-        } else {
-            // Logic: itemIds is empty.
-            if (mapScript) {
-                log("No items found to process. Skipping map phase.");
-            } else {
-                // This is the valid "Setup Only" path
-                log("No items found and no mapScript provided. Skipping map phase (valid setup-only execution).");
-            }
         }
-        // --- End of Map Phase ---
 
-        // Prepare the summary or post-script input
+        // --- Categorize Results ---
         const successes = results.filter(r => r.status === 'success');
         const warnings = results.filter(r => r.status === 'warning');
         const failures = results.filter(r => r.status === 'error');
 
-        const successCount = successes.length;
-        const warningCount = warnings.length;
-        const errorCount = failures.length;
+        // --- STOPPED ON ERROR EXIT ---
+        // If execution stopped early, return the Partial Success Report immediately.
+        // We skip Post-Processing and Validation as data is incomplete.
+        const actualStoppingError = stoppingError as { id: string; error: string } | null;
+        if (wasStoppedOnError && actualStoppingError) {
+            const stoppedResult: OrchestratorResult = {
+                status: "StoppedOnError",
+                summary: `Execution stopped due to error on item '${actualStoppingError.id}'. Processed ${successes.length} items successfully before stop.`,
+                processedItems: successes.map(s => ({ id: s.itemId, result: s.result })),
+                failedItem: actualStoppingError
+            };
+            
+            // Log debug info if requested, but return the structured result
+            if (debug) {
+                (stoppedResult as any).executionLog = logs.join('\n');
+            }
+
+            return {
+                content: [{ type: "text", text: JSON.stringify(stoppedResult, null, 2) }]
+            };
+        }
 
         // --- Phase 3: Post-Processing Logic (Reduce Phase) ---
+        // Runs only if we completed the loop (even with failures, if stopOnError=false)
         let responsePayload: any = null;
+        
         if (postProcessingScript) {
             logs.push("\nStarting post-processing script (reduce phase)...");
             let compiledPostScript: vm.Script;
             try {
-                compiledPostScript = new vm.Script(`
-                    (async () => {
-                        "use strict";
-                        ${postProcessingScript}
-                    })();
-                `, { filename: 'postProcessingScript.js' });
+                compiledPostScript = new vm.Script(`(async () => { "use strict"; ${postProcessingScript} })();`, { filename: 'postProcessingScript.js' });
             } catch (error: any) {
-                return {
-                    content: [{ type: "text", text: `Post-processing Script Compilation Error: ${extractErrorMessage(error)}` }]
-                };
+                return { content: [{ type: "text", text: `Post-processing Script Compilation Error: ${extractErrorMessage(error)}` }] };
             }
 
             const postScriptLog = (message: string) => logs.push(`[PostScript] ${message}`);
-            const postScriptErrorLog = (message: string) => logs.push(`[PostScript] [ERROR] ${message}`);
-            const postScriptWarnLog = (message: string) => logs.push(`[PostScript] [WARN] ${message}`);
-            const sandboxContext = { ...baseSandbox };
-            sandboxContext.context = {
-                results: Object.freeze(results),
-                successes: Object.freeze(successes),
-                warnings: Object.freeze(warnings), // New
-                failures: Object.freeze(failures),
-                parameters: Object.freeze(parameters),
-                preProcessingResult: preScriptContextData,
-                tools: toolWrappers,
-                utils: scriptUtils,
-                log: postScriptLog
+            const sandboxContext = { ...baseSandbox, 
+                context: {
+                    results: Object.freeze(results),
+                    successes: Object.freeze(successes),
+                    warnings: Object.freeze(warnings),
+                    failures: Object.freeze(failures),
+                    parameters: Object.freeze(parameters),
+                    preProcessingResult: preScriptContextData,
+                    tools: toolWrappers,
+                    utils: scriptUtils,
+                    log: postScriptLog
+                },
+                console: { log: postScriptLog } 
             };
-            sandboxContext.console = { log: postScriptLog, error: postScriptErrorLog, warn: postScriptWarnLog };
-            const sandbox = vm.createContext(sandboxContext, {
-                codeGeneration: { strings: false, wasm: false }
-            });
+            const sandbox = vm.createContext(sandboxContext);
             try {
-                const scriptPromise = compiledPostScript.runInContext(sandbox, {
-                    timeout: SYNC_SCRIPT_TIMEOUT_MS
-                });
-                const timeoutPromise = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error(`Script timed out after ${TOTAL_SCRIPT_TIMEOUT_MS}ms`)), TOTAL_SCRIPT_TIMEOUT_MS)
-                );
-                const finalResult = await Promise.race([scriptPromise, timeoutPromise]);
+                const scriptPromise = compiledPostScript.runInContext(sandbox, { timeout: SYNC_SCRIPT_TIMEOUT_MS });
+                const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error(`Script timed out after ${TOTAL_SCRIPT_TIMEOUT_MS}ms`)), TOTAL_SCRIPT_TIMEOUT_MS));
+                responsePayload = await Promise.race([scriptPromise, timeoutPromise]);
                 logs.push("Post-processing script finished successfully.");
-
-                responsePayload = finalResult;
             } catch (error: any) {
-                const errorMessage = extractErrorMessage(error);
-                logs.push(`Post-Processing Script FAILED: ${errorMessage}`);
-
-                // Create a small, safe JSON error object.
-                const finalErrorSummary = {
-                    summary: "ToolOrchestrator FAILED",
-                    phase: "post-processing",
-                    mapPhaseSummary: {
-                        totalItemsProcessed: results.length,
-                        succeeded: successCount,
-                        warnings: warningCount,
-                        failed: errorCount
-                    },
-                    error: `Post-Processing Script FAILED: ${errorMessage}`,
-                    // Add a *small, truncated* piece of the log for context.
-                    logSample: logs.slice(-10).join('\n')
+                // Return structured error for Post-Processing failure
+                const postError: OrchestratorResult = {
+                     status: "StoppedOnError",
+                     summary: "Map phase completed, but Post-Processing script failed.",
+                     processedItems: successes.map(s => ({ id: s.itemId, result: s.result })),
+                     failedItem: { id: "PostProcessingScript", error: extractErrorMessage(error) }
                 };
-                const formattedFinalErrorSummary = formatForAgent(finalErrorSummary);
-                return {
-                    content: [{ type: "text", text: JSON.stringify(formattedFinalErrorSummary, null, 2) }],
-                };
+                return { content: [{ type: "text", text: JSON.stringify(postError, null, 2) }] };
             }
         } else {
-            // --- Final Summary (if no post-processing) ---
+            // Default Summary if no post-script
             responsePayload = {
-                summary: "ToolOrchestrator Summary",
+                summary: "ToolOrchestrator Operation Completed",
                 totalItemsProcessed: finalItemIds.length,
-                succeeded: successCount,
-                warnings: warningCount,
-                failed: errorCount
+                succeeded: successes.length,
+                warnings: warnings.length,
+                failed: failures.length,
+                results: includeScriptResults ? successes.map(r => ({ itemId: r.itemId, result: r.result })) : undefined
             };
-            if (errorCount > 0) {
-                responsePayload.errors = failures.map(r => ({ itemId: r.itemId, error: r.error }));
-            }
-
-            if (warningCount > 0) {
-                responsePayload.warnings = warnings.map(r => ({ itemId: r.itemId, warning: r.warning, result: r.result }));
-            }
-
-            if (includeScriptResults) {
-                responsePayload.results = results
-                    .filter(r => r.status === 'success')
-                    .map(r => ({ itemId: r.itemId, result: r.result }));
-            }
         }
 
         // --- Phase 4: Validation Logic (Audit Phase) ---
@@ -1103,96 +958,70 @@ export const toolOrchestrator = {
             logs.push("\nStarting validation script (audit phase)...");
             let compiledValidationScript: vm.Script;
             try {
-                compiledValidationScript = new vm.Script(`
-                    (async () => {
-                        "use strict";
-                        ${validationScript}
-                    })();
-                `, { filename: 'validationScript.js' });
+                compiledValidationScript = new vm.Script(`(async () => { "use strict"; ${validationScript} })();`, { filename: 'validationScript.js' });
             } catch (error: any) {
-                return {
-                    content: [{ type: "text", text: `Validation Script Compilation Error: ${extractErrorMessage(error)}` }]
-                };
+                return { content: [{ type: "text", text: `Validation Script Compilation Error: ${extractErrorMessage(error)}` }] };
             }
 
             const valScriptLog = (message: string) => logs.push(`[Validation] ${message}`);
-            const valScriptErrorLog = (message: string) => logs.push(`[Validation] [ERROR] ${message}`);
-            const valScriptWarnLog = (message: string) => logs.push(`[Validation] [WARN] ${message}`);
-            const sandboxContext = { ...baseSandbox };
-
-            sandboxContext.context = {
-                output: Object.freeze(responsePayload), // The result from Phase 3 (or the summary)
-                results: Object.freeze(results),
-                successes: Object.freeze(successes),
-                warnings: Object.freeze(warnings),
-                failures: Object.freeze(failures),
-
-                // --- Context Flags for Safer Scripting ---
-                hasSuccesses: successCount > 0,
-                hasFailures: errorCount > 0,
-                hasWarnings: warningCount > 0,
-
-                parameters: Object.freeze(parameters),
-                preProcessingResult: preScriptContextData,
-                tools: toolWrappers,
-                utils: scriptUtils,
-                log: valScriptLog
+            const sandboxContext = { ...baseSandbox,
+                context: {
+                    output: Object.freeze(responsePayload),
+                    results: Object.freeze(results),
+                    successes: Object.freeze(successes),
+                    warnings: Object.freeze(warnings),
+                    failures: Object.freeze(failures),
+                    hasSuccesses: successes.length > 0,
+                    hasFailures: failures.length > 0,
+                    hasWarnings: warnings.length > 0,
+                    parameters: Object.freeze(parameters),
+                    preProcessingResult: preScriptContextData,
+                    tools: toolWrappers,
+                    utils: scriptUtils,
+                    log: valScriptLog
+                },
+                console: { log: valScriptLog }
             };
-            sandboxContext.console = { log: valScriptLog, error: valScriptErrorLog, warn: valScriptWarnLog };
-            const sandbox = vm.createContext(sandboxContext, {
-                codeGeneration: { strings: false, wasm: false }
-            });
+            const sandbox = vm.createContext(sandboxContext);
             try {
-                const scriptPromise = compiledValidationScript.runInContext(sandbox, {
-                    timeout: SYNC_SCRIPT_TIMEOUT_MS
-                });
-                const timeoutPromise = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error(`Script timed out after ${TOTAL_SCRIPT_TIMEOUT_MS}ms`)), TOTAL_SCRIPT_TIMEOUT_MS)
-                );
+                const scriptPromise = compiledValidationScript.runInContext(sandbox, { timeout: SYNC_SCRIPT_TIMEOUT_MS });
+                const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error(`Script timed out after ${TOTAL_SCRIPT_TIMEOUT_MS}ms`)), TOTAL_SCRIPT_TIMEOUT_MS));
                 const validationResult = await Promise.race([scriptPromise, timeoutPromise]);
                 logs.push("Validation script finished successfully.");
-                // If the validation script returns a value, use it to augment or replace the output
                 if (validationResult !== undefined) {
                     responsePayload = validationResult;
                 }
-
             } catch (error: any) {
-                const errorMessage = extractErrorMessage(error);
-                logs.push(`Validation Script FAILED: ${errorMessage}`);
-
-                // Return a specific Validation Failure response that includes the work done so far
-                const validationErrorSummary = {
-                    summary: "ToolOrchestrator Execution Completed (Validation Script Failed)",
-                    phase: "validation",
-                    originalOutput: responsePayload, // Include the work that was done
-                    error: `Validation Failed: ${errorMessage}`,
-                    logSample: logs.slice(-10).join('\n')
+                // Validation failure returns a special stopped state
+                const valError: OrchestratorResult = {
+                    status: "StoppedOnError",
+                    summary: "Operation and post-processing succeeded, but Validation failed.",
+                    processedItems: successes.map(s => ({ id: s.itemId, result: s.result })),
+                    output: responsePayload,
+                    failedItem: { id: "ValidationScript", error: extractErrorMessage(error) }
                 };
-                const formattedError = formatForAgent(validationErrorSummary);
-                return {
-                    content: [{ type: "text", text: JSON.stringify(formattedError, null, 2) }],
-                };
+                return { content: [{ type: "text", text: JSON.stringify(valError, null, 2) }] };
             }
         }
 
-        // --- Final Output Construction ---
-        let finalOutput: any = responsePayload;
-        if (debug) {
-            // Truncate the log to the first 25 and last 25 lines
-            let logOutput = logs;
-            if (logs.length > 50) {
-                logOutput = [
-                    ...logs.slice(0, 25),
-                    `\n... (log truncated - ${logs.length - 50} lines hidden) ...\n`,
-                    ...logs.slice(-25)
-                ];
-            }
+        // --- Final Output Construction (Structured) ---
+        // We wrap the final result (even if custom) in the OrchestratorResult envelope
+        // to ensure the agent receives the standard structure requested.
+        const finalStatus = failures.length > 0 ? "PartialSuccess" : "Completed";
+        
+        const finalOutput: OrchestratorResult = {
+            status: finalStatus,
+            summary: (typeof responsePayload === 'string') ? responsePayload : (responsePayload?.summary || `Operation ${finalStatus}`),
+            processedItems: successes.map(s => ({ id: s.itemId, result: s.result })),
+            output: responsePayload
+        };
 
-            // Wrap the result to include debug info
-            finalOutput = {
-                result: responsePayload,
-                executionLog: logOutput.join('\n')
-            };
+        if (debug) {
+             let logOutput = logs;
+             if (logs.length > 50) {
+                 logOutput = [...logs.slice(0, 25), `... (log truncated - ${logs.length - 50} lines hidden) ...`, ...logs.slice(-25)];
+             }
+             (finalOutput as any).executionLog = logOutput.join('\n');
         }
 
         return {
