@@ -1,9 +1,11 @@
 {
-    "coreTools": [
-    "ShellTool",
-    "WebFetchTool",
-    "WebSearchTool"
-  ],
+  "tools": {
+    "core": [
+      "ShellTool",
+      "WebFetchTool",
+      "WebSearchTool"
+    ]
+  },
   "mcpServers": {
     "mcp-test-server": {
       "httpUrl": "http://localhost:8090"
