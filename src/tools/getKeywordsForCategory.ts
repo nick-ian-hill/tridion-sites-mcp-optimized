@@ -6,7 +6,7 @@ import { filterResponseData } from "../utils/responseFiltering.js";
 
 export const getKeywordsForCategory = {
     name: "getKeywordsForCategory",
-    description: `Retrieves the list of keywords for the specified category, including nested keywords. This is the second step in finding keywords, used after 'getCategories'. The keyword IDs returned by this tool are used as input for tools like 'classify', and 'getClassifiedItems'.
+    description: `Retrieves the list of keywords for the specified category, including nested keywords. This is the second step in finding keywords, used after 'getCategories'. The keyword IDs returned by this tool are used as input for tools like 'classify', and 'getItemsClassifiedByKeyword'.
     Keywords can be associated with items via 'keyword' fields in an item's content or metadata.
     Keywords with the 'Abstract' property set to true are typically used for defining hierarchical navigation.
     Keywords with the 'Abstract' property set to false can be used for both navigation and for classifying items.
