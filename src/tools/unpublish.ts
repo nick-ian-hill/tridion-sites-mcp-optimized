@@ -30,11 +30,11 @@ const unpublishInputProperties = {
     priority: z.enum(["Low", "Normal", "High"]).optional().default("Normal")
         .describe("The priority for the unpublish transaction."),
     deployAt: z.string().datetime({ message: "Invalid datetime format. Please use ISO 8601 format." }).optional()
-        .describe("Schedules the deployment (un-deployment) for a specific time (ISO 8601 UTC format, e.g., '2025-10-30T10:00:00Z'). If omitted, deployment is immediate."),
+        .describe("Schedules the removal of published items for a specific time (ISO 8601 UTC format, e.g., '2025-10-30T10:00:00Z'). If omitted, removal is immediate."),
     resolveInstruction: resolveInstructionSchema
         .describe("Specifies advanced rules for resolving dependencies."),
     dryRun: z.boolean().optional().default(false)
-        .describe("If true, returns the list of items that would be unpublished without actually creating an unpublish transaction. This is a preview. If no items are listed, the actual unpublish operation would fail with a warning.")
+        .describe("If true, returns the list of items that would be unpublished without actually creating a transaction. This is a preview. If no items are listed, the actual unpublish operation would fail with a warning.")
 };
 
 const unpublishSchema = z.object(unpublishInputProperties);
@@ -62,6 +62,12 @@ export const unpublish = {
 
         const action = dryRun ? "preview unpublish for" : "unpublish";
 
+        const commonPossibleCauses = [
+            "The item is not currently published to the specified Target.",
+            "The item does not exist in the Context Publication.",
+            "You do not have permission to unpublish this item."
+        ];
+
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
 
@@ -73,7 +79,7 @@ export const unpublish = {
                 includeWorkflow: userInputResolveInstruction?.includeWorkflow ?? true,
                 publishInChildPublications: userInputResolveInstruction?.publishInChildPublications ?? [],
                 publishNewContent: userInputResolveInstruction?.publishNewContent ?? true,
-                structureResolveOption: userInputResolveInstruction?.structureResolveOption ?? "OnlyItems",
+                structureResolveOption: userInputResolveInstruction?.structureResolveOption ?? "OnlyItems"
             };
 
             const requestBody = {
@@ -94,12 +100,62 @@ export const unpublish = {
             const response = await authenticatedAxios.post(endpoint, requestBody);
 
             if (response.status === successStatus) {
+                
+                // 1. Handle Dry Run (Array of Items)
+                if (dryRun && Array.isArray(response.data)) {
+                    const resolvedItems = response.data.map((item: any) => ({
+                        Id: item.Item?.IdRef,
+                        Title: item.Item?.Title,
+                        Publication: item.Publication?.Title,
+                        Target: item.TargetType?.Title
+                    }));
+
+                    if (resolvedItems.length === 0) {
+                        return {
+                            content: [{
+                                type: "text",
+                                text: JSON.stringify({
+                                    type: "UnpublishWarning",
+                                    Message: "No items were resolved for unpublishing.",
+                                    PossibleCauses: commonPossibleCauses,
+                                    Suggestion: "Check if the item is actually published to the target."
+                                }, null, 2)
+                            }],
+                        };
+                    }
+
+                    return {
+                        content: [{
+                            type: "text",
+                            text: JSON.stringify({
+                                type: "UnpublishPreview",
+                                Message: `Unpublish preview generated. ${resolvedItems.length} item(s) resolved for unpublishing.`,
+                                ResolvedItems: resolvedItems
+                            }, null, 2)
+                        }]
+                    };
+                }
+
+                // 2. Handle Actual Unpublish (Object with Transaction IDs)
                 const transactionIds = response.data?.PublishTransactionIds || [];
+                
+                if (transactionIds.length === 0) {
+                     return {
+                        content: [{
+                            type: "text",
+                            text: JSON.stringify({
+                                type: "UnpublishWarning",
+                                Message: "No items were resolved for unpublishing. 0 transactions created.",
+                                PossibleCauses: commonPossibleCauses,
+                                Suggestion: "Check if the item is actually published to the target."
+                            }, null, 2)
+                        }],
+                    };
+                }
+
                 const responseData = {
-                    type: dryRun ? "UnpublishPreview" : "UnpublishResult",
-                    Message: dryRun
-                        ? `Unpublish preview generated. ${transactionIds.length} items would be processed.`
-                        : `Successfully started unpublish action. ${transactionIds.length} transaction(s) created.`,
+                    type: "UnpublishResult",
+                    Message: `Successfully started unpublish action. ${transactionIds.length} transaction(s) created.`,
                     TransactionIds: transactionIds
                 };
 

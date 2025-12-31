@@ -62,6 +62,16 @@ export const publish = {
 
         const action = dryRun ? "preview publish for" : "publish";
 
+        // Centralized list of causes to ensure consistency between dryRun and real publish warnings
+        const commonPossibleCauses = [
+            "The item has never been published, but 'includeUnpublishedItems' was set to false (Republish Only).",
+            "The item has not reached the required Minimum Approval Status for the selected Target Type.",
+            "The Page is missing a Page Template, or contains Components missing Component Templates.",
+            "The Structure Group containing the Page has its 'Publishable' property set to false.",
+            "You are trying to publish a Structure Group or Folder that contains no publishable items.",
+            "The item is in a Workflow state that prevents publishing."
+        ];
+
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
 
@@ -94,20 +104,49 @@ export const publish = {
             const response = await authenticatedAxios.post(endpoint, requestBody);
 
             if (response.status === successStatus) {
+                // 1. Handle Dry Run (Array of Items)
+                if (dryRun && Array.isArray(response.data)) {
+                    const resolvedItems = response.data.map((item: any) => ({
+                        Id: item.Item?.IdRef,
+                        Title: item.Item?.Title,
+                        Publication: item.Publication?.Title,
+                        Target: item.TargetType?.Title
+                    }));
+
+                    if (resolvedItems.length === 0) {
+                        return {
+                            content: [{
+                                type: "text",
+                                text: JSON.stringify({
+                                    type: "PublishingWarning",
+                                    Message: "No items were resolved for publishing.",
+                                    PossibleCauses: commonPossibleCauses,
+                                    Suggestion: "Check the item's properties, workflow status, and the 'resolveInstruction' parameters."
+                                }, null, 2)
+                            }],
+                        };
+                    }
+
+                    return {
+                        content: [{
+                            type: "text",
+                            text: JSON.stringify({
+                                type: "PublishPreview",
+                                Message: `Publish preview generated. ${resolvedItems.length} item(s) resolved for publishing.`,
+                                ResolvedItems: resolvedItems
+                            }, null, 2)
+                        }]
+                    };
+                }
+
+                // 2. Handle Actual Publish (Object with Transaction IDs)
                 const transactionIds = response.data?.PublishTransactionIds || [];
                 
                 if (transactionIds.length === 0) {
                     const warningData = {
                         type: "PublishingWarning",
                         Message: "No items were resolved for publishing. 0 transactions created.",
-                        PossibleCauses: [
-                            "The item has never been published, but 'includeUnpublishedItems' was set to false (Republish Only).",
-                            "The item has not reached the required Minimum Approval Status for the selected Target Type.",
-                            "The Page is missing a Page Template, or contains Components missing Component Templates.",
-                            "The Structure Group containing the Page has its 'Publishable' property set to false.",
-                            "You are trying to publish a Structure Group or Folder that contains no publishable items.",
-                            "The item is in a Workflow state that prevents publishing."
-                        ],
+                        PossibleCauses: commonPossibleCauses,
                         Suggestion: "Check the item's properties, workflow status, and the 'resolveInstruction' parameters."
                     };
                     return {
@@ -119,10 +158,8 @@ export const publish = {
                 }
 
                 const responseData = {
-                    type: dryRun ? "PublishPreview" : "PublishResult",
-                    Message: dryRun
-                        ? `Publish preview generated. ${transactionIds.length} items would be processed.`
-                        : `Successfully started publish action. ${transactionIds.length} transaction(s) created.`,
+                    type: "PublishResult",
+                    Message: `Successfully started publish action. ${transactionIds.length} transaction(s) created.`,
                     TransactionIds: transactionIds
                 };
 
