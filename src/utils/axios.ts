@@ -136,7 +136,7 @@ export const createAuthenticatedAxios = (userSessionId?: string | null, referer?
                 if (config.headers['Cookie']) console.log("Auth:", "UserSessionID Cookie Set");
 
                 if (config.params) console.log("Query Params:", config.params);
-                if (config.data) console.log("Request Body:", config.data);
+                if (config.data) console.log("Request Body:", JSON.stringify(config.data, null, 2));
                 console.groupEnd();
                 return config;
             },
