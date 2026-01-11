@@ -71,24 +71,26 @@ Example 2: Updates a metadata value for a 'Folder' containing a multi-value embe
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
         const userSessionId = match ? match[1] : null;
 
-        const restItemId = itemId.replace(':', '_');
+        const restItemId = itemId
+            .replace(/-16$/, '')
+            .replace(':', '_');
         const authenticatedAxios = createAuthenticatedAxios(userSessionId);
 
         try {
             const getItemResponse = await authenticatedAxios.get(`/items/${restItemId}`, { params: { useDynamicVersion: true } });
             if (getItemResponse.status !== 200) return handleUnexpectedResponse(getItemResponse);
-            
+
             const itemToUpdate = getItemResponse.data;
-            
+
             let schemaIdForMetadata: string | undefined;
 
             if (itemToUpdate.MetadataSchema?.IdRef && itemToUpdate.MetadataSchema.IdRef !== 'tcm:0-0-0') {
                 schemaIdForMetadata = itemToUpdate.MetadataSchema.IdRef;
-            } 
+            }
             else if (itemToUpdate.$type === 'Component') {
                 schemaIdForMetadata = itemToUpdate.Schema?.IdRef;
             }
-            
+
             if (!schemaIdForMetadata) {
                 return handleAxiosError(new Error(`Could not determine a valid Schema for the metadata fields of item ${itemId}.`), "Failed to update item metadata");
             }
@@ -101,14 +103,14 @@ Example 2: Updates a metadata value for a 'Folder' containing a multi-value embe
 
             // Reorder based on the full merged object
             const orderedMetadata = await reorderFieldsBySchema(mergedMetadata, schemaIdForMetadata, 'metadata', authenticatedAxios);
-            
+
             itemToUpdate.Metadata = orderedMetadata;
 
             const updateResponse = await authenticatedAxios.put(`/items/${restItemId}`, itemToUpdate);
             if (updateResponse.status !== 200) {
                 return handleUnexpectedResponse(updateResponse);
             }
-            
+
             const updatedItem = updateResponse.data;
             const responseData = {
                 type: updatedItem['$type'],

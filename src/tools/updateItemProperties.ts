@@ -243,7 +243,8 @@ This example updates a basic Region Schema (e.g., 'tcm:5-3875-8') to make it non
         const userSessionId = match ? match[1] : null;
 
         const { itemId, itemType, ...updates } = params;
-        const restItemId = itemId.replace(':', '_');
+        const normalizedItemId = itemId.replace(/-16$/, '');
+        const restItemId = normalizedItemId.replace(':', '_');
         const authenticatedAxios = createAuthenticatedAxios(userSessionId);
 
         try {
