@@ -239,7 +239,7 @@ export const autoClassifyItem = {
 
             // Corrected API usage for @google/genai package
             const result = await ai.models.generateContent({
-                model: "gemini-2.5-flash-lite",
+                model: "gemini-3-flash-preview",
                 contents: prompt,
                 config: {
                     temperature: 0,

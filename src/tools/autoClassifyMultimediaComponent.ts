@@ -167,10 +167,9 @@ export const autoClassifyMultimediaComponent = {
             };
 
             const result = await genAI.models.generateContent({
-                model: "gemini-2.5-flash-image",
+                model: "gemini-3-flash-preview",
                 contents: [prompt, imagePart],
                 config: {
-                    temperature: 0,
                     responseMimeType: "application/json",
                     responseJsonSchema: zodToJsonSchema(outputSchema),
                     safetySettings: [{

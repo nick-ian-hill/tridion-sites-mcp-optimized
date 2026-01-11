@@ -21,15 +21,12 @@ export const generateContentFromPrompt = {
             .describe("The source text to operate on (e.g., the body of an article to be rewritten or translated)."),
             
         guidance: z.string().optional()
-            .describe("Stylistic instructions, brand guidelines, or formatting rules. This sets the 'persona' of the AI for this generation."),
-            
-        creativityLevel: z.enum(["low", "medium", "high"]).optional().default("medium")
-            .describe("Controls the temperature. 'low' for factual tasks, 'high' for creative writing.")
+            .describe("Stylistic instructions, brand guidelines, or formatting rules. This sets the 'persona' of the AI for this generation.")
     },
 
     async execute(
-        { prompt, sourceText, guidance, creativityLevel = "medium" }: 
-        { prompt: string; sourceText?: string; guidance?: string; creativityLevel?: "low" | "medium" | "high" },
+        { prompt, sourceText, guidance }: 
+        { prompt: string; sourceText?: string; guidance?: string; },
         context: any
     ) {
         if (!GEMINI_API_KEY) {
@@ -37,8 +34,6 @@ export const generateContentFromPrompt = {
         }
 
         try {
-            const temperatureMap = { low: 0.2, medium: 0.5, high: 0.8 };
-            const temperature = temperatureMap[creativityLevel];
 
             // Construct a structured prompt
             const parts = [];
@@ -55,15 +50,12 @@ export const generateContentFromPrompt = {
 
             // 3. The Task
             parts.push(`--- INSTRUCTION ---\n${prompt}`);
-
-            console.log(`[generateContent] Calling Gemini (Temp: ${temperature})...`);
             
             const genAI = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
             const result = await genAI.models.generateContent({
-                model: "gemini-2.5-flash-lite",
+                model: "gemini-3-flash-preview",
                 contents: [{ role: 'user', parts: [{ text: parts.join("\n\n") }] }],
                 config: {
-                    temperature: temperature,
                     safetySettings: [{
                         category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
                         threshold: HarmBlockThreshold.BLOCK_NONE
