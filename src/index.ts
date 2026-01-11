@@ -6,6 +6,14 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { handleStartChat, handlePollChat } from './agent/agent.js';
 
+// --- Direct imports for Assistant-specific tools ---
+import { getCurrentTime } from './agent/uiTools/getCurrentTime.js';
+import { requestOpenInEditor } from './agent/uiTools/requestOpenInEditor.js';
+import { requestNavigation } from './agent/uiTools/requestNavigation.js';
+
+// Set this to false to hide UI-specific tools from the LLM
+const ENABLE_UI_ASSISTANT_TOOLS = false;
+
 interface Tool {
     name: string;
     description: string;
@@ -32,8 +40,23 @@ function isTool(obj: any): obj is Tool {
 async function startServer() {
     const mcpServer = new McpServer({ name: "tridion-sites-mcp-server", version: "1.0.0" });
     const mcpTransport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-    
+
     const tools: Tool[] = [];
+
+    // 1. Manually register the UI assistant specific tools first
+    if (ENABLE_UI_ASSISTANT_TOOLS) {
+        if (isTool(getCurrentTime)) {
+            tools.push(getCurrentTime);
+        }
+        if (isTool(requestOpenInEditor)) {
+            tools.push(requestOpenInEditor);
+        }
+        if (isTool(requestNavigation)) {
+            tools.push(requestNavigation);
+        }
+    }
+
+    // 2. Dynamically load standard tools from the tools/ directory
     const __dirname = path.dirname(fileURLToPath(import.meta.url));
     const toolsDirPath = path.join(__dirname, 'tools');
 
@@ -43,15 +66,16 @@ async function startServer() {
         for (const file of toolFiles) {
             if (file.endsWith('.ts')) {
                 const modulePath = path.join(toolsDirPath, file);
-
                 const moduleUrl = pathToFileURL(modulePath).href;
-                
                 const module = await import(moduleUrl);
-                
+
                 const potentialTool = Object.values(module)[0];
 
                 if (isTool(potentialTool)) {
-                    tools.push(potentialTool);
+                    // Avoid duplicate registration
+                    if (!tools.find(t => t.name === potentialTool.name)) {
+                        tools.push(potentialTool);
+                    }
                 } else {
                     console.warn(`Warning: File ${file} does not export a valid tool object.`);
                 }
@@ -65,10 +89,9 @@ async function startServer() {
 
         for (const potentialTool of tools) {
             mcpServer.tool(
-                potentialTool.name, 
-                potentialTool.description, 
-                potentialTool.input, 
-                // Handle toolOrchestrator as a special case
+                potentialTool.name,
+                potentialTool.description,
+                potentialTool.input,
                 (args: any, context: any) => {
                     let finalContext = context;
                     if (potentialTool.name === 'toolOrchestrator') {
@@ -77,7 +100,6 @@ async function startServer() {
                             tools: toolsAsRecord
                         };
                     }
-                    // All other tools get the default context
                     return potentialTool.execute(args, finalContext);
                 }
             );
