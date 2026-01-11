@@ -3,6 +3,8 @@ import { filterResponseData } from '../utils/responseFiltering.js';
 
 export const MAX_HISTORY_CHAR_LENGTH = 500000;
 
+const ARG_COMPRESSION_THRESHOLD = 20000;
+
 export function prepareHistoryForModel(history: Content[]): Content[] {
     const originalLength = JSON.stringify(history).length;
     const originalPercentage = Math.round((originalLength / MAX_HISTORY_CHAR_LENGTH) * 100);
@@ -21,36 +23,41 @@ export function prepareHistoryForModel(history: Content[]): Content[] {
             return msg; // Keep the last interaction in high fidelity.
         }
 
-        const part = msg.parts[0];
-
-        // If it's an old functionCall with large args, compress them.
-        if (msg.role === 'model' && part && 'functionCall' in part) {
-            const argsString = JSON.stringify(part.functionCall.args);
-            if (argsString.length > 250) { 
-                return {
-                    ...msg,
-                    parts: [{
+        // We map over parts to ensure we preserve "Thinking" parts while compressing "FunctionCall" parts.
+        const processedParts = msg.parts.map(part => {
+            
+            // 1. Handle Model Function Calls (Compress Large Args)
+            // We check if this specific part is a function call.
+            if (msg.role === 'model' && 'functionCall' in part) {
+                const argsString = JSON.stringify(part.functionCall.args);
+                if (argsString.length > ARG_COMPRESSION_THRESHOLD) { 
+                    return {
                         functionCall: {
                             name: part.functionCall.name,
                             args: { summary: `Large payload of ${argsString.length} chars` }
                         }
-                    }]
-                };
+                    };
+                }
             }
-        }
+            
+            // 2. Handle Function Responses (Filter Data)
+            // We check if this specific part is a function response.
+            if (msg.role === 'function' && 'functionResponse' in part) {
+                const filteredResponse = filterResponseData({
+                    responseData: part.functionResponse.response,
+                    details: 'IdAndTitle'
+                });
+                const newPart: FunctionResponsePart = {
+                    functionResponse: { name: part.functionResponse.name, response: filteredResponse }
+                };
+                return newPart;
+            }
+
+            // 3. Preserve everything else (specifically Thoughts/Reasoning parts)
+            return part;
+        });
         
-        if (msg.role === 'function' && part && 'functionResponse' in part) {
-            const filteredResponse = filterResponseData({
-                responseData: part.functionResponse.response,
-                details: 'IdAndTitle'
-            });
-            const newPart: FunctionResponsePart = {
-                functionResponse: { name: part.functionResponse.name, response: filteredResponse }
-            };
-            return { ...msg, parts: [newPart] };
-        }
-        
-        return msg;
+        return { ...msg, parts: processedParts };
     });
 
     let currentLength = JSON.stringify(preparedHistory).length;
