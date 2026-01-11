@@ -11,7 +11,7 @@ export const getItem = {
     description: `Retrieves read-only details for a single Content Manager System (CMS) item.
 This is the primary tool for fetching the FULL data of an item.
 The default response includes extensive system metadata and HATEOAS links.
-To avoid polluting the context window, use the 'includeProperties' parameter to request only what you need.
+To avoid polluting the context window, use the 'includeProperties' parameter to request only what you need. However, do include all relevant propeties to avoid sequential requests for the same item. 
 
 ### Contextual Retrieval
 You can inspect the state of an item in a specified Publication context (e.g., to check if it is localized, shared, or accessible in a sibling/parent) by providing the 'contextPublicationId' parameter. The tool will automatically resolve the correct ID for that context.
