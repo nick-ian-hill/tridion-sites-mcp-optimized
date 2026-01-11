@@ -1,4 +1,4 @@
-import { GoogleGenAI, FunctionDeclaration, Content, Type, GenerateContentResponse, FunctionCallingConfigMode } from "@google/genai";
+import { GoogleGenAI, FunctionDeclaration, Content, Type, GenerateContentResponse, FunctionCallingConfigMode, ThinkingLevel } from "@google/genai";
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { PlanStep } from './types.js';
@@ -11,78 +11,17 @@ const getGenAI = (): GoogleGenAI => {
     return new GoogleGenAI({ apiKey });
 };
 
-export interface DetectedIntent {
-    strategy: 'SIMPLE_ACTION' | 'MEDIUM_ACTION' | 'COMPLEX_OR_GENERAL';
-}
-
 export interface NextStepResult {
     planStep: PlanStep | null;
     modelResponseContent: Content | null;
 }
 
-/**
- * Detects if the prompt is a general question, a simple action, or a medium/complex action.
- */
-export const detectIntent = async (prompt: string): Promise<DetectedIntent> => {
-    const tools: FunctionDeclaration[] = [
-        {
-            name: 'handleSimpleAction',
-            description: 'Use for a very clear, specific, single-action command that requires only a few tools. Examples: "create a folder", "get item X", "what time is it?".',
-            parameters: { type: Type.OBJECT, properties: {} }
-        },
-        {
-            name: 'handleMediumAction',
-            description: 'Use for a clear command that may require a few steps or a moderate number of tools. Examples: "find an image and copy it to a new folder", "update the content and metadata of a component".',
-            parameters: { type: Type.OBJECT, properties: {} }
-        },
-        {
-            name: 'handleComplexOrGeneralQuery',
-            description: 'Use for broad, ambiguous, multi-part requests, or general conversational questions. This is the default choice if unsure. Examples: "find all components modified last week and add them to the marketing bundle", "what can you do?", "list all tools".',
-            parameters: { type: Type.OBJECT, properties: {} }
-        }
-    ];
-
-    const systemInstruction = `You are an expert intent strategist. Analyze the user's prompt and classify its complexity. You MUST call one of the provided functions. Default to handleComplexOrGeneralQuery if uncertain.`;
-
-    try {
-        const result = await getGenAI().models.generateContent({
-            model: "gemini-2.5-pro",
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            config: {
-                systemInstruction,
-                tools: [{ functionDeclarations: tools }],
-                toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.ANY } },
-                temperature: 0.0
-            }
-        });
-
-        const call = result.functionCalls?.[0];
-        if (call?.name === 'handleSimpleAction') {
-            console.log("[IntentDetector] Strategy: SIMPLE_ACTION");
-            return { strategy: 'SIMPLE_ACTION' };
-        }
-        if (call?.name === 'handleMediumAction') {
-            console.log("[IntentDetector] Strategy: MEDIUM_ACTION");
-            return { strategy: 'MEDIUM_ACTION' };
-        }
-
-        console.log("[IntentDetector] Strategy: COMPLEX_OR_GENERAL");
-        return { strategy: 'COMPLEX_OR_GENERAL' };
-
-    } catch (error) {
-        console.error("[IntentDetector] Error detecting intent, defaulting to COMPLEX_OR_GENERAL:", error);
-        return { strategy: 'COMPLEX_OR_GENERAL' };
-    }
-};
-
 // Helper to clean Zod schemas for Gemini
 const removeUnsupportedProperties = (schema: any): any => {
     if (!schema || typeof schema !== 'object') return schema;
     
-    // Recursively process arrays (e.g. "allOf", "anyOf", "items")
     if (Array.isArray(schema)) return schema.map(removeUnsupportedProperties);
 
-    // FIX 1: Remove unsupported root keywords
     delete schema.$schema;
     delete schema.additionalProperties;
     delete schema.title; 
@@ -90,32 +29,25 @@ const removeUnsupportedProperties = (schema: any): any => {
     delete schema.$defs;
     delete schema.$ref;
 
-    // FIX 2: Convert "const" to "enum" (Crucial for Discriminated Unions)
-    // z.literal("Value") -> { "const": "Value" } -> { "enum": ["Value"] }
     if ('const' in schema) {
         schema.enum = [schema.const];
         delete schema.const;
     }
 
-    // FIX 3: Flatten "type" arrays (e.g. type: ["string", "null"])
     if (schema.type && Array.isArray(schema.type)) {
-        // Grab the first non-null type, or default to the first one
         schema.type = schema.type.find((t: string) => t !== 'null') || schema.type[0];
     }
 
-    // Recurse into common schema containers
     if (schema.anyOf) schema.anyOf = schema.anyOf.map(removeUnsupportedProperties);
     if (schema.oneOf) schema.oneOf = schema.oneOf.map(removeUnsupportedProperties);
     if (schema.allOf) schema.allOf = schema.allOf.map(removeUnsupportedProperties);
 
-    // Recurse into object "properties"
     if (schema.properties) {
         for (const key in schema.properties) {
             schema.properties[key] = removeUnsupportedProperties(schema.properties[key]);
         }
     }
 
-    // Recurse into array "items"
     if (schema.items) {
         schema.items = removeUnsupportedProperties(schema.items);
     }
@@ -146,7 +78,7 @@ export const determineNextStep = async (
     prompt: string,
     contextItemId: string | undefined,
     history: Content[],
-    relevantTools: any[]
+    allTools: any[]
 ): Promise<NextStepResult> => {
     const finishTool: FunctionDeclaration = {
         name: "finish",
@@ -163,7 +95,7 @@ export const determineNextStep = async (
         }
     };
 
-    const toolsForNextStep = [...formatToolsForGemini(relevantTools), finishTool];
+    const toolsForNextStep = [...formatToolsForGemini(allTools), finishTool];
 
     const systemInstruction = `
         You are an expert orchestrator for a CMS. Your goal is to fulfill the user's request. You have the flexibility to either call a tool OR respond directly with a text message if that is more appropriate (e.g., for a simple conversational question).
@@ -184,7 +116,7 @@ export const determineNextStep = async (
             - If the output is an intermediate step towards a larger goal, call the next logical tool.
         2.  **Analyze New Request:** If there is no recent tool output, analyze the user's latest request. Do I have all the required parameters (e.g., 'title', 'locationId') to use a tool based on the user's request?
         3.  **Ask for Missing Info:** If required information is missing, I MUST call the 'finish' tool. I will use its 'finalMessage' parameter to ask the user for the necessary details.
-        4.  **Call a Tool:** If I have enough information, I will call the appropriate tool to make progress on the user's request.
+        4.  **Call a Tool:** If I have enough information, I will call the appropriate tool to make progress on the user's request. If I need multiple pieces of information about an item (e.g., its Content, and its Metadata), fetch ALL required properties in a single call using the 'includeProperties' parameter.
         5.  **Complete the Task:** When the user's request has been fully addressed, call the 'finish' tool with a message summarizing what was done.
 
         User Request: "${prompt}"
@@ -192,7 +124,7 @@ export const determineNextStep = async (
     `;
 
     const result: GenerateContentResponse = await getGenAI().models.generateContent({
-        model: "gemini-2.5-pro",
+        model: "gemini-3-flash-preview",
         contents: history,
         config: {
             systemInstruction: systemInstruction,
@@ -200,7 +132,9 @@ export const determineNextStep = async (
             toolConfig: {
                 functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO }
             },
-            temperature: 0.0
+            thinkingConfig: {
+                thinkingLevel: ThinkingLevel.MEDIUM,
+            }
         }
     });
 
@@ -231,82 +165,6 @@ export const determineNextStep = async (
     return { planStep: nextStep, modelResponseContent };
 };
 
-export const MANDATORY_TOOLS = [
-    'bulkReadItems', 'getItem', 'createItem', 'createPage', 'createRegionSchema', 'createComponent',
-    'createComponentSchema', 'search', 'getPublications', 'getCurrentTime', 'updateContent',
-    'updateMetadata', 'updatePage', 'localizeItem'
-];
-
-export const selectRelevantTools = async (prompt: string, allTools: any[], maxTools: number): Promise<any[]> => {
-    const toolLister: FunctionDeclaration = {
-        name: 'setSelectedTools',
-        description: 'Use this function to provide the list of additional tools relevant to the user\'s request.',
-        parameters: {
-            type: Type.OBJECT,
-            properties: {
-                toolNames: {
-                    type: Type.ARRAY,
-                    description: 'An array of the names of the additional tools that are most relevant to the user\'s request.',
-                    items: { type: Type.STRING }
-                }
-            },
-            required: ['toolNames']
-        }
-    };
-
-    // Filter out mandatory tools from the list the selector model will see
-    const optionalTools = allTools.filter(t => !MANDATORY_TOOLS.includes(t.name));
-    const simplifiedOptionalTools = optionalTools.map(t => ({ name: t.name, description: t.description }));
-
-    const numToolsToSelect = maxTools - MANDATORY_TOOLS.length;
-    if (numToolsToSelect <= 0) {
-        console.log(`[ToolRouter] Tool budget (${maxTools}) met by mandatory tools. Selecting mandatory tools only.`);
-        return allTools.filter(t => MANDATORY_TOOLS.includes(t.name) || t.name === 'finish');
-    }
-
-    const systemInstruction = `
-        You are a tool routing expert. Your job is to analyze the user's request and select the most relevant tools.
-        The following core tools are already included: ${MANDATORY_TOOLS.join(', ')}.
-        From the list of available tools below, you must select the top ${numToolsToSelect} MOST RELEVANT *additional* tools that are likely to be needed.
-        Do NOT re-select any of the core tools. You MUST call the 'setSelectedTools' function with the names of your selected additional tools.
-    `;
-
-    const fullPrompt = `
-        User Request: "${prompt}"
-
-        Available Additional Tools:
-        ${JSON.stringify(simplifiedOptionalTools, null, 2)}
-    `;
-
-    try {
-        const result = await getGenAI().models.generateContent({
-            model: "gemini-2.5-pro",
-            contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
-            config: { systemInstruction, tools: [{ functionDeclarations: [toolLister] }], toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.ANY } }, temperature: 0.0 }
-        });
-
-        const call = result.functionCalls?.[0];
-        const finalToolNames = new Set<string>(MANDATORY_TOOLS);
-
-        if (call?.name === 'setSelectedTools' && call.args?.toolNames) {
-            const additionalToolNames = call.args.toolNames as string[];
-            additionalToolNames.forEach(name => finalToolNames.add(name));
-        } else {
-            console.warn("[ToolRouter] Model did not select any additional tools.");
-        }
-
-        // Ensure 'finish' is always present
-        finalToolNames.add('finish');
-
-        console.log(`[ToolRouter] Selected ${finalToolNames.size} total tools.`);
-        return allTools.filter(t => finalToolNames.has(t.name));
-
-    } catch (error) {
-        console.error("[ToolRouter] Error selecting relevant tools, falling back to mandatory tools:", error);
-        return allTools.filter(t => MANDATORY_TOOLS.includes(t.name) || t.name === 'finish');
-    }
-};
-
 export const summarizeToolOutput = async (toolOutput: any, userPrompt: string): Promise<string> => {
     if (toolOutput === null || toolOutput === undefined) return "";
 
@@ -332,11 +190,8 @@ export const summarizeToolOutput = async (toolOutput: any, userPrompt: string): 
 
     try {
         const result = await getGenAI().models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: summaryPrompt,
-            config: {
-                temperature: 0.0
-            }
+            model: "gemini-3-flash-preview",
+            contents: summaryPrompt
         });
         return (result.text ?? "").trim();
     } catch (error) {

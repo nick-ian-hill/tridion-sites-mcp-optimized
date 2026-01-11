@@ -1,7 +1,7 @@
 import http from 'node:http';
 import { filterResponseData } from '../utils/responseFiltering.js';
 import { Task, PlanStep, MessageEmitter, Content } from './types.js';
-import { determineNextStep, summarizeToolOutput, selectRelevantTools, detectIntent, DetectedIntent, MANDATORY_TOOLS } from './gemini.js';
+import { determineNextStep, summarizeToolOutput } from './gemini.js';
 import { READ_ONLY_TOOLS } from './readOnlyTools.js';
 import { AxiosError } from 'axios';
 import { prepareHistoryForModel } from './historyUtils.js';
@@ -40,37 +40,14 @@ export class Orchestrator {
         let finalMessage = "Task failed to complete.";
 
         try {
-            this.emit('progress', { isLog: true, message: "Analyzing user's request and complexity..." });
-            const intent: DetectedIntent = await detectIntent(prompt);
+            // Logic for intent detection and tool routing has been removed to leverage 
+            // model caching and ensure full context availability.
+            this.emit('progress', { 
+                isLog: true, 
+                message: `Starting task...` 
+            });
 
-            let availableTools: any[];
-
-            switch (intent.strategy) {
-                case 'SIMPLE_ACTION':
-                    this.emit('progress', { isLog: true, message: "Strategy: Simple Action. Selecting a small toolset..." });
-                    availableTools = await selectRelevantTools(prompt, this.allTools, MANDATORY_TOOLS.length + 1);
-                    break;
-                
-                case 'MEDIUM_ACTION':
-                    this.emit('progress', { isLog: true, message: "Strategy: Medium Action. Selecting a medium toolset..." });
-                    availableTools = await selectRelevantTools(prompt, this.allTools, 20);
-                    break;
-                
-                case 'COMPLEX_OR_GENERAL':
-                default:
-                    this.emit('progress', { isLog: true, message: "Strategy: Complex/General. Using all available tools..." });
-                    availableTools = this.allTools;
-                    break;
-            }
-
-             if (intent.strategy !== 'COMPLEX_OR_GENERAL') {
-                this.emit('progress', {
-                    isLog: true,
-                    message: `Tool router selected ${availableTools.length}/${this.allTools.length} tools for this task.`
-                });
-            }
-            
-            finalMessage = await this.executePlan(task, availableTools, prompt);
+            finalMessage = await this.executePlan(task, this.allTools, prompt);
 
             this.emit('result', {
                 message: finalMessage,
