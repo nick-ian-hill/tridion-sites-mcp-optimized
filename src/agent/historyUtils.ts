@@ -32,6 +32,7 @@ export function prepareHistoryForModel(history: Content[]): Content[] {
                 const argsString = JSON.stringify(part.functionCall.args);
                 if (argsString.length > ARG_COMPRESSION_THRESHOLD) { 
                     return {
+                        ...part, // <--- CHANGED: Spread existing props to preserve 'thoughtSignature'
                         functionCall: {
                             name: part.functionCall.name,
                             args: { summary: `Large payload of ${argsString.length} chars` }
