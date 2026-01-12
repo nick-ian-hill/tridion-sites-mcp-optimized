@@ -11,10 +11,25 @@ export const updateContent = {
 
 Partial Updates Supported:
 - You only need to provide the fields you wish to change.
-- The tool performs a recursive "deep merge":
-  - **Objects**: Merged (e.g., if updating 'Address.City', 'Address.Zip' is preserved).
-  - **Arrays**: Replaced (e.g., providing a new list of 'Tags' overwrites the old list entirely).
-  - **Primitives**: Overwritten.
+- The 'updateMode' parameter controls how your input interacts with the existing data.
+
+Update Modes:
+1. **'replace'** (Default): 
+   - The content object you provide **REPLACES** the existing content structure.
+   - Any **content fields** NOT present in your input (but present on the item) will be **REMOVED**.
+   - Arrays are completely overwritten.
+   - *Use this when you want to set the exact state of the content, removing anything you didn't explicitly include.*
+
+2. **'update'**:
+   - **"Smart Merge"**: Your input is merged into the existing content.
+   - **Objects**: Recursively merged. Keys you omit are **PRESERVED**.
+     - *Note*: Merging only works if the target field already exists on the item. If a field is currently null/missing on the server, you must provide all mandatory sub-fields, as there is nothing to merge with.
+   - **Arrays**: Merged by index.
+     - **Constraint**: Multi-value fields MUST be provided as arrays (e.g., \`[{...}]\`), even if you are only updating a single item.
+     - **Skips**: If you provide \`null\` at an index (e.g., \`[null, "New"]\`), the existing value at that index is **PRESERVED**.
+     - **Partial Objects**: If you provide a partial object (e.g., \`[{ "Age": 30 }]\`), it merges into the existing object at that index.
+     - New items are appended. Existing items beyond the input length are preserved.
+   - *Use this when you want to modify specific properties (like updating one field in an embedded schema) without having to resend the entire structure.*
 
 Important Constraints:
 - This tool is only for Components. It cannot update other item types.
@@ -37,30 +52,39 @@ To discover all available fields within an embedded schema, including optional o
 
 Examples:
 
-Example 1: Updates ONLY the 'TitleField', preserving other existing content fields.
+Example 1: REPLACE 'TitleField'.
+    // Even if other fields existed, using 'replace' with ONLY TitleField will attempt to save a Component with ONLY TitleField (likely failing schema validation if other fields are mandatory).
+    // Use 'replace' when you have the FULL desired state of the component content.
     const result = await tools.updateContent({
         "itemId": "tcm:5-123",
+        "updateMode": "replace", 
         "content": {
             "TitleField": "Updated Component Title" 
         }
     });
     
-Example 2: Updates a specific field deep inside an embedded schema, preserving siblings.
+Example 2: Smart Update - Updates a specific field deep inside a list of embedded schemas.
+    // Existing 'Team' list: [{ "Name": "Alice", "Role": "Dev" }, { "Name": "Bob", "Role": "QA" }]
     const result = await tools.updateContent({
         "itemId": "tcm:5-123",
+        "updateMode": "update",
         "content": {
-            "sourceAttribution": {
-                // This updates 'authorName' but keeps 'publication' and 'relatedArticles' if they exist.
-                "authorName": "Dr. Ellie Sattler"
-            }
+            "Team": [
+                {
+                    // This merges into index 0 (Alice), changing her Role but keeping Name="Alice".
+                    "Role": "Lead Developer"
+                },
+                null // Index 1: PRESERVED (Bob) by passing null
+            ]
         }
     });
     `,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-16)?)$/).describe("The unique ID of the component to update (e.g., 'tcm:5-123')."),
-        content: z.record(fieldValueSchema).describe("A JSON object containing the Component's content fields to update. Partial updates are supported."),
+        content: z.record(fieldValueSchema).describe("A JSON object containing the Component's content fields to update."),
+        updateMode: z.enum(['replace', 'update']).default('replace').describe("Strategy for applying changes. 'replace' overwrites the provided structure. 'update' performs a smart merge (recursive object merge + array merge by index with null skipping)."),
     },
-    execute: async ({ itemId, content }: { itemId: string, content: Record<string, any> }, context: any) => {
+    execute: async ({ itemId, content, updateMode }: { itemId: string, content: Record<string, any>, updateMode: 'replace' | 'update' }, context: any) => {
         formatForApi(content);
         const diagnosticsArgs = JSON.parse(JSON.stringify(content));
         const req = context?.request;
@@ -86,12 +110,21 @@ Example 2: Updates a specific field deep inside an embedded schema, preserving s
             
             convertLinksRecursively(content, itemId);
 
-            // Fetch existing content and merge with new input
-            const existingContent = itemToUpdate.Content || {};
-            const mergedContent = deepMerge(existingContent, content);
+            let newContent: Record<string, any>;
 
-            // Reorder based on the full merged object
-            const orderedContent = await reorderFieldsBySchema(mergedContent, schemaId, 'content', authenticatedAxios);
+            if (updateMode === 'replace') {
+                // In replace mode, the input IS the new content.
+                // We rely on reorderFieldsBySchema to structure it correctly, 
+                // but we do NOT merge with existing values.
+                newContent = content;
+            } else {
+                // In update mode, we perform a smart merge with existing data.
+                const existingContent = itemToUpdate.Content || {};
+                newContent = deepMerge(existingContent, content);
+            }
+
+            // Reorder based on the full object
+            const orderedContent = await reorderFieldsBySchema(newContent, schemaId, 'content', authenticatedAxios);
 
             itemToUpdate.Content = orderedContent;
 

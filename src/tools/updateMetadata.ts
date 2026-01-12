@@ -11,10 +11,25 @@ export const updateMetadata = {
 
 Partial Updates Supported:
 - You only need to provide the fields you wish to change.
-- The tool performs a recursive "deep merge":
-  - **Objects**: Merged (e.g., if updating 'Address.City', 'Address.Zip' is preserved).
-  - **Arrays**: Replaced (e.g., providing a new list of 'Keywords' overwrites the old list entirely).
-  - **Primitives**: Overwritten.
+- The 'updateMode' parameter controls how your input interacts with the existing data.
+
+Update Modes:
+1. **'replace'** (Default): 
+   - The metadata object you provide **REPLACES** the existing metadata structure.
+   - Any **metadata fields** NOT present in your input (but present on the item) will be **REMOVED**.
+   - Arrays are completely overwritten.
+   - *Use this when you want to set the exact state of the metadata, removing anything you didn't explicitly include.*
+
+2. **'update'**:
+   - **"Smart Merge"**: Your input is merged into the existing metadata.
+   - **Objects**: Recursively merged. Keys you omit are **PRESERVED**.
+     - *Note*: Merging only works if the target field already exists on the item. If a field is currently null/missing on the server, you must provide all mandatory sub-fields, as there is nothing to merge with.
+   - **Arrays**: Merged by index.
+     - **Constraint**: Multi-value fields MUST be provided as arrays (e.g., \`[{...}]\`), even if you are only updating a single item.
+     - **Skips**: If you provide \`null\` at an index (e.g., \`[null, "New"]\`), the existing value at that index is **PRESERVED**.
+     - **Partial Objects**: If you provide a partial object (e.g., \`[{ "Age": 30 }]\`), it merges into the existing object at that index.
+     - New items are appended. Existing items beyond the input length are preserved.
+   - *Use this when you want to modify specific properties (like updating one field in an embedded schema) without having to resend the entire structure.*
 
 Important Constraints:
 - This tool only updates the metadata fields. It cannot update the item's Title or Content fields.
@@ -34,36 +49,38 @@ To discover all available fields within an embedded schema, including optional o
 
 Examples:
 
-Example 1: Updates ONLY the 'Keywords' metadata field.
+Example 1: REPLACE 'Keywords'.
+    // If existing metadata had "Keywords": ["Old"] and "Author": "Me".
+    // This input will result in "Keywords": ["New"] and "Author": "Me" (Author is preserved because it's a sibling, assuming "metadata" here is partial).
     const result = await tools.updateMetadata({
         "itemId": "tcm:5-123",
+        "updateMode": "replace", 
         "metadata": {
-            "Keywords": ["Update", "Tool", "Metadata"] 
+            "Keywords": ["New"] 
         }
     });
     
-Example 2: Updates a metadata value for a 'Folder' containing a multi-value embedded schema field.
+Example 2: Smart Update of an Embedded Schema List.
+    // Existing 'Products' list: ["A", "B", "C"]
+    // We want to change the second item ("B") to "Z", keeping "A" and "C".
     const result = await tools.updateMetadata({
         "itemId": "tcm:4-567-2",
+        "updateMode": "update",
         "metadata": {
-            // Because 'Products' is an array, providing this list REPLACES the existing list.
             "Products": [
-                {
-                    "Description": {
-                        type: "Link",
-                        IdRef: "tcm:4-101"
-                    },
-                    "AvailableFrom": "2025-10-02T00:00:00"
-                }
+                null, // Index 0: PRESERVED ("A")
+                "Z"   // Index 1: UPDATED ("Z")
+                      // Index 2: PRESERVED ("C") automatically
             ]
         }
     });
     `,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the item to update (e.g., 'tcm:5-1234-64')."),
-        metadata: z.record(fieldValueSchema).describe("A JSON object containing the item's metadata fields to update. Partial updates are supported."),
+        metadata: z.record(fieldValueSchema).describe("A JSON object containing the item's metadata fields to update."),
+        updateMode: z.enum(['replace', 'update']).default('replace').describe("Strategy for applying changes. 'replace' overwrites the provided structure. 'update' performs a smart merge (recursive object merge + array merge by index with null skipping)."),
     },
-    execute: async ({ itemId, metadata }: { itemId: string, metadata: Record<string, any> }, context: any) => {
+    execute: async ({ itemId, metadata, updateMode }: { itemId: string, metadata: Record<string, any>, updateMode: 'replace' | 'update' }, context: any) => {
         formatForApi(metadata);
         const diagnosticsArgs = JSON.parse(JSON.stringify(metadata));
         const req = context?.request;
@@ -97,12 +114,21 @@ Example 2: Updates a metadata value for a 'Folder' containing a multi-value embe
 
             convertLinksRecursively(metadata, itemId);
 
-            // Fetch existing metadata and merge with new input
-            const existingMetadata = itemToUpdate.Metadata || {};
-            const mergedMetadata = deepMerge(existingMetadata, metadata);
+            let newMetadata: Record<string, any>;
 
-            // Reorder based on the full merged object
-            const orderedMetadata = await reorderFieldsBySchema(mergedMetadata, schemaIdForMetadata, 'metadata', authenticatedAxios);
+            if (updateMode === 'replace') {
+                // In replace mode, the input IS the new metadata.
+                // We rely on reorderFieldsBySchema to structure it correctly, 
+                // but we do NOT merge with existing values.
+                newMetadata = metadata;
+            } else {
+                // In update mode, we perform a smart merge with existing data.
+                const existingMetadata = itemToUpdate.Metadata || {};
+                newMetadata = deepMerge(existingMetadata, metadata);
+            }
+
+            // Reorder based on the full object
+            const orderedMetadata = await reorderFieldsBySchema(newMetadata, schemaIdForMetadata, 'metadata', authenticatedAxios);
 
             itemToUpdate.Metadata = orderedMetadata;
 

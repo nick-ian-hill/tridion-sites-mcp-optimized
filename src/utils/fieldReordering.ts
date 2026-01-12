@@ -290,18 +290,54 @@ export function formatForAgent(obj: any): any {
 }
 
 /**
- * Deep merges the source object into the target object.
- * - Objects are merged recursively.
- * - Arrays are NOT merged; the source array replaces the target array.
- * - Primitives are overwritten.
+ * Performs a "Smart Merge" of source into target.
+ * - Objects are merged recursively (properties in target but not in source are preserved).
+ * - Arrays are merged by index (target items at indices beyond source length are preserved).
+ * - Explicit 'null' in source array PRESERVES the target item at that index.
  */
 export function deepMerge(target: any, source: any): any {
-    if (typeof source !== 'object' || source === null || Array.isArray(source)) {
-        return source; // Primitives and Arrays overwrite
+    // 1. Handle Primitives and non-mergeable types (including null acting as value)
+    if (typeof source !== 'object' || source === null) {
+        return source; 
     }
+
+    // 2. Handle Arrays (Smart Merge by Index)
+    if (Array.isArray(source)) {
+        if (!Array.isArray(target)) {
+            // Target isn't an array, so we overwrite with source
+            return source;
+        }
+
+        const maxLength = Math.max(target.length, source.length);
+        const result = [];
+
+        for (let i = 0; i < maxLength; i++) {
+            if (i < source.length && i < target.length) {
+                // Both exist.
+                // SPECIAL CHECK: If source[i] is NULL, we interpret this as "SKIP/PRESERVE".
+                if (source[i] === null) {
+                    result.push(target[i]);
+                } else {
+                    // Otherwise, recursively merge
+                    result.push(deepMerge(target[i], source[i]));
+                }
+            } else if (i < source.length) {
+                // Only in source (newly added item)
+                result.push(source[i]);
+            } else {
+                // Only in target (preserved existing item)
+                result.push(target[i]);
+            }
+        }
+        return result;
+    }
+
+    // 3. Handle Objects (Recursive Merge)
     if (typeof target !== 'object' || target === null || Array.isArray(target)) {
-        return source; // Target isn't mergeable, overwrite
+        // If target is not an object (or is null/array), we cannot merge properties. Overwrite.
+        return source; 
     }
+
     const output = { ...target };
     Object.keys(source).forEach(key => {
         if (Object.prototype.hasOwnProperty.call(source, key)) {
