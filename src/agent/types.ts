@@ -39,8 +39,8 @@ export interface OrchestratorEvent {
 export type MessageEmitter = (event: OrchestratorEvent['type'], data: OrchestratorEvent['data']) => void;
 
 // These types accurately represent the Gemini conversation history structure.
-export interface TextPart { text: string; }
-export interface FunctionCallPart { functionCall: { name: string; args: any; }; }
+export interface TextPart { text: string; thoughtSignature?: string; }
+export interface FunctionCallPart { functionCall: { name: string; args: any; }; thoughtSignature?: string; }
 export interface FunctionResponsePart { functionResponse: { name: string; response: any; }; }
 
 export type ContentPart = TextPart | FunctionCallPart | FunctionResponsePart;
