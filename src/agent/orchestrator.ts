@@ -124,6 +124,9 @@ export class Orchestrator {
         const argsSummary = JSON.stringify(step.args, null, 2);
         this.emit('progress', {
             isLog: true,
+            logCategory: 'tool-call',
+            toolName: step.tool,
+            args: step.args,
             message: `Calling tool: **${step.tool}**\n\`\`\`json\n${argsSummary}\n\`\`\``
         });
 
@@ -172,6 +175,8 @@ export class Orchestrator {
 
             this.emit('progress', {
                 isLog: true,
+                logCategory: 'tool-result',
+                toolName: step.tool,
                 message: `Received response from **${step.tool}**.`
             });
 
