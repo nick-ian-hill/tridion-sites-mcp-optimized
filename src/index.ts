@@ -12,7 +12,7 @@ import { requestOpenInEditor } from './agent/uiTools/requestOpenInEditor.js';
 import { requestNavigation } from './agent/uiTools/requestNavigation.js';
 
 // Set this to false to hide UI-specific tools from the LLM
-const ENABLE_UI_ASSISTANT_TOOLS = false;
+const ENABLE_UI_ASSISTANT_TOOLS = true;
 
 interface Tool {
     name: string;
