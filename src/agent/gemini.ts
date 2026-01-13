@@ -141,9 +141,13 @@ export const determineNextStep = async (
     const calls = result.functionCalls;
     const modelResponseContent = result.candidates?.[0]?.content ?? null;
 
+    // Filter to ensure we only process valid calls that have a name.
+    // This satisfies TypeScript safety and prevents runtime errors in the Orchestrator.
+    const validCalls = (calls || []).filter(call => call.name);
+
     // Handle case where no function calls were generated (fallback to text or 'finish')
-    if (!calls || calls.length === 0) {
-        console.warn("[Reasoner] Model did not return a function call. Assuming task is complete.");
+    if (validCalls.length === 0) {
+        console.warn("[Reasoner] Model did not return a valid function call. Assuming task is complete.");
         const textResponse = (result.text ?? "").trim();
         const planStep: PlanStep = {
             step: -1,
@@ -155,13 +159,13 @@ export const determineNextStep = async (
         return { planSteps: [planStep], modelResponseContent };
     }
 
-    // Map ALL function calls to plan steps (supporting parallel calling)
+    // Map ALL valid function calls to plan steps (supporting parallel calling)
     const currentFunctionCount = history.filter(h => h.role === 'function').length;
     
-    const nextSteps: PlanStep[] = calls.map((call, index) => ({
+    const nextSteps: PlanStep[] = validCalls.map((call, index) => ({
         step: currentFunctionCount + 1 + index,
         description: `Call tool: ${call.name}`,
-        tool: call.name ?? "unknown_tool",
+        tool: call.name!,
         args: call.args,
         status: 'pending'
     }));
