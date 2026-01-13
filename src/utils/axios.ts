@@ -123,7 +123,7 @@ export const createAuthenticatedAxios = (userSessionId?: string | null, referer?
 
     const instance = axios.create(config);
 
-    const LOGGING_ENABLED = true;
+    const LOGGING_ENABLED = false;
 
     if (LOGGING_ENABLED) {
         instance.interceptors.request.use(
