@@ -132,7 +132,17 @@ export class Orchestrator {
             let responseForHistory;
             const isReadOnly = READ_ONLY_TOOLS.includes(step.tool);
 
-            if (isReadOnly) {
+            // Check if the "result" contains error indicators
+            const isErrorResult = result && (result.type === 'Error' || result.ErrorCode);
+
+            if (isErrorResult) {
+                step.status = 'failed';
+                step.error = result.Message || "Unknown tool error";
+                responseForHistory = { error: step.error };
+                
+                // We purposefully do NOT throw here, allowing the agent to see the error 
+                // in the history and try to self-correct.
+            } else if (isReadOnly) {
                 responseForHistory = step.result;
             } else {
                 if (typeof step.result === 'object' && step.result !== null && step.result.Id) {
@@ -141,12 +151,14 @@ export class Orchestrator {
                     responseForHistory = { status: 'success' };
                 }
             }
-            
-            if (Array.isArray(responseForHistory)) {
-                responseForHistory = { items: responseForHistory };
-            }
-            else if (typeof responseForHistory !== 'object' || responseForHistory === null) {
-                responseForHistory = { output: responseForHistory };
+
+            if (!isErrorResult) {
+                if (Array.isArray(responseForHistory)) {
+                    responseForHistory = { items: responseForHistory };
+                }
+                else if (typeof responseForHistory !== 'object' || responseForHistory === null) {
+                    responseForHistory = { output: responseForHistory };
+                }
             }
 
             task.history.push({ role: 'function', parts: [{ functionResponse: { name: step.tool, response: responseForHistory } }] });
