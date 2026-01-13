@@ -79,30 +79,37 @@ export class Orchestrator {
         for (let i = 0; i < MAX_STEPS; i++) {
             const preparedHistory = prepareHistoryForModel(task.history);
             
-            const { planStep: nextStep, modelResponseContent } = await determineNextStep(
+            // Get all steps for this turn (supports parallel calls)
+            const { planSteps: nextSteps, modelResponseContent } = await determineNextStep(
                 latestPrompt,
                 task.contextItemId,
                 preparedHistory,
                 availableTools
             );
 
-            if (!nextStep || nextStep.tool === 'finish') {
-                if (nextStep?.args.finalMessage === '__NEEDS_SUMMARY__') {
+            // Check if the primary next step is to finish or if no steps were found
+            const firstStep = nextSteps[0];
+            if (!firstStep || firstStep.tool === 'finish') {
+                if (firstStep?.args.finalMessage === '__NEEDS_SUMMARY__') {
                     const lastStep = task.plan[task.plan.length - 1];
                     if (lastStep && lastStep.status === 'completed') {
                         return await summarizeToolOutput(lastStep.result, latestPrompt);
                     }
                     return "The task is complete.";
                 }
-                return nextStep?.args?.finalMessage || "Task completed successfully.";
+                return firstStep?.args?.finalMessage || "Task completed successfully.";
             }
             
+            // Push the model's full response (which includes ALL function calls) to history
             if (modelResponseContent) {
                 task.history.push(modelResponseContent as Content);
             }
 
-            task.plan.push(nextStep);
-            await this.executeStep(nextStep, task);
+            // Iterate through ALL parallel steps and execute them
+            for (const step of nextSteps) {
+                task.plan.push(step);
+                await this.executeStep(step, task);
+            }
 
             if (i === MAX_STEPS - 1) {
                 return "Task stopped as it reached the maximum number of steps.";
@@ -165,7 +172,7 @@ export class Orchestrator {
 
             this.emit('progress', {
                 isLog: true,
-                message: `Received response from **${step.tool}**. Now deciding next step...`
+                message: `Received response from **${step.tool}**.`
             });
 
         } catch (e) {

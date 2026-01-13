@@ -12,7 +12,7 @@ const getGenAI = (): GoogleGenAI => {
 };
 
 export interface NextStepResult {
-    planStep: PlanStep | null;
+    planSteps: PlanStep[];
     modelResponseContent: Content | null;
 }
 
@@ -72,7 +72,7 @@ const formatToolsForGemini = (tools: any[]): FunctionDeclaration[] => {
 };
 
 /**
- * Determines the single next step for the agent to take.
+ * Determines the next steps (potentially multiple parallel steps) for the agent to take.
  */
 export const determineNextStep = async (
     prompt: string,
@@ -138,10 +138,11 @@ export const determineNextStep = async (
         }
     });
 
-    const call = result.functionCalls?.[0];
+    const calls = result.functionCalls;
     const modelResponseContent = result.candidates?.[0]?.content ?? null;
 
-    if (!call || !call.name) {
+    // Handle case where no function calls were generated (fallback to text or 'finish')
+    if (!calls || calls.length === 0) {
         console.warn("[Reasoner] Model did not return a function call. Assuming task is complete.");
         const textResponse = (result.text ?? "").trim();
         const planStep: PlanStep = {
@@ -151,18 +152,21 @@ export const determineNextStep = async (
             description: "Finish with a direct text response from the model.",
             status: 'pending'
         };
-        return { planStep, modelResponseContent };
+        return { planSteps: [planStep], modelResponseContent };
     }
 
-    const nextStep: PlanStep = {
-        step: history.filter(h => h.role === 'function').length + 1,
+    // Map ALL function calls to plan steps (supporting parallel calling)
+    const currentFunctionCount = history.filter(h => h.role === 'function').length;
+    
+    const nextSteps: PlanStep[] = calls.map((call, index) => ({
+        step: currentFunctionCount + 1 + index,
         description: `Call tool: ${call.name}`,
-        tool: call.name,
+        tool: call.name ?? "unknown_tool",
         args: call.args,
         status: 'pending'
-    };
+    }));
 
-    return { planStep: nextStep, modelResponseContent };
+    return { planSteps: nextSteps, modelResponseContent };
 };
 
 export const summarizeToolOutput = async (toolOutput: any, userPrompt: string): Promise<string> => {
