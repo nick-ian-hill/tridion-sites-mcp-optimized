@@ -150,7 +150,7 @@ async function processSingleRegion(
     if (regionSchemaIdRef) {
         // Case 1: Region is defined in schema
         if (agentProvidedMetadata) {
-            finalMetadataPayload = await reorderFieldsBySchema(agentProvidedMetadata, regionSchemaIdRef, 'content', axiosInstance);
+            finalMetadataPayload = await reorderFieldsBySchema(agentProvidedMetadata, regionSchemaIdRef, 'metadata', axiosInstance);
         } else {
             // Always provide empty metadata if defined
             finalMetadataPayload = { "$type": "FieldsValueDictionary" };
