@@ -127,6 +127,82 @@ async function startServer() {
             return;
         }
 
+        // --- NEW: Direct Tool Orchestrator Endpoint ---
+        // Allows the UI to execute scripts directly without the LLM Agent wrapper.
+        if (req.url === '/agent/tools/orchestrator' && req.method === 'POST') {
+            if (req.headers['x-api-key'] !== MCP_API_KEY) {
+                res.writeHead(401, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Unauthorized: Missing or invalid API Key' }));
+                return;
+            }
+
+            let body = '';
+            req.on('data', chunk => { body += chunk.toString(); });
+            req.on('end', async () => {
+                try {
+                    const input = JSON.parse(body || '{}');
+
+                    // 1. Re-construct the tools map for this execution context
+                    // (We do this here to ensure we have the latest reference to the loaded tools array)
+                    const toolsAsRecord = tools.reduce((acc, tool) => {
+                        acc[tool.name] = tool;
+                        return acc;
+                    }, {} as Record<string, Tool>);
+
+                    const orchestratorTool = toolsAsRecord['toolOrchestrator'];
+
+                    if (!orchestratorTool) {
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: "toolOrchestrator not loaded on server." }));
+                        return;
+                    }
+
+                    // 2. Manually construct the context expected by toolOrchestrator.ts
+                    // The orchestrator expects { tools: ... } in the context to function.
+                    const executionContext = {
+                        tools: toolsAsRecord
+                    };
+
+                    // 3. Execute the tool
+                    // This bypasses the McpServer wrapper and calls the underlying tool code directly.
+                    const result = await orchestratorTool.execute(input, executionContext);
+
+                    // 4. Unwrap the MCP response format to return clean JSON to the UI.
+                    // MCP returns { content: [{ type: 'text', text: 'JSON_STRING' }] }
+                    // We want to return just JSON_OBJECT.
+                    let cleanResponse = result;
+                    if (result && result.content && Array.isArray(result.content) && result.content[0]?.text) {
+                        const rawText = result.content[0].text;
+                        try {
+                            // Check if it looks like JSON before parsing
+                            if (typeof rawText === 'string' && (rawText.trim().startsWith('{') || rawText.trim().startsWith('['))) {
+                                cleanResponse = JSON.parse(rawText);
+                            } else {
+                                cleanResponse = { output: rawText };
+                            }
+                        } catch (e) {
+                            // Fallback to raw text if parsing fails
+                            cleanResponse = { output: rawText };
+                        }
+                    }
+
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify(cleanResponse));
+
+                } catch (error: any) {
+                    console.error("[DirectAPI] Error executing orchestrator:", error);
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({
+                        status: "Error",
+                        summary: "Script failed to execute",
+                        error: error.message || String(error)
+                    }));
+                }
+            });
+            return;
+        }
+        // --- END NEW ENDPOINT ---
+
         if (req.url === '/agent/chat' && req.method === 'POST') {
             if (req.headers['x-api-key'] !== MCP_API_KEY) {
                 res.writeHead(401, { 'Content-Type': 'application/json' });
