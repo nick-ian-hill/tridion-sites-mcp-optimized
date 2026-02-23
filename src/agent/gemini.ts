@@ -145,6 +145,17 @@ export const determineNextStep = async (
         - "Viewing details for" indicates the item for which details are being displayed in the various 'details' panels. If there are no selected items, this might be what the user wants to work with, but the browsing location is still their primary context.
         - When a user asks "what folder am I in?" or similar questions, they're asking about the "Browsing in" location, NOT the focused item.
 
+        **Formatting Item References:**
+        - CRITICAL: Whenever you reference a CMS item in your response, ALWAYS use this format: "Title" (id)
+        - Examples: 
+          • "Products" (tcm:5-123-2)
+          • "Hero Banner" (tcm:5-456-16)
+          • "Homepage" (tcm:5-789-64)
+          • "Product Image" (ecl:provider-123)
+        - This format makes items clickable in the user interface, allowing users to navigate directly to the referenced item.
+        - ALWAYS include both the title in quotes and the item ID (either TCM URI or ECL URI) in parentheses.
+        - You may optionally include a descriptive word before the title (e.g., 'folder "Products"' or 'page "Homepage"') for clarity, but this is not required.
+
         **Answering Informational Questions:**
         - If the user's request is a direct question for information (e.g., 'list the tools', 'what is the current time?') and doesn't seem to be part of a larger multi-step task, your primary goal is conciseness.
         - If a single tool can provide the answer, call that tool. In the *next* step, your ONLY action should be to call the 'finish' tool with a 'finalMessage' that directly and concisely answers the user's question. 
