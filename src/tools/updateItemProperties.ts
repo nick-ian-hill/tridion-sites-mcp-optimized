@@ -30,9 +30,11 @@ const updateItemPropertiesInputProperties = {
     resultLimit: z.number().int().optional().describe("A new result limit for the Search Folder."),
     fields: z.record(fieldDefinitionSchema).optional().describe(`For Schema updates only. Replaces the entire collection of content fields.
     Use this for structural changes like adding, removing, or reordering fields.
+    NOTE: Structural changes (fields) can ONLY be made in the 'Primary' Schema (where IsLocalized and IsShared are false). If the Schema is Shared or Localized, you must update its primary parent.
     For modifying properties of existing fields (e.g., making a field optional), the 'updateSchemaFieldProperties' tool is strongly recommended as it is safer and more efficient.`),
     metadataFields: z.record(fieldDefinitionSchema).optional().describe(`For Schema updates only. Replaces the entire collection of metadata fields. The ONLY way to create a component with metadata fields is to use a component schema for which this property is defined.
     Use this for structural changes like adding, removing, or reordering fields.
+    NOTE: Structural changes (metadataFields) can ONLY be made in the 'Primary' Schema (where IsLocalized and IsShared are false). If the Schema is Shared or Localized, you must update its primary parent.
     For modifying properties of existing fields (e.g., changing a description), the 'updateSchemaFieldProperties' tool is strongly recommended as it is safer and more efficient.`),
     rootElementName: xmlNameSchema.optional().describe("For Component and Embedded Schema updates only. The name of the root element for the XML structure defined by the Schema (e.g., 'Article')."),
     allowedMultimediaTypes: z.array(z.string().regex(/^tcm:0-\d+-65544$/)).optional().describe("For Multimedia Schema updates only. An array of TCM URIs for allowed Multimedia Types. Replaces the existing list."),
@@ -60,6 +62,11 @@ const updateItemPropertiesSchema = z.object(updateItemPropertiesInputProperties)
 
 type UpdateItemPropertiesInput = z.infer<typeof updateItemPropertiesSchema>;
 
+// Helper to create a JSON error response
+const createJsonError = (message: string) => ({
+    content: [{ type: "text", text: JSON.stringify({ type: "Error", Message: message }, null, 2) }]
+});
+
 export const updateItemProperties = {
     name: "updateItemProperties",
     description: `Updates the core properties and structural definition of an existing Content Management System (CMS) item.
@@ -68,6 +75,11 @@ This tool modifies the definition of an item itself (e.g., its title, its Schema
 To update only the content of a Component, use the 'updateContent' tool.
 To update only the metadata values of any item, use the 'updateMetadata' tool.
 To update a Workflow Process Definition, use the dedicated 'updateProcessDefinition' tool.
+
+BluePrint Constraint for Schemas:
+Content and Metadata field definitions can ONLY be modified in the 'Primary' version of the Schema (where BluePrintInfo.IsLocalized and BluePrintInfo.IsShared are both false).
+- If the Schema is inherited (Shared), you must update the primary item in the parent publication.
+- If the Schema is Localized, you can update its Title/Description, but structural changes to fields must be made in the original Primary item.
 
 Example use cases by item type:
 - All types: update 'title', 'description', and 'metadataSchemaId'. The 'metadata' can also be provided at the same time.
@@ -226,13 +238,7 @@ This example updates a basic Region Schema (e.g., 'tcm:5-3875-8') to make it non
         try {
             updateItemPropertiesSchema.parse(params);
         } catch (validationError: any) {
-            const errorResponse = {
-                type: "Error",
-                Message: `Validation Error: ${validationError.errors?.[0]?.message || validationError.message}`
-            };
-            return {
-                content: [{ type: "text", text: JSON.stringify(errorResponse, null, 2) }]
-            };
+            return createJsonError(`Validation Error: ${validationError.errors?.[0]?.message || validationError.message}`);
         }
 
         formatForApi(params);
@@ -301,6 +307,20 @@ This example updates a basic Region Schema (e.g., 'tcm:5-3875-8') to make it non
                 return handleUnexpectedResponse(getItemResponse);
             }
             const itemToUpdate = getItemResponse.data;
+
+            // --- BluePrint Validation for Schema Field Updates ---
+            if (itemType === 'Schema' && (updates.fields || updates.metadataFields)) {
+                const bpInfo = itemToUpdate.BluePrintInfo;
+                if (bpInfo) {
+                    const primaryId = bpInfo.PrimaryBluePrintParentItem?.IdRef;
+                    if (bpInfo.IsShared) {
+                        return createJsonError(`Schema ${itemId} is Shared and its field structure cannot be modified here. Update the primary item: ${primaryId || 'parent publication'}.`);
+                    }
+                    if (bpInfo.IsLocalized) {
+                        return createJsonError(`Schema ${itemId} is Localized. Field definitions can only be modified in the primary version: ${primaryId || 'original parent'}.`);
+                    }
+                }
+            }
 
             if (updates.title) itemToUpdate.Title = updates.title;
             if (updates.description) itemToUpdate.Description = updates.description;

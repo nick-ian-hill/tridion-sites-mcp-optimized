@@ -81,6 +81,11 @@ export const updateSchemaFieldProperties = {
     name: "updateSchemaFieldProperties",
     description: `Updates specific properties of one or more fields within a given Schema. For surgical updates, this is more efficient and robust than using the 'updateItemProperties' tool and replacing the entire fields collection.
     
+BluePrint Note:
+Field and Metadata Field definitions (the Schema structure) can ONLY be modified in the 'Primary' version of the Schema (where IsLocalized and IsShared are both false). 
+- If a Schema is inherited (Shared), you must update the item in the parent publication.
+- If a Schema is localized, you can update its Title/Description using 'updateItemProperties', but you CANNOT modify its fields here. You must update the Primary item from which it was localized.
+
 Versioning is handled automatically. If the item is not checked out, it will be checked out, updated, and then checked back in. If the item is already checked out by you, it will remain checked out after the update. The operation will be aborted if the item is checked out by another user.
 
 Example 1: Make the 'articleBody' field optional and change the description of the 'headline' field in a single operation.
@@ -155,6 +160,18 @@ Example 3: Update a validation constraint on a field.
             const getItemResponse = await authenticatedAxios.get(`/items/${restItemId}`, { params: { useDynamicVersion: true } });
             if (getItemResponse.status !== 200) return handleUnexpectedResponse(getItemResponse);
             const itemToUpdate = getItemResponse.data;
+
+            // --- BluePrint Validation ---
+            const bpInfo = itemToUpdate.BluePrintInfo;
+            if (bpInfo) {
+                const primaryId = bpInfo.PrimaryBluePrintParentItem?.IdRef;
+                if (bpInfo.IsShared) {
+                    return createJsonError(`Schema ${schemaId} is shared (inherited) and cannot be modified in this publication. You must update the primary item: ${primaryId || 'parent publication'}.`);
+                }
+                if (bpInfo.IsLocalized) {
+                    return createJsonError(`Schema ${schemaId} is a localized copy. While localized items allow some property updates, the XML field structure can only be modified in the primary version of the Schema: ${primaryId || 'the original parent'}.`);
+                }
+            }
 
             for (const update of fieldUpdates) {
                 const { fieldName, fieldLocation, propertyToUpdate, newValue } = update;
