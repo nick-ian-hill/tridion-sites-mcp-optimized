@@ -5,7 +5,7 @@ import { formatForAgent } from "../utils/fieldReordering.js";
 import { filterResponseData } from "../utils/responseFiltering.js";
 
 const getItemsClassifiedByKeywordInputProperties = {
-    keywordId: z.string().regex(/^(tcm:\d+-\d+-1024?|ecl:[a-zA-Z0-9-]+)$/).describe("The TCM URI of the Keyword to search for. To find a keyword, first use 'getCategories' to find a Category, then 'getKeywordsForCategory' to list its keywords."),
+    keywordId: z.string().regex(/^(tcm:\d+-\d+-1024?|ecl:[^:\s]+)$/).describe("The TCM URI of the Keyword to search for. To find a keyword, first use 'getCategories' to find a Category, then 'getKeywordsForCategory' to list its keywords."),
     useDynamicVersion: z.boolean().optional().default(false).describe("If true, loads the latest saved version (dynamic version) for any versioned items returned."),
     itemTypes: z.array(z.string()).optional().describe("An array of item types to filter the results, e.g., ['Component', 'Page', 'Folder']. If omitted, all item types are returned."),
     resolveDescendantKeywords: z.boolean().optional().default(false).describe("If true, items classified with descendant keywords of the specified keyword are also included in the results."),

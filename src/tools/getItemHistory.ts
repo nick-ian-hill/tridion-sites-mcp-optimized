@@ -8,7 +8,7 @@ export const getItemHistory = {
     name: "getItemHistory",
     description: "Gets all major versions of a specified versioned item. The primary use of this tool is to find the version-specific URI of an older version before using the 'rollbackItem' tool to revert to it.",
     input: {
-        itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)
+        itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/)
             .describe("The unique ID of the versioned item. The ID should not contain a version number (e.g., 'tcm:5-256-8')."),
     },
     execute: async ({ itemId }: { itemId: string }, context: any) => {

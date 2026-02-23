@@ -4,7 +4,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 import { formatForAgent } from "../utils/fieldReordering.js";
 
 const getRelatedBluePrintItemsInputProperties = {
-    itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)
+    itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/)
         .describe("The TCM URI of the item or Publication to analyze."),
     
     relationship: z.enum([

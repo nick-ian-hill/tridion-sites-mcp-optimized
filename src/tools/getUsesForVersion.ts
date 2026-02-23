@@ -5,7 +5,7 @@ import { filterResponseData } from "../utils/responseFiltering.js";
 import { formatForAgent } from "../utils/fieldReordering.js";
 
 const getUsesForVersionInputProperties = {
-    itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)
+    itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/)
         .describe("The unique ID (TCM URI) of the versioned item to inspect."),
     version: z.number().int().min(1)
         .describe("The specific major version number of the item to inspect (e.g., 12)."),

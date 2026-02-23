@@ -35,7 +35,7 @@ export const getItemsInContainer = {
     1. Use this tool to get the item IDs.
     2. Use 'getItem' in the mapScript of the 'toolOrchestrator', or 'bulkReadItems' in a 'toolOrchestrator' preProcessingScript. These tools have an includeProperties input parameter that can be used to efficiently request the relevant item properties. A comprehensive list of available properties is documented in the 'getItem' tool.`,
     input: {
-        containerId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The TCM URI or ECL URI of the container item."),
+        containerId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/).describe("The TCM URI or ECL URI of the container item."),
         recursive: z.boolean().optional().default(false).describe("Set to `true` to include items from all nested sub-containers."),
         useDynamicVersion: z.boolean().optional().default(true).describe("The default setting of `true` ensures that the latest data is returned for versioned items."),
         itemTypes: z.array(itemTypeEnum).optional().describe("An array of item types to filter the results, e.g., ['Component', 'Page', 'Folder']. If omitted, all item types are returned."),

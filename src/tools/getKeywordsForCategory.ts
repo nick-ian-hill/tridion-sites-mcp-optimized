@@ -12,7 +12,7 @@ export const getKeywordsForCategory = {
     Keywords with the 'Abstract' property set to false can be used for both navigation and for classifying items.
     When used in classification, the keywords' title property is usually assumed to reflect some aspect of the item's content/metadata.`,
     input: {
-        itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the category (e.g., 'tcm:5-123-512'). Use 'getCategories' to find a Category ID."),
+        itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/).describe("The unique ID of the category (e.g., 'tcm:5-123-512'). Use 'getCategories' to find a Category ID."),
     },
     execute: async ({ itemId }: { itemId: string }, context: any) => {
         const req = context?.request;

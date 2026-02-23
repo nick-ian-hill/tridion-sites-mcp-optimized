@@ -9,7 +9,7 @@ import { extractIds } from "../utils/links.js"; // <-- Updated: Import now comes
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 
 const autoClassifyItemInputProperties = {
-    itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)
+    itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/)
         .describe("The unique ID of the item to classify."),
     restrictToAutoClassifiableFields: z.boolean().default(true).optional()
         .describe("If true (default), the tool strictly respects the Schema's 'UseForAutoClassification' (source text) and 'AllowAutoClassification' (target keyword) properties. If false, it uses all text content and all available keyword fields."),

@@ -200,7 +200,7 @@ Example Structure:
   }
 }`,
     input: {
-        itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The TCM URI of the item for which to retrieve the BluePrint hierarchy."),
+        itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/).describe("The TCM URI of the item for which to retrieve the BluePrint hierarchy."),
         outputFormat: z.enum(["JsonGraph", "Svg"]).optional().default("JsonGraph").describe("Specifies the output format. 'JsonGraph' returns the raw node/edge data. 'Svg' generates a visual diagram."),
     },
     execute: async ({ itemId, outputFormat = "JsonGraph" }: { itemId: string; outputFormat: "JsonGraph" | "Svg" }, context: any) => {

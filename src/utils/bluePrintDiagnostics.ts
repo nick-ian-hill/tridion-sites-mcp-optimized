@@ -2,7 +2,7 @@ import { AxiosInstance, isAxiosError } from "axios";
 import { convertItemIdToContextPublication } from "./convertItemIdToContextPublication.js";
 
 // Regex to identify potential TCM URIs in the input
-const TCM_REGEX = /^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/;
+const TCM_REGEX = /^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/;
 
 function extractIds(obj: any, ids: Set<string> = new Set()): Set<string> {
     if (!obj) return ids;

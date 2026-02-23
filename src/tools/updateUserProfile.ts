@@ -6,9 +6,9 @@ import { formatForApi } from "../utils/fieldReordering.js";
 
 const updateUserProfileInputProperties = {
     userId: z.string().regex(/^tcm:0-\d+-65552$/).optional().describe("The TCM URI of the user whose profile is to be updated (e.g., 'tcm:0-20-65552'). If not provided, it defaults to the currently logged-in user."),
-    favorites: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)).optional().describe("A complete array of favorite item URIs to REPLACE the user's entire existing list."),
-    addFavorites: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)).optional().describe("An array of favorite item URIs to ADD to the user's existing list. Duplicates will be ignored."),
-    removeFavorites: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)).optional().describe("An array of favorite item URIs to REMOVE from the user's existing list."),
+    favorites: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/)).optional().describe("A complete array of favorite item URIs to REPLACE the user's entire existing list."),
+    addFavorites: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/)).optional().describe("An array of favorite item URIs to ADD to the user's existing list. Duplicates will be ignored."),
+    removeFavorites: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/)).optional().describe("An array of favorite item URIs to REMOVE from the user's existing list."),
     languageName: z.enum([
         'German',
         'English',

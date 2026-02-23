@@ -12,7 +12,7 @@ import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
 import { xmlNameSchema } from "../schemas/xmlNameSchema.js";
 
 const updateItemPropertiesInputProperties = {
-    itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the CMS item to update."),
+    itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/).describe("The unique ID of the CMS item to update."),
     itemType: z.enum([
         "Component", "Folder", "StructureGroup", "Keyword",
         "Category", "Schema", "Bundle", "SearchFolder", "PageTemplate", "ComponentTemplate"
@@ -25,7 +25,7 @@ const updateItemPropertiesInputProperties = {
     key: z.string().optional().describe("A new custom key for the Keyword. (Applicable to Keyword)"),
     parentKeywords: z.array(z.string().regex(/^tcm:\d+-\d+-1024$/)).optional().describe("An array of parent Keyword URIs. Replaces existing parents. (Applicable to Keyword)"),
     relatedKeywords: z.array(z.string().regex(/^tcm:\d+-\d+-1024$/)).optional().describe("An array of related Keyword URIs. Replaces existing relations. (Applicable to Keyword)"),
-    itemsInBundle: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)).optional().describe("An array of item URIs for the Bundle. Replaces existing items. (Applicable to Bundle)"),
+    itemsInBundle: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/)).optional().describe("An array of item URIs for the Bundle. Replaces existing items. (Applicable to Bundle)"),
     searchQuery: SearchQueryValidation.optional().describe("A new search query model for the Search Folder."),
     resultLimit: z.number().int().optional().describe("A new result limit for the Search Folder."),
     fields: z.record(fieldDefinitionSchema).optional().describe(`For Schema updates only. Replaces the entire collection of content fields.

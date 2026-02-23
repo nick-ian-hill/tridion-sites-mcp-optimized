@@ -23,7 +23,7 @@ const resolveInstructionSchema = z.object({
 }).optional();
 
 const unpublishInputProperties = {
-    itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)).min(1)
+    itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/)).min(1)
         .describe("An array of one or more unique item IDs (TCM URIs) to unpublish."),
     targetIdsOrPurposes: z.array(z.string()).min(1)
         .describe("An array of one or more Target Type IDs (e.g., 'tcm:0-1-65538') or Target Purposes (e.g., 'Live', 'Staging')."),

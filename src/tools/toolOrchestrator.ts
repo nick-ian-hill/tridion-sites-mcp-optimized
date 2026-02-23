@@ -136,7 +136,7 @@ interface OrchestratorResult {
 
 // This plain object defines the input properties, matching your other tools
 const toolOrchestratorInputProperties = {
-    itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/))
+    itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?(-v\d+)?|ecl:[^:\s]+(-v\d+)?)$/))
         .optional()
         .describe("An optional array of unique IDs (TCM URIs) to be processed. If provided, these are passed to the 'mapScript'. If a 'preProcessingScript' is also provided, the IDs returned by that script take precedence."),
     preProcessingScript: z.string().optional()

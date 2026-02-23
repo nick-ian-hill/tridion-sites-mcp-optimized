@@ -21,7 +21,7 @@ export const localizeItem = {
     Similarly, the values of fields that are not marked as non-localizable can be freely changed in the localized item.
     A common use case for localizing an item is to translate content inherited from a parent item into a different language.`,
     input: {
-        itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID (TCM URI) of the shared item to localize."),
+        itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/).describe("The unique ID (TCM URI) of the shared item to localize."),
     },
     execute: async ({ itemId }: { itemId: string }, context: any) => {
         const req = context?.request;

@@ -14,7 +14,7 @@ export const unlocalizeItem = {
     The tool returns a confirmation that the item has been successfully unlocalized.
     `,
     input: {
-        itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID (TCM URI) of the local item to unlocalize."),
+        itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/).describe("The unique ID (TCM URI) of the local item to unlocalize."),
         useDynamicVersion: z.boolean().optional().default(true).describe("Loads the latest saved version of the item if available."),
         confirmed: z.boolean().optional().describe("Confirmation to proceed with unlocalizing the item, which will discard local changes."),
     },

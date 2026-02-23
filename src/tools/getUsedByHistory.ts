@@ -4,7 +4,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 // Define the input schema
 const getUsedByHistoryInputProperties = {
-    itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)
+    itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/)
         .describe("The unique ID (TCM URI) of the item for which to find usage history."),
 };
 

@@ -15,7 +15,7 @@ export const startWorkflow = {
             .describe("The title for the first task in the workflow (e.g., 'Classify the related items.')."),
         processDefinitionId: z.string().regex(/^tcm:\d+-\d+-131074$/)
             .describe("The ID of the workflow definition to use (e.g., 'tcm:5-12-131074'). Use 'getProcessDefinition' to find available process definitions for the publication."),
-        subjectIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/))
+        subjectIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/))
             .optional()
             .describe("An optional array of item IDs to be included in the workflow. These are the items that will be reviewed or approved."),
         assigneeId: z.string().regex(/^tcm:\d+-\d+-65552$/)

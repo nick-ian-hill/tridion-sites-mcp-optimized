@@ -192,7 +192,7 @@ You can limit the response to combinations of the following properties by provid
             * **RenderTime**: Time taken to render.
         * **Publication**: Link to the Publication.`,
     input: {
-        itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the item."),
+        itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?(-v\d+)?|ecl:[^:\s]+(-v\d+)?)$/).describe("The unique ID of the item. To retrieve a specific historical version, append the version number to the ID (e.g., 'tcm:5-123-v2' or 'tcm:5-123-64-v1')."),
         contextPublicationId: z.string().regex(/^tcm:0-\d+-1$/).optional().describe("The TCM URI of a Publication (e.g., 'tcm:0-10-1'). If provided, the tool will automatically resolve the item within this publication context. Use this to check inheritance, localization status, field values etc. in a specific publication."),
         useDynamicVersion: z.boolean().optional().default(true).describe("Defaults to true. For versioned items, retrieves the latest saved state (dynamic version), including minor revisions (checked-out). Set to false to strictly retrieve the last checked-in major version."),
         includeProperties: z.array(z.string()).optional().describe(`The PREFERRED method for retrieving specific details. Provide an array of property names (supports dot notation like 'BinaryContent.MimeType'). 'Id', 'Title', and 'type' are always included.`)

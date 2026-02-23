@@ -9,7 +9,7 @@ import { extractIds } from "../utils/links.js";
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 
 const autoClassifyMultimediaInputProperties = {
-    itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)
+    itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/)
         .describe("The unique ID of the multimedia component to classify."),
     restrictToAutoClassificationFields: z.boolean().default(true).optional()
         .describe("If true (default), the tool strictly respects the Schema's 'AllowAutoClassification' property on Keyword fields. If false, it attempts to classify against ALL available keyword fields in the metadata."),

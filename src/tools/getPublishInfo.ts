@@ -5,7 +5,7 @@ import { filterResponseData } from "../utils/responseFiltering.js";
 import { formatForAgent } from "../utils/fieldReordering.js";
 
 const getPublishInfoInputProperties = {
-    itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/)
+    itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/)
         .describe("The unique ID (TCM URI) of the item to check."),
     includeProperties: z.array(z.string()).optional()
         .describe(`An array of property names to include in the response. 

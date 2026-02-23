@@ -49,7 +49,7 @@ Expected JSON Output for Example 2 (Flat Mode):
 ]
 `,
     input: {
-        itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the item for which the dependency graph should be retrieved."),
+        itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/).describe("The unique ID of the item for which the dependency graph should be retrieved."),
         direction: z.enum(["Uses", "UsedBy"]).optional().default("Uses").describe("Specifies the direction of the dependencies. 'Uses' returns items this item depends on; 'UsedBy' returns items that depend on this item."),
         contextRepositoryId: z.string().regex(/^tcm:0-\d+-1$/).optional().describe("The TCM URI of an ancestor Publication. If specified, the response will indicate whether the dependent items exist in this Publication."),
         rloItemTypes: z.array(z.enum([

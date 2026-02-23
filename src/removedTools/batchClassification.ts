@@ -5,13 +5,13 @@ import { convertItemIdToContextPublication } from "../utils/convertItemIdToConte
 import { formatForAgent } from "../utils/fieldReordering.js";
 
 const batchClassificationInputProperties = {
-    itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/))
+    itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/))
         .min(1, "At least one item ID must be provided.")
         .describe("An array of unique IDs (TCM URIs) for the items to modify. Use 'search' or 'getItemsInContainer' to find items."),
-    keywordIdsToAdd: z.array(z.string().regex(/^(tcm:\d+-\d+-1024|ecl:[a-zA-Z0-9-]+)$/))
+    keywordIdsToAdd: z.array(z.string().regex(/^(tcm:\d+-\d+-1024|ecl:[^:\s]+)$/))
         .optional()
         .describe("An array of unique IDs (TCM URIs) for Keywords to apply to the items. Use 'getCategories' and 'getKeywordsForCategory' to find available keywords."),
-    keywordIdsToRemove: z.array(z.string().regex(/^(tcm:\d+-\d+-1024|ecl:[a-zA-Z0-9-]+)$/))
+    keywordIdsToRemove: z.array(z.string().regex(/^(tcm:\d+-\d+-1024|ecl:[^:\s]+)$/))
         .optional()
         .describe("An array of unique IDs (TCM URIs) for Keywords to remove from the items. Use 'bulkReadItems' in combination with the 'includeProperties' property (or set the 'loadFullItems' property to true) to find the currently used keywords for each item."),
 };

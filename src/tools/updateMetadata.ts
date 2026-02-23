@@ -76,7 +76,7 @@ Example 2: Smart Update of an Embedded Schema List.
     });
     `,
     input: {
-        itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[a-zA-Z0-9-]+)$/).describe("The unique ID of the item to update (e.g., 'tcm:5-1234-64')."),
+        itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/).describe("The unique ID of the item to update (e.g., 'tcm:5-1234-64')."),
         metadata: z.record(fieldValueSchema).describe("A JSON object containing the item's metadata fields to update."),
         updateMode: z.enum(['replace', 'update']).default('replace').describe("Strategy for applying changes. 'replace' overwrites the provided structure. 'update' performs a smart merge (recursive object merge + array merge by index with null skipping)."),
     },
