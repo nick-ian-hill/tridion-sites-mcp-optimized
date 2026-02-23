@@ -96,7 +96,7 @@ export class Orchestrator {
             // Check if the primary next step is to finish or if no steps were found
             const firstStep = nextSteps[0];
             if (!firstStep || firstStep.tool === 'finish') {
-                if (firstStep?.args.finalMessage === '__NEEDS_SUMMARY__') {
+                if (firstStep?.args.taskConfirmation === '__NEEDS_SUMMARY__') {
                     const lastStep = task.plan[task.plan.length - 1];
                     if (lastStep && lastStep.status === 'completed') {
                         return await summarizeToolOutput(lastStep.result, latestPrompt);
@@ -120,7 +120,7 @@ export class Orchestrator {
                 }
                 
                 // If finish is called on the first step (no prior tool execution),
-                // try to extract the full text response from the model instead of just the finalMessage
+                // try to extract the full text response from the model instead of just the taskConfirmation
                 if (task.plan.length === 0 && modelResponseContent) {
                     const textParts = modelResponseContent.parts
                         ?.filter((part: any) => 'text' in part)
@@ -134,7 +134,7 @@ export class Orchestrator {
                     }
                 }
                 
-                return firstStep?.args?.finalMessage || "Task completed successfully.";
+                return firstStep?.args?.taskConfirmation || "Task completed successfully.";
             }
             
             // Push the model's full response (which includes ALL function calls) to history
@@ -232,12 +232,10 @@ export class Orchestrator {
         if (!task.shouldInvalidateContext && !READ_ONLY_TOOLS.includes(step.tool)) {
             task.shouldInvalidateContext = true;
         }
-        if (result?.isUiAction && result.action) {
-            this.emit('ui-action', result.action);
-        }
 
         let cleanResult = result;
 
+        // First, parse JSON from text if needed
         if (
             result?.content &&
             Array.isArray(result.content) &&
@@ -257,6 +255,11 @@ export class Orchestrator {
                 console.warn(`[Orchestrator] Could not parse JSON from tool '${step.tool}' result text. Using raw text.`);
                 cleanResult = rawText;
             }
+        }
+        
+        // Check for ui-action on the parsed result
+        if (cleanResult?.isUiAction && cleanResult.action) {
+            this.emit('ui-action', cleanResult.action);
         }
         
         step.result = filterResponseData({ responseData: cleanResult });

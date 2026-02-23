@@ -82,16 +82,20 @@ export const determineNextStep = async (
 ): Promise<NextStepResult> => {
     const finishTool: FunctionDeclaration = {
         name: "finish",
-        description: "Call this tool to signal that you have fully completed the user's request and all tasks are done.",
+        description: "Call this when the current request is complete. The taskConfirmation must contain ONLY what was accomplished.",
         parameters: {
             type: Type.OBJECT,
             properties: {
-                finalMessage: {
+                taskConfirmation: {
                     type: Type.STRING,
-                    description: "A concluding message for the user summarizing the outcome."
+                    description: "State ONLY what was accomplished for the CURRENT request. Example: 'Created folder Products (tcm:5-123-2).' This is the only part the user will see."
+                },
+                conversationalFiller: {
+                    type: Type.STRING,
+                    description: "Any extra info, capability summaries, or conversational filler. This will NOT be shown to the user."
                 }
             },
-            required: ['finalMessage']
+            required: ['taskConfirmation']
         }
     };
 
@@ -137,7 +141,17 @@ export const determineNextStep = async (
     };
 
     const systemInstruction = `
-        You are an expert orchestrator for a CMS. Your goal is to fulfill the user's request. You have the flexibility to either call a tool OR respond directly with a text message if that is more appropriate (e.g., for a simple conversational question).
+        You are a task execution system for a CMS, not a conversational assistant. Your role is to execute commands and confirm what was done - nothing more.
+
+        CONVERSATION HISTORY: The history shows previous commands and results. Use it to understand references but do not recap or mention it in your task confirmation.
+
+        FINISHING: When calling the 'finish' tool:
+        1. 'taskConfirmation': This MUST contain ONLY the factual confirmation of the CURRENT request (e.g., "Created bundle 'X' (id)"). This is shown to the user.
+        2. 'conversationalFiller': This is the ONLY place where you can add things like "I can help you...", "As discussed...", or other conversational elements. These will be hidden from the user.
+
+        YOUR TASK CONFIRMATIONS: Must contain ONLY a confirmation of what was accomplished for the current request.
+        CORRECT: "Created bundle 'Images' (tcm:5-467-8192) in folder 'Nick' (tcm:5-404-2)."
+        WRONG: "I can help you... Created bundle..."
 
         **Understanding User Context:**
         - "Browsing in" indicates the folder/container the user is currently exploring. This is their PRIMARY location.
@@ -157,8 +171,8 @@ export const determineNextStep = async (
         - You may optionally include a descriptive word before the title (e.g., 'folder "Products"' or 'page "Homepage"') for clarity, but this is not required.
 
         **Answering Informational Questions:**
-        - If the user's request is a direct question for information (e.g., 'list the tools', 'what is the current time?') and doesn't seem to be part of a larger multi-step task, your primary goal is conciseness.
-        - If a single tool can provide the answer, call that tool. In the *next* step, your ONLY action should be to call the 'finish' tool with a 'finalMessage' that directly and concisely answers the user's question. 
+        - For informational questions (e.g., 'what tools are available?', 'what time is it?'), provide the answer directly using tools if needed.
+        - Exception: If asked about your capabilities, you may provide a comprehensive answer. But for all subsequent task-based requests, revert to the task execution mode described above. 
 
         **Error Handling Rules:**
         - If the last tool execution resulted in an error, analyze the error message.
@@ -167,15 +181,13 @@ export const determineNextStep = async (
         - If you cannot recover from the error, call the 'finish' tool with a message explaining the failure.
 
         **Reasoning Steps:**
-        1.  **Analyze Tool Output:** Check the last message in the conversation history. If it is a 'functionResponse', your entire focus is to process that output.
-            - If the output directly and completely answers the user's latest question, your ONLY next step is to call the 'finish' tool with the special argument "finalMessage: '__NEEDS_SUMMARY__'".
-            - If the output is an intermediate step towards a larger goal, call the next logical tool.
-        2.  **Analyze New Request:** If there is no recent tool output, analyze the user's latest request. Do I have all the required parameters (e.g., 'title', 'locationId') to use a tool based on the user's request?
-        3.  **Ask for Missing Info:** If required information is missing, I MUST call the 'finish' tool. I will use its 'finalMessage' parameter to ask the user for the necessary details.
+        1.  **Analyze Tool Output:** If the last message is a 'functionResponse', process that output. If it fully answers the user's question, call 'finish' with "finalMessage: '__NEEDS_SUMMARY__'". Otherwise, call the next logical tool.
+        2.  **Analyze New Request:** For new requests, determine if I have all required parameters to call a tool.
+        3.  **Ask for Missing Info:** If parameters are missing, call 'finish' asking for the needed details.
         4.  **Call a Tool:** If I have enough information, I will call the appropriate tool to make progress on the user's request. If I need multiple pieces of information about an item (e.g., its Content, and its Metadata), fetch ALL required properties in a single call using the 'includeProperties' parameter.
-        5.  **Complete the Task:** When the user's request has been fully addressed, call the 'finish' tool with a message summarizing what was done.
+        5.  **Complete the Task:** Call 'finish' with only what was accomplished. Nothing else.
 
-        User Request: "${prompt}"${formatContext(context)}
+        User's Latest Request: "${prompt}"${formatContext(context)}
     `;
 
     let result: GenerateContentResponse;
@@ -213,7 +225,7 @@ export const determineNextStep = async (
         const planStep: PlanStep = {
             step: -1,
             tool: 'finish',
-            args: { finalMessage: textResponse || "Task completed." },
+            args: { taskConfirmation: textResponse || "Task completed." },
             description: "Finish with a direct text response from the model.",
             status: 'pending'
         };
