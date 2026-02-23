@@ -79,6 +79,12 @@ export class Orchestrator {
         for (let i = 0; i < MAX_STEPS; i++) {
             const preparedHistory = prepareHistoryForModel(task.history);
             
+            // Emit progress event before model call
+            this.emit('progress', { 
+                isLog: false, 
+                message: i === 0 ? 'Generating response...' : 'Planning next step...' 
+            });
+            
             // Get all steps for this turn (supports parallel calls)
             const { planSteps: nextSteps, modelResponseContent } = await determineNextStep(
                 latestPrompt,
@@ -95,8 +101,39 @@ export class Orchestrator {
                     if (lastStep && lastStep.status === 'completed') {
                         return await summarizeToolOutput(lastStep.result, latestPrompt);
                     }
+                    
+                    // If __NEEDS_SUMMARY__ is called on first step, try to extract text from model response
+                    if (task.plan.length === 0 && modelResponseContent) {
+                        const textParts = modelResponseContent.parts
+                            ?.filter((part: any) => 'text' in part)
+                            .map((part: any) => part.text)
+                            .filter((text: string) => text.trim().length > 0);
+                        
+                        if (textParts && textParts.length > 0) {
+                            const fullText = textParts.join('\n\n');
+                            console.log('[Orchestrator] Extracted text from model response for __NEEDS_SUMMARY__:', fullText.substring(0, 100) + '...');
+                            return fullText;
+                        }
+                    }
+                    
                     return "The task is complete.";
                 }
+                
+                // If finish is called on the first step (no prior tool execution),
+                // try to extract the full text response from the model instead of just the finalMessage
+                if (task.plan.length === 0 && modelResponseContent) {
+                    const textParts = modelResponseContent.parts
+                        ?.filter((part: any) => 'text' in part)
+                        .map((part: any) => part.text)
+                        .filter((text: string) => text.trim().length > 0);
+                    
+                    if (textParts && textParts.length > 0) {
+                        const fullText = textParts.join('\n\n');
+                        console.log('[Orchestrator] Using full text response from model:', fullText.substring(0, 100) + '...');
+                        return fullText;
+                    }
+                }
+                
                 return firstStep?.args?.finalMessage || "Task completed successfully.";
             }
             

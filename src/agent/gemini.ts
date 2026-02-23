@@ -178,20 +178,26 @@ export const determineNextStep = async (
         User Request: "${prompt}"${formatContext(context)}
     `;
 
-    const result: GenerateContentResponse = await getGenAI().models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: history,
-        config: {
-            systemInstruction: systemInstruction,
-            tools: [{ functionDeclarations: toolsForNextStep }],
-            toolConfig: {
-                functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO }
-            },
-            thinkingConfig: {
-                thinkingLevel: ThinkingLevel.MEDIUM,
+    let result: GenerateContentResponse;
+    try {
+        result = await getGenAI().models.generateContent({
+            model: "gemini-3-flash-preview",
+            contents: history,
+            config: {
+                systemInstruction: systemInstruction,
+                tools: [{ functionDeclarations: toolsForNextStep }],
+                toolConfig: {
+                    functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO }
+                },
+                thinkingConfig: {
+                    thinkingLevel: ThinkingLevel.MEDIUM,
+                }
             }
-        }
-    });
+        });
+    } catch (error) {
+        console.error("[Reasoner] Gemini API call failed:", error);
+        throw new Error(`Failed to get response from Gemini: ${error instanceof Error ? error.message : String(error)}`);
+    }
 
     const calls = result.functionCalls;
     const modelResponseContent = result.candidates?.[0]?.content ?? null;
