@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { filterResponseData } from '../utils/responseFiltering.js';
-import { Task, PlanStep, MessageEmitter, Content } from './types.js';
+import { Task, PlanStep, MessageEmitter, Content, AgentContext } from './types.js';
 import { determineNextStep, summarizeToolOutput } from './gemini.js';
 import { READ_ONLY_TOOLS } from './readOnlyTools.js';
 import { AxiosError } from 'axios';
@@ -24,13 +24,13 @@ export class Orchestrator {
         console.log('[Agent] Orchestrator initialized.');
     }
 
-    async process(prompt: string, contextItemId: string | undefined, history: Content[]) {
+    async process(prompt: string, context: AgentContext | undefined, history: Content[]) {
         const task: Task = {
             id: 'task-' + Date.now(),
             originalPrompt: prompt,
             plan: [],
             currentStep: 0,
-            contextItemId: contextItemId,
+            context: context,
             history: history,
             shouldInvalidateContext: false,
         };
@@ -82,7 +82,7 @@ export class Orchestrator {
             // Get all steps for this turn (supports parallel calls)
             const { planSteps: nextSteps, modelResponseContent } = await determineNextStep(
                 latestPrompt,
-                task.contextItemId,
+                task.context,
                 preparedHistory,
                 availableTools
             );

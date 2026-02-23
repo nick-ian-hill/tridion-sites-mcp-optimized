@@ -76,7 +76,7 @@ const formatToolsForGemini = (tools: any[]): FunctionDeclaration[] => {
  */
 export const determineNextStep = async (
     prompt: string,
-    contextItemId: string | undefined,
+    context: any | undefined,
     history: Content[],
     allTools: any[]
 ): Promise<NextStepResult> => {
@@ -97,8 +97,53 @@ export const determineNextStep = async (
 
     const toolsForNextStep = [...formatToolsForGemini(allTools), finishTool];
 
+    /**
+     * Formats the context object into a human-readable string for the system instruction.
+     * Order matters: Container (where user is browsing) comes first, then selected items, then focused item.
+     */
+    const formatContext = (ctx: any): string => {
+        if (!ctx) return '';
+        
+        const parts: string[] = [];
+        
+        // 1. Container - Most important: where the user is currently browsing
+        if (ctx.container) {
+            parts.push(`Browsing in: ${ctx.container.type} "${ctx.container.title}" (${ctx.container.id})`);
+        }
+        
+        // 2. Selected items - Items the user has explicitly selected with checkboxes
+        if (ctx.selectedItems && ctx.selectedItems.length > 0) {
+            if (ctx.selectedItems.length === 1) {
+                const item = ctx.selectedItems[0];
+                parts.push(`Selected: ${item.type} "${item.title}" (${item.id})`);
+            } else {
+                parts.push(`Selected Items (${ctx.selectedItems.length}):`);
+                ctx.selectedItems.forEach((item: any, index: number) => {
+                    parts.push(`  ${index + 1}. ${item.type} "${item.title}" (${item.id})`);
+                });
+            }
+        }
+        
+        // 3. Details item - The item whose details are being displayed in the details panels
+        //    (less important than explicit selection, but still relevant context)
+        if (ctx.detailsItem) {
+            const prefix = ctx.selectedItems && ctx.selectedItems.find((item: any) => item.id === ctx.detailsItem.id)
+                ? 'Also viewing details for'
+                : 'Viewing details for';
+            parts.push(`${prefix}: ${ctx.detailsItem.type} "${ctx.detailsItem.title}" (${ctx.detailsItem.id})`);
+        }
+        
+        return parts.length > 0 ? `\n\nUser's Current Context:\n${parts.join('\n')}` : '';
+    };
+
     const systemInstruction = `
         You are an expert orchestrator for a CMS. Your goal is to fulfill the user's request. You have the flexibility to either call a tool OR respond directly with a text message if that is more appropriate (e.g., for a simple conversational question).
+
+        **Understanding User Context:**
+        - "Browsing in" indicates the folder/container the user is currently exploring. This is their PRIMARY location.
+        - "Selected" indicates items the user has explicitly chosen (checked). These are the items they want to act upon.
+        - "Viewing details for" indicates the item for which details are being displayed in the various 'details' panels. If there are no selected items, this might be what the user wants to work with, but the browsing location is still their primary context.
+        - When a user asks "what folder am I in?" or similar questions, they're asking about the "Browsing in" location, NOT the focused item.
 
         **Answering Informational Questions:**
         - If the user's request is a direct question for information (e.g., 'list the tools', 'what is the current time?') and doesn't seem to be part of a larger multi-step task, your primary goal is conciseness.
@@ -119,8 +164,7 @@ export const determineNextStep = async (
         4.  **Call a Tool:** If I have enough information, I will call the appropriate tool to make progress on the user's request. If I need multiple pieces of information about an item (e.g., its Content, and its Metadata), fetch ALL required properties in a single call using the 'includeProperties' parameter.
         5.  **Complete the Task:** When the user's request has been fully addressed, call the 'finish' tool with a message summarizing what was done.
 
-        User Request: "${prompt}"
-        ${contextItemId ? `Context Item ID: "${contextItemId}"` : ''}
+        User Request: "${prompt}"${formatContext(context)}
     `;
 
     const result: GenerateContentResponse = await getGenAI().models.generateContent({

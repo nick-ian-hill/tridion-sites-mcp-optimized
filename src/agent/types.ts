@@ -1,4 +1,34 @@
 /**
+ * Context information from the UI about the user's current view.
+ */
+export interface AgentContext {
+    /**
+     * The item being displayed in the details panel.
+     */
+    detailsItem?: {
+        id: string;
+        type: string;
+        title: string;
+    };
+    /**
+     * Items selected in the table.
+     */
+    selectedItems?: Array<{
+        id: string;
+        type: string;
+        title: string;
+    }>;
+    /**
+     * The container item being viewed (e.g., Folder, StructureGroup, Category, Keyword, Bundle, SearchFolder, etc.).
+     */
+    container?: {
+        id: string;
+        type: string;
+        title: string;
+    };
+}
+
+/**
  * Represents the overall state of a multi-step task managed by the orchestrator.
  */
 export interface Task {
@@ -6,7 +36,7 @@ export interface Task {
     originalPrompt: string;
     plan: PlanStep[];
     currentStep: number;
-    contextItemId?: string;
+    context?: AgentContext;
     history: Content[];
     shouldInvalidateContext: boolean;
 }

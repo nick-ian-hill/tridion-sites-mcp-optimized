@@ -35,7 +35,7 @@ export function handleStartChat(
 
             // Run the orchestrator process in the background. Do not `await` it.
             // It will run to completion and add events to the task store.
-            orchestrator.process(prompt, context?.itemId, history)
+            orchestrator.process(prompt, context, history)
                 .catch(err => {
                     console.error(`[Agent] Background task ${taskId} failed:`, err);
                     // Add a final error event to the store if the process crashes.
