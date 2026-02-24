@@ -40,8 +40,6 @@ export class Orchestrator {
         let finalMessage = "Task failed to complete.";
 
         try {
-            // Logic for intent detection and tool routing has been removed to leverage 
-            // model caching and ensure full context availability.
             this.emit('progress', { 
                 isLog: true, 
                 message: `Starting task...` 
@@ -93,35 +91,41 @@ export class Orchestrator {
                 availableTools
             );
 
+            // Push the model's full response (which includes ALL function or text responses) to history
+            if (modelResponseContent) {
+                task.history.push(modelResponseContent as Content);
+            }
+
             // Check if the primary next step is to finish or if no steps were found
             const firstStep = nextSteps[0];
             if (!firstStep || firstStep.tool === 'finish') {
-                if (firstStep?.args.taskConfirmation === '__NEEDS_SUMMARY__') {
+                // If the model called finish, push a dummy function response to history
+                // to complete the function calling turn and maintain a valid history state.
+                if (firstStep?.tool === 'finish') {
+                    task.history.push({ 
+                        role: 'function', 
+                        parts: [{ 
+                            functionResponse: { name: 'finish', response: { status: 'success' } } 
+                        }] 
+                    });
+                }
+
+                // Handle the special summarization request
+                if (firstStep?.args?.taskConfirmation === '__NEEDS_SUMMARY__') {
                     const lastStep = task.plan[task.plan.length - 1];
                     if (lastStep && lastStep.status === 'completed') {
                         return await summarizeToolOutput(lastStep.result, latestPrompt);
                     }
-                    
-                    // If __NEEDS_SUMMARY__ is called on first step, try to extract text from model response
-                    if (task.plan.length === 0 && modelResponseContent) {
-                        const textParts = modelResponseContent.parts
-                            ?.filter((part: any) => 'text' in part)
-                            .map((part: any) => part.text)
-                            .filter((text: string) => text.trim().length > 0);
-                        
-                        if (textParts && textParts.length > 0) {
-                            const fullText = textParts.join('\n\n');
-                            console.log('[Orchestrator] Extracted text from model response for __NEEDS_SUMMARY__:', fullText.substring(0, 100) + '...');
-                            return fullText;
-                        }
-                    }
-                    
-                    return "The task is complete.";
                 }
                 
-                // If finish is called on the first step (no prior tool execution),
-                // try to extract the full text response from the model instead of just the taskConfirmation
-                if (task.plan.length === 0 && modelResponseContent) {
+                // Prioritize the structured taskConfirmation from the model
+                const confirmation = firstStep?.args?.taskConfirmation;
+                if (confirmation && confirmation !== '__NEEDS_SUMMARY__') {
+                    return confirmation;
+                }
+                
+                // Fallback: If taskConfirmation is missing, try to extract raw text
+                if (modelResponseContent) {
                     const textParts = modelResponseContent.parts
                         ?.filter((part: any) => 'text' in part)
                         .map((part: any) => part.text)
@@ -129,17 +133,12 @@ export class Orchestrator {
                     
                     if (textParts && textParts.length > 0) {
                         const fullText = textParts.join('\n\n');
-                        console.log('[Orchestrator] Using full text response from model:', fullText.substring(0, 100) + '...');
+                        console.log('[Orchestrator] Using fallback text response from model:', fullText.substring(0, 100) + '...');
                         return fullText;
                     }
                 }
                 
-                return firstStep?.args?.taskConfirmation || "Task completed successfully.";
-            }
-            
-            // Push the model's full response (which includes ALL function calls) to history
-            if (modelResponseContent) {
-                task.history.push(modelResponseContent as Content);
+                return "Task completed successfully.";
             }
 
             // Iterate through ALL parallel steps and execute them
