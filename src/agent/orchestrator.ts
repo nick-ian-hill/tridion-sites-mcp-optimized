@@ -40,9 +40,9 @@ export class Orchestrator {
         let finalMessage = "Task failed to complete.";
 
         try {
-            this.emit('progress', { 
-                isLog: true, 
-                message: `Starting task...` 
+            this.emit('progress', {
+                isLog: true,
+                message: `Starting task...`
             });
 
             finalMessage = await this.executePlan(task, this.allTools, prompt);
@@ -76,14 +76,12 @@ export class Orchestrator {
         const MAX_STEPS = 20;
         for (let i = 0; i < MAX_STEPS; i++) {
             const preparedHistory = prepareHistoryForModel(task.history);
-            
-            // Emit progress event before model call
-            this.emit('progress', { 
-                isLog: false, 
-                message: i === 0 ? 'Generating response...' : 'Planning next step...' 
+
+            this.emit('progress', {
+                isLog: false,
+                message: i === 0 ? 'Generating response...' : 'Planning next step...'
             });
-            
-            // Get all steps for this turn (supports parallel calls)
+
             const { planSteps: nextSteps, modelResponseContent } = await determineNextStep(
                 latestPrompt,
                 task.context,
@@ -91,60 +89,77 @@ export class Orchestrator {
                 availableTools
             );
 
-            // Push the model's full response (which includes ALL function or text responses) to history
             if (modelResponseContent) {
                 task.history.push(modelResponseContent as Content);
             }
 
-            // Check if the primary next step is to finish or if no steps were found
-            const firstStep = nextSteps[0];
-            if (!firstStep || firstStep.tool === 'finish') {
-                // If the model called finish, push a dummy function response to history
-                // to complete the function calling turn and maintain a valid history state.
-                if (firstStep?.tool === 'finish') {
-                    task.history.push({ 
-                        role: 'function', 
-                        parts: [{ 
-                            functionResponse: { name: 'finish', response: { status: 'success' } } 
-                        }] 
-                    });
-                }
+            // Separate the finish step from real backend action steps
+            const finishStep = nextSteps.find(s => s.tool === 'finish');
+            const actionSteps = nextSteps.filter(s => s.tool !== 'finish');
 
-                // Handle the special summarization request
-                if (firstStep?.args?.taskConfirmation === '__NEEDS_SUMMARY__') {
-                    const lastStep = task.plan[task.plan.length - 1];
-                    if (lastStep && lastStep.status === 'completed') {
-                        return await summarizeToolOutput(lastStep.result, latestPrompt);
+            let hasFailures = false;
+
+            // 1. Iterate through ALL actual parallel action steps and execute them
+            for (const step of actionSteps) {
+                task.plan.push(step);
+                await this.executeStep(step, task);
+                if (step.status === 'failed') {
+                    hasFailures = true;
+                }
+            }
+
+            // 2. Handle the finish step (if present)
+            if (finishStep) {
+                if (hasFailures) {
+                    // Provide a response to satisfy Gemini's strict turn validation, but do NOT end the task
+                    task.history.push({
+                        role: 'function',
+                        parts: [{
+                            functionResponse: { name: 'finish', response: { error: 'Aborted finish execution because a parallel tool step failed.' } }
+                        }]
+                    });
+                } else {
+                    // Success path: push dummy success response to complete the function calling turn
+                    task.history.push({
+                        role: 'function',
+                        parts: [{
+                            functionResponse: { name: 'finish', response: { status: 'success' } }
+                        }]
+                    });
+
+                    // Handle the special summarization request
+                    if (finishStep.args?.taskConfirmation === '__NEEDS_SUMMARY__') {
+                        const lastStep = task.plan[task.plan.length - 1];
+                        if (lastStep && lastStep.status === 'completed') {
+                            return await summarizeToolOutput(lastStep.result, latestPrompt);
+                        }
+                    }
+
+                    // Prioritize the structured taskConfirmation from the model
+                    const confirmation = finishStep.args?.taskConfirmation;
+                    if (confirmation && confirmation !== '__NEEDS_SUMMARY__') {
+                        return confirmation;
                     }
                 }
-                
-                // Prioritize the structured taskConfirmation from the model
-                const confirmation = firstStep?.args?.taskConfirmation;
-                if (confirmation && confirmation !== '__NEEDS_SUMMARY__') {
-                    return confirmation;
-                }
-                
-                // Fallback: If taskConfirmation is missing, try to extract raw text
+            }
+
+            // 3. End the execution if there are no steps, OR if we successfully finished without failures
+            if (nextSteps.length === 0 || (finishStep && !hasFailures)) {
+                // Fallback: Try to extract raw text
                 if (modelResponseContent) {
                     const textParts = modelResponseContent.parts
                         ?.filter((part: any) => 'text' in part)
                         .map((part: any) => part.text)
                         .filter((text: string) => text.trim().length > 0);
-                    
+
                     if (textParts && textParts.length > 0) {
                         const fullText = textParts.join('\n\n');
                         console.log('[Orchestrator] Using fallback text response from model:', fullText.substring(0, 100) + '...');
                         return fullText;
                     }
                 }
-                
-                return "Task completed successfully.";
-            }
 
-            // Iterate through ALL parallel steps and execute them
-            for (const step of nextSteps) {
-                task.plan.push(step);
-                await this.executeStep(step, task);
+                return "Task completed successfully.";
             }
 
             if (i === MAX_STEPS - 1) {
@@ -170,25 +185,35 @@ export class Orchestrator {
             const toolToExecute = this.allTools.find(t => t.name === step.tool);
             if (!toolToExecute) throw new Error(`Tool '${step.tool}' not found.`);
 
-            const result = await toolToExecute.execute(step.args, { request: this.req });
+            // Provide the tools dictionary to the execution context so toolOrchestrator can use them
+            const toolsDict: Record<string, any> = {};
+            this.allTools.forEach(t => toolsDict[t.name] = t);
+
+            const result = await toolToExecute.execute(step.args, {
+                request: this.req,
+                tools: toolsDict
+            });
 
             step.status = 'completed';
             this.handleToolResult(result, step, task);
-            
+
             let responseForHistory;
             const isReadOnly = READ_ONLY_TOOLS.includes(step.tool);
 
             // Check if the "result" contains error indicators
-            const isErrorResult = result && (result.type === 'Error' || result.ErrorCode);
+            const isErrorResult = step.result && (step.result.type === 'Error' || step.result.ErrorCode);
 
             if (isErrorResult) {
                 step.status = 'failed';
-                step.error = result.Message || "Unknown tool error";
-                responseForHistory = { error: step.error };
-                
+                step.error = step.result.Message || "Unknown tool error";
+                responseForHistory = {
+                    error: step.error,
+                    ...(step.result.Details && { details: step.result.Details })
+                };
+
                 // We purposefully do NOT throw here, allowing the agent to see the error 
                 // in the history and try to self-correct.
-            } else if (isReadOnly) {
+            } else if (isReadOnly || step.tool === 'toolOrchestrator') {
                 responseForHistory = step.result;
             } else {
                 if (typeof step.result === 'object' && step.result !== null && step.result.Id) {
@@ -255,12 +280,12 @@ export class Orchestrator {
                 cleanResult = rawText;
             }
         }
-        
+
         // Check for ui-action on the parsed result
         if (cleanResult?.isUiAction && cleanResult.action) {
             this.emit('ui-action', cleanResult.action);
         }
-        
+
         step.result = filterResponseData({ responseData: cleanResult });
     }
 }

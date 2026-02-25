@@ -22,10 +22,6 @@ const TOTAL_SCRIPT_TIMEOUT_MS = 600000; // 10 minutes
 const DISALLOWED_TOOLS: string[] = [
     "toolOrchestrator",
     "deleteItem",
-    "createMultimediaComponentFromPrompt",
-    "updateMultimediaComponentFromPrompt",
-    "generateContentFromPrompt",
-    "readImageDetailsFromMultimediaComponent",
 ];
 
 /**
@@ -647,9 +643,7 @@ export const toolOrchestrator = {
         }
 
         if (!mcpContext.tools || typeof mcpContext.tools !== 'object') {
-            return {
-                content: [{ type: "text", text: "Error: Tool execution context is missing. 'toolOrchestrator' cannot access other tools." }]
-            };
+            return { content: [{ type: "text", text: JSON.stringify({ type: "Error", Message: "Tool execution context is missing. 'toolOrchestrator' cannot access other tools." }) }] };
         }
 
         const results: any[] = [];
@@ -751,7 +745,7 @@ export const toolOrchestrator = {
             try {
                 compiledPreScript = new vm.Script(`(async () => { "use strict"; ${preProcessingScript} })();`, { filename: 'preProcessingScript.js' });
             } catch (error: any) {
-                return { content: [{ type: "text", text: `Pre-processing Script Compilation Error: ${extractErrorMessage(error)}` }] };
+                return { content: [{ type: "text", text: JSON.stringify({ type: "Error", Message: `Pre-processing Script Compilation Error: ${extractErrorMessage(error)}` }) }] };
             }
 
             const preScriptLog = (message: string) => logs.push(`[PreScript] ${message}`);
@@ -777,7 +771,7 @@ export const toolOrchestrator = {
                 logs.push(`Pre-processing script finished. Found ${finalItemIds.length} items.`);
             } catch (error: any) {
                 const errorMessage = extractErrorMessage(error);
-                return { content: [{ type: "text", text: JSON.stringify({ summary: "ToolOrchestrator FAILED", phase: "pre-processing", error: errorMessage }, null, 2) }] };
+                return { content: [{ type: "text", text: JSON.stringify({ type: "Error", Message: `Pre-processing phase failed: ${errorMessage}` }) }] };
             }
         }
 
@@ -786,7 +780,7 @@ export const toolOrchestrator = {
 
         if (finalItemIds.length > 0) {
             if (!mapScript) {
-                return { content: [{ type: "text", text: JSON.stringify({ type: "Error", Message: "Items found but no mapScript provided." }, null, 2) }] };
+                return { content: [{ type: "text", text: JSON.stringify({ type: "Error", Message: "Items found but no mapScript provided." }) }] };
             }
 
             log(`\nStarting map phase for ${finalItemIds.length} items...`);
@@ -794,7 +788,7 @@ export const toolOrchestrator = {
             try {
                 compiledMapScript = new vm.Script(`(async () => { "use strict"; ${mapScript} })();`, { filename: 'mapScript.js' });
             } catch (error: any) {
-                return { content: [{ type: "text", text: `Map Script Compilation Error: ${extractErrorMessage(error)}` }] };
+                return { content: [{ type: "text", text: JSON.stringify({ type: "Error", Message: `Map Script Compilation Error: ${extractErrorMessage(error)}` }) }] };
             }
 
             const runTask = async (itemId: string, index: number): Promise<void> => {
@@ -899,11 +893,11 @@ export const toolOrchestrator = {
             // If debug is on, we can include the full details of all failures in the log
             if (debug) {
                 (stoppedResult as any).executionLog = logs.join('\n');
-                (stoppedResult as any).allFailures = failures; // Extra debug data
+                (stoppedResult as any).allFailures = failures;
             }
 
             return {
-                content: [{ type: "text", text: JSON.stringify(stoppedResult, null, 2) }]
+                content: [{ type: "text", text: JSON.stringify({ type: "Error", Message: summaryText, Details: stoppedResult }, null, 2) }]
             };
         }
 
@@ -917,7 +911,7 @@ export const toolOrchestrator = {
             try {
                 compiledPostScript = new vm.Script(`(async () => { "use strict"; ${postProcessingScript} })();`, { filename: 'postProcessingScript.js' });
             } catch (error: any) {
-                return { content: [{ type: "text", text: `Post-processing Script Compilation Error: ${extractErrorMessage(error)}` }] };
+                return { content: [{ type: "text", text: JSON.stringify({ type: "Error", Message: `Post-processing Script Compilation Error: ${extractErrorMessage(error)}` }) }] };
             }
 
             const postScriptLog = (message: string) => logs.push(`[PostScript] ${message}`);
@@ -943,14 +937,13 @@ export const toolOrchestrator = {
                 responsePayload = await Promise.race([scriptPromise, timeoutPromise]);
                 logs.push("Post-processing script finished successfully.");
             } catch (error: any) {
-                // Return structured error for Post-Processing failure
                 const postError: OrchestratorResult = {
                     status: "StoppedOnError",
                     summary: "Map phase completed, but Post-Processing script failed.",
                     processedItems: successes.map(s => ({ id: s.itemId, result: s.result })),
                     failedItem: { id: "PostProcessingScript", error: extractErrorMessage(error) }
                 };
-                return { content: [{ type: "text", text: JSON.stringify(postError, null, 2) }] };
+                return { content: [{ type: "text", text: JSON.stringify({ type: "Error", Message: postError.summary, Details: postError }) }] };
             }
         } else {
             // Default Summary if no post-script
@@ -971,7 +964,7 @@ export const toolOrchestrator = {
             try {
                 compiledValidationScript = new vm.Script(`(async () => { "use strict"; ${validationScript} })();`, { filename: 'validationScript.js' });
             } catch (error: any) {
-                return { content: [{ type: "text", text: `Validation Script Compilation Error: ${extractErrorMessage(error)}` }] };
+                return { content: [{ type: "text", text: JSON.stringify({ type: "Error", Message: `Validation Script Compilation Error: ${extractErrorMessage(error)}` }) }] };
             }
 
             const valScriptLog = (message: string) => logs.push(`[Validation] ${message}`);
@@ -1004,7 +997,6 @@ export const toolOrchestrator = {
                     responsePayload = validationResult;
                 }
             } catch (error: any) {
-                // Validation failure returns a special stopped state
                 const valError: OrchestratorResult = {
                     status: "StoppedOnError",
                     summary: "Operation and post-processing succeeded, but Validation failed.",
@@ -1012,7 +1004,7 @@ export const toolOrchestrator = {
                     output: responsePayload,
                     failedItem: { id: "ValidationScript", error: extractErrorMessage(error) }
                 };
-                return { content: [{ type: "text", text: JSON.stringify(valError, null, 2) }] };
+                return { content: [{ type: "text", text: JSON.stringify({ type: "Error", Message: valError.summary, Details: valError }) }] };
             }
         }
 
