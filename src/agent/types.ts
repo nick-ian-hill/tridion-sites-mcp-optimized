@@ -59,7 +59,7 @@ export interface PlanStep {
  * Defines the structure for events emitted by the orchestrator to the client.
  */
 export interface OrchestratorEvent {
-    type: 'plan' | 'progress' | 'result' | 'error' | 'ui-action';
+    type: 'plan' | 'progress' | 'result' | 'error' | 'ui-action' | 'completed';
     data: any;
 }
 

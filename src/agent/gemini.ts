@@ -19,12 +19,12 @@ export interface NextStepResult {
 // Helper to clean Zod schemas for Gemini
 const removeUnsupportedProperties = (schema: any): any => {
     if (!schema || typeof schema !== 'object') return schema;
-    
+
     if (Array.isArray(schema)) return schema.map(removeUnsupportedProperties);
 
     delete schema.$schema;
     delete schema.additionalProperties;
-    delete schema.title; 
+    delete schema.title;
     delete schema.definitions;
     delete schema.$defs;
     delete schema.$ref;
@@ -78,7 +78,8 @@ export const determineNextStep = async (
     prompt: string,
     context: any | undefined,
     history: Content[],
-    allTools: any[]
+    allTools: any[],
+    useAdvancedModel: boolean = false
 ): Promise<NextStepResult> => {
     const finishTool: FunctionDeclaration = {
         name: "finish",
@@ -107,14 +108,14 @@ export const determineNextStep = async (
      */
     const formatContext = (ctx: any): string => {
         if (!ctx) return '';
-        
+
         const parts: string[] = [];
-        
+
         // 1. Container - Most important: where the user is currently browsing
         if (ctx.container) {
             parts.push(`Browsing in: ${ctx.container.type} "${ctx.container.title}" (${ctx.container.id})`);
         }
-        
+
         // 2. Selected items - Items the user has explicitly selected with checkboxes
         if (ctx.selectedItems && ctx.selectedItems.length > 0) {
             if (ctx.selectedItems.length === 1) {
@@ -127,7 +128,7 @@ export const determineNextStep = async (
                 });
             }
         }
-        
+
         // 3. Details item - The item whose details are being displayed in the details panels
         //    (less important than explicit selection, but still relevant context)
         if (ctx.detailsItem) {
@@ -136,7 +137,7 @@ export const determineNextStep = async (
                 : 'Viewing details for';
             parts.push(`${prefix}: ${ctx.detailsItem.type} "${ctx.detailsItem.title}" (${ctx.detailsItem.id})`);
         }
-        
+
         return parts.length > 0 ? `\n\nUser's Current Context:\n${parts.join('\n')}` : '';
     };
 
@@ -170,12 +171,21 @@ You are an expert, helpful assistant for a Content Management System (CMS). Your
           • "Products" (tcm:5-123-2)
           • "Hero Banner" (tcm:5-456-16)
           • "Product Image" (ecl:provider-123)
+        - NEVER guess or fabricate an item's title. If you know an item's ID but do not know its exact title, you MUST use the getItem tool to fetch the title.
         - ALWAYS include both the title in quotes and the item ID (either TCM URI or ECL URI) in parentheses.
 
         **Error Handling Rules:**
         - If the last tool execution resulted in an error, analyze the error message.
         - If the error is 'ItemAlreadyExists' or a '409 Conflict' because an item name is not unique, check if you can fix the problem by calling a different tool or adjusting arguments.
         - If you cannot recover from the error, call the 'finish' tool with a clear message explaining the failure in 'taskConfirmation'.
+
+        **Bulk Operations & Orchestration (CRITICAL):**
+        - If you need to process, inspect, fetch details, or mutate more than 3 items from a list, search result, or container, you MUST NOT call individual tools sequentially or in parallel (e.g., do not call 'getItem' 10 times).
+        - Instead, you MUST use the 'toolOrchestrator' to process the entire batch of items in a single turn. Use the orchestrator to write a mapScript that handles the item logic on the server side.
+
+        **Token Efficiency & Data Filtering:**
+        - When fetching full items using 'getItem' or 'bulkReadItems', ALWAYS use the 'includeProperties' parameter to request ONLY the specific fields you actually need (e.g., ["Id", "Title", "type", "VersionInfo.RevisionDate"]).
+        - Never fetch the full, unfiltered item object unless the user explicitly asks to see "all properties" or "all details".
 
         **Reasoning Steps:**
         1. Analyze the new request and the conversation history.
@@ -187,25 +197,49 @@ You are an expert, helpful assistant for a Content Management System (CMS). Your
         User's Latest Request: "${prompt}"${formatContext(context)}
     `;
 
-    let result: GenerateContentResponse;
-    try {
-        result = await getGenAI().models.generateContent({
-            model: "gemini-3-flash-preview",
-            contents: history,
-            config: {
-                systemInstruction: systemInstruction,
-                tools: [{ functionDeclarations: toolsForNextStep }],
-                toolConfig: {
-                    functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO }
-                },
-                thinkingConfig: {
-                    thinkingLevel: ThinkingLevel.MEDIUM,
+    const modelToUse = useAdvancedModel ? "gemini-3.1-pro-preview" : "gemini-3-flash-preview";
+    if (useAdvancedModel) {
+        console.log(`[Reasoner] Escalating to advanced model: ${modelToUse}`);
+    }
+
+    let result: GenerateContentResponse | undefined;
+    let retries = 3;
+    let delayMs = 4000;
+
+    while (retries > 0) {
+        try {
+            result = await getGenAI().models.generateContent({
+                model: modelToUse,
+                contents: history,
+                config: {
+                    systemInstruction: systemInstruction,
+                    tools: [{ functionDeclarations: toolsForNextStep }],
+                    toolConfig: {
+                        functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO }
+                    },
+                    thinkingConfig: {
+                        thinkingLevel: ThinkingLevel.MEDIUM,
+                    }
                 }
+            });
+            break;
+        } catch (error: any) {
+            const errorString = typeof error === 'object' ? JSON.stringify(error) + String(error) : String(error);
+            
+            if (errorString.includes('429') && retries > 1) {
+                console.warn(`[Reasoner] Rate limit hit on ${modelToUse}. Retrying in ${delayMs / 1000} seconds...`);
+                await new Promise(resolve => setTimeout(resolve, delayMs));
+                delayMs *= 1.5; 
+                retries--;
+            } else {
+                console.error("[Reasoner] Gemini API call failed:", error);
+                throw new Error(`Failed to get response from Gemini: ${error instanceof Error ? error.message : String(error)}`);
             }
-        });
-    } catch (error) {
-        console.error("[Reasoner] Gemini API call failed:", error);
-        throw new Error(`Failed to get response from Gemini: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    if (!result) {
+        throw new Error("Failed to generate content after retries.");
     }
 
     const calls = result.functionCalls;
@@ -231,7 +265,7 @@ You are an expert, helpful assistant for a Content Management System (CMS). Your
 
     // Map ALL valid function calls to plan steps (supporting parallel calling)
     const currentFunctionCount = history.filter(h => h.role === 'function').length;
-    
+
     const nextSteps: PlanStep[] = validCalls.map((call, index) => ({
         step: currentFunctionCount + 1 + index,
         description: `Call tool: ${call.name}`,
@@ -276,5 +310,48 @@ export const summarizeToolOutput = async (toolOutput: any, userPrompt: string): 
     } catch (error) {
         console.error("[Summarizer] Error generating summary:", error);
         return `Completed with result: ${toolOutput}`;
+    }
+};
+
+/**
+ * Uses the advanced Pro model to evaluate the agent's history and determine 
+ * if it is making forward progress, returning a user-friendly summary.
+ */
+export const assessTaskProgress = async (
+    history: Content[], 
+    originalPrompt: string
+): Promise<{ isMakingProgress: boolean, progressSummary: string }> => {
+    const prompt = `
+    You are a Senior AI Overseer evaluating the progress of an autonomous CMS Agent.
+    The user's original goal was: "${originalPrompt}"
+    
+    Review the conversation history between the Agent and the system tools.
+    Your task is to determine if the Agent is making logical, forward progress toward the goal, or if it is stuck in a loop, repeating errors, or lost.
+    
+    Return a JSON object with EXACTLY this structure:
+    {
+        "isMakingProgress": boolean, // true if the agent is actively making good progress and nearing completion. false if it is stuck, looping, or confused.
+        "progressSummary": string // A 2-3 sentence summary intended FOR THE USER. Explain what the Agent has figured out so far, and what it is currently trying to do. Keep it user-friendly.
+    }
+    `;
+
+    try {
+        const response = await getGenAI().models.generateContent({
+            model: "gemini-3.1-pro-preview",
+            contents: [...history, { role: 'user', parts: [{ text: prompt }] }],
+            config: {
+                responseMimeType: "application/json",
+                thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM }
+            }
+        });
+        
+        const text = response.text || "{}";
+        return JSON.parse(text);
+    } catch (error) {
+        console.error("[Overseer] Failed to assess progress:", error);
+        return { 
+            isMakingProgress: false, 
+            progressSummary: "I have been executing multiple steps, but I encountered an issue assessing my own overall progress." 
+        };
     }
 };

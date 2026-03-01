@@ -70,9 +70,9 @@ export function getTaskEvents(taskId: string): Promise<OrchestratorEvent[]> {
         return Promise.resolve(events);
     }
 
-    // If the task is already complete and the queue is empty, signal completion.
+    // If the task is already complete and the queue is empty, return an explicit 'completed' event.
     if (task.isComplete) {
-        return Promise.resolve([]);
+        return Promise.resolve([{ type: 'completed', data: {} }]);
     }
 
     // Otherwise, wait for a new event to arrive.

@@ -1,7 +1,7 @@
 import http from 'node:http';
 import { filterResponseData } from '../utils/responseFiltering.js';
 import { Task, PlanStep, MessageEmitter, Content, AgentContext } from './types.js';
-import { determineNextStep, summarizeToolOutput } from './gemini.js';
+import { determineNextStep, summarizeToolOutput, assessTaskProgress } from './gemini.js';
 import { READ_ONLY_TOOLS } from './readOnlyTools.js';
 import { AxiosError } from 'axios';
 import { prepareHistoryForModel } from './historyUtils.js';
@@ -72,9 +72,13 @@ export class Orchestrator {
         }
     }
 
-    private async executePlan(task: Task, availableTools: any[], latestPrompt: string): Promise<string> {
-        const MAX_STEPS = 20;
-        for (let i = 0; i < MAX_STEPS; i++) {
+private async executePlan(task: Task, availableTools: any[], latestPrompt: string): Promise<string> {
+        let maxTurns = 20; // Starting limit
+        let hasExtended = false; // Tracks if we already gave the agent the +10 bonus
+        let consecutiveFailures = 0;
+        let useAdvancedModel = false;
+
+        for (let i = 0; i < maxTurns; i++) {
             const preparedHistory = prepareHistoryForModel(task.history);
 
             this.emit('progress', {
@@ -86,48 +90,67 @@ export class Orchestrator {
                 latestPrompt,
                 task.context,
                 preparedHistory,
-                availableTools
+                availableTools,
+                useAdvancedModel
             );
 
             if (modelResponseContent) {
                 task.history.push(modelResponseContent as Content);
             }
 
-            // Separate the finish step from real backend action steps
             const finishStep = nextSteps.find(s => s.tool === 'finish');
             const actionSteps = nextSteps.filter(s => s.tool !== 'finish');
 
             let hasFailures = false;
 
-            // 1. Iterate through ALL actual parallel action steps and execute them
-            for (const step of actionSteps) {
+            // Execute parallel actions concurrently
+            const executionPromises = actionSteps.map(async (step) => {
                 task.plan.push(step);
                 await this.executeStep(step, task);
                 if (step.status === 'failed') {
                     hasFailures = true;
                 }
+            });
+
+            await Promise.allSettled(executionPromises);
+
+            // Progress and escalation logic
+            if (actionSteps.length > 0) {
+                if (hasFailures) {
+                    consecutiveFailures++;
+                    
+                    if (consecutiveFailures === 2 && !useAdvancedModel) {
+                        this.emit('progress', { isLog: true, message: "Encountered repeated errors. Escalating to advanced model for recovery..." });
+                        useAdvancedModel = true;
+                    } else if (consecutiveFailures >= 4) {
+                        this.emit('progress', { isLog: true, message: "Advanced model also failing. Requesting user intervention." });
+                        
+                        task.history.push({
+                            role: 'function',
+                            parts: [{ functionResponse: { name: 'finish', response: { status: 'stuck_on_errors' } } }]
+                        });
+                        
+                        return "I'm having trouble completing this task even with my advanced reasoning model. I've hit 4 consecutive errors. Could you clarify the requirement or provide some guidance?";
+                    }
+                } else {
+                    consecutiveFailures = 0;
+                    useAdvancedModel = false; 
+                }
             }
 
-            // 2. Handle the finish step (if present)
+            // Handle Finish Step
             if (finishStep) {
                 if (hasFailures) {
-                    // Provide a response to satisfy Gemini's strict turn validation, but do NOT end the task
                     task.history.push({
                         role: 'function',
-                        parts: [{
-                            functionResponse: { name: 'finish', response: { error: 'Aborted finish execution because a parallel tool step failed.' } }
-                        }]
+                        parts: [{ functionResponse: { name: 'finish', response: { error: 'Action failed. Reviewing error and retrying...' } } }]
                     });
                 } else {
-                    // Success path: push dummy success response to complete the function calling turn
                     task.history.push({
                         role: 'function',
-                        parts: [{
-                            functionResponse: { name: 'finish', response: { status: 'success' } }
-                        }]
+                        parts: [{ functionResponse: { name: 'finish', response: { status: 'success' } } }]
                     });
 
-                    // Handle the special summarization request
                     if (finishStep.args?.taskConfirmation === '__NEEDS_SUMMARY__') {
                         const lastStep = task.plan[task.plan.length - 1];
                         if (lastStep && lastStep.status === 'completed') {
@@ -135,7 +158,6 @@ export class Orchestrator {
                         }
                     }
 
-                    // Prioritize the structured taskConfirmation from the model
                     const confirmation = finishStep.args?.taskConfirmation;
                     if (confirmation && confirmation !== '__NEEDS_SUMMARY__') {
                         return confirmation;
@@ -143,9 +165,8 @@ export class Orchestrator {
                 }
             }
 
-            // 3. End the execution if there are no steps, OR if we successfully finished without failures
+            // End execution if task is genuinely complete
             if (nextSteps.length === 0 || (finishStep && !hasFailures)) {
-                // Fallback: Try to extract raw text
                 if (modelResponseContent) {
                     const textParts = modelResponseContent.parts
                         ?.filter((part: any) => 'text' in part)
@@ -153,20 +174,41 @@ export class Orchestrator {
                         .filter((text: string) => text.trim().length > 0);
 
                     if (textParts && textParts.length > 0) {
-                        const fullText = textParts.join('\n\n');
-                        console.log('[Orchestrator] Using fallback text response from model:', fullText.substring(0, 100) + '...');
-                        return fullText;
+                        return textParts.join('\n\n');
                     }
                 }
-
                 return "Task completed successfully.";
             }
 
-            if (i === MAX_STEPS - 1) {
-                return "Task stopped as it reached the maximum number of steps.";
+            // --- OVERSEER PROGRESS CHECK ---
+            // If we have reached the end of our current turn limit
+            if (i === maxTurns - 1) {
+                this.emit('progress', { isLog: true, message: `Reached turn limit (${maxTurns}). Evaluating progress...` });
+                
+                // Call the Pro model to judge the worker model's progress
+                const assessment = await assessTaskProgress(preparedHistory, latestPrompt);
+
+                // If making good progress and we haven't given an extension yet, grant +10 turns
+                if (assessment.isMakingProgress && !hasExtended) {
+                    this.emit('progress', { isLog: true, message: `Agent is making solid progress. Extending allowance by 10 turns...` });
+                    maxTurns += 10; // Dynamically expands the for-loop!
+                    hasExtended = true;
+                    continue; 
+                }
+
+                // If NOT making progress, OR if we already extended and still hit the new limit, ask the user.
+                this.emit('progress', { isLog: true, message: `Pausing for user permission.` });
+                
+                // Push dummy finish to close the function call array cleanly
+                task.history.push({
+                    role: 'function',
+                    parts: [{ functionResponse: { name: 'finish', response: { status: 'paused' } } }]
+                });
+
+                return `I am taking longer than expected, but I want to check in before proceeding further.\n\n**Status Update:** ${assessment.progressSummary}\n\nWould you like me to continue or change my approach?`;
             }
         }
-        return "Task finished unexpectedly.";
+        return "Task paused.";
     }
 
     private async executeStep(step: PlanStep, task: Task) {

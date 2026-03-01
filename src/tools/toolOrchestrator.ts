@@ -128,6 +128,8 @@ interface OrchestratorResult {
     failedItem?: { id: string, error: string };
     /** The final output data (from postProcessingScript or default summary). */
     output?: any;
+    /** The optional execution log, included if debug is true. */
+    executionLog?: string;
 }
 
 // This plain object defines the input properties, matching your other tools
@@ -775,92 +777,114 @@ export const toolOrchestrator = {
             }
         }
 
+        if (finalItemIds.length === 0) {
+            logs.push("No items provided or found during pre-processing. Skipping Map, Reduce, and Validation phases.");
+
+            const emptyResult: OrchestratorResult = {
+                status: "Completed",
+                summary: "Operation completed: 0 items found to process.",
+                processedItems: [],
+                output: preScriptContextData // Pass along any setup data just in case
+            };
+
+            if (debug) {
+                emptyResult.executionLog = logs.join('\n');
+            }
+
+            return {
+                content: [{
+                    type: "text",
+                    text: JSON.stringify(emptyResult, null, 2)
+                }],
+            };
+        }
+
         // --- Phase 2: Execution Logic (Map Phase) ---
         let wasStoppedOnError = false;
 
-        if (finalItemIds.length > 0) {
-            if (!mapScript) {
-                return { content: [{ type: "text", text: JSON.stringify({ type: "Error", Message: "Items found but no mapScript provided." }) }] };
-            }
-
-            log(`\nStarting map phase for ${finalItemIds.length} items...`);
-            let compiledMapScript: vm.Script;
-            try {
-                compiledMapScript = new vm.Script(`(async () => { "use strict"; ${mapScript} })();`, { filename: 'mapScript.js' });
-            } catch (error: any) {
-                return { content: [{ type: "text", text: JSON.stringify({ type: "Error", Message: `Map Script Compilation Error: ${extractErrorMessage(error)}` }) }] };
-            }
-
-            const runTask = async (itemId: string, index: number): Promise<void> => {
-                logs.push(`\n[${index + 1}/${finalItemIds.length}] Processing item: ${itemId}`);
-                let itemHasWarning = false;
-                let itemWarningMessage = "";
-
-                const perItemLog = (message: string) => logs.push(`[${itemId}] ${message}`);
-                const perItemWarnLog = (message: string) => { logs.push(`[${itemId}] [WARN] ${message}`); itemHasWarning = true; itemWarningMessage = message; };
-
-                const perItemContext: MapScriptContext = {
-                    currentItemId: itemId,
-                    parameters: Object.freeze(parameters),
-                    preProcessingResult: preScriptContextData,
-                    tools: toolWrappers,
-                    utils: scriptUtils,
-                    log: perItemLog
-                };
-                const sandboxContext = { ...baseSandbox, context: perItemContext, console: { log: perItemLog, warn: perItemWarnLog, error: perItemLog } };
-                const sandbox = vm.createContext(sandboxContext);
-
-                try {
-                    const scriptPromise = compiledMapScript.runInContext(sandbox, { timeout: SYNC_SCRIPT_TIMEOUT_MS });
-                    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error(`Script timed out after ${TOTAL_SCRIPT_TIMEOUT_MS}ms`)), TOTAL_SCRIPT_TIMEOUT_MS));
-                    const result = await Promise.race([scriptPromise, timeoutPromise]);
-
-                    if (itemHasWarning) {
-                        results.push({ itemId, status: "warning", result: result ?? "No return value", warning: itemWarningMessage });
-                    } else {
-                        results.push({ itemId, status: "success", result: result ?? "No return value" });
-                    }
-                } catch (error: any) {
-                    const errorMessage = extractErrorMessage(error);
-                    logs.push(`[${itemId}] FAILED: ${errorMessage}`);
-
-                    // Always record the failure
-                    results.push({ itemId: itemId, status: "error", error: errorMessage });
-
-                    if (stopOnError) {
-                        // Mark global stop flag. The loop controller will handle the break.
-                        wasStoppedOnError = true;
-                    }
-                }
-            };
-
-            // Execution Loop
-            if (maxConcurrency === 1) {
-                for (const [index, itemId] of finalItemIds.entries()) {
-                    if (wasStoppedOnError) break; // STOP Condition
-                    await runTask(itemId, index);
-                }
-            } else {
-                const workerPool = new Set<Promise<void>>();
-                let index = 0;
-                for (const itemId of finalItemIds) {
-                    if (wasStoppedOnError) break; // STOP Condition (prevents NEW tasks)
-
-                    while (workerPool.size >= maxConcurrency) {
-                        await Promise.race(workerPool);
-                    }
-                    // Double check in case a worker failed while we were waiting
-                    if (wasStoppedOnError) break;
-
-                    const taskPromise = runTask(itemId, index++);
-                    const onFinally = () => workerPool.delete(taskPromise);
-                    taskPromise.then(onFinally, onFinally);
-                    workerPool.add(taskPromise);
-                }
-                await Promise.allSettled(Array.from(workerPool));
-            }
-            logs.push("\nMap phase finished.");
+        if (!mapScript) {
+            return { content: [{ type: "text", text: JSON.stringify({ type: "Error", Message: "Items found but no mapScript provided." }) }] };
         }
+
+        log(`\nStarting map phase for ${finalItemIds.length} items...`);
+        let compiledMapScript: vm.Script;
+        try {
+            compiledMapScript = new vm.Script(`(async () => { "use strict"; ${mapScript} })();`, { filename: 'mapScript.js' });
+        } catch (error: any) {
+            return { content: [{ type: "text", text: JSON.stringify({ type: "Error", Message: `Map Script Compilation Error: ${extractErrorMessage(error)}` }) }] };
+        }
+
+        const runTask = async (itemId: string, index: number): Promise<void> => {
+            logs.push(`\n[${index + 1}/${finalItemIds.length}] Processing item: ${itemId}`);
+            let itemHasWarning = false;
+            let itemWarningMessage = "";
+
+            const perItemLog = (message: string) => logs.push(`[${itemId}] ${message}`);
+            const perItemWarnLog = (message: string) => { logs.push(`[${itemId}] [WARN] ${message}`); itemHasWarning = true; itemWarningMessage = message; };
+
+            const perItemContext: MapScriptContext = {
+                currentItemId: itemId,
+                parameters: Object.freeze(parameters),
+                preProcessingResult: preScriptContextData,
+                tools: toolWrappers,
+                utils: scriptUtils,
+                log: perItemLog
+            };
+            const sandboxContext = { ...baseSandbox, context: perItemContext, console: { log: perItemLog, warn: perItemWarnLog, error: perItemLog } };
+            const sandbox = vm.createContext(sandboxContext);
+
+            try {
+                const scriptPromise = compiledMapScript.runInContext(sandbox, { timeout: SYNC_SCRIPT_TIMEOUT_MS });
+                const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error(`Script timed out after ${TOTAL_SCRIPT_TIMEOUT_MS}ms`)), TOTAL_SCRIPT_TIMEOUT_MS));
+                const result = await Promise.race([scriptPromise, timeoutPromise]);
+
+                const safeResult = result === undefined ? "No return value" : result;
+
+                if (itemHasWarning) {
+                    results.push({ itemId, status: "warning", result: safeResult, warning: itemWarningMessage });
+                } else {
+                    results.push({ itemId, status: "success", result: safeResult });
+                }
+            } catch (error: any) {
+                const errorMessage = extractErrorMessage(error);
+                logs.push(`[${itemId}] FAILED: ${errorMessage}`);
+
+                // Always record the failure
+                results.push({ itemId: itemId, status: "error", error: errorMessage });
+
+                if (stopOnError) {
+                    // Mark global stop flag. The loop controller will handle the break.
+                    wasStoppedOnError = true;
+                }
+            }
+        };
+
+        // Execution Loop
+        if (maxConcurrency === 1) {
+            for (const [index, itemId] of finalItemIds.entries()) {
+                if (wasStoppedOnError) break; // STOP Condition
+                await runTask(itemId, index);
+            }
+        } else {
+            const workerPool = new Set<Promise<void>>();
+            let index = 0;
+            for (const itemId of finalItemIds) {
+                if (wasStoppedOnError) break; // STOP Condition (prevents NEW tasks)
+
+                while (workerPool.size >= maxConcurrency) {
+                    await Promise.race(workerPool);
+                }
+                // Double check in case a worker failed while we were waiting
+                if (wasStoppedOnError) break;
+
+                const taskPromise = runTask(itemId, index++);
+                const onFinally = () => workerPool.delete(taskPromise);
+                taskPromise.then(onFinally, onFinally);
+                workerPool.add(taskPromise);
+            }
+            await Promise.allSettled(Array.from(workerPool));
+        }
+        logs.push("\nMap phase finished.");
 
         // --- Categorize Results ---
         const successes = results.filter(r => r.status === 'success');

@@ -88,14 +88,17 @@ export function prepareHistoryForModel(history: Content[]): Content[] {
     // Safety valve: if history is still too big, drop the oldest messages entirely.
     // We prioritize dropping messages from the start of the array (oldest).
     // However, we MUST NOT drop messages from the 'protectionStartIndex' onwards if possible.
+    let currentProtectionIndex = protectionStartIndex;
+
     while (currentLength > MAX_HISTORY_CHAR_LENGTH && preparedHistory.length > 2) {
-        // Ensure we don't delete into the current turn unless absolutely necessary
-        if (preparedHistory.length <= (preparedHistory.length - protectionStartIndex) + 1) {
-            console.warn("[History Debug] Critical: Context limit reached, but cannot drop older frames without breaking current turn.");
+        // If the protected turn has shifted all the way down to index 1, stop deleting!
+        if (currentProtectionIndex <= 1) {
+            console.warn("History Debug] Critical: Context limit reached, but cannot drop older frames without breaking current turn.");
             break;
         }
 
-        preparedHistory.splice(1, 1); // Delete the second message (index 1), keeping the System/First User prompt (index 0) usually.
+        preparedHistory.splice(1, 1);
+        currentProtectionIndex--; // Update the index because everything shifted left
         currentLength = JSON.stringify(preparedHistory).length;
     }
 
