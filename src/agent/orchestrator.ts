@@ -35,7 +35,10 @@ export class Orchestrator {
             shouldInvalidateContext: false,
         };
 
-        task.history.push({ role: 'user', parts: [{ text: prompt }] });
+        const contextString = this.formatContext(context);
+        const combinedPrompt = contextString ? `${prompt}${contextString}` : prompt;
+
+        task.history.push({ role: 'user', parts: [{ text: combinedPrompt }] });
 
         let finalMessage = "Task failed to complete.";
 
@@ -72,7 +75,46 @@ export class Orchestrator {
         }
     }
 
-private async executePlan(task: Task, availableTools: any[], latestPrompt: string): Promise<string> {
+    /**
+     * Formats the context object into a human-readable string for the system instruction.
+     * Order matters: Container (where user is browsing) comes first, then selected items, then focused item.
+     */
+    private formatContext = (ctx: any): string => {
+        if (!ctx) return '';
+
+        const parts: string[] = [];
+
+        // 1. Container - Most important: where the user is currently browsing
+        if (ctx.container) {
+            parts.push(`Browsing in: ${ctx.container.type} "${ctx.container.title}" (${ctx.container.id})`);
+        }
+
+        // 2. Selected items - Items the user has explicitly selected with checkboxes
+        if (ctx.selectedItems && ctx.selectedItems.length > 0) {
+            if (ctx.selectedItems.length === 1) {
+                const item = ctx.selectedItems[0];
+                parts.push(`Selected: ${item.type} "${item.title}" (${item.id})`);
+            } else {
+                parts.push(`Selected Items (${ctx.selectedItems.length}):`);
+                ctx.selectedItems.forEach((item: any, index: number) => {
+                    parts.push(`  ${index + 1}. ${item.type} "${item.title}" (${item.id})`);
+                });
+            }
+        }
+
+        // 3. Details item - The item whose details are being displayed in the details panels
+        //    (less important than explicit selection, but still relevant context)
+        if (ctx.detailsItem) {
+            const prefix = ctx.selectedItems && ctx.selectedItems.find((item: any) => item.id === ctx.detailsItem.id)
+                ? 'Also viewing details for'
+                : 'Viewing details for';
+            parts.push(`${prefix}: ${ctx.detailsItem.type} "${ctx.detailsItem.title}" (${ctx.detailsItem.id})`);
+        }
+
+        return parts.length > 0 ? `\n\nUser's Current Context:\n${parts.join('\n')}` : '';
+    };
+
+    private async executePlan(task: Task, availableTools: any[], latestPrompt: string): Promise<string> {
         let maxTurns = 20; // Starting limit
         let hasExtended = false; // Tracks if we already gave the agent the +10 bonus
         let consecutiveFailures = 0;
@@ -87,8 +129,6 @@ private async executePlan(task: Task, availableTools: any[], latestPrompt: strin
             });
 
             const { planSteps: nextSteps, modelResponseContent } = await determineNextStep(
-                latestPrompt,
-                task.context,
                 preparedHistory,
                 availableTools,
                 useAdvancedModel
@@ -118,23 +158,23 @@ private async executePlan(task: Task, availableTools: any[], latestPrompt: strin
             if (actionSteps.length > 0) {
                 if (hasFailures) {
                     consecutiveFailures++;
-                    
+
                     if (consecutiveFailures === 2 && !useAdvancedModel) {
                         this.emit('progress', { isLog: true, message: "Encountered repeated errors. Escalating to advanced model for recovery..." });
                         useAdvancedModel = true;
                     } else if (consecutiveFailures >= 4) {
                         this.emit('progress', { isLog: true, message: "Advanced model also failing. Requesting user intervention." });
-                        
+
                         task.history.push({
                             role: 'function',
                             parts: [{ functionResponse: { name: 'finish', response: { status: 'stuck_on_errors' } } }]
                         });
-                        
+
                         return "I'm having trouble completing this task even with my advanced reasoning model. I've hit 4 consecutive errors. Could you clarify the requirement or provide some guidance?";
                     }
                 } else {
                     consecutiveFailures = 0;
-                    useAdvancedModel = false; 
+                    useAdvancedModel = false;
                 }
             }
 
@@ -184,7 +224,7 @@ private async executePlan(task: Task, availableTools: any[], latestPrompt: strin
             // If we have reached the end of our current turn limit
             if (i === maxTurns - 1) {
                 this.emit('progress', { isLog: true, message: `Reached turn limit (${maxTurns}). Evaluating progress...` });
-                
+
                 // Call the Pro model to judge the worker model's progress
                 const assessment = await assessTaskProgress(preparedHistory, latestPrompt);
 
@@ -193,12 +233,12 @@ private async executePlan(task: Task, availableTools: any[], latestPrompt: strin
                     this.emit('progress', { isLog: true, message: `Agent is making solid progress. Extending allowance by 10 turns...` });
                     maxTurns += 10; // Dynamically expands the for-loop!
                     hasExtended = true;
-                    continue; 
+                    continue;
                 }
 
                 // If NOT making progress, OR if we already extended and still hit the new limit, ask the user.
                 this.emit('progress', { isLog: true, message: `Pausing for user permission.` });
-                
+
                 // Push dummy finish to close the function call array cleanly
                 task.history.push({
                     role: 'function',

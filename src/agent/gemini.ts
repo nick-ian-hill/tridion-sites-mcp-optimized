@@ -75,8 +75,6 @@ const formatToolsForGemini = (tools: any[]): FunctionDeclaration[] => {
  * Determines the next steps (potentially multiple parallel steps) for the agent to take.
  */
 export const determineNextStep = async (
-    prompt: string,
-    context: any | undefined,
     history: Content[],
     allTools: any[],
     useAdvancedModel: boolean = false
@@ -102,47 +100,8 @@ export const determineNextStep = async (
 
     const toolsForNextStep = [...formatToolsForGemini(allTools), finishTool];
 
-    /**
-     * Formats the context object into a human-readable string for the system instruction.
-     * Order matters: Container (where user is browsing) comes first, then selected items, then focused item.
-     */
-    const formatContext = (ctx: any): string => {
-        if (!ctx) return '';
-
-        const parts: string[] = [];
-
-        // 1. Container - Most important: where the user is currently browsing
-        if (ctx.container) {
-            parts.push(`Browsing in: ${ctx.container.type} "${ctx.container.title}" (${ctx.container.id})`);
-        }
-
-        // 2. Selected items - Items the user has explicitly selected with checkboxes
-        if (ctx.selectedItems && ctx.selectedItems.length > 0) {
-            if (ctx.selectedItems.length === 1) {
-                const item = ctx.selectedItems[0];
-                parts.push(`Selected: ${item.type} "${item.title}" (${item.id})`);
-            } else {
-                parts.push(`Selected Items (${ctx.selectedItems.length}):`);
-                ctx.selectedItems.forEach((item: any, index: number) => {
-                    parts.push(`  ${index + 1}. ${item.type} "${item.title}" (${item.id})`);
-                });
-            }
-        }
-
-        // 3. Details item - The item whose details are being displayed in the details panels
-        //    (less important than explicit selection, but still relevant context)
-        if (ctx.detailsItem) {
-            const prefix = ctx.selectedItems && ctx.selectedItems.find((item: any) => item.id === ctx.detailsItem.id)
-                ? 'Also viewing details for'
-                : 'Viewing details for';
-            parts.push(`${prefix}: ${ctx.detailsItem.type} "${ctx.detailsItem.title}" (${ctx.detailsItem.id})`);
-        }
-
-        return parts.length > 0 ? `\n\nUser's Current Context:\n${parts.join('\n')}` : '';
-    };
-
     const systemInstruction = `
-You are an expert, helpful assistant for a Content Management System (CMS). Your role is dual-purpose:
+        You are an expert, helpful assistant for a Content Management System (CMS). Your role is dual-purpose:
         1. Execute tasks efficiently and accurately using the provided tools.
         2. Answer the user's informational questions about the CMS, their context, or your capabilities.
 
@@ -193,8 +152,6 @@ You are an expert, helpful assistant for a Content Management System (CMS). Your
         3. If you lack required parameters for a tool, call 'finish' to ask the user for them.
         4. Call the necessary tools to progress the request. Fetch multiple properties at once if needed.
         5. Call 'finish' to deliver the final confirmation or answer.
-
-        User's Latest Request: "${prompt}"${formatContext(context)}
     `;
 
     const modelToUse = useAdvancedModel ? "gemini-3.1-pro-preview" : "gemini-3-flash-preview";
@@ -225,11 +182,19 @@ You are an expert, helpful assistant for a Content Management System (CMS). Your
             break;
         } catch (error: any) {
             const errorString = typeof error === 'object' ? JSON.stringify(error) + String(error) : String(error);
-            
-            if (errorString.includes('429') && retries > 1) {
-                console.warn(`[Reasoner] Rate limit hit on ${modelToUse}. Retrying in ${delayMs / 1000} seconds...`);
+
+            const isRetryable =
+                errorString.includes('429') ||          // Rate limits
+                errorString.includes('500') ||          // Internal Server Error
+                errorString.includes('503') ||          // Service Unavailable
+                errorString.includes('fetch failed') || // Node.js network blip
+                errorString.includes('ETIMEDOUT') ||    // Connection timeout
+                errorString.includes('ECONNRESET');     // Connection reset by peer
+
+            if (isRetryable && retries > 1) {
+                console.warn(`[Reasoner] Transient API/Network issue detected. Retrying in ${delayMs / 1000} seconds...`);
                 await new Promise(resolve => setTimeout(resolve, delayMs));
-                delayMs *= 1.5; 
+                delayMs *= 1.5;
                 retries--;
             } else {
                 console.error("[Reasoner] Gemini API call failed:", error);
@@ -318,7 +283,7 @@ export const summarizeToolOutput = async (toolOutput: any, userPrompt: string): 
  * if it is making forward progress, returning a user-friendly summary.
  */
 export const assessTaskProgress = async (
-    history: Content[], 
+    history: Content[],
     originalPrompt: string
 ): Promise<{ isMakingProgress: boolean, progressSummary: string }> => {
     const prompt = `
@@ -344,14 +309,14 @@ export const assessTaskProgress = async (
                 thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM }
             }
         });
-        
+
         const text = response.text || "{}";
         return JSON.parse(text);
     } catch (error) {
         console.error("[Overseer] Failed to assess progress:", error);
-        return { 
-            isMakingProgress: false, 
-            progressSummary: "I have been executing multiple steps, but I encountered an issue assessing my own overall progress." 
+        return {
+            isMakingProgress: false,
+            progressSummary: "I have been executing multiple steps, but I encountered an issue assessing my own overall progress."
         };
     }
 };
