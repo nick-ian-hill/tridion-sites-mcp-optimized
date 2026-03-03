@@ -3,7 +3,7 @@ import { createAuthenticatedAxios } from "../utils/axios.js";
 import { toLink } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
-import { processSchemaFieldDefinitions, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
+import { processAndOrderFieldDefinitions, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
 import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
 import { getCachedDefaultModel } from "../utils/defaultModelCache.js";
 
@@ -14,7 +14,7 @@ export const createMetadataSchema = {
 Metadata Schemas define the structure for metadata fields that can be applied to items like Folders, Structure Groups, Pages, Keywords, etc.
 (Note: To add metadata to a Component, you must define 'metadataFields' on the Component Schema using 'createComponentSchema'.)
 
-The schema's structure is defined using the 'metadataFields' property, which is a dictionary of field definitions.
+The schema's structure is defined using the 'metadataFields' property, which is an array of field definitions.
 
 BluePrint Inheritance Note:
 The Schema will be created in the specified Folder and be automatically inherited by all descendant Publications.
@@ -26,15 +26,15 @@ Example 1: Create a simple Metadata Schema for Folders.
         title: "Folder Metadata",
         locationId: "tcm:1-2-2",
         description: "A simple schema for folder metadata.",
-        metadataFields: {
-            "owner": {
+        metadataFields: [
+            {
                 "type": "SingleLineTextFieldDefinition",
                 "Name": "owner",
                 "Description": "The owner of the folder.",
                 "MaxOccurs": 1,
                 "MinOccurs": 1
             }
-        }
+        ]
     });
 
 Example 2: Create a Metadata Schema with a multi-value checkbox field using a predefined list of dates.
@@ -42,8 +42,8 @@ Example 2: Create a Metadata Schema with a multi-value checkbox field using a pr
         title: "Date Selection",
         locationId: "tcm:1-2-2",
         description: "A metadata schema for selecting dates.",
-        metadataFields: {
-            "availableDates": {
+        metadataFields: [
+            {
                 "type": "DateFieldDefinition",
                 "Name": "availableDates",
                 "Description": "Select your preferred dates.",
@@ -58,14 +58,14 @@ Example 2: Create a Metadata Schema with a multi-value checkbox field using a pr
                     ]
                 }
             }
-        }
+        ]
     });
     `,
     input: {
         title: z.string().nonempty().describe("The title for the new Metadata Schema."),
         locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new Schema will be created."),
         description: z.string().nonempty().describe("A mandatory description of the Schema."),
-        metadataFields: z.record(fieldDefinitionSchema).optional().describe("A dictionary of metadata field definitions for the schema."),
+        metadataFields: z.array(fieldDefinitionSchema).optional().describe("An array of metadata field definitions for the schema. The order of the array determines the field order."),
         isIndexable: z.boolean().optional().describe("Specifies whether metadata values are indexed for searching."),
         isPublishable: z.boolean().optional().describe("Specifies whether metadata values are published.")
     },
@@ -84,7 +84,7 @@ Example 2: Create a Metadata Schema with a multi-value checkbox field using a pr
         const authenticatedAxios = createAuthenticatedAxios(userSessionId);
         
         try {
-            const processedMetadataFields = metadataFields ? await processSchemaFieldDefinitions(metadataFields, locationId, authenticatedAxios) : undefined;
+            const processedMetadataFields = metadataFields ? await processAndOrderFieldDefinitions(metadataFields, locationId, authenticatedAxios) : undefined;
 
             let payload;
             try {
@@ -98,7 +98,7 @@ Example 2: Create a Metadata Schema with a multi-value checkbox field using a pr
             delete payload.RootElementName;
 
             if (description) payload.Description = description;
-            if (processedMetadataFields) payload.MetadataFields = { "$type": "FieldsDefinitionDictionary", ...processedMetadataFields };
+            if (processedMetadataFields) payload.MetadataFields = processedMetadataFields;
             if (typeof isIndexable === 'boolean') payload.IsIndexable = isIndexable;
             if (typeof isPublishable === 'boolean') payload.IsPublishable = isPublishable;
             

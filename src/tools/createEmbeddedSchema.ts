@@ -4,7 +4,7 @@ import { toLink } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { xmlNameSchema } from "../schemas/xmlNameSchema.js";
 import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
-import { processSchemaFieldDefinitions, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
+import { processAndOrderFieldDefinitions, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
 import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
 import { getCachedDefaultModel } from "../utils/defaultModelCache.js";
 
@@ -28,22 +28,22 @@ This schema can then be used inside other schemas (like an 'Article' schema) to 
         locationId: "tcm:20-1234-2",
         rootElementName: "AuthorDetails",
         description: "An embeddable schema for author information.",
-        fields: {
-            "name": {
+        fields: [
+            {
                 "type": "SingleLineTextFieldDefinition",
                 "Name": "name",
                 "Description": "The author's full name.",
                 "MinOccurs": 1,
                 "MaxOccurs": 1
             },
-            "biography": {
+            {
                 "type": "MultiLineTextFieldDefinition",
                 "Name": "biography",
                 "Description": "A short biography of the author.",
                 "Height": 5,
                 "MinOccurs": 0
             }
-        }
+        ]
     });
     `,
     input: {
@@ -51,7 +51,7 @@ This schema can then be used inside other schemas (like an 'Article' schema) to 
         locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new Schema will be created."),
         rootElementName: xmlNameSchema.describe("The name of the root element for the XML structure. This is mandatory for Embedded Schemas."),
         description: z.string().nonempty().describe("A mandatory description of the Schema."),
-        fields: z.record(fieldDefinitionSchema).optional().describe("A dictionary of field definitions for the schema's content fields."),
+        fields: z.array(fieldDefinitionSchema).optional().describe("An array of field definitions for the schema's content fields. The order of the array determines the field order."),
         isIndexable: z.boolean().optional().describe("Specifies whether field values are indexed for searching."),
         isPublishable: z.boolean().optional().describe("Specifies whether field values are published.")
     },
@@ -70,7 +70,7 @@ This schema can then be used inside other schemas (like an 'Article' schema) to 
         const authenticatedAxios = createAuthenticatedAxios(userSessionId);
         
         try {
-            const processedFields = fields ? await processSchemaFieldDefinitions(fields, locationId, authenticatedAxios) : undefined;
+            const processedFields = fields ? await processAndOrderFieldDefinitions(fields, locationId, authenticatedAxios) : undefined;
 
             let payload;
             try {
@@ -83,7 +83,7 @@ This schema can then be used inside other schemas (like an 'Article' schema) to 
             payload.RootElementName = rootElementName;
 
             if (description) payload.Description = description;
-            if (processedFields) payload.Fields = { "$type": "FieldsDefinitionDictionary", ...processedFields };
+            if (processedFields) payload.Fields = processedFields;
             if (typeof isIndexable === 'boolean') payload.IsIndexable = isIndexable;
             if (typeof isPublishable === 'boolean') payload.IsPublishable = isPublishable;
             

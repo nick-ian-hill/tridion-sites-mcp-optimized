@@ -3,7 +3,7 @@ import { createAuthenticatedAxios } from "../utils/axios.js";
 import { toLink } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
-import { convertLinksRecursively, processSchemaFieldDefinitions, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
+import { convertLinksRecursively, processAndOrderFieldDefinitions, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
 import { regionDefinitionSchema } from "../schemas/regionDefinitionSchemas.js";
 import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
 import { getCachedDefaultModel } from "../utils/defaultModelCache.js";
@@ -95,7 +95,7 @@ Note the use of "type": "ExpandableLink" for the 'RegionSchema' property inside 
         title: z.string().nonempty().describe("The title for the new Region Schema."),
         locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new Schema will be created."),
         description: z.string().nonempty().describe("A mandatory description of the Schema."),
-        metadataFields: z.record(fieldDefinitionSchema).optional().describe("A dictionary of metadata field definitions for the Region Schema itself."),
+        metadataFields: z.array(fieldDefinitionSchema).optional().describe("An array of metadata field definitions for the Region Schema itself. The order of the array determines the field order."),
         regionDefinition: regionDefinitionSchema.optional().describe("A JSON object defining the Region's constraints, nested regions, and localizability."),
         isIndexable: z.boolean().optional().describe("Specifies whether metadata values are indexed for searching."),
         isPublishable: z.boolean().optional().describe("Specifies whether metadata values are published.")
@@ -115,7 +115,7 @@ Note the use of "type": "ExpandableLink" for the 'RegionSchema' property inside 
         const authenticatedAxios = createAuthenticatedAxios(userSessionId);
         
         try {
-            const processedMetadataFields = metadataFields ? await processSchemaFieldDefinitions(metadataFields, locationId, authenticatedAxios) : undefined;
+            const processedMetadataFields = metadataFields ? await processAndOrderFieldDefinitions(metadataFields, locationId, authenticatedAxios) : undefined;
 
             if (processedMetadataFields) {
                 convertLinksRecursively(processedMetadataFields, locationId);
@@ -137,7 +137,7 @@ Note the use of "type": "ExpandableLink" for the 'RegionSchema' property inside 
             delete payload.RootElementName;
 
             if (description) payload.Description = description;
-            if (processedMetadataFields) payload.MetadataFields = { "$type": "FieldsDefinitionDictionary", ...processedMetadataFields };
+            if (processedMetadataFields) payload.MetadataFields = processedMetadataFields;
             if (regionDefinition) payload.RegionDefinition = regionDefinition;
             if (typeof isIndexable === 'boolean') payload.IsIndexable = isIndexable;
             if (typeof isPublishable === 'boolean') payload.IsPublishable = isPublishable;

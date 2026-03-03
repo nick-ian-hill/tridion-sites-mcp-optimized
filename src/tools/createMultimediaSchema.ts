@@ -3,7 +3,7 @@ import { createAuthenticatedAxios } from "../utils/axios.js";
 import { toLink, toLinkArray } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
-import { processSchemaFieldDefinitions, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
+import { processAndOrderFieldDefinitions, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
 import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
 
 export const createMultimediaSchema = {
@@ -13,7 +13,7 @@ export const createMultimediaSchema = {
 Multimedia Schemas define the metadata fields for Multimedia Components (e.g., images, videos, PDFs).
 They also specify which file types are allowed using the 'allowedMultimediaTypes' property.
 
-The schema's structure is defined using the 'metadataFields' property.
+The schema's structure is defined using the 'metadataFields' property, which is an array of field definitions.
 
 Examples:
 
@@ -26,27 +26,27 @@ Example 1: Create a simple Multimedia Schema for images.
             "tcm:0-2-65544", // JPEG
             "tcm:0-3-65544"  // PNG
         ],
-        metadataFields: {
-            "altText": {
+        metadataFields: [
+            {
                 "type": "SingleLineTextFieldDefinition",
                 "Name": "altText",
                 "Description": "Alternative text for accessibility.",
                 "MinOccurs": 1
             },
-            "caption": {
+            {
                 "type": "SingleLineTextFieldDefinition",
                 "Name": "caption",
                 "Description": "A caption for the image.",
                 "MinOccurs": 0
             }
-        }
+        ]
     });
     `,
     input: {
         title: z.string().nonempty().describe("The title for the new Multimedia Schema."),
         locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new Schema will be created."),
         description: z.string().nonempty().describe("A mandatory description of the Schema."),
-        metadataFields: z.record(fieldDefinitionSchema).optional().describe("A dictionary of metadata field definitions for the schema."),
+        metadataFields: z.array(fieldDefinitionSchema).optional().describe("An array of metadata field definitions for the schema. The order of the array determines the field order."),
         allowedMultimediaTypes: z.array(z.string().regex(/^tcm:0-\d+-65544$/)).describe("An array of TCM URIs for allowed Multimedia Types. Use 'getMultimediaTypes' to find available types."),
         isIndexable: z.boolean().optional().describe("Specifies whether metadata values are indexed for searching."),
         isPublishable: z.boolean().optional().describe("Specifies whether metadata values are published.")
@@ -66,7 +66,7 @@ Example 1: Create a simple Multimedia Schema for images.
         const authenticatedAxios = createAuthenticatedAxios(userSessionId);
         
         try {
-            const processedMetadataFields = metadataFields ? await processSchemaFieldDefinitions(metadataFields, locationId, authenticatedAxios) : undefined;
+            const processedMetadataFields = metadataFields ? await processAndOrderFieldDefinitions(metadataFields, locationId, authenticatedAxios) : undefined;
 
             const defaultModelResponse = await authenticatedAxios.get('/item/defaultModel/Schema', {
                 params: { containerId: locationId }
@@ -81,7 +81,7 @@ Example 1: Create a simple Multimedia Schema for images.
             delete payload.RootElementName;
 
             if (description) payload.Description = description;
-            if (processedMetadataFields) payload.MetadataFields = { "$type": "FieldsDefinitionDictionary", ...processedMetadataFields };
+            if (processedMetadataFields) payload.MetadataFields = processedMetadataFields;
             if (allowedMultimediaTypes) payload.AllowedMultimediaTypes = toLinkArray(allowedMultimediaTypes);
             if (typeof isIndexable === 'boolean') payload.IsIndexable = isIndexable;
             if (typeof isPublishable === 'boolean') payload.IsPublishable = isPublishable;

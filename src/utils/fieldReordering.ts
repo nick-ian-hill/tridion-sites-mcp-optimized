@@ -194,6 +194,39 @@ export async function processSchemaFieldDefinitions(fieldDefinitions: Record<str
 }
 
 /**
+ * Processes an array of field definitions, maps external links, and strictly 
+ * converts them into a FieldsDefinitionDictionary preserving the exact array sequence.
+ * @param fieldArray An array of field definitions.
+ * @param contextId The TCM URI of the context item.
+ * @param axiosInstance An authenticated Axios instance.
+ * @returns A promise that resolves to the ordered FieldsDefinitionDictionary.
+ */
+export async function processAndOrderFieldDefinitions(fieldArray: any[], contextId: string, axiosInstance: AxiosInstance): Promise<Record<string, any>> {
+    if (!fieldArray || fieldArray.length === 0) {
+        return { "$type": "FieldsDefinitionDictionary" };
+    }
+
+    // Convert array to a temporary dictionary for processing
+    const tempRecord: Record<string, any> = {};
+    fieldArray.forEach((field: any) => {
+        if (field.Name) tempRecord[field.Name] = field;
+    });
+
+    // Process links and embedded fields using the existing dictionary logic
+    const processedFields = await processSchemaFieldDefinitions(tempRecord, contextId, axiosInstance);
+    
+    // Rebuild the final dictionary strictly using the order of the original array
+    const orderedFields: Record<string, any> = { "$type": "FieldsDefinitionDictionary" };
+    fieldArray.forEach((field: any) => {
+        if (field.Name && processedFields[field.Name]) {
+            orderedFields[field.Name] = processedFields[field.Name];
+        }
+    });
+    
+    return orderedFields;
+}
+
+/**
  * Recursively formats an object from the Agent (using 'type') to be API-compatible (using '$type').
  * 1. Renames 'type' to '$type'.
  * 2. Ensures '$type' is the first key in any object.
@@ -260,6 +293,17 @@ export function formatForAgent(obj: any): any {
 
     if (Array.isArray(obj)) {
         return obj.map(formatForAgent); // Recurse into arrays, returning a new array
+    }
+
+    // Intercept FieldsDefinitionDictionary and convert it to an array for the agent
+    if (obj['$type'] === 'FieldsDefinitionDictionary') {
+        const fieldArray: any[] = [];
+        for (const key in obj) {
+            if (key !== '$type' && key !== 'ExtensionXml') {
+                fieldArray.push(formatForAgent(obj[key]));
+            }
+        }
+        return fieldArray;
     }
 
     const newObj: { [key: string]: any } = {};

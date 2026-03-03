@@ -52,7 +52,8 @@ export const singleLineTextFieldSchema = z.object({
     Pattern: z.string().optional().describe("A regular expression pattern that the field value must match."),
     MinLength: z.number().int().optional().describe("The minimum number of characters allowed in the field."),
     MaxLength: z.number().int().optional().describe("The maximum number of characters allowed in the field."),
-    UseForAutoClassification: z.boolean().optional().describe("Whether this field is used as a source for auto-classification logic.")
+    UseForAutoClassification: z.boolean().optional().describe("Whether this field is used as a source for auto-classification logic."),
+    ExtensionXml: z.string().optional().describe("System property, ignored during updates.")
 });
 
 export const multiLineTextFieldSchema = z.object({
@@ -65,7 +66,8 @@ export const multiLineTextFieldSchema = z.object({
     IsLocalizable: z.boolean().optional().describe("Whether the field value can be changed in localized items."),
     IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing."),
     Height: z.number().int().default(2).describe("The height of the text area in the UI."),
-    UseForAutoClassification: z.boolean().optional().describe("Whether this field is used as a source for auto-classification logic.")
+    UseForAutoClassification: z.boolean().optional().describe("Whether this field is used as a source for auto-classification logic."),
+    ExtensionXml: z.string().optional().describe("System property, ignored during updates.")
 });
 
 export const xhtmlFieldSchema = z.object({
@@ -79,7 +81,8 @@ export const xhtmlFieldSchema = z.object({
     IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing."),
     Height: z.number().int().default(5).describe("The height of the rich text editor in the UI."),
     FormattingFeatures: formattingFeaturesSchema.optional().describe("Specifies the formatting options for the XHTML field."),
-    UseForAutoClassification: z.boolean().optional().describe("Whether this field is used as a source for auto-classification logic.")
+    UseForAutoClassification: z.boolean().optional().describe("Whether this field is used as a source for auto-classification logic."),
+    ExtensionXml: z.string().optional().describe("System property, ignored during updates.")
 });
 
 export const keywordFieldSchema = z.object({
@@ -93,7 +96,8 @@ export const keywordFieldSchema = z.object({
     IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing."),
     List: listDefinitionSchema.describe("The UI control for the Keyword list (e.g., Select, Radio). This property is MANDATORY for KeywordFieldDefinition."),
     Category: linkSchema.describe("A Link to the Category from which Keywords can be selected."),
-    AllowAutoClassification: z.boolean().optional().describe("Whether to allow automatic classification for this Keyword field.")
+    AllowAutoClassification: z.boolean().optional().describe("Whether to allow automatic classification for this Keyword field."),
+    ExtensionXml: z.string().optional().describe("System property, ignored during updates.")
 });
 
 export const numberFieldSchema = z.object({
@@ -106,12 +110,13 @@ export const numberFieldSchema = z.object({
     IsLocalizable: z.boolean().optional().describe("Whether the field value can be changed in localized items."),
     IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing."),
     List: listDefinitionSchema.optional(),
-    MinExclusive: z.number().optional().describe("The exclusive minimum value allowed."),
-    MaxExclusive: z.number().optional().describe("The exclusive maximum value allowed."),
-    MinInclusive: z.number().optional().describe("The inclusive minimum value allowed."),
-    MaxInclusive: z.number().optional().describe("The inclusive maximum value allowed."),
+    MinValue: z.number().optional().describe("The minimum value allowed."),
+    MaxValue: z.number().optional().describe("The maximum value allowed."),
+    IsMinValueExclusive: z.boolean().optional().describe("Set to true if the minimum value is exclusive."),
+    IsMaxValueExclusive: z.boolean().optional().describe("Set to true if the maximum value is exclusive."),
     TotalDigits: z.number().int().optional().describe("The maximum number of digits allowed."),
-    FractionDigits: z.number().int().optional().describe("The maximum number of digits allowed in the fractional part.")
+    FractionDigits: z.number().int().optional().describe("The maximum number of digits allowed in the fractional part."),
+    ExtensionXml: z.string().optional().describe("System property, ignored during updates.")
 });
 
 export const dateFieldSchema = z.object({
@@ -124,10 +129,11 @@ export const dateFieldSchema = z.object({
     IsLocalizable: z.boolean().optional().describe("Whether the field value can be changed in localized items."),
     IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing."),
     List: listDefinitionSchema.optional(),
-    MinExclusive: flexibleDateTimeSchema.optional().describe("The exclusive minimum date/time value allowed (ISO 8601 format)."),
-    MaxExclusive: flexibleDateTimeSchema.optional().describe("The exclusive maximum date/time value allowed (ISO 8601 format)."),
-    MinInclusive: flexibleDateTimeSchema.optional().describe("The inclusive minimum date/time value allowed (ISO 8601 format)."),
-    MaxInclusive: flexibleDateTimeSchema.optional().describe("The inclusive maximum date/time value allowed (ISO 8601 format).")
+    MinValue: flexibleDateTimeSchema.optional().describe("The minimum date/time value allowed (ISO 8601 format)."),
+    MaxValue: flexibleDateTimeSchema.optional().describe("The maximum date/time value allowed (ISO 8601 format)."),
+    IsMinValueExclusive: z.boolean().optional().describe("Set to true if the minimum value is exclusive."),
+    IsMaxValueExclusive: z.boolean().optional().describe("Set to true if the maximum value is exclusive."),
+    ExtensionXml: z.string().optional().describe("System property, ignored during updates.")
 });
 
 export const externalLinkFieldSchema = z.object({
@@ -138,7 +144,8 @@ export const externalLinkFieldSchema = z.object({
     MaxOccurs: z.number().int().optional().describe("The maximum number of times the field can occur (e.g., 1 for single-value, -1 for unlimited multi-value)."),
     IsIndexable: z.boolean().optional().describe("Whether the field value is included when performing a search."),
     IsLocalizable: z.boolean().optional().describe("Whether the field value can be changed in localized items."),
-    IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing.")
+    IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing."),
+    ExtensionXml: z.string().optional().describe("System property, ignored during updates.")
 });
 
 export const componentLinkFieldSchema = z.object({
@@ -150,7 +157,9 @@ export const componentLinkFieldSchema = z.object({
     IsIndexable: z.boolean().optional().describe("Whether the field value is included when performing a search."),
     IsLocalizable: z.boolean().optional().describe("Whether the field value can be changed in localized items."),
     IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing."),
-    AllowedTargetSchemas: z.array(linkSchema).optional().describe("Restricts which types of Components can be linked.")
+    AllowedTargetSchemas: z.array(linkSchema).optional().describe("Restricts which types of Components can be linked."),
+    AllowMultimediaLinks: z.boolean().optional().describe("Specifies if links to Multimedia Components are allowed."),
+    ExtensionXml: z.string().optional().describe("System property, ignored during updates.")
 });
 
 export const multimediaLinkFieldSchema = z.object({
@@ -162,7 +171,8 @@ export const multimediaLinkFieldSchema = z.object({
     IsIndexable: z.boolean().optional().describe("Whether the field value is included when performing a search."),
     IsLocalizable: z.boolean().optional().describe("Whether the field value can be changed in localized items."),
     IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing."),
-    AllowedTargetSchemas: z.array(linkSchema).optional().describe("Restricts which types of multimedia can be linked.")
+    AllowedTargetSchemas: z.array(linkSchema).optional().describe("Restricts which types of multimedia can be linked."),
+    ExtensionXml: z.string().optional().describe("System property, ignored during updates.")
 });
 
 export const embeddedSchemaFieldSchema = z.object({
@@ -175,7 +185,8 @@ export const embeddedSchemaFieldSchema = z.object({
     IsLocalizable: z.boolean().optional().describe("Whether the field value can be changed in localized items."),
     IsPublishable: z.boolean().optional().describe("Whether the field value is included when publishing."),
     EmbeddedSchema: linkSchema.describe("A Link object to the Schema to be embedded."),
-    EmbeddedFields: z.object({}).optional().describe("This property is handled automatically by the tool and does not need to be provided.")
+    EmbeddedFields: z.any().optional().describe("This property is handled automatically by the tool and does not need to be provided."),
+    ExtensionXml: z.string().optional().describe("System property, ignored during updates.")
 });
 
 // The master schema for any valid field definition, using a discriminated union

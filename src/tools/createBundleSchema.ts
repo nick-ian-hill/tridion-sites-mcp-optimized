@@ -3,7 +3,7 @@ import { createAuthenticatedAxios } from "../utils/axios.js";
 import { toLink } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldDefinitionSchema } from "../schemas/fieldValueSchema.js";
-import { processSchemaFieldDefinitions, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
+import { processAndOrderFieldDefinitions, formatForApi, formatForAgent } from "../utils/fieldReordering.js";
 
 export const createBundleSchema = {
     name: "createBundleSchema",
@@ -20,20 +20,20 @@ Example 1: Create a simple Bundle Schema.
         title: "Campaign Bundle Schema",
         locationId: "tcm:1-2-2",
         description: "A schema for campaign-related bundles.",
-        metadataFields: {
-            "campaignManager": {
+        metadataFields: [
+            {
                 "type": "SingleLineTextFieldDefinition",
                 "Name": "campaignManager",
                 "Description": "The manager of this campaign."
             }
-        }
+        ]
     });
     `,
     input: {
         title: z.string().nonempty().describe("The title for the new Bundle Schema."),
         locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new Schema will be created."),
         description: z.string().nonempty().describe("A mandatory description of the Schema."),
-        metadataFields: z.record(fieldDefinitionSchema).optional().describe("A dictionary of metadata field definitions for the schema."),
+        metadataFields: z.array(fieldDefinitionSchema).optional().describe("An array of metadata field definitions for the schema. The order of the array determines the field order."),
         bundleProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of a Process Definition to associate as the Bundle Process."),
         deleteBundleOnProcessFinished: z.boolean().optional().describe("If true, Bundles based on this Schema will be deleted when their workflow process finishes."),
         isIndexable: z.boolean().optional().describe("Specifies whether metadata values are indexed for searching."),
@@ -54,7 +54,7 @@ Example 1: Create a simple Bundle Schema.
         
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
-            const processedMetadataFields = metadataFields ? await processSchemaFieldDefinitions(metadataFields, locationId, authenticatedAxios) : undefined;
+            const processedMetadataFields = metadataFields ? await processAndOrderFieldDefinitions(metadataFields, locationId, authenticatedAxios) : undefined;
 
             const defaultModelResponse = await authenticatedAxios.get('/item/defaultModel/Schema', {
                 params: { containerId: locationId }
@@ -69,7 +69,7 @@ Example 1: Create a simple Bundle Schema.
             delete payload.RootElementName;
 
             if (description) payload.Description = description;
-            if (processedMetadataFields) payload.MetadataFields = { "$type": "FieldsDefinitionDictionary", ...processedMetadataFields };
+            if (processedMetadataFields) payload.MetadataFields = processedMetadataFields;
             if (bundleProcessId) payload.BundleProcess = toLink(bundleProcessId);
             if (typeof deleteBundleOnProcessFinished === 'boolean') payload.DeleteBundleOnProcessFinished = deleteBundleOnProcessFinished;
             if (typeof isIndexable === 'boolean') payload.IsIndexable = isIndexable;

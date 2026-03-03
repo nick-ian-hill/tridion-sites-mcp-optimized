@@ -5,7 +5,7 @@ import { generateSearchFolderXmlConfiguration } from "../utils/generateSearchFol
 import { toLink, toLinkArray } from "../utils/links.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { fieldDefinitionSchema, fieldValueSchema } from "../schemas/fieldValueSchema.js";
-import { convertLinksRecursively, processSchemaFieldDefinitions, reorderFieldsBySchema, formatForApi, invalidateSchemaCache } from "../utils/fieldReordering.js";
+import { convertLinksRecursively, processAndOrderFieldDefinitions, reorderFieldsBySchema, formatForApi, invalidateSchemaCache } from "../utils/fieldReordering.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
 import { regionDefinitionSchema } from "../schemas/regionDefinitionSchemas.js";
 import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
@@ -28,12 +28,14 @@ const updateItemPropertiesInputProperties = {
     itemsInBundle: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/)).optional().describe("An array of item URIs for the Bundle. Replaces existing items. (Applicable to Bundle)"),
     searchQuery: SearchQueryValidation.optional().describe("A new search query model for the Search Folder."),
     resultLimit: z.number().int().optional().describe("A new result limit for the Search Folder."),
-    fields: z.record(fieldDefinitionSchema).optional().describe(`For Schema updates only. Replaces the entire collection of content fields.
+    fields: z.array(fieldDefinitionSchema).optional().describe(`For Schema updates only. Replaces the entire collection of content fields.
     Use this for structural changes like adding, removing, or reordering fields.
+    To reorder fields, arrange the field definition objects in your desired sequence within the array.
     NOTE: Structural changes (fields) can ONLY be made in the 'Primary' Schema (where IsLocalized and IsShared are false). If the Schema is Shared or Localized, you must update its primary parent.
     For modifying properties of existing fields (e.g., making a field optional), the 'updateSchemaFieldProperties' tool is strongly recommended as it is safer and more efficient.`),
-    metadataFields: z.record(fieldDefinitionSchema).optional().describe(`For Schema updates only. Replaces the entire collection of metadata fields. The ONLY way to create a component with metadata fields is to use a component schema for which this property is defined.
+    metadataFields: z.array(fieldDefinitionSchema).optional().describe(`For Schema updates only. Replaces the entire collection of metadata fields. The ONLY way to create a component with metadata fields is to use a component schema for which this property is defined.
     Use this for structural changes like adding, removing, or reordering fields.
+    To reorder fields, arrange the field definition objects in your desired sequence within the array.
     NOTE: Structural changes (metadataFields) can ONLY be made in the 'Primary' Schema (where IsLocalized and IsShared are false). If the Schema is Shared or Localized, you must update its primary parent.
     For modifying properties of existing fields (e.g., changing a description), the 'updateSchemaFieldProperties' tool is strongly recommended as it is safer and more efficient.`),
     rootElementName: xmlNameSchema.optional().describe("For Component and Embedded Schema updates only. The name of the root element for the XML structure defined by the Schema (e.g., 'Article')."),
@@ -122,12 +124,12 @@ IMPORTANT:
 
 Example 1: Update a Schema to make a mandatory field optional.
 This example modifies the 'News Article' Schema (tcm:2-104-8) to include a new field, 'image'.
-Note that the entire 'fields' object must be provided, including the unchanged fields.
+Note that the entire 'fields' array must be provided, including the unchanged fields.
     const result = await tools.updateItemProperties({
         itemId: "tcm:2-104-8",
         itemType: "Schema",
-        fields: {
-            "headline": {
+        fields: [
+            {
                 "type": "SingleLineTextFieldDefinition",
                 "Name": "headline",
                 "Description": "Headline",
@@ -135,7 +137,7 @@ Note that the entire 'fields' object must be provided, including the unchanged f
                 "MaxOccurs": 1,
                 "IsLocalizable": true
             },
-            "image": {
+            {
                 "type": "MultimediaLinkFieldDefinition",
                 "Name": "image",
                 "Description": "Image",
@@ -149,7 +151,7 @@ Note that the entire 'fields' object must be provided, including the unchanged f
                     }
                 ]
             },
-            "articleBody": {
+            {
                 "type": "EmbeddedSchemaFieldDefinition",
                 "Name": "articleBody",
                 "Description": "Article Body",
@@ -161,7 +163,7 @@ Note that the entire 'fields' object must be provided, including the unchanged f
                     "IdRef": "tcm:2-102-8"
                 }
             }
-        }
+        ]
     });
 
 Example 2: Change the Metadata Schema of a Folder and provide the mandatory values for the new schema.
@@ -308,7 +310,6 @@ This example updates a basic Region Schema (e.g., 'tcm:5-3875-8') to make it non
             }
             const itemToUpdate = getItemResponse.data;
 
-            // --- BluePrint Validation for Schema Field Updates ---
             if (itemType === 'Schema' && (updates.fields || updates.metadataFields)) {
                 const bpInfo = itemToUpdate.BluePrintInfo;
                 if (bpInfo) {
@@ -367,12 +368,10 @@ This example updates a basic Region Schema (e.g., 'tcm:5-3875-8') to make it non
                     throw new Error(`Could not determine location for Schema ${itemId} to process field definitions.`);
                 }
                 if (updates.fields) {
-                    const processedFields = await processSchemaFieldDefinitions(updates.fields, schemaLocationId, authenticatedAxios);
-                    itemToUpdate.Fields = { "$type": "FieldsDefinitionDictionary", ...processedFields };
+                    itemToUpdate.Fields = await processAndOrderFieldDefinitions(updates.fields, schemaLocationId, authenticatedAxios);
                 }
                 if (updates.metadataFields) {
-                    const processedMetadataFields = await processSchemaFieldDefinitions(updates.metadataFields, schemaLocationId, authenticatedAxios);
-                    itemToUpdate.MetadataFields = { "$type": "FieldsDefinitionDictionary", ...processedMetadataFields };
+                    itemToUpdate.MetadataFields = await processAndOrderFieldDefinitions(updates.metadataFields, schemaLocationId, authenticatedAxios);
                 }
                 if (updates.allowedMultimediaTypes) {
                     itemToUpdate.AllowedMultimediaTypes = toLinkArray(updates.allowedMultimediaTypes);
