@@ -4,7 +4,9 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 export const undoCheckOutItem = {
     name: "undoCheckOutItem",
-    description: `Reverts (undoes) the check-out of a versioned item. Often referred to as revertItem. This action discards any changes made since the item was checked out and removes the lock, reverting it to its last major version.`,
+    description: `Reverts (undoes) the check-out of a versioned item. Often referred to as revertItem.
+    This action discards any changes made since the item was checked out and removes the lock, reverting it to its last major version.
+    If the item does not have a major version, it will be removed (i.e., deleted) from the system.`,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/).describe("The unique ID (TCM URI) of the checked-out versioned item. The version number should not be included."),
         removePermanentLock: z.boolean().optional().default(true).describe("Set to true to ensure the permanent lock is removed. This should typically be true."),

@@ -8,7 +8,7 @@ export const deleteItem = {
 IMPORTANT: The operation will fail if the item is used by other items in the system. To prevent this, it is highly recommended to first check for dependencies using the 'getDependencyGraph' tool with the direction set to 'UsedBy'.`,
     input: {
         itemId: z.string().regex(/^tcm:\d+-\d+(-\d+)?(-v\d+)?$/).describe("The unique ID (TCM URI) of the item to delete. To delete a specific version, include the version number in the URI (e.g., 'tcm:5-263-64-v3')."),
-        confirmed: z.boolean().optional().describe("Confirmation to proceed with the deletion."),
+        confirmed: z.boolean().optional().describe("CRITICAL SAFETY LOCK: DO NOT set this to true on your own. You MUST leave this undefined so the system can trigger the user-facing confirmation prompt. ONLY set this to true if: 1) The user has explicitly given you permission to delete this exact item, OR 2) You created this exact item yourself during the current conversation turn and need to roll back a mistake."),
     },
     execute: async ({ itemId, confirmed }: { itemId: string; confirmed?: boolean }, context: any) => {
         if (!confirmed) {

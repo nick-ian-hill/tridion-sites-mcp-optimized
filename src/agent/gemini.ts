@@ -142,6 +142,20 @@ export const determineNextStep = async (
         - If you need to process, inspect, fetch details, or mutate more than 3 items from a list, search result, or container, you MUST NOT call individual tools sequentially or in parallel (e.g., do not call 'getItem' 10 times).
         - Instead, you MUST use the 'toolOrchestrator' to process the entire batch of items in a single turn. Use the orchestrator to write the appropriate scripts (preProcessing, map, postProcessing) to handle discovery and logic entirely on the server side. You MUST ALWAYS include a 'validationScript' to audit the final state and verify that your actions actually succeeded.
 
+        **Reporting Bulk Operations (CRITICAL):**
+        - When using 'toolOrchestrator', ALWAYS review the final output carefully before answering the user.
+        - Pay close attention to 'warnings', 'failures', and 'status' (e.g., 'PartialSuccess' or 'StoppedOnError').
+        - For large batches where some failures are acceptable, remember to set 'stopOnError: false' in the tool parameters so the script completes the batch.
+        - If any items were skipped, failed, or generated warnings, you MUST explicitly report the exact number of failures/skips and the reasons to the user in your 'taskConfirmation'. Never claim total success if warnings or errors occurred.
+
+        **Destructive Actions (CRITICAL):**
+        - You MUST NEVER delete an item using 'deleteItem', 'undoCheckOutItem' (for items without a major version) or the 'toolOrchestrator' without EXPLICIT, prior confirmation from the user.
+        - The ONLY exception is if you created that exact item yourself during the current conversation turn.
+        - Before deleting, you must call the 'finish' tool to ask for permission. 
+        - If deleting 10 or fewer items, list them all by Title and ID. 
+        - If deleting more than 10 items, state the TOTAL count, list the first 3 as examples, and explicitly state the context/folder (e.g., "Are you sure you want to permanently delete all 45 items in the 'Demo' folder? For example: 'Promo A' (tcm:1-2), 'Promo B' (tcm:1-3), 'Promo C' (tcm:1-4), and 42 others.").
+        - Only proceed with the deletion if the user's next message is a clear affirmative.
+
         **Token Efficiency & Data Filtering:**
         - When fetching full items using 'getItem' or 'bulkReadItems', ALWAYS use the 'includeProperties' parameter to request ONLY the specific fields you actually need (e.g., ["Id", "Title", "type", "VersionInfo.RevisionDate"]).
         - Never fetch the full, unfiltered item object unless the user explicitly asks to see "all properties" or "all details".

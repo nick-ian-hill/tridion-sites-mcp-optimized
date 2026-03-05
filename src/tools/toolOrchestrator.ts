@@ -21,7 +21,6 @@ const TOTAL_SCRIPT_TIMEOUT_MS = 600000; // 10 minutes
  */
 const DISALLOWED_TOOLS: string[] = [
     "toolOrchestrator",
-    "deleteItem",
 ];
 
 /**
@@ -136,11 +135,11 @@ interface OrchestratorResult {
 const toolOrchestratorInputProperties = {
     itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?(-v\d+)?|ecl:[^:\s]+(-v\d+)?)$/))
         .optional()
-        .describe("An optional array of unique IDs (TCM URIs) to be processed. If provided, these are passed to the 'mapScript'. If a 'preProcessingScript' is also provided, the IDs returned by that script take precedence."),
+        .describe("An optional array of unique IDs (TCM URIs) to be processed. If you already found IDs in a previous 'Discovery' turn, pass them directly here for Turn 2 so you do not need to rewrite your preProcessingScript filtering logic."),
     preProcessingScript: z.string().optional()
         .describe("Phase 1 (Setup): An optional async function body that runs once before the loop. Must return `string[]` (item IDs) or `{ itemIds: string[], preProcessingResult?: any }`. Use this for dynamic discovery (e.g. `search`) or setup."),
     mapScript: z.string().optional()
-        .describe("Phase 2 (Map): An optional async function body that runs for EACH item. Mandatory if 'itemIds' are present. CRITICAL: If a required lookup fails or an update is impossible, you MUST `throw new Error('Reason')`. If you simply return `null` or `{}` it will be counted as a SUCCESS, leading to false reporting."),
+        .describe("Phase 2 (Map): An optional async function body that runs for EACH item. If omitted, the orchestrator will gracefully exit after Phase 1 and return the discovered items (perfect for Discovery/Turn 1). CRITICAL: If a required lookup fails or an update is impossible, you MUST `throw new Error('Reason')`."),
     postProcessingScript: z.string().optional()
         .describe("Phase 3 (Reduce): An optional async function body that runs once after all items are processed. Has access to `context.results`, `context.successes`, `context.warnings`, and `context.failures`. Returns the final output."),
     validationScript: z.string().optional()
@@ -168,11 +167,11 @@ const toolOrchestratorSchema = z.object(toolOrchestratorInputProperties)
 export const toolOrchestrator = {
     name: "toolOrchestrator",
     description: `Executes an advanced, multi-step JavaScript script to perform batch operations, aggregations, or complex workflows.
-    The tool supports up to four phases:
+    The tool supports up to four phases. (Note: If 'mapScript' is omitted, the orchestrator acts in "Discovery-Only" mode. It will execute Phase 1, return the discovered items, and skip Phases 2, 3, and 4):
     1.  Setup (preProcessingScript): Dynamically find items (e.g., via 'search') or prepare data.
-    2.  Map (mapScript): Process each item individually (e.g., 'updateContent', 'getItem').
-    3.  Reduce (postProcessingScript): Aggregate results or generate a summary.
-    4.  Validate (validationScript): Audit the final state to ensure success.
+    2.  Map (mapScript): Optional. Process each item individually (e.g., 'updateContent', 'getItem').
+    3.  Reduce (postProcessingScript): Optional. Aggregate results or generate a summary.
+    4.  Validate (validationScript): Mandatory ONLY IF 'mapScript' is used. Audit the final state to ensure success.
 
     --- PARTIAL SUCCESS & ERROR HANDLING ---
     This tool implements specific logic for handling failures:
@@ -187,9 +186,9 @@ export const toolOrchestrator = {
     - TO FLAG A FAILURE: You MUST \`throw new Error("Reason")\`.
     - TO FLAG A WARNING: Use \`console.warn("Reason")\`. This will add the item to the 'warnings' count.
 
-    2. "Verify, Don't Trust" (Strong Validation)
+2. "Verify, Don't Trust" (Strong Validation)
     Do not assume the operation worked just because "succeeded" count is > 0.
-    In your 'validationScript', you MUST perform a "Read-After-Write" check:
+    When you provide a 'mapScript', you MUST also provide a 'validationScript' to perform a "Read-After-Write" check:
     - Get a sample: \`const sample = context.utils.sample(context.successes, 1)\`.
     - Fetch the FRESH item: \`const item = await context.tools.getItem({ itemId: sample[0].result.id, ... })\`.
     - Assert the state: \`context.utils.assert(item.Content.someField === "expected", "Update failed")\`.
@@ -205,6 +204,18 @@ export const toolOrchestrator = {
     - DEFAULT: The tool will FAIL with a "409 Conflict" error.
     - OPTIONAL: Set 'forceSkipIfPresent: true' in the parameters. The tool will NOT fail; instead, it will skip the item and mark it as "Success (Skipped)".
     - Note: This skip is "blind". It does not check if the existing item matches your input.
+
+    5. Defensive Execution & Failure Tracking
+    CMS operations can fail for various business-logic reasons (e.g., items are locked, shared/unlocalized, in use by other items, or lacking mandatory fields). 
+    - You MUST write defensive 'mapScripts' that anticipate and handle these realities.
+    - Wrap risky operations (like 'updateContent', 'deleteItem', etc.) in 'try/catch' blocks or check their prerequisites if known.
+    - If an item cannot be processed, you MUST explicitly track it by using 'console.warn("Reason for skip")' or 'throw new Error("Reason for failure")'. 
+    - NEVER let a script silently swallow an error or return a generic success object if the underlying operation failed. All skipped or failed items must be tracked so you can accurately report the final tally to the user.
+
+    6. Destructive Actions (The Two-Turn Deletion Pattern)
+    You MUST NEVER execute a script that deletes items without explicit prior confirmation from the user. Because the orchestrator runs all scripts in a single execution, you must split bulk deletions into TWO distinct tool calls across two conversation turns:
+    - TURN 1 (Discovery & Consent): Call 'toolOrchestrator' using ONLY a 'preProcessingScript' to find the items. Return the list to the chat and ask the user for confirmation to delete. 
+    - TURN 2 (Execution): ONLY after the user explicitly replies with consent, make a SECOND call to 'toolOrchestrator'. Pass the confirmed IDs into 'itemIds', and use 'mapScript' to call 'context.tools.deleteItem'. You MUST explicitly pass 'confirmed: true' in your deleteItem tool call within the mapScript, otherwise the deletion will silently fail.
 
     --- SCRIPT CONTEXT DETAILS ---
 
@@ -598,6 +609,26 @@ export const toolOrchestrator = {
         \`
     });
     \`\`\`
+
+    **Example 9: Discovery-Only (The "Turn 1" Pattern)**
+    Finds items and returns them immediately without mapping or validating. Perfect for generating lists for user confirmation before a destructive action.
+    \`\`\`javascript
+    const result = await tools.toolOrchestrator({
+        preProcessingScript: \`
+            context.log('Phase 1: Finding items to delete...');
+            const items = await context.tools.getItemsInContainer({
+                containerId: "tcm:5-1505-2", itemTypes: ["Folder"]
+            });
+            // Return the array of IDs for Turn 2.
+            // For 'preProcessingResult', map the items to return ONLY the Id and Title 
+            // to save tokens, as that is all you need for the user confirmation message.
+            return {
+                itemIds: items.map(i => i.Id),
+                preProcessingResult: items.map(i => ({ Id: i.Id, Title: i.Title }))
+            };
+        \`
+    });
+    \`\`\`
 `,
 
     input: toolOrchestratorInputProperties,
@@ -800,10 +831,26 @@ export const toolOrchestrator = {
         }
 
         // --- Phase 2: Execution Logic (Map Phase) ---
-        let wasStoppedOnError = false;
+let wasStoppedOnError = false;
 
         if (!mapScript) {
-            return { content: [{ type: "text", text: JSON.stringify({ type: "Error", Message: "Items found but no mapScript provided." }) }] };
+            // GRACEFUL EXIT: If there's no mapScript, this was purely a discovery/setup call (e.g., Turn 1 of deletion).
+            logs.push("No mapScript provided. Ending execution after pre-processing and returning discovered items.");
+            
+            const discoveryResult: OrchestratorResult = {
+                status: "Completed",
+                summary: `Discovery completed: ${finalItemIds.length} items found.`,
+                processedItems: finalItemIds.map(id => ({ id, result: "Discovered" })),
+                output: preScriptContextData 
+            };
+
+            if (debug) {
+                (discoveryResult as any).executionLog = logs.join('\n');
+            }
+
+            return {
+                content: [{ type: "text", text: JSON.stringify(discoveryResult, null, 2) }],
+            };
         }
 
         log(`\nStarting map phase for ${finalItemIds.length} items...`);
