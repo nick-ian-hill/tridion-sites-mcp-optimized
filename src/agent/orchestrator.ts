@@ -1,7 +1,7 @@
 import http from 'node:http';
 import { filterResponseData } from '../utils/responseFiltering.js';
 import { Task, PlanStep, MessageEmitter, Content, AgentContext } from './types.js';
-import { determineNextStep, summarizeToolOutput, assessTaskProgress } from './gemini.js';
+import { determineNextStep, summarizeToolOutput, assessTaskProgress, summarizeFailureState } from './gemini.js';
 import { READ_ONLY_TOOLS } from './readOnlyTools.js';
 import { AxiosError } from 'axios';
 import { prepareHistoryForModel } from './historyUtils.js';
@@ -115,7 +115,7 @@ export class Orchestrator {
     };
 
     private async executePlan(task: Task, availableTools: any[], latestPrompt: string): Promise<string> {
-        let maxTurns = 20; // Starting limit
+        let maxTurns = 15; // Starting limit
         let hasExtended = false; // Tracks if we already gave the agent the +10 bonus
         let consecutiveFailures = 0;
         let useAdvancedModel = false;
@@ -170,7 +170,7 @@ export class Orchestrator {
                             parts: [{ functionResponse: { name: 'finish', response: { status: 'stuck_on_errors' } } }]
                         });
 
-                        return "I'm having trouble completing this task even with my advanced reasoning model. I've hit 4 consecutive errors. Could you clarify the requirement or provide some guidance?";
+                        return await summarizeFailureState(preparedHistory, latestPrompt);
                     }
                 } else {
                     consecutiveFailures = 0;
@@ -220,7 +220,7 @@ export class Orchestrator {
                 return "Task completed successfully.";
             }
 
-            // --- OVERSEER PROGRESS CHECK ---
+// --- OVERSEER PROGRESS CHECK ---
             // If we have reached the end of our current turn limit
             if (i === maxTurns - 1) {
                 this.emit('progress', { isLog: true, message: `Reached turn limit (${maxTurns}). Evaluating progress...` });
@@ -245,7 +245,7 @@ export class Orchestrator {
                     parts: [{ functionResponse: { name: 'finish', response: { status: 'paused' } } }]
                 });
 
-                return `I am taking longer than expected, but I want to check in before proceeding further.\n\n**Status Update:** ${assessment.progressSummary}\n\nWould you like me to continue or change my approach?`;
+                return assessment.userMessage; 
             }
         }
         return "Task paused.";

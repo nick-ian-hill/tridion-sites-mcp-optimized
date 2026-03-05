@@ -140,11 +140,16 @@ export const determineNextStep = async (
 
         **Bulk Operations & Orchestration (CRITICAL):**
         - If you need to process, inspect, fetch details, or mutate more than 3 items from a list, search result, or container, you MUST NOT call individual tools sequentially or in parallel (e.g., do not call 'getItem' 10 times).
-        - Instead, you MUST use the 'toolOrchestrator' to process the entire batch of items in a single turn. Use the orchestrator to write a mapScript that handles the item logic on the server side.
+        - Instead, you MUST use the 'toolOrchestrator' to process the entire batch of items in a single turn. Use the orchestrator to write the appropriate scripts (preProcessing, map, postProcessing) to handle discovery and logic entirely on the server side. You MUST ALWAYS include a 'validationScript' to audit the final state and verify that your actions actually succeeded.
 
         **Token Efficiency & Data Filtering:**
         - When fetching full items using 'getItem' or 'bulkReadItems', ALWAYS use the 'includeProperties' parameter to request ONLY the specific fields you actually need (e.g., ["Id", "Title", "type", "VersionInfo.RevisionDate"]).
         - Never fetch the full, unfiltered item object unless the user explicitly asks to see "all properties" or "all details".
+
+        **Handling Ambiguous or Playful Prompts:**
+        - If the user's request is completely nonsensical, highly ambiguous, or playfully out-of-domain (e.g., "Mango the orange..."), do NOT attempt to call CMS tools.
+        - Instead, immediately call the 'finish' tool.
+        - In the 'taskConfirmation', you may provide a brief, matching humorous or polite response, but you MUST immediately pivot and ask the user to clarify what they want to achieve in the CMS.
 
         **Reasoning Steps:**
         1. Analyze the new request and the conversation history.
@@ -280,23 +285,23 @@ export const summarizeToolOutput = async (toolOutput: any, userPrompt: string): 
 
 /**
  * Uses the advanced Pro model to evaluate the agent's history and determine 
- * if it is making forward progress, returning a user-friendly summary.
+ * if it is making forward progress, generating a direct user message if a pause is needed.
  */
 export const assessTaskProgress = async (
     history: Content[],
     originalPrompt: string
-): Promise<{ isMakingProgress: boolean, progressSummary: string }> => {
+): Promise<{ isMakingProgress: boolean, userMessage: string }> => {
     const prompt = `
-    You are a Senior AI Overseer evaluating the progress of an autonomous CMS Agent.
+    You are the autonomous CMS Agent evaluating your own progress.
     The user's original goal was: "${originalPrompt}"
     
-    Review the conversation history between the Agent and the system tools.
-    Your task is to determine if the Agent is making logical, forward progress toward the goal, or if it is stuck in a loop, repeating errors, or lost.
+    Review your conversation history with the system tools.
+    Determine if you are making logical, forward progress toward the goal, or if you are stuck in a loop, taking too long, or lost.
     
     Return a JSON object with EXACTLY this structure:
     {
-        "isMakingProgress": boolean, // true if the agent is actively making good progress and nearing completion. false if it is stuck, looping, or confused.
-        "progressSummary": string // A 2-3 sentence summary intended FOR THE USER. Explain what the Agent has figured out so far, and what it is currently trying to do. Keep it user-friendly.
+        "isMakingProgress": boolean, // true if you are actively making good progress and nearing completion. false if you are stuck, looping, or taking an unusually long time.
+        "userMessage": string // Write the EXACT, complete message to show the user if you need to pause. Polite, conversational, and professional. State that the task is taking a while, summarize what you've accomplished so far, and ask the user how they would like to proceed.
     }
     `;
 
@@ -316,7 +321,46 @@ export const assessTaskProgress = async (
         console.error("[Overseer] Failed to assess progress:", error);
         return {
             isMakingProgress: false,
-            progressSummary: "I have been executing multiple steps, but I encountered an issue assessing my own overall progress."
+            userMessage: "I am taking longer than expected to complete this task, but I wanted to check in before proceeding further. Would you like me to continue or change my approach?"
         };
+    }
+};
+
+/**
+ * Uses the advanced Pro model to evaluate a sequence of errors and write a complete, user-friendly message explaining why the agent is stuck.
+ */
+export const summarizeFailureState = async (
+    history: Content[],
+    originalPrompt: string
+): Promise<string> => {
+    const prompt = `
+    You are the autonomous CMS Agent speaking directly to the user.
+    The user's original goal was: "${originalPrompt}"
+    
+    Review the conversation history, paying special attention to the recent errors returned by the system tools.
+    You have hit multiple consecutive errors and are currently stuck.
+    
+    Your task is to write the EXACT final message that will be shown to the user. 
+    In your message:
+    1. Briefly and politely explain what you were trying to do.
+    2. Explain the specific nature of the errors preventing you from continuing (e.g., "I tried to create the folder, but a folder with that name already exists").
+    3. Ask the user for clarification, guidance, or permission to try a different approach.
+    
+    Keep the tone helpful, professional, and conversational. Do not wrap your response in JSON; just provide the raw text message.
+    `;
+
+    try {
+        const response = await getGenAI().models.generateContent({
+            model: "gemini-3.1-pro-preview",
+            contents: [...history, { role: 'user', parts: [{ text: prompt }] }],
+            config: {
+                thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM }
+            }
+        });
+
+        return (response.text || "").trim();
+    } catch (error) {
+        console.error("[Overseer] Failed to summarize failure state:", error);
+        return "I encountered several repeated errors while trying to complete this task, and I'm currently stuck. Could you clarify the requirement or provide some guidance on how to proceed?";
     }
 };
