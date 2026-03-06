@@ -56,8 +56,6 @@ export const search = {
 
             // --- Interception Logic: Search inside Category ---
             if (searchQuery && searchQuery.SearchIn && searchQuery.SearchIn.endsWith("-512")) {
-                console.log(`[Search] Intercepting search request for Category: ${searchQuery.SearchIn}`);
-                
                 // If ItemTypes are specified but do NOT include 'Keyword', return empty immediately
                 // because Categories only contain Keywords.
                 if (searchQuery.ItemTypes && searchQuery.ItemTypes.length > 0 && !searchQuery.ItemTypes.includes("Keyword")) {
@@ -212,7 +210,7 @@ export const search = {
                     details: "IdAndTitle" 
                 });
                 const formattedFinalData = formatForAgent(finalData);
-                console.log(JSON.stringify(formattedFinalData, null, 2));
+
                 return {
                     content: [
                         {

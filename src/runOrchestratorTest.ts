@@ -162,7 +162,7 @@ async function runTest() {
         },
         preProcessingScript: `
             context.log('Stage 1: Reading Excel tags...');
-            const excelData = await context.tools.readExcelFileFromMultimediaComponent({ itemId: context.parameters.excelItemId });
+            const excelData = await context.tools.readMultimediaComponent({ itemId: context.parameters.excelItemId });
             const workbook = typeof excelData === 'string' ? JSON.parse(excelData) : excelData;
             const articleRows = workbook.WorkbookData['Articles'] || [];
             
@@ -340,7 +340,7 @@ async function runTest() {
         },
         preProcessingScript: `
             context.log('Stage 3: Preparing Component Data...');
-            const excelData = await context.tools.readExcelFileFromMultimediaComponent({ itemId: context.parameters.excelItemId });
+            const excelData = await context.tools.readMultimediaComponent({ itemId: context.parameters.excelItemId });
             const workbook = typeof excelData === 'string' ? JSON.parse(excelData) : excelData;
             
             const articles = workbook.WorkbookData['Articles'] || [];
@@ -430,7 +430,7 @@ async function runTest() {
         },
         preProcessingScript: `
             context.log('Stage 4: Preparing Page Data...');
-            const excelData = await context.tools.readExcelFileFromMultimediaComponent({ itemId: context.parameters.excelItemId });
+            const excelData = await context.tools.readMultimediaComponent({ itemId: context.parameters.excelItemId });
             const workbook = typeof excelData === 'string' ? JSON.parse(excelData) : excelData;
             const pageRows = workbook.WorkbookData['Page Map'] || [];
 
