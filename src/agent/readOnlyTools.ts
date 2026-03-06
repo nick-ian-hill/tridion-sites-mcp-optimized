@@ -29,6 +29,7 @@ export const READ_ONLY_TOOLS = [
     'readTextFromPowerPointMultimediaComponent',
     'readPdfFileFromMultimediaComponent',
     'readImageDetailsFromMultimediaComponent',
+    'readUploadedFile',
     'getBluePrintHierarchy',
     'getPublications',
     'getPublicationTypes',

@@ -1,8 +1,7 @@
 import { z } from "zod";
-import ExcelJS from "exceljs";
-import { Buffer } from 'buffer';
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
+import { parseExcelBuffer } from "../utils/fileProcessing.js";
 
 const readExcelFileFromMultimediaComponentInputProperties = {
     itemId: z.string().regex(/^tcm:\d+-\d+$/).describe("The TCM URI of the multimedia component containing the Excel (.xlsx) file (e.g., 'tcm:5-124'). Use 'search' or 'getItemsInContainer' to find it."),
@@ -52,6 +51,7 @@ export const readExcelFileFromMultimediaComponent = {
             excelRows: excelRows // Pass the actual array
         }
     };
+    Note: This tool reads files stored as Multimedia Components. If you need to read or analyse a file directly attached/uploaded by the user, use 'readUploadedFile' instead.
     `,
     input: readExcelFileFromMultimediaComponentInputProperties,
     async execute(input: z.infer<typeof readExcelFileFromMultimediaComponentSchema>, context: any) {
@@ -92,38 +92,7 @@ export const readExcelFileFromMultimediaComponent = {
             console.log(`Successfully downloaded ${excelFileBuffer.length} bytes.`);
 
             console.log("Parsing .xlsx content into JSON using exceljs...");
-            const workbook = new ExcelJS.Workbook();
-
-            await workbook.xlsx.load(excelFileBuffer as unknown as ExcelJS.Buffer);
-            
-            const workbookData: { [key: string]: any[] } = {};
-
-            workbook.eachSheet((worksheet, _sheetId) => {
-                const sheetData: any[] = [];
-                const headerRow = worksheet.getRow(1);
-                if (!headerRow.values || headerRow.values.length === 0) return;
-
-                const headers: string[] = [];
-                headerRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-                   headers[colNumber] = cell.value ? cell.value.toString() : `column_${colNumber}`;
-                });
-
-                worksheet.eachRow((row, rowNumber) => {
-                    if (rowNumber > 1) {
-                        const rowObject: { [key: string]: any } = {};
-                        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-                            const header = headers[colNumber];
-                            if (header) {
-                                rowObject[header] = cell.value;
-                            }
-                        });
-                        if (Object.keys(rowObject).length > 0) {
-                            sheetData.push(rowObject);
-                        }
-                    }
-                });
-                workbookData[worksheet.name] = sheetData;
-            });
+            const workbookData = await parseExcelBuffer(excelFileBuffer);
 
             const responseData = {
                 type: "ExcelData",

@@ -5,27 +5,32 @@ import { handleAxiosError } from "../utils/errorUtils.js";
 import { GoogleGenAI } from "@google/genai";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { formatForApi } from "../utils/fieldReordering.js";
+import { getImageMimeType } from "../utils/fileProcessing.js";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 
 const createMultimediaComponentFromPromptInputProperties = {
-    prompt: z.string().describe("Instructions to guide the image generation model. Include both the subject description (what to draw) and explicit commands on how to use any provided 'contextItemIds' (e.g., 'Use the first image for the character's pose and the second for the color palette.' or 'Use a similar style to the context images.')."),
+    prompt: z.string().describe("Instructions to guide the image generation model. Include both the subject description (what to draw) and explicit commands on how to use any provided 'contextItemIds' or 'contextAttachments' (e.g., 'Use the first image for the character's pose and the second for the color palette.' or 'Use a similar style to the context images.')."),
     title: z.string().describe("The title for the new multimedia component."),
     fileName: z.string().describe("The desired file name with a valid image extension (e.g., 'banner-v1.jpg' or 'icon.png'). Ensure the extension matches the expected output format."),
     locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new component will be created. Use 'search' or 'getItemsInContainer' to find a suitable Folder."),
     schemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the Multimedia Schema to use. If not provided, a default will be determined automatically. Use 'getSchemaLinks' with purpose 'Multimedia' to find available schemas."),
     metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields."),
     aspectRatio: z.enum(['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9']).optional().describe("The desired aspect ratio for the generated image. Defaults to 1:1 square if not specified."),
-    contextItemIds: z.array(z.string().regex(/^tcm:\d+-\d+$/)).optional().describe("An optional array of TCM URIs for other multimedia components to use as context (e.g., for style reference, composition, or combining elements).")
+    contextItemIds: z.array(z.string().regex(/^tcm:\d+-\d+$/)).optional().describe("An optional array of TCM URIs for existing CMS multimedia components to use as context (e.g., for style reference, composition, or combining elements)."),
+    contextAttachments: z.array(z.object({
+        attachmentId: z.string().describe("The attachment ID of the uploaded file provided in the context."),
+        fileName: z.string().describe("The original file name including extension (e.g., 'sketch.png')."),
+    })).optional().describe("An optional array of user-attached image files to use as context. Use these instead of 'contextItemIds' when the reference images were uploaded by the user as attachments rather than stored as CMS multimedia components.")
 };
 
 const createMultimediaComponentFromPromptSchema = z.object(createMultimediaComponentFromPromptInputProperties);
 
 export const createMultimediaComponentFromPrompt = {
     name: "createMultimediaComponentFromPrompt",
-    description: `Generates an image from a text prompt using the Gemini API and creates a new multimedia component from it. Can optionally use existing multimedia components as context/style references. Be sure to explain in the prompt how any reference images should be used.
+    description: `Generates an image from a text prompt using the Gemini API and creates a new multimedia component from it. Can optionally use existing CMS multimedia components ('contextItemIds') or user-attached images ('contextAttachments') as context for style references, composition, or combining elements. Be sure to explain in the prompt how any reference images should be used. This is one of four ways to create a multimedia component, with the others being 'createMultimediaComponentFromBase64', 'createMultimediaComponentFromUrl', and 'createMultimediaComponentFromAttachment' (for user-attached files).
 
-Example: Style Transfer
+Example: Style Transfer using a CMS image
 // Use an existing "Brand Style" image (tcm:5-88) as a reference to generate a new banner image.
 const result = await tools.createMultimediaComponentFromPrompt({
     prompt: "A modern, collaborative workspace with a diverse team brainstorming around a whiteboard. High energy, professional atmosphere. Use the provided image as a reference.",
@@ -34,6 +39,17 @@ const result = await tools.createMultimediaComponentFromPrompt({
     locationId: "tcm:5-10-2",
     aspectRatio: "16:9",
     contextItemIds: ["tcm:5-88"]
+});
+
+Example: Style Transfer using a user-attached image
+// Use a sketch the user has attached as a style reference.
+const result = await tools.createMultimediaComponentFromPrompt({
+    prompt: "Generate a polished product banner in the same style and colour palette as the attached sketch.",
+    title: "Product Banner",
+    fileName: "product-banner.jpg",
+    locationId: "tcm:5-10-2",
+    aspectRatio: "16:9",
+    contextAttachments: [{ attachmentId: "abc-123", fileName: "sketch.png" }]
 });
 
 Expected JSON Output:
@@ -52,7 +68,7 @@ Expected JSON Output:
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
         const userSessionId = match ? match[1] : null;
 
-        const { prompt, title, fileName, locationId, schemaId, metadata, aspectRatio, contextItemIds } = input;
+        const { prompt, title, fileName, locationId, schemaId, metadata, aspectRatio, contextItemIds, contextAttachments } = input;
 
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
@@ -96,6 +112,36 @@ Expected JSON Output:
                         });
                     } else {
                         console.warn(`Failed to download binary for ${contextId}. Status: ${downloadResponse.status}`);
+                    }
+                }
+            }
+
+            // If context attachments (user-uploaded temp files) are provided, download and add them
+            if (contextAttachments && contextAttachments.length > 0) {
+                console.log(`Fetching ${contextAttachments.length} context attachment(s)...`);
+
+                for (const attachment of contextAttachments) {
+                    console.log(`Downloading attachment '${attachment.fileName}' (attachmentId: ${attachment.attachmentId})...`);
+                    const downloadResponse = await authenticatedAxios.get('/binary/download', {
+                        params: { tempFileId: attachment.attachmentId, filename: attachment.fileName },
+                        responseType: 'arraybuffer',
+                    });
+
+                    if (downloadResponse.status === 200) {
+                        const buffer = Buffer.from(downloadResponse.data);
+                        const headerMime = downloadResponse.headers['content-type']?.split(';')[0].trim();
+                        const mimeType = (headerMime && headerMime !== 'application/octet-stream')
+                            ? headerMime
+                            : (getImageMimeType(attachment.fileName) ?? 'image/jpeg');
+
+                        contents.push({
+                            inlineData: {
+                                mimeType,
+                                data: buffer.toString('base64'),
+                            },
+                        });
+                    } else {
+                        console.warn(`Failed to download attachment '${attachment.fileName}'. Status: ${downloadResponse.status}`);
                     }
                 }
             }

@@ -1,4 +1,12 @@
 /**
+ * Represents a file that was uploaded by the user via the attachment feature.
+ */
+export interface Attachment {
+    tempFileId: string;
+    fileName: string;
+}
+
+/**
  * Context information from the UI about the user's current view.
  */
 export interface AgentContext {

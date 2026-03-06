@@ -21,7 +21,7 @@ export function handleStartChat(
     req.on('end', () => {
         try {
             const parsedBody = JSON.parse(body || '{}');
-            const { prompt, context, history = [] } = parsedBody;
+            const { prompt, context, history = [], attachments } = parsedBody;
 
             const taskId = crypto.randomUUID();
             createTask(taskId);
@@ -35,7 +35,7 @@ export function handleStartChat(
 
             // Run the orchestrator process in the background. Do not `await` it.
             // It will run to completion and add events to the task store.
-            orchestrator.process(prompt, context, history)
+            orchestrator.process(prompt, context, history, attachments)
                 .catch(err => {
                     console.error(`[Agent] Background task ${taskId} failed:`, err);
                     // Add a final error event to the store if the process crashes.

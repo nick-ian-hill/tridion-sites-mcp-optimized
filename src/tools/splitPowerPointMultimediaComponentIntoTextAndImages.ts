@@ -4,29 +4,7 @@ import { Parser as XmlParser } from "xml2js";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { createMultimediaComponentFromBase64 } from "./createMultimediaComponentFromBase64.js";
-
-const extractTextFromXmlObject = (obj: any): string[] => {
-    let texts: string[] = [];
-    if (Array.isArray(obj)) {
-        for (const item of obj) {
-            texts = texts.concat(extractTextFromXmlObject(item));
-        }
-    } else if (typeof obj === 'object' && obj !== null) {
-        for (const key in obj) {
-            if (key === 'a:t') {
-                const val = obj[key];
-                if (typeof val === 'string' && val.trim() !== '') {
-                    texts.push(val);
-                } else if (Array.isArray(val)) {
-                    texts.push(...val.filter((t: any) => typeof t === 'string' && t.trim() !== ''));
-                }
-            } else {
-                texts = texts.concat(extractTextFromXmlObject(obj[key]));
-            }
-        }
-    }
-    return texts;
-};
+import { extractTextFromXmlObject } from "../utils/fileProcessing.js";
 
 const findAttributeValues = (obj: any, attributeName: string): string[] => {
     let values: string[] = [];
@@ -53,7 +31,15 @@ const findAttributeValues = (obj: any, attributeName: string): string[] => {
 
 
 const splitPowerPointMultimediaComponentIntoTextAndImagesInputProperties = {
-    itemId: z.string().regex(/^tcm:\d+-\d+$/).describe("The TCM URI of the source PowerPoint multimedia component. Use 'search' or 'getItemsInContainer' to find it."),
+    itemId: z.string().regex(/^tcm:\d+-\d+$/).optional().describe(
+        "The TCM URI of the source PowerPoint multimedia component in the CMS. Provide either this or 'attachmentId'+'fileName' for a user attachment.",
+    ),
+    attachmentId: z.string().optional().describe(
+        "The attachment ID of the uploaded file provided in the context. Provide either this or 'itemId'.",
+    ),
+    fileName: z.string().optional().describe(
+        "Required when using 'attachmentId'. The original file name including extension (e.g., 'presentation.pptx').",
+    ),
     locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new image components will be created."),
 };
 
@@ -69,7 +55,7 @@ interface Relationship {
 
 export const splitPowerPointMultimediaComponentIntoTextAndImages = {
     name: "splitPowerPointMultimediaComponentIntoTextAndImages",
-    description: "Splits a PowerPoint multimedia component into its constituent parts. It extracts all text and creates new multimedia components for each image, returning a consolidated text summary of the results with image-to-slide mappings.",
+    description: "Splits a PowerPoint file into its constituent parts. It extracts all text and creates new multimedia components for each image, returning a consolidated text summary with image-to-slide mappings. Accepts either a CMS multimedia component ('itemId') or a user attachment ('attachmentId'+'fileName').",
     input: splitPowerPointMultimediaComponentIntoTextAndImagesInputProperties,
     async execute(input: z.infer<typeof splitPowerPointMultimediaComponentIntoTextAndImagesSchema>, context: any) {
         const req = context?.request;
@@ -77,16 +63,29 @@ export const splitPowerPointMultimediaComponentIntoTextAndImages = {
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
         const userSessionId = match ? match[1] : null;
 
-        const { itemId, locationId } = input;
-        const restItemId = itemId.replace(':', '_');
+        const { itemId, attachmentId, fileName, locationId } = input;
+
+        if (!itemId && !(attachmentId && fileName)) {
+            throw new Error("Provide either 'itemId' for a CMS multimedia component or both 'attachmentId' and 'fileName' for a user attachment.");
+        }
 
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
-            const downloadResponse = await authenticatedAxios.get(`/items/${restItemId}/binary/download`, {
-                responseType: 'arraybuffer'
-            });
-            if (downloadResponse.status !== 200) return handleUnexpectedResponse(downloadResponse);
-            const pptxFileBuffer = Buffer.from(downloadResponse.data);
+
+            let pptxFileBuffer: Buffer;
+            if (itemId) {
+                const restItemId = itemId.replace(':', '_');
+                const downloadResponse = await authenticatedAxios.get(`/items/${restItemId}/binary/download`, { responseType: 'arraybuffer' });
+                if (downloadResponse.status !== 200) return handleUnexpectedResponse(downloadResponse);
+                pptxFileBuffer = Buffer.from(downloadResponse.data);
+            } else {
+                const downloadResponse = await authenticatedAxios.get('/binary/download', {
+                    params: { tempFileId: attachmentId, filename: fileName },
+                    responseType: 'arraybuffer',
+                });
+                if (downloadResponse.status !== 200) return handleUnexpectedResponse(downloadResponse);
+                pptxFileBuffer = Buffer.from(downloadResponse.data);
+            }
             
             const zip = await JSZip.loadAsync(pptxFileBuffer);
             const xmlParser = new XmlParser({ explicitArray: false, attrkey: '$' });
@@ -197,7 +196,7 @@ export const splitPowerPointMultimediaComponentIntoTextAndImages = {
 
             const responseData = {
                 type: "SplitPowerPointResult",
-                Id: itemId,
+                Id: itemId ?? fileName,
                 CreatedImageComponents: createdImageComponents,
                 Slides: slidesSummary
             };
@@ -210,7 +209,7 @@ export const splitPowerPointMultimediaComponentIntoTextAndImages = {
             };
 
         } catch (error) {
-            return handleAxiosError(error, `Failed to split PowerPoint component ${itemId}`);
+            return handleAxiosError(error, `Failed to split PowerPoint '${itemId ?? fileName}'`);
         }
     }
 };

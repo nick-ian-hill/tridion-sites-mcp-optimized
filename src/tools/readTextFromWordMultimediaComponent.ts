@@ -1,7 +1,7 @@
 import { z } from "zod";
-import mammoth from "mammoth";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
+import { parseWordBuffer } from "../utils/fileProcessing.js";
 
 const readTextFromWordMultimediaComponentInputProperties = {
     itemId: z.string().regex(/^tcm:\d+-\d+$/).describe("The TCM URI of the multimedia component containing the Word (.docx) file (e.g., 'tcm:5-123'). Use 'search' or 'getItemsInContainer' to find it."),
@@ -11,7 +11,7 @@ const readTextFromWordMultimediaComponentSchema = z.object(readTextFromWordMulti
 
 export const readTextFromWordMultimediaComponent = {
     name: "readTextFromWordMultimediaComponent",
-    description: "Reads the text content of a Word file (.docx) from a multimedia component and returns it as an HTML string, excluding any images. This HTML can be used to populate an XHTML field when creating or updating a Component with 'createComponent' or 'updateContent' tools. For a more advanced function that also extracts images, use 'splitWordMultimediaComponentIntoTextAndImages'.",
+    description: "Reads the text content of a Word file (.docx) from a multimedia component and returns it as an HTML string, excluding any images. This HTML can be used to populate an XHTML field when creating or updating a Component with 'createComponent' or 'updateContent' tools. For a more advanced function that also extracts images, use 'splitWordMultimediaComponentIntoTextAndImages'. Note: If you need to read or analyse a file directly attached/uploaded by the user, use 'readUploadedFile' instead.",
     input: readTextFromWordMultimediaComponentInputProperties,
     async execute(input: z.infer<typeof readTextFromWordMultimediaComponentSchema>, context: any) {
         const req = context?.request;
@@ -40,13 +40,7 @@ export const readTextFromWordMultimediaComponent = {
             
             const wordFileBuffer = Buffer.from(downloadResponse.data);
 
-            const mammothOptions = {
-                convertImage: async function(_image: any) {
-                    return [];
-                }
-            } as any; 
-
-            const { value: htmlContent } = await mammoth.convertToHtml({ buffer: wordFileBuffer }, mammothOptions);
+            const htmlContent = await parseWordBuffer(wordFileBuffer);
 
             const responseData = {
                 type: "HtmlContent",

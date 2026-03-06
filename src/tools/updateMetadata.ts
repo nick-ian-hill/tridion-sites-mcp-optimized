@@ -33,6 +33,9 @@ Update Modes:
 
 Important Constraints:
 - This tool only updates the metadata fields. It cannot update the item's Title or Content fields.
+- **BluePrint Restrictions**: You can only update an item if it is the primary (owning) item or a 'Localized' copy. You **cannot** update a 'Shared' (inherited) copy directly. To modify a Shared item, it must first be localized, or the primary item must be updated in its owning parent publication.
+- **Non-Localizable Fields**: When updating a Localized copy, you **cannot** modify fields where their Schema definition sets 'IsLocalizable' to 'false'. To change these specific fields, you must update the primary (owning) item instead.
+- **Lock State**: The item must not be locked or checked out by another user. If it is, the update will be rejected by the server.
 
 To update content fields for a component, use the 'updateContent' tool instead.
 To update other properties, use the 'updateItemProperties', 'updatePage', or 'updatePublication' tool depending on the item type.

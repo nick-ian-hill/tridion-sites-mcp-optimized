@@ -1,9 +1,7 @@
 import { z } from "zod";
-import { GoogleGenAI } from "@google/genai";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
-
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
+import { getImageMimeType, analyzeImageBuffer } from "../utils/fileProcessing.js";
 
 const readImageDetailsFromMultimediaComponentInputProperties = {
     itemId: z.string().regex(/^tcm:\d+-\d+$/).describe("The TCM URI of the multimedia component containing the image file (e.g., 'tcm:5-123'). Use 'search' or 'getItemsInContainer' to find it."),
@@ -12,19 +10,13 @@ const readImageDetailsFromMultimediaComponentInputProperties = {
 
 const readImageDetailsFromMultimediaComponentSchema = z.object(readImageDetailsFromMultimediaComponentInputProperties);
 
-const getMimeType = (filename: string): string | null => {
-    const lowercased = filename.toLowerCase();
-    if (lowercased.endsWith('.png')) return 'image/png';
-    if (lowercased.endsWith('.jpg') || lowercased.endsWith('.jpeg')) return 'image/jpeg';
-    if (lowercased.endsWith('.webp')) return 'image/webp';
-    if (lowercased.endsWith('.gif')) return 'image/gif';
-    return null;
-};
+const getMimeType = getImageMimeType;
 
 export const readImageDetailsFromMultimediaComponent = {
     name: "readImageDetailsFromMultimediaComponent",
     description: `Analyzes an image from a multimedia component using a generative AI vision model based on a provided text prompt. 
-    It can be used to describe images, extract text (OCR), identify objects, generate alt text, and answer questions about the visual content.`,
+    It can be used to describe images, extract text (OCR), identify objects, generate alt text, and answer questions about the visual content.
+    Note: If you need to read or analyse a file directly attached/uploaded by the user, use 'readUploadedFile' instead.`,
     input: readImageDetailsFromMultimediaComponentInputProperties,
     async execute(input: z.infer<typeof readImageDetailsFromMultimediaComponentSchema>, context: any) {
         const req = context?.request;
@@ -34,10 +26,6 @@ export const readImageDetailsFromMultimediaComponent = {
 
         const { itemId, prompt } = input;
         const restItemId = itemId.replace(':', '_');
-
-        if (!GEMINI_API_KEY) {
-            return handleAxiosError(new Error("GEMINI_API_KEY environment variable is not set."), "Configuration Error");
-        }
 
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
@@ -75,28 +63,10 @@ export const readImageDetailsFromMultimediaComponent = {
             }
             
             const imageBuffer = Buffer.from(downloadResponse.data);
-            const base64Content = imageBuffer.toString('base64');
             console.log(`Successfully downloaded and encoded ${imageBuffer.length} bytes.`);
             
-            console.log(`Sending prompt and image to Gemini 2.5 Flash Image model...`);
-            const genAI = new GoogleGenAI({apiKey: GEMINI_API_KEY});
-
-            const imagePart = {
-                inlineData: {
-                    data: base64Content,
-                    mimeType: mimeType,
-                },
-            };
-
-            const result = await genAI.models.generateContent({
-                model: "gemini-2.5-flash-image",
-                contents: [prompt, imagePart],
-                config: {
-                    responseModalities: ['Text']
-                }
-            });
-            
-            const text = (result.text ?? "").trim();
+            console.log(`Sending prompt and image to Image model...`);
+            const text = await analyzeImageBuffer(imageBuffer, mimeType, prompt);
             
             const responseData = {
                 type: "ImageAnalysis",

@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { filterResponseData } from '../utils/responseFiltering.js';
-import { Task, PlanStep, MessageEmitter, Content, AgentContext } from './types.js';
+import { Task, PlanStep, MessageEmitter, Content, AgentContext, Attachment } from './types.js';
 import { determineNextStep, summarizeToolOutput, assessTaskProgress, summarizeFailureState } from './gemini.js';
 import { READ_ONLY_TOOLS } from './readOnlyTools.js';
 import { AxiosError } from 'axios';
@@ -24,7 +24,7 @@ export class Orchestrator {
         console.log('[Agent] Orchestrator initialized.');
     }
 
-    async process(prompt: string, context: AgentContext | undefined, history: Content[]) {
+    async process(prompt: string, context: AgentContext | undefined, history: Content[], attachments?: Attachment[]) {
         const task: Task = {
             id: 'task-' + Date.now(),
             originalPrompt: prompt,
@@ -36,7 +36,9 @@ export class Orchestrator {
         };
 
         const contextString = this.formatContext(context);
-        const combinedPrompt = contextString ? `${prompt}${contextString}` : prompt;
+        const attachmentsString = this.formatAttachments(attachments);
+        const suffix = contextString + attachmentsString;
+        const combinedPrompt = suffix ? `${prompt}${suffix}` : prompt;
 
         task.history.push({ role: 'user', parts: [{ text: combinedPrompt }] });
 
@@ -74,6 +76,20 @@ export class Orchestrator {
             });
         }
     }
+
+    /**
+     * Formats attached file metadata into a human-readable prompt suffix so the
+     * LLM knows which files are available and how to process them.
+     */
+    private formatAttachments = (attachments?: Attachment[]): string => {
+        if (!attachments || attachments.length === 0) {
+            return '';
+        }
+        const list = attachments
+            .map(a => `  - "${a.fileName}" (attachmentId: ${a.tempFileId})`)
+            .join('\n');
+        return `\n\nAttached Files (${attachments.length}):\n${list}\n\nBased on what the user is asking, choose the right tool for each attachment:\n- To **read or analyse** the content (e.g. extract text, summarise, import data into fields), call 'readUploadedFile' with the attachmentId and fileName.\n- To **save it as a new multimedia component** in the CMS, call 'createMultimediaComponentFromAttachment' with the attachmentId and fileName.\n- To **extract both text and embedded images** from a Word or PowerPoint file and create multimedia components for each image, call 'splitWordMultimediaComponentIntoTextAndImages' or 'splitPowerPointMultimediaComponentIntoTextAndImages' with the attachmentId and fileName.\n- To **generate a new AI image using an attachment as a style or composition reference**, call 'createMultimediaComponentFromPrompt' and pass the attachment(s) via the 'contextAttachments' parameter (each entry needs attachmentId and fileName).`;
+    };
 
     /**
      * Formats the context object into a human-readable string for the system instruction.

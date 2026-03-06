@@ -1,31 +1,7 @@
 import { z } from "zod";
-import JSZip from "jszip";
-import { Parser as XmlParser } from "xml2js";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
-
-const extractTextFromXmlObject = (obj: any): string[] => {
-    let texts: string[] = [];
-    if (Array.isArray(obj)) {
-        for (const item of obj) {
-            texts = texts.concat(extractTextFromXmlObject(item));
-        }
-    } else if (typeof obj === 'object' && obj !== null) {
-        for (const key in obj) {
-            if (key === 'a:t') {
-                const val = obj[key];
-                if (typeof val === 'string' && val.trim() !== '') {
-                    texts.push(val);
-                } else if (Array.isArray(val)) {
-                    texts.push(...val.filter((t: any) => typeof t === 'string' && t.trim() !== ''));
-                }
-            } else {
-                texts = texts.concat(extractTextFromXmlObject(obj[key]));
-            }
-        }
-    }
-    return texts;
-};
+import { parsePowerPointBuffer } from "../utils/fileProcessing.js";
 
 const readPowerPointFileFromMultimediaComponentInputProperties = {
     itemId: z.string().regex(/^tcm:\d+-\d+$/).describe("The TCM URI of the multimedia component containing the PowerPoint (.pptx) file (e.g., 'tcm:5-126')."),
@@ -37,7 +13,8 @@ export const readTextFromPowerPointMultimediaComponent = {
     name: "readTextFromPowerPointMultimediaComponent",
     description: `Reads the text content of a PowerPoint file (.pptx) from a multimedia component and returns it as a string, organized by slide.
     The extracted text from each slide can then be used to create new content items in the CMS using the 'createComponent' tool.
-    For a more advanced function that also extracts images, use 'splitPowerPointMultimediaComponentIntoTextAndImages'.`,
+    For a more advanced function that also extracts images, use 'splitPowerPointMultimediaComponentIntoTextAndImages'.
+    Note: If you need to read or analyse a file directly attached/uploaded by the user, use 'readUploadedFile' instead.`,
     input: readPowerPointFileFromMultimediaComponentInputProperties,
     async execute(input: z.infer<typeof readPowerPointFileFromMultimediaComponentSchema>, context: any) {
         const req = context?.request;
@@ -66,11 +43,10 @@ export const readTextFromPowerPointMultimediaComponent = {
             const pptxFileBuffer = Buffer.from(downloadResponse.data);
             
             console.log("Parsing .pptx content using JSZip...");
-            const zip = await JSZip.loadAsync(pptxFileBuffer);
-            const xmlParser = new XmlParser({ explicitArray: false });
+            const allSlidesData = await parsePowerPointBuffer(pptxFileBuffer);
+            console.log("Parsing complete.");
 
-            const slideFiles = zip.file(/ppt\/slides\/slide\d+\.xml/);
-            if (slideFiles.length === 0) {
+            if (allSlidesData.length === 0) {
                 const errorResponse = {
                     type: 'PowerPointText',
                     Id: itemId,
@@ -79,27 +55,6 @@ export const readTextFromPowerPointMultimediaComponent = {
                 return { content: [{ type: "text", text: JSON.stringify(errorResponse, null, 2) }] };
             }
 
-            slideFiles.sort((a, b) => {
-                const aMatch = a.name.match(/\d+/);
-                const bMatch = b.name.match(/\d+/);
-                const aNum = aMatch ? parseInt(aMatch[0], 10) : 0;
-                const bNum = bMatch ? parseInt(bMatch[0], 10) : 0;
-                return aNum - bNum;
-            });
-            
-            const allSlidesData = await Promise.all(slideFiles.map(async (slideFile, index) => {
-                console.log(`Processing slide ${index + 1}: ${slideFile.name}`);
-                const slideXml = await slideFile.async("string");
-                const parsedXml = await xmlParser.parseStringPromise(slideXml);
-                const slideTexts = extractTextFromXmlObject(parsedXml);
-                return {
-                    SlideNumber: index + 1,
-                    Content: slideTexts.join("\n")
-                };
-            }));
-            
-            console.log("Parsing complete.");
-            
             const fullTextContent = allSlidesData
                 .map(s => `--- Slide ${s.SlideNumber} ---\n${s.Content}`)
                 .join("\n\n");

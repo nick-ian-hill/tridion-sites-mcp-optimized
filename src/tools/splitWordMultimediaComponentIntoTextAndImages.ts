@@ -5,7 +5,15 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 import { createMultimediaComponentFromBase64 } from "./createMultimediaComponentFromBase64.js";
 
 const splitWordMultimediaComponentIntoTextAndImagesInputProperties = {
-    itemId: z.string().regex(/^tcm:\d+-\d+$/).describe("The TCM URI of the source Word multimedia component."),
+    itemId: z.string().regex(/^tcm:\d+-\d+$/).optional().describe(
+        "The TCM URI of the source Word multimedia component in the CMS. Provide either this or 'attachmentId'+'fileName' for a user attachment.",
+    ),
+    attachmentId: z.string().optional().describe(
+        "The attachment ID of the uploaded file provided in the context. Provide either this or 'itemId'.",
+    ),
+    fileName: z.string().optional().describe(
+        "Required when using 'attachmentId'. The original file name including extension (e.g., 'document.docx').",
+    ),
     locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new image components will be created."),
 };
 
@@ -13,19 +21,32 @@ const splitWordMultimediaComponentIntoTextAndImagesSchema = z.object(splitWordMu
 
 export const splitWordMultimediaComponentIntoTextAndImages = {
     name: "splitWordMultimediaComponentIntoTextAndImages",
-    description: "Splits a Word multimedia component into its text and images. It returns the text as HTML and creates new multimedia components for each image.",
+    description: "Splits a Word file into its text and images. It returns the text as HTML and creates new multimedia components for each image. Accepts either a CMS multimedia component ('itemId') or a user attachment ('attachmentId'+'fileName').",
     input: splitWordMultimediaComponentIntoTextAndImagesInputProperties,
     async execute(input: z.infer<typeof splitWordMultimediaComponentIntoTextAndImagesSchema>, context: any) {
-        const { itemId, locationId } = input;
-        const restItemId = itemId.replace(':', '_');
+        const { itemId, attachmentId, fileName, locationId } = input;
+
+        if (!itemId && !(attachmentId && fileName)) {
+            throw new Error("Provide either 'itemId' for a CMS multimedia component or both 'attachmentId' and 'fileName' for a user attachment.");
+        }
 
         try {
             const authenticatedAxios = createAuthenticatedAxios(context?.request?.headers?.cookie.match(/UserSessionID=([^;]+)/)?.[1]);
-            const downloadResponse = await authenticatedAxios.get(`/items/${restItemId}/binary/download`, {
-                responseType: 'arraybuffer'
-            });
-            if (downloadResponse.status !== 200) return handleUnexpectedResponse(downloadResponse);
-            const wordFileBuffer = Buffer.from(downloadResponse.data);
+
+            let wordFileBuffer: Buffer;
+            if (itemId) {
+                const restItemId = itemId.replace(':', '_');
+                const downloadResponse = await authenticatedAxios.get(`/items/${restItemId}/binary/download`, { responseType: 'arraybuffer' });
+                if (downloadResponse.status !== 200) return handleUnexpectedResponse(downloadResponse);
+                wordFileBuffer = Buffer.from(downloadResponse.data);
+            } else {
+                const downloadResponse = await authenticatedAxios.get('/binary/download', {
+                    params: { tempFileId: attachmentId, filename: fileName },
+                    responseType: 'arraybuffer',
+                });
+                if (downloadResponse.status !== 200) return handleUnexpectedResponse(downloadResponse);
+                wordFileBuffer = Buffer.from(downloadResponse.data);
+            }
 
             const images: {
                 placeholderSrc: string;
@@ -91,7 +112,7 @@ export const splitWordMultimediaComponentIntoTextAndImages = {
             
             const responseData = {
                 type: "SplitWordDocResult",
-                Id: itemId,
+                Id: itemId ?? fileName,
                 CreatedImageComponents: createdImageComponents,
                 HtmlContent: htmlContent
             };
@@ -103,7 +124,7 @@ export const splitWordMultimediaComponentIntoTextAndImages = {
                 }]
             };
         } catch (error) {
-            return handleAxiosError(error, `Failed to split Word component ${itemId}`);
+            return handleAxiosError(error, `Failed to split Word document '${itemId ?? fileName}'`);
         }
     }
 };
