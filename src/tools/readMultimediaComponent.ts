@@ -23,7 +23,7 @@ const readMultimediaComponentSchema = z.object(readMultimediaComponentInputPrope
 
 // ─── File-type resolution ─────────────────────────────────────────────────────
 
-type FileType = 'pdf' | 'docx' | 'pptx' | 'xlsx' | 'image';
+type FileType = 'pdf' | 'docx' | 'pptx' | 'xlsx' | 'image' | 'text' | 'json';
 
 const MIME_TYPE_MAP: Record<string, FileType> = {
     'application/pdf': 'pdf',
@@ -34,6 +34,8 @@ const MIME_TYPE_MAP: Record<string, FileType> = {
     'image/png': 'image',
     'image/gif': 'image',
     'image/webp': 'image',
+    'text/plain': 'text',
+    'application/json': 'json',
 };
 
 const EXT_TYPE_MAP: Record<string, FileType> = {
@@ -46,6 +48,8 @@ const EXT_TYPE_MAP: Record<string, FileType> = {
     '.png': 'image',
     '.gif': 'image',
     '.webp': 'image',
+    '.txt': 'text',
+    '.json': 'json',
 };
 
 /**
@@ -64,7 +68,9 @@ function resolveFileType(mimeType: string | undefined, fileName: string): { file
     const ext = dotIndex !== -1 ? fileName.slice(dotIndex).toLowerCase() : '';
     const fileType = EXT_TYPE_MAP[ext];
     if (fileType) {
-        const resolvedMime = fileType === 'image' ? (getImageMimeType(fileName) ?? 'image/jpeg') : 'application/octet-stream';
+        const resolvedMime = fileType === 'image' ? (getImageMimeType(fileName) ?? 'image/jpeg') : 
+                             fileType === 'text' ? 'text/plain' : 
+                             fileType === 'json' ? 'application/json' : 'application/octet-stream';
         return { fileType, mimeType: resolvedMime };
     }
 
@@ -76,6 +82,8 @@ export const readMultimediaComponent = {
     description: `Reads and analyses the content of a Multimedia Component. 
 
 Supported file types and their return formats:
+- **Text (.txt)**: Extracted plain text.
+- **JSON (.json)**: Parsed JSON object data.
 - **PDF (.pdf)**: Extracted plain text.
 - **Word (.docx)**: Extracted body as an HTML string (images excluded).
 - **PowerPoint (.pptx)**: Extracted text organised by slide number.
@@ -142,7 +150,7 @@ return excelRows; // or process rows individually
             const resolved = resolveFileType(itemData.BinaryContent?.MimeType, fileName);
             if (!resolved) {
                 throw new Error(
-                    `Unsupported file type for '${fileName}'. Supported types: PDF, Word (.docx), PowerPoint (.pptx), Excel (.xlsx), and common image formats (.jpg, .png, .gif, .webp).`
+                    `Unsupported file type for '${fileName}'. Supported types: Text (.txt), JSON (.json), PDF, Word (.docx), PowerPoint (.pptx), Excel (.xlsx), and common image formats (.jpg, .png, .gif, .webp).`
                 );
             }
 
@@ -167,6 +175,30 @@ return excelRows; // or process rows individually
             console.log(`Successfully downloaded ${buffer.length} bytes.`);
 
             console.log(`Processing '${fileName}' as ${fileType}...`);
+
+            if (fileType === 'text') {
+                const text = buffer.toString('utf-8');
+                return {
+                    content: [{
+                        type: "text",
+                        text: JSON.stringify({ type: "PlainText", Id: itemId, Content: text }, null, 2),
+                    }],
+                };
+            }
+
+            if (fileType === 'json') {
+                try {
+                    const jsonContent = JSON.parse(buffer.toString('utf-8'));
+                    return {
+                        content: [{
+                            type: "text",
+                            text: JSON.stringify({ type: "JsonData", Id: itemId, Content: jsonContent }, null, 2),
+                        }],
+                    };
+                } catch (e: any) {
+                    throw new Error(`Failed to parse JSON content: ${e.message}`);
+                }
+            }
 
             if (fileType === 'pdf') {
                 const text = await parsePdfBuffer(buffer);

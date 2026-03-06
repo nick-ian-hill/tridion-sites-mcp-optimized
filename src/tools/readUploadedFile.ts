@@ -26,7 +26,7 @@ const readUploadedFileSchema = z.object(readUploadedFileInputProperties);
 
 // ─── File-type resolution ─────────────────────────────────────────────────────
 
-type FileType = 'pdf' | 'docx' | 'pptx' | 'xlsx' | 'image';
+type FileType = 'pdf' | 'docx' | 'pptx' | 'xlsx' | 'image' | 'text' | 'json';
 
 const MIME_TYPE_MAP: Record<string, FileType> = {
     'application/pdf': 'pdf',
@@ -37,6 +37,8 @@ const MIME_TYPE_MAP: Record<string, FileType> = {
     'image/png': 'image',
     'image/gif': 'image',
     'image/webp': 'image',
+    'text/plain': 'text',
+    'application/json': 'json',
 };
 
 const EXT_TYPE_MAP: Record<string, FileType> = {
@@ -49,6 +51,8 @@ const EXT_TYPE_MAP: Record<string, FileType> = {
     '.png': 'image',
     '.gif': 'image',
     '.webp': 'image',
+    '.txt': 'text',
+    '.json': 'json',
 };
 
 /**
@@ -76,7 +80,11 @@ function resolveFileType(
     if (fileType) {
         // For images we prefer the server MIME if available (even if unrecognised above),
         // otherwise derive it from the extension via the shared helper.
-        const mimeType = getImageMimeType(fileName) ?? headerMime ?? 'application/octet-stream';
+        const mimeType = fileType === 'image' 
+            ? (getImageMimeType(fileName) ?? headerMime ?? 'application/octet-stream')
+            : fileType === 'text' ? 'text/plain' 
+            : fileType === 'json' ? 'application/json' 
+            : (headerMime ?? 'application/octet-stream');
         return { fileType, mimeType };
     }
 
@@ -90,6 +98,8 @@ export const readUploadedFile = {
 If the user wants to **save the file as a new multimedia component** in the CMS instead, use 'createMultimediaComponentFromAttachment'.
 
 Supported file types and their return formats:
+- **Text (.txt)**: Extracted plain text.
+- **JSON (.json)**: Parsed JSON object data.
 - **PDF (.pdf)**: Extracted plain text.
 - **Word (.docx)**: Extracted body as an HTML string (images excluded).
 - **PowerPoint (.pptx)**: Extracted text organised by slide number.
@@ -125,12 +135,36 @@ The attachmentId and fileName for each attachment are provided in the user's con
             const resolved = resolveFileType(downloadResponse.headers['content-type'], fileName);
             if (!resolved) {
                 throw new Error(
-                    `Unsupported file type for '${fileName}'. Supported types: PDF, Word (.docx), PowerPoint (.pptx), Excel (.xlsx), and common image formats (.jpg, .png, .gif, .webp).`,
+                    `Unsupported file type for '${fileName}'. Supported types: Text (.txt), JSON (.json), PDF, Word (.docx), PowerPoint (.pptx), Excel (.xlsx), and common image formats (.jpg, .png, .gif, .webp).`,
                 );
             }
 
             const { fileType, mimeType } = resolved;
             console.log(`Processing '${fileName}' as ${fileType} (MIME: ${mimeType})...`);
+
+            if (fileType === 'text') {
+                const text = buffer.toString('utf-8');
+                return {
+                    content: [{
+                        type: "text",
+                        text: JSON.stringify({ type: "PlainText", fileName, Content: text }, null, 2),
+                    }],
+                };
+            }
+
+            if (fileType === 'json') {
+                try {
+                    const jsonContent = JSON.parse(buffer.toString('utf-8'));
+                    return {
+                        content: [{
+                            type: "text",
+                            text: JSON.stringify({ type: "JsonData", fileName, Content: jsonContent }, null, 2),
+                        }],
+                    };
+                } catch (e: any) {
+                    throw new Error(`Failed to parse JSON content: ${e.message}`);
+                }
+            }
 
             if (fileType === 'pdf') {
                 const text = await parsePdfBuffer(buffer);
