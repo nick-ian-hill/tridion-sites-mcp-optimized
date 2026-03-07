@@ -102,7 +102,12 @@ export class Orchestrator {
 
         // 1. Container - Most important: where the user is currently browsing
         if (ctx.container) {
-            parts.push(`Browsing in: ${ctx.container.type} "${ctx.container.title}" (${ctx.container.id})`);
+            if (ctx.container.isVirtualNode) {
+                // UI-only node — id is client-fabricated and cannot be used for backend API calls
+                parts.push(`Browsing in: ${ctx.container.type} "${ctx.container.title}" (UI node: ${ctx.container.id})`);
+            } else {
+                parts.push(`Browsing in: ${ctx.container.type} "${ctx.container.title}" (${ctx.container.id})`);
+            }
         }
 
         // 2. Selected items - Items the user has explicitly selected with checkboxes
