@@ -124,6 +124,15 @@ export const determineNextStep = async (
         - "Viewing details for" indicates the item for which details are being displayed in the various 'details' panels.
         - When a user asks "what folder am I in?" or similar questions, they're asking about the "Browsing in" location.
 
+        **BluePrint Architecture Best Practices:**
+        - Unless the user explicitly dictates the exact publication for an item, you should autonomously follow Tridion BluePrint hierarchy conventions for item creation:
+          • Schema Master: Create Schemas and Categories high up in the BluePrint (e.g., in a Schema Master or Structure publication).
+          • Design Master: Create Component Templates and Page Templates here.
+          • Content Master: Create reusable master content (Components) here.
+          • Website Master: Create reusable Pages and Structure Groups here.
+          • Children of Website Master: Localize content, pages, and structure groups etc. (if required) in child publications of Website Master.
+          - Use the 'getRelatedBluePrintItems' tool to traverse the hierarchy (using 'Ancestor' or 'Parent' relationships) to find the appropriate master publications before creating structural, design, or global content items.
+
         **Formatting Item References:**
         - CRITICAL: Whenever you reference a CMS item in your response, ALWAYS use this format: "Title" (id)
         - Examples: 
@@ -202,8 +211,9 @@ export const determineNextStep = async (
         } catch (error: any) {
             const errorString = typeof error === 'object' ? JSON.stringify(error) + String(error) : String(error);
 
+            const isRateLimit = errorString.includes('429') || errorString.includes('RESOURCE_EXHAUSTED');
             const isRetryable =
-                errorString.includes('429') ||          // Rate limits
+                isRateLimit ||
                 errorString.includes('500') ||          // Internal Server Error
                 errorString.includes('503') ||          // Service Unavailable
                 errorString.includes('fetch failed') || // Node.js network blip
@@ -211,9 +221,26 @@ export const determineNextStep = async (
                 errorString.includes('ECONNRESET');     // Connection reset by peer
 
             if (isRetryable && retries > 1) {
-                console.warn(`[Reasoner] Transient API/Network issue detected. Retrying in ${delayMs / 1000} seconds...`);
-                await new Promise(resolve => setTimeout(resolve, delayMs));
-                delayMs *= 1.5;
+                let waitTimeMs = delayMs;
+
+                // If it's a rate limit, try to extract the required wait time from the error message
+                if (isRateLimit) {
+                    const match = errorString.match(/retry in ([\d.]+)s/i) || errorString.match(/"retryDelay"\s*:\s*"([\d.]+)s"/i);
+                    if (match && match[1]) {
+                        // Extract the seconds, convert to MS, and add a 1-second safety buffer
+                        waitTimeMs = Math.ceil(parseFloat(match[1]) * 1000) + 1000;
+                    } else {
+                        // Fallback to 60 seconds if we can't parse the exact time
+                        waitTimeMs = 60000;
+                    }
+                }
+
+                console.warn(`[Reasoner] API/Network issue detected. Retrying in ${waitTimeMs / 1000} seconds...`);
+                await new Promise(resolve => setTimeout(resolve, waitTimeMs));
+
+                if (!isRateLimit) {
+                    delayMs *= 1.5; // Only apply normal exponential backoff to non-quota network blips
+                }
                 retries--;
             } else {
                 console.error("[Reasoner] Gemini API call failed:", error);
