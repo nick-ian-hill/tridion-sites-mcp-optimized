@@ -131,8 +131,9 @@ export class Orchestrator {
     };
 
     private async executePlan(task: Task, availableTools: any[], latestPrompt: string): Promise<string> {
-        let maxTurns = 15; // Starting limit
-        let hasExtended = false; // Tracks if we already gave the agent the +10 bonus
+        let maxTurns = 20; // Starting limit
+        let extensionsUsed = 0; 
+        const maxExtensions = 2; // Allow up to two +10 extensions (max 40 turns total)
         let consecutiveFailures = 0;
         let useAdvancedModel = false;
 
@@ -236,7 +237,7 @@ export class Orchestrator {
                 return "Task completed successfully.";
             }
 
-// --- OVERSEER PROGRESS CHECK ---
+            // --- OVERSEER PROGRESS CHECK ---
             // If we have reached the end of our current turn limit
             if (i === maxTurns - 1) {
                 this.emit('progress', { isLog: true, message: `Reached turn limit (${maxTurns}). Evaluating progress...` });
@@ -244,11 +245,11 @@ export class Orchestrator {
                 // Call the Pro model to judge the worker model's progress
                 const assessment = await assessTaskProgress(preparedHistory, latestPrompt);
 
-                // If making good progress and we haven't given an extension yet, grant +10 turns
-                if (assessment.isMakingProgress && !hasExtended) {
+                // If making good progress and we haven't maxed out extensions
+                if (assessment.isMakingProgress && extensionsUsed < maxExtensions) {
                     this.emit('progress', { isLog: true, message: `Agent is making solid progress. Extending allowance by 10 turns...` });
                     maxTurns += 10; // Dynamically expands the for-loop!
-                    hasExtended = true;
+                    extensionsUsed++;
                     continue;
                 }
 
