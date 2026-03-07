@@ -29,7 +29,7 @@ export function invalidateSchemaCache(schemaId: string) {
 async function getOrderedFieldNames(schemaId: string, fieldType: 'content' | 'metadata', axiosInstance: AxiosInstance): Promise<string[]> {
     const cacheKey = `${schemaId}-${fieldType}`;
     const cachedOrder = schemaFieldOrderCache.get(cacheKey);
-    
+
     if (cachedOrder) {
         return cachedOrder;
     }
@@ -67,7 +67,7 @@ export async function reorderFieldsBySchema(data: Record<string, any>, schemaId:
     const orderedFieldNames = await getOrderedFieldNames(schemaId, fieldType, axiosInstance);
 
     // Validate that all fields in 'data' exist in the schema (ignoring system properties)
-    const inputKeys = Object.keys(data).filter(key => 
+    const inputKeys = Object.keys(data).filter(key =>
         key !== '$type' &&
         key !== '@id'
     );
@@ -214,7 +214,7 @@ export async function processAndOrderFieldDefinitions(fieldArray: any[], context
 
     // Process links and embedded fields using the existing dictionary logic
     const processedFields = await processSchemaFieldDefinitions(tempRecord, contextId, axiosInstance);
-    
+
     // Rebuild the final dictionary strictly using the order of the original array
     const orderedFields: Record<string, any> = { "$type": "FieldsDefinitionDictionary" };
     fieldArray.forEach((field: any) => {
@@ -222,7 +222,7 @@ export async function processAndOrderFieldDefinitions(fieldArray: any[], context
             orderedFields[field.Name] = processedFields[field.Name];
         }
     });
-    
+
     return orderedFields;
 }
 
@@ -249,6 +249,9 @@ export function formatForApi(obj: any): any {
     if (obj.hasOwnProperty('type')) {
         typeValue = obj['type'];
         delete obj['type'];
+    } else if (obj.hasOwnProperty('$type')) {
+        typeValue = obj['$type'];
+        delete obj['$type'];
     }
 
     for (const key in obj) {
@@ -342,7 +345,7 @@ export function formatForAgent(obj: any): any {
 export function deepMerge(target: any, source: any): any {
     // 1. Handle Primitives and non-mergeable types (including null acting as value)
     if (typeof source !== 'object' || source === null) {
-        return source; 
+        return source;
     }
 
     // 2. Handle Arrays (Smart Merge by Index)
@@ -379,7 +382,7 @@ export function deepMerge(target: any, source: any): any {
     // 3. Handle Objects (Recursive Merge)
     if (typeof target !== 'object' || target === null || Array.isArray(target)) {
         // If target is not an object (or is null/array), we cannot merge properties. Overwrite.
-        return source; 
+        return source;
     }
 
     const output = { ...target };
