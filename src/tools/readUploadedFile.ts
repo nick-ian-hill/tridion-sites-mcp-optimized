@@ -20,6 +20,11 @@ const readUploadedFileInputProperties = {
     prompt: z.string().optional().describe(
         "Required for image files only (.jpg, .jpeg, .png, .gif, .webp): the instruction or question to send to the vision model (e.g., 'Describe this image in detail', 'Extract all visible text').",
     ),
+    maxRows: z.number().int().positive().optional().describe(`Excel (.xlsx) files only. Limits returned rows per sheet. STRATEGY: 1. Always start with \`maxRows\`: 3 to triage the file. 2. If a specific sheet contains instructions or logic notes rather than a data table, and you suspect more content exists (compare \`Data.length\` to \`TotalRows\`), immediately re-read THAT SPECIFIC SHEET using the \`targetSheet\` parameter WITHOUT \`maxRows\` before proceeding. 3. For actual data processing, omit \`maxRows\` only inside a 'toolOrchestrator' script.`
+    ),
+    targetSheet: z.string().optional().describe(
+        "Optional. The exact name of a specific sheet to read. Use this if you only want to extract data from one sheet instead of the entire workbook."
+    ),
 };
 
 const readUploadedFileSchema = z.object(readUploadedFileInputProperties);
@@ -103,10 +108,40 @@ Supported file types and their return formats:
 - **PDF (.pdf)**: Extracted plain text.
 - **Word (.docx)**: Extracted body as an HTML string (images excluded).
 - **PowerPoint (.pptx)**: Extracted text organised by slide number.
-- **Excel (.xlsx)**: Workbook data as an object mapping sheet names to row arrays.
+- **Excel (.xlsx)**: Workbook data as an object mapping sheet names to a structured object containing 'TotalRows' and a 'Data' array of row objects.
 - **Images (.jpg, .jpeg, .png, .gif, .webp)**: AI-generated description based on a provided prompt.
 
-The attachmentId and fileName for each attachment are provided in the user's context at the start of the conversation.`,
+The attachmentId and fileName for each attachment are provided in the user's context at the start of the conversation.
+
+NOTE: When called from 'toolOrchestrator', the returned JSON string is automatically parsed. You receive the object directly.
+
+--- EXCEL USAGE IN TOOL ORCHESTRATOR ---
+The returned Excel object is a wrapper containing all sheets from the workbook. You must access a specific sheet to get the array of rows.
+
+Example Return Object Shape:
+{
+  "type": "ExcelData",
+  "fileName": "data.xlsx",
+  "WorkbookData": {
+    "Sheet1": {
+      "TotalRows": 15,
+      "Data": [
+        { "header1": "valueA", "header2": "valueB" }
+      ]
+    }
+  }
+}
+  
+--- EXCEL TWO-PASS PATTERN (RECOMMENDED FOR IMPORTS) ---
+For large Excel files, use a two-pass approach to avoid processing data you do not yet understand:
+
+Pass 1 — Preview: call with maxRows: 3 to cheaply read the column headers and 2-3 sample
+values per column. Inspect WorkbookData to confirm the column names match your target CMS Schema
+fields and that the value formats are as expected.
+
+Pass 2 — Full import: Once the structure is confirmed, omit maxRows and call inside a
+toolOrchestrator preProcessingScript. Return the full row array as preProcessingResult so that
+the mapScript can iterate every row and create or update CMS Components.`,
     input: readUploadedFileInputProperties,
     async execute(input: z.infer<typeof readUploadedFileSchema>, context: any) {
         const req = context?.request;
@@ -114,7 +149,7 @@ The attachmentId and fileName for each attachment are provided in the user's con
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
         const userSessionId = match ? match[1] : null;
 
-        const { attachmentId, fileName, prompt } = input;
+        const { attachmentId, fileName, prompt, maxRows } = input;
 
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
@@ -200,7 +235,7 @@ The attachmentId and fileName for each attachment are provided in the user's con
             }
 
             if (fileType === 'xlsx') {
-                const workbookData = await parseExcelBuffer(buffer);
+                const workbookData = await parseExcelBuffer(buffer, input.maxRows, input.targetSheet);
                 return {
                     content: [{
                         type: "text",

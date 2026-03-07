@@ -115,21 +115,31 @@ export async function parsePowerPointBuffer(buffer: Buffer): Promise<SlideConten
 
 /**
  * Parses an Excel (.xlsx) buffer and returns an object that maps each sheet
- * name to an array of row objects keyed by column header.
+ * name to an object containing the TotalRows and a Data array of row objects keyed by column header.
+ *
+ * @param buffer      - The raw .xlsx file contents.
+ * @param maxRows     - Optional limit on the number of **data** rows (i.e. rows
+ * after the header) to include per sheet. Useful for a cheap
+ * preview pass: pass `maxRows: 3` to read only the column
+ * labels and a few sample values before committing to a full
+ * parse of a large workbook.
+ * @param targetSheet - Optional. The exact name of a specific sheet to read, skipping all others.
  */
-export async function parseExcelBuffer(buffer: Buffer): Promise<Record<string, any[]>> {
+export async function parseExcelBuffer(buffer: Buffer, maxRows?: number, targetSheet?: string): Promise<Record<string, any>> {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(buffer as unknown as ExcelJS.Buffer);
 
-    const workbookData: Record<string, any[]> = {};
+    const workbookData: Record<string, any> = {};
 
     workbook.eachSheet((worksheet) => {
+        if (targetSheet && worksheet.name !== targetSheet) {
+            return;
+        }
+
         const sheetData: any[] = [];
         const headerRow = worksheet.getRow(1);
 
-        if (!headerRow.values || headerRow.values.length === 0) {
-            return;
-        }
+        if (!headerRow.values || headerRow.values.length === 0) return;
 
         const headers: string[] = [];
         headerRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
@@ -137,21 +147,21 @@ export async function parseExcelBuffer(buffer: Buffer): Promise<Record<string, a
         });
 
         worksheet.eachRow((row, rowNumber) => {
-            if (rowNumber > 1) {
-                const rowObject: Record<string, any> = {};
-                row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-                    const header = headers[colNumber];
-                    if (header) {
-                        rowObject[header] = cell.value;
-                    }
-                });
-                if (Object.keys(rowObject).length > 0) {
-                    sheetData.push(rowObject);
-                }
-            }
+            if (rowNumber === 1) return; 
+            if (maxRows !== undefined && sheetData.length >= maxRows) return;
+
+            const rowObject: Record<string, any> = {};
+            row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+                const header = headers[colNumber];
+                if (header) rowObject[header] = cell.value;
+            });
+            if (Object.keys(rowObject).length > 0) sheetData.push(rowObject);
         });
 
-        workbookData[worksheet.name] = sheetData;
+        workbookData[worksheet.name] = {
+            TotalRows: worksheet.rowCount,
+            Data: sheetData
+        };
     });
 
     return workbookData;
