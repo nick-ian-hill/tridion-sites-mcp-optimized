@@ -193,7 +193,6 @@ Example 5: Create a workflow with a timed delay. The script suspends the activit
                 }
             }
 
-            console.log(`[createProcessDefinition] Fetching default model for ProcessDefinition from container '${locationId}'...`);
             const defaultModelResponse = await authenticatedAxios.get('/item/defaultModel/ProcessDefinition', {
                 params: { containerId: locationId }
             });
@@ -238,9 +237,6 @@ Example 5: Create a workflow with a timed delay. The script suspends the activit
 
                 return activityPayload;
             });
-
-            console.log(`[createProcessDefinition] Final payload constructed. Posting to /items...`);
-            console.log(JSON.stringify(payload, null, 2));
 
             // Post the single, complete payload to create the item atomically
             const createResponse = await authenticatedAxios.post('/items', payload);
