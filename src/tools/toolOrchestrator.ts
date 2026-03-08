@@ -54,6 +54,32 @@ const createBaseSandbox = (): any => {
 };
 // --- End Security Configuration ---
 
+/**
+ * Recursively adds a non-enumerable 'itemId' getter to any object that has an 'Id'.
+ * Being non-enumerable means the agent can read it, but it won't be serialized 
+ * and sent to the API, preventing 400 Bad Request errors.
+ */
+function applyItemIdAlias(obj: any): any {
+    if (!obj || typeof obj !== 'object') return obj;
+    
+    if (Array.isArray(obj)) {
+        for (let i = 0; i < obj.length; i++) applyItemIdAlias(obj[i]);
+        return obj;
+    }
+
+    if ('Id' in obj && !('itemId' in obj)) {
+        Object.defineProperty(obj, 'itemId', {
+            get: function() { return this.Id; },
+            enumerable: false,
+            configurable: true
+        });
+    }
+
+    for (const key of Object.keys(obj)) applyItemIdAlias(obj[key]);
+
+    return obj;
+}
+
 // --- Utilities for Scripts ---
 
 const scriptUtils = {
@@ -721,16 +747,16 @@ export const toolOrchestrator = {
                                 if (parsedObject && parsedObject.type === 'Error' && parsedObject.Message) {
                                     throw new Error(parsedObject.Message);
                                 }
-                                return parsedObject;
+                                return applyItemIdAlias(parsedObject);
                             } catch (err) {
                                 throw err;
                             }
                         }
                     }
                     if (result && typeof result === 'object' && !Array.isArray(result) && !result.content) {
-                        return result;
+                        return applyItemIdAlias(result);
                     }
-                    return result;
+                    return applyItemIdAlias(result);
                 };
 
                 // Idempotency Wrapper
@@ -990,7 +1016,7 @@ let wasStoppedOnError = false;
                 ...baseSandbox,
                 context: {
                     results: Object.freeze(results),
-                    successes: Object.freeze(successes),
+                    successes: Object.freeze(applyItemIdAlias(successes)),
                     warnings: Object.freeze(warnings),
                     failures: Object.freeze(failures),
                     parameters: Object.freeze(parameters),
@@ -1042,9 +1068,9 @@ let wasStoppedOnError = false;
             const sandboxContext = {
                 ...baseSandbox,
                 context: {
-                    output: Object.freeze(responsePayload),
+                    output: Object.freeze(applyItemIdAlias(responsePayload)),
                     results: Object.freeze(results),
-                    successes: Object.freeze(successes),
+                    successes: Object.freeze(applyItemIdAlias(successes)),
                     warnings: Object.freeze(warnings),
                     failures: Object.freeze(failures),
                     hasSuccesses: successes.length > 0,
