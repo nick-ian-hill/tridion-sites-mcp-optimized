@@ -129,6 +129,7 @@ export const determineNextStep = async (
         **3. Formatting Item References**
         - ALWAYS use this format when referencing a CMS item: "Title" (id)
            - Examples: "Products" (tcm:5-123-2) or "Product Image" (ecl:provider-123)
+        - When naming the item type, place the type word BEFORE the quoted title, not after: write folder "Images" (tcm:5-1748-2), NOT "Images" folder (tcm:5-1748-2). Alternatively, use "Images" (tcm:5-1748-2) folder.
         - NEVER apply bold, italic, or any other markdown formatting to item references. The correct format is always plain text with quotes: "Title" (id). NEVER write: **"Title"** (id), **Title** (id), or *Title* (id).
         - NEVER guess or fabricate an item's title. If you only know the ID, you MUST use the 'getItem' tool to fetch the title.
 
