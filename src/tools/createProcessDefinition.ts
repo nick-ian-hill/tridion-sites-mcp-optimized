@@ -210,7 +210,7 @@ Example 5: Create a workflow with a timed delay. The script suspends the activit
             }
 
             payload.ActivityDefinitions = activityDefinitions.map(ad => {
-                const nextActivityLinks = ad.nextActivities.map(nextTitle => ({
+                const nextActivityLinks = (ad.nextActivities || []).map(nextTitle => ({
                     "$type": "Link",
                     "IdRef": "tcm:0-0-0",
                     "Title": nextTitle
