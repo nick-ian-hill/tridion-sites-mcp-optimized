@@ -52,6 +52,7 @@ const updateItemPropertiesInputProperties = {
     outputFormat: z.string().optional().describe("For 'ComponentTemplate' type. The format of the rendered Component Presentation (e.g., 'HTML Fragment')."),
     priority: z.number().int().optional().describe("For 'ComponentTemplate' type. Priority used for resolving Component links."),
     relatedSchemaIds: z.array(z.string().regex(/^tcm:\d+-\d+-8$/)).optional().describe("For 'ComponentTemplate' type. An array of Schema TCM URIs to link to this template. Replaces any existing links."),
+    bundleProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("For 'Component', 'Multimedia Component' and 'Bundle' schema types. The TCM URI of a Process Definition (workflow) used for reviewing and approving changes to the item based on the schema. If specified, the item based on the schema needs to be added to a bundle that is associated with the same workflow process."),
 };
 
 const updateItemPropertiesSchema = z.object(updateItemPropertiesInputProperties)
@@ -249,6 +250,9 @@ This example updates a basic Region Schema (e.g., 'tcm:5-3875-8') to make it non
             if (updates.allowedMultimediaTypes) {
                 updates.allowedMultimediaTypes = updates.allowedMultimediaTypes.map((id: string) => convertItemIdToContextPublication(id, itemId));
             }
+            if (updates.bundleProcessId) {
+                updates.bundleProcessId = convertItemIdToContextPublication(updates.bundleProcessId, itemId);
+            }
             if (updates.searchQuery) {
                 const contextId = updates.searchQuery.SearchIn || itemId;
 
@@ -354,6 +358,9 @@ This example updates a basic Region Schema (e.g., 'tcm:5-3875-8') to make it non
                 if (updates.regionDefinition) {
                     convertLinksRecursively(updates.regionDefinition, itemId);
                     itemToUpdate.RegionDefinition = updates.regionDefinition;
+                }
+                if (updates.bundleProcessId) {
+                    itemToUpdate.BundleProcess = toLink(updates.bundleProcessId);
                 }
             }
             if (itemType === 'PageTemplate' || itemType === 'ComponentTemplate') {

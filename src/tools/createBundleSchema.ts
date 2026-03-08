@@ -34,7 +34,7 @@ Example 1: Create a simple Bundle Schema.
         locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new Schema will be created."),
         description: z.string().nonempty().describe("A mandatory description of the Schema."),
         metadataFields: z.array(fieldDefinitionSchema).optional().describe("An array of metadata field definitions for the schema. The order of the array determines the field order."),
-        bundleProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of a Process Definition to associate as the Bundle Process."),
+        bundleProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of a Process Definition (workflow) to associate with this Bundle Schema. Any Bundle created using this schema, as well as its contained items, will be automatically routed through this workflow process for review and approval."),
         deleteBundleOnProcessFinished: z.boolean().optional().describe("If true, Bundles based on this Schema will be deleted when their workflow process finishes."),
         isIndexable: z.boolean().optional().describe("Specifies whether metadata values are indexed for searching."),
         isPublishable: z.boolean().optional().describe("Specifies whether metadata values are published.")

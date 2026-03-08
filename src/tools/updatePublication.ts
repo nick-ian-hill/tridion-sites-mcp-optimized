@@ -72,10 +72,10 @@ export const updatePublication = {
         defaultMultimediaSchema: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of the new default Multimedia Schema. This is the Schema that will be used by default when creating a new Multimedia Component."),
         pageSnapshotTemplate: z.string().regex(/^tcm:\d+-\d+-128$/).optional().describe("The TCM URI of the new Page Template for rendering Page snapshots in Workflow."),
         componentSnapshotTemplate: z.string().regex(/^tcm:\d+-\d+-32$/).optional().describe("The TCM URI of the new Component Template for rendering Component snapshots in Workflow."),
-        pageTemplateProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of the Process Definition to associate with Page Templates."),
-        componentTemplateProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of the Process Definition to associate with Component Templates."),
+        pageTemplateProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of the Process Definition to associate with Page Template updates. If specified, changes to a Page Template will trigger the associated workflow process."),
+        componentTemplateProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of the Process Definition to associate with Component Template updates. If specified, changes to a Component Template will trigger the associated workflow process."),
         defaultTaskProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of the default Process Definition for tasks."),
-        templateBundleProcess: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of the new Process Definition to associate with Template Bundles."),
+        templateBundleProcess: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of the Process Definition. If specified, changes to a Component or Page Template will require approval by a 'bundle workflow' with the associated workflow process."),
         enableWorkflowProcessAssociations: z.boolean().optional().describe("If true, enables Workflow Process Associations in Shared Schemas and Structure Groups."),
         locale: z.string().optional().describe("The new locale for the Publication (e.g., 'en-US', 'de-DE')."),
         publicationType: z.string().optional().describe("The new type of the Publication (e.g., 'Web', 'Content'). Use the getPublicationTypes tool to see the available types.")

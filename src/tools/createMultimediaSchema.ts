@@ -48,6 +48,7 @@ Example 1: Create a simple Multimedia Schema for images.
         description: z.string().nonempty().describe("A mandatory description of the Schema."),
         metadataFields: z.array(fieldDefinitionSchema).optional().describe("An array of metadata field definitions for the schema. The order of the array determines the field order."),
         allowedMultimediaTypes: z.array(z.string().regex(/^tcm:0-\d+-65544$/)).describe("An array of TCM URIs for allowed Multimedia Types. Use 'getMultimediaTypes' to find available types."),
+        bundleProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of a Process Definition (workflow) used for reviewing and approving changes to Multimedia Components based on this schema. If specified, the item needs to be added to a bundle associated with the same workflow process."),
         isIndexable: z.boolean().optional().describe("Specifies whether metadata values are indexed for searching."),
         isPublishable: z.boolean().optional().describe("Specifies whether metadata values are published.")
     },
@@ -60,7 +61,7 @@ Example 1: Create a simple Multimedia Schema for images.
 
         const {
             title, locationId, description, metadataFields,
-            allowedMultimediaTypes, isIndexable, isPublishable
+            allowedMultimediaTypes, bundleProcessId, isIndexable, isPublishable
         } = args;
 
         const authenticatedAxios = createAuthenticatedAxios(userSessionId);
@@ -83,6 +84,7 @@ Example 1: Create a simple Multimedia Schema for images.
             if (description) payload.Description = description;
             if (processedMetadataFields) payload.MetadataFields = processedMetadataFields;
             if (allowedMultimediaTypes) payload.AllowedMultimediaTypes = toLinkArray(allowedMultimediaTypes);
+            if (bundleProcessId) payload.BundleProcess = toLink(bundleProcessId);
             if (typeof isIndexable === 'boolean') payload.IsIndexable = isIndexable;
             if (typeof isPublishable === 'boolean') payload.IsPublishable = isPublishable;
             

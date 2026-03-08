@@ -295,6 +295,7 @@ Example 8: Create a Schema with advanced constraints.
         fields: z.array(fieldDefinitionSchema).optional().describe("An array of field definitions for the schema's content fields. The order of the array determines the field order."),
         metadataFields: z.array(fieldDefinitionSchema).optional().describe("An array of metadata field definitions for the schema's metadata. The order of the array determines the field order. This is the ONLY way to define metadata for a Component."),
         componentProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of a Process Definition to associate as the Component Process for workflow."),
+        bundleProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of a Process Definition (workflow) used for reviewing and approving changes to Components based on the schema. If specified, the item needs to be added to a bundle associated with the same workflow process."),
         isIndexable: z.boolean().optional().describe("Specifies whether Components based on this Schema will be indexed for searching."),
         isPublishable: z.boolean().optional().describe("Specifies whether Components based on this Schema can be resolved for data publishing."),
     },
@@ -307,7 +308,7 @@ Example 8: Create a Schema with advanced constraints.
 
         const {
             title, locationId, rootElementName, description,
-            fields, metadataFields, componentProcessId, isIndexable,
+            fields, metadataFields, componentProcessId, bundleProcessId, isIndexable,
             isPublishable
         } = args;
 
@@ -332,6 +333,7 @@ Example 8: Create a Schema with advanced constraints.
             if (processedFields) payload.Fields = processedFields;
             if (processedMetadataFields) payload.MetadataFields = processedMetadataFields;
             if (componentProcessId) payload.ComponentProcess = toLink(componentProcessId);
+            if (bundleProcessId) payload.BundleProcess = toLink(bundleProcessId);
             if (typeof isIndexable === 'boolean') payload.IsIndexable = isIndexable;
             if (typeof isPublishable === 'boolean') payload.IsPublishable = isPublishable;
             
