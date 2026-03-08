@@ -305,11 +305,11 @@ export class Orchestrator {
             const isReadOnly = READ_ONLY_TOOLS.includes(step.tool);
 
             // Check if the "result" contains error indicators
-            const isErrorResult = step.result && (step.result.type === 'Error' || step.result.ErrorCode);
+            const isErrorResult = step.result && (step.result.type === 'Error' || step.result.ErrorCode || step.result.error);
 
             if (isErrorResult) {
                 step.status = 'failed';
-                step.error = step.result.Message || "Unknown tool error";
+                step.error = step.result.Message || step.result.error || "Unknown tool error";
                 responseForHistory = {
                     error: step.error,
                     ...(step.result.Details && { details: step.result.Details })
