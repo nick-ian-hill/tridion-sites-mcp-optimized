@@ -3,17 +3,17 @@ import axios, { InternalAxiosRequestConfig } from "axios";
 // --- Configuration Constants ---
 
 // 1. Service API (Bearer Token) - For automated/service-to-service calls
-const CORE_API_URL = process.env.CORE_API_URL ||
+const CORE_API_URL = process.env.CORE_API_URL?.trim() ||
     "http://10.100.92.199:81/api/v3.0";
 
 // 2. Experience Space UI API (Session Cookie) - For Chat Panel/Browser calls
 const UI_API_URL = "http://10.100.92.199:81/ui/api/v3.0";
 
 // Auth Endpoint Configuration
-const AUTH_TOKEN_URL = process.env.AUTH_TOKEN_URL ||
+const AUTH_TOKEN_URL = process.env.AUTH_TOKEN_URL?.trim() ||
     "http://external-dxui-dev-sites-stg.ted.nl.sdldev.net/access-management/connect/token";
-const AUTH_CLIENT_ID = process.env.AUTH_CLIENT_ID;
-const AUTH_CLIENT_SECRET = process.env.AUTH_CLIENT_SECRET;
+const AUTH_CLIENT_ID = process.env.AUTH_CLIENT_ID?.trim();
+const AUTH_CLIENT_SECRET = process.env.AUTH_CLIENT_SECRET?.trim();
 
 // --- Fallback Session ID Configuration ---
 // By default, this is null.
