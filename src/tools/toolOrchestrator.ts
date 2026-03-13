@@ -61,7 +61,7 @@ const createBaseSandbox = (): any => {
  */
 function applyItemIdAlias(obj: any): any {
     if (!obj || typeof obj !== 'object') return obj;
-    
+
     if (Array.isArray(obj)) {
         for (let i = 0; i < obj.length; i++) applyItemIdAlias(obj[i]);
         return obj;
@@ -69,7 +69,7 @@ function applyItemIdAlias(obj: any): any {
 
     if ('Id' in obj && !('itemId' in obj)) {
         Object.defineProperty(obj, 'itemId', {
-            get: function() { return this.Id; },
+            get: function () { return this.Id; },
             enumerable: false,
             configurable: true
         });
@@ -212,7 +212,7 @@ export const toolOrchestrator = {
     - TO FLAG A FAILURE: You MUST \`throw new Error("Reason")\`.
     - TO FLAG A WARNING: Use \`console.warn("Reason")\`. This will add the item to the 'warnings' count.
 
-2. "Verify, Don't Trust" (Strong Validation)
+    2. "Verify, Don't Trust" (Strong Validation)
     Do not assume the operation worked just because "succeeded" count is > 0.
     When you provide a 'mapScript', you MUST also provide a 'validationScript' to perform a "Read-After-Write" check:
     - Get a sample: \`const sample = context.utils.sample(context.successes, 1)\`.
@@ -235,6 +235,7 @@ export const toolOrchestrator = {
     CMS operations can fail for various business-logic reasons (e.g., items are locked, shared/unlocalized, in use by other items, or lacking mandatory fields). 
     - You MUST write defensive 'mapScripts' that anticipate and handle these realities.
     - Wrap risky operations (like 'updateContent', 'deleteItem', etc.) in 'try/catch' blocks or check their prerequisites if known.
+    - Do not just look for "409 Conflict" (Item Exists) errors. If you catch a "400 Bad Request" validation error (e.g., trying to map to a Region or Field that does not exist), you MUST log the specific 'e.message' or 'e.response.data using 'context.log()'. This exposes the exact schema mismatch to you so you can self-correct.
     - If an item cannot be processed, you MUST explicitly track it by using 'console.warn("Reason for skip")' or 'throw new Error("Reason for failure")'. 
     - NEVER let a script silently swallow an error or return a generic success object if the underlying operation failed. All skipped or failed items must be tracked so you can accurately report the final tally to the user.
 
@@ -242,6 +243,12 @@ export const toolOrchestrator = {
     You MUST NEVER execute a script that deletes items without explicit prior confirmation from the user. Because the orchestrator runs all scripts in a single execution, you must split bulk deletions into TWO distinct tool calls across two conversation turns:
     - TURN 1 (Discovery & Consent): Call 'toolOrchestrator' using ONLY a 'preProcessingScript' to find the items. Return the list to the chat and ask the user for confirmation to delete. 
     - TURN 2 (Execution): ONLY after the user explicitly replies with consent, make a SECOND call to 'toolOrchestrator'. Pass the confirmed IDs into 'itemIds', and use 'mapScript' to call 'context.tools.deleteItem'. You MUST explicitly pass 'confirmed: true' in your deleteItem tool call within the mapScript, otherwise the deletion will silently fail.
+
+    7. Data-Driven Content Modeling & Pre-Flight Checks
+    When importing data from external files (Excel, CSV, attachments) and creating corresponding Schemas or Templates:
+    - Do not guess or assume standard fields or layouts (e.g., assuming a single "Main" region). You MUST thoroughly analyze the *entire* dataset first.
+    - Check the data for references to specific metadata fields, category classifications, or Page Regions (e.g., "Sidebar", "Header", "Footer").
+    - **Pre-flight Checks**: Before using 'mapScript' to assemble Pages or Components in bulk, verify that your target Schemas and Templates actually contain the exact fields and regions you intend to populate.
 
     --- SCRIPT CONTEXT DETAILS ---
 
@@ -281,20 +288,18 @@ export const toolOrchestrator = {
     1. Test on a Single Item: Do not run your script on 500 items at once. First, run it with a single, non-critical item (e.g.,'itemIds': ["tcm:5-100"]).
     2. Set 'maxConcurrency: 1': This makes the execution log sequential and easy to read.
     3. Set 'debug: true': This includes a streamlined execution log in the response.
-    4. Set 'includeScriptResults: true': This reveals what your mapScript is actually returning (e.g., checking if it returns null or status: "skipped").
+    4. Set 'includeScriptResults: true': This reveals what your mapScript is actually returning.
     5. Inspect the Result: This single-item test will either succeed, proving your logic, or it will fail with a real error.
     
     ADVANCED RESILIENCE STRATEGIES
-    1. Resilient Batch (Partial Failures): By default, the tool stops on the first error. For bulk operations where some failures are acceptable, set \`stopOnError: false\`. In \`postProcessingScript\`, inspect \`context.failures\` to report on failed items.
-    2. Safe Execution (Try/Catch): Wrap risky tool calls (like 'getItem') in \`try...catch\` blocks within your \`mapScript\` to handle expected errors (like "Item Not Found") gracefully.
-   
-    Handling Heavy Data: Do not read entire Excel files or large JSON blobs directly into the chat context. First, use a script to read the file and return a summary (e.g., column headers). Then, process the data entirely within the toolOrchestrator scripts by reading the file in 'preProcessingScript' and passing rows to 'mapScript'.
-    Complex Tasks: Prefer the Single-Call Pattern. Execute Setup, Map, and Reduce in a single toolOrchestrator call. Pass data from 'preProcessingScript' to 'mapScript' via memory (context.preProcessingResult) rather than outputting large lists of IDs to the chat and pasting them into a second tool call.
+    1. Fail Loudly on Mutations: DO NOT wrap 'createItem', 'createPage', 'updateContent', or other data-altering API calls in 'try/catch' blocks that return null. You MUST let these errors throw naturally so the Orchestrator's 'stopOnError' circuit breaker catches them and reports the exact schema mismatch to you.
+    2. Defensive Validation: Your 'validationScript' must be resilient. If your mapScript encounters a logic error, 'context.successes[0].result' might not have the properties you expect (like 'itemId'). Always verify the result object exists and has the necessary IDs before calling 'getItem' in your validation phase.
+    3. Handling Heavy Data & Complex Tasks (Single-Call Pattern): Do not read entire Excel files or large JSON blobs directly into the chat context. Execute Setup, Map, and Validate in a single toolOrchestrator call. Parse the file in 'preProcessingScript' and pass the extracted data to 'mapScript' via memory ('context.preProcessingResult') rather than outputting large lists of IDs to the chat and pasting them into a second tool call.
 
     NOTES
     - Automatic JSON parsing: All tools have their JSON string responses automatically parsed into JavaScript objects. You do not need to parse tool responses in a script.
     - Script Limits: All scripts are sandboxed. Sync code max 5s, Async max 600s.
-    - Disallowed Tools: 'toolOrchestrator' and 'deleteItem' cannot be called recursively.
+    - Disallowed Tools: 'toolOrchestrator' cannot be called recursively.
 
     ### EXAMPLES
 
@@ -726,6 +731,7 @@ export const toolOrchestrator = {
 
                 const standardWrapper = async (args: any) => {
                     let validatedArgs = args || {};
+                    validatedArgs = formatForAgent(validatedArgs);
                     if (toolInputProperties && typeof toolInputProperties === 'object') {
                         const toolInputSchema = z.object(toolInputProperties);
                         const validationResult = toolInputSchema.safeParse(validatedArgs);
@@ -857,17 +863,17 @@ export const toolOrchestrator = {
         }
 
         // --- Phase 2: Execution Logic (Map Phase) ---
-let wasStoppedOnError = false;
+        let wasStoppedOnError = false;
 
         if (!mapScript) {
             // GRACEFUL EXIT: If there's no mapScript, this was purely a discovery/setup call (e.g., Turn 1 of deletion).
             logs.push("No mapScript provided. Ending execution after pre-processing and returning discovered items.");
-            
+
             const discoveryResult: OrchestratorResult = {
                 status: "Completed",
                 summary: `Discovery completed: ${finalItemIds.length} items found.`,
                 processedItems: finalItemIds.map(id => ({ id, result: "Discovered" })),
-                output: preScriptContextData 
+                output: preScriptContextData
             };
 
             if (debug) {
@@ -1106,15 +1112,33 @@ let wasStoppedOnError = false;
         }
 
         // --- Final Output Construction (Structured) ---
-        // We wrap the final result (even if custom) in the OrchestratorResult envelope
-        // to ensure the agent receives the standard structure requested.
         const finalStatus = failures.length > 0 ? "PartialSuccess" : "Completed";
+
+        // 1. Force truncation on the processed items list (max 3 items)
+        const truncatedSuccesses = successes.slice(0, 3).map(s => ({ id: s.itemId, result: s.result }));
+        const truncatedFailures = failures.slice(0, 3).map(f => ({ id: f.itemId, error: f.error }));
+
+        // 2. Clean up the output payload to prevent echoing massive datasets
+        let safeOutput = responsePayload;
+        if (typeof responsePayload === 'object' && responsePayload !== null) {
+            safeOutput = { ...responsePayload };
+            // If the agent passed massive datasets through preProcessingResult, strip them out before returning to LLM
+            delete safeOutput.preProcessingResult;
+            delete safeOutput.sourceData;
+
+            // If the default summary included the full results array, truncate it
+            if (Array.isArray(safeOutput.results)) {
+                safeOutput.results = safeOutput.results.slice(0, 3);
+                safeOutput.resultsTruncated = true;
+            }
+        }
 
         const finalOutput: OrchestratorResult = {
             status: finalStatus,
-            summary: (typeof responsePayload === 'string') ? responsePayload : (responsePayload?.summary || `Operation ${finalStatus}`),
-            processedItems: successes.map(s => ({ id: s.itemId, result: s.result })),
-            output: responsePayload
+            summary: (typeof responsePayload === 'string') ? responsePayload : (responsePayload?.summary || `Operation ${finalStatus}. Processed: ${finalItemIds.length}, Succeeded: ${successes.length}, Failed: ${failures.length}`),
+            processedItems: truncatedSuccesses,
+            failedItem: truncatedFailures.length > 0 ? truncatedFailures[0] : undefined, // Just show the first failure
+            output: safeOutput
         };
 
         if (debug) {
