@@ -34,16 +34,32 @@ The 'activityDefinitions' parameter accepts an array of objects. Each object def
 
 IMPORTANT: The tool assumes the backend can resolve temporary references during creation. This is a common pattern for creating complex, interlinked items in a single transaction.
 
-### Scripting Automated Activities
+### Core Concepts: The "Automated Activity" Pattern
+To make an activity "automated", define it as a "Normal" activity type and provide a C# script in the 'script' property. 
+- **Assignee Best Practice**: Always assign automated activities to the System User (assigneeId: "tcm:0-3-65552"). This prevents the workflow from "hanging" or appearing in manual worklists.
+- **Finishing**: Most scripts MUST end by programmatically finishing the activity using 'SessionAwareCoreServiceClient.FinishActivity(...)'.
+- **Available Namespaces**: Scripts have access to 'System.Linq', 'System.Collections.Generic', and 'Tridion.ContentManager.CoreService.Client' by default.
+- **Formatting**: Ensure your C# code is correctly formatted as a single string, with newlines represented as '\\n' and quotes escaped as '\\"'.
 
-To make an activity "automated", you provide a C# script in the 'script' property. This script executes when the workflow reaches that activity. The script can perform various actions by interacting with the Core Service via the 'SessionAwareCoreServiceClient' object.
+### Best Practices for Decision Routing
+**Do not automate "Decision" activities directly.** Automating a Decision activity is highly discouraged because 'FinishActivity' requires a 'nextActivityDefinitionId' to know which branch to take. Since these IDs are generated dynamically during process creation, they cannot be safely hardcoded.
+**Recommendation**: After a manual Decision activity that routes the user (e.g., Approve or Reject), it is highly desirable that the actual routing/processing is performed automatically. To achieve this, make the branches (the immediate next steps) "Normal" automated activities assigned to the System User. These automated branch activities can execute necessary logic (like setting variables or publishing) and then automatically finish to push the workflow to the next real stage.
 
-Key points for scripting:
-- Most scripts will end by programmatically finishing the activity using 'SessionAwareCoreServiceClient.FinishActivity(...)'.
-- You can access information about the current workflow process via the 'ProcessInstance' object.
-- You can access the current activity via the 'CurrentActivityInstance' object.
-- Use 'ProcessInstance.Variables' to pass data between activities.
-- Ensure your C# code is correctly formatted as a single string, with newlines represented as '\\n'.
+### Deep Dive: Robust Automated Publishing
+A common error in publishing scripts is the "Not found" error. To prevent this, scripts must handle:
+1. **Version Stripping**: Item IDs in workflow packages often contain version suffixes (e.g., "-v12"). The Publish method requires standard IDs without these suffixes.
+2. **Null Safety**: Always verify that the Publish call returned a valid transaction array before attempting to access its members.
+(See Example 3 for the "Bulletproof" Publish Script).
+
+### Dynamic Routing Patterns
+You can use ProcessInstance history to dynamically route workflows.
+- **Pattern A (Return to Creator)**: Send a task back to the workflow initiator.
+  \`NextAssignee = new LinkToTrusteeData { IdRef = ProcessInstance.Creator.IdRef }\`
+- **Pattern B (Return to Last Performer)**: Trace history to send a task back to the specific person who completed an earlier step. Use LINQ on \`ProcessInstance.Activities\`.
+
+### Troubleshooting
+- **Error: "Next activity 'X' does not exist"**: Ensure the exact string in 'nextActivities' matches the 'title' property of another activity defined in the same array.
+- **UI Error: "Not found" on an automated step**: This usually indicates the C# script crashed. Add a try-catch block to your scripts to log errors to \`ProcessInstance.Variables["Error"]\` for easier debugging.
 
 Examples:
 
@@ -66,11 +82,11 @@ Example 1: Create a simple, two-step approval workflow.
         ]
     });
 
-Example 2: Create a more complex workflow with a decision point.
+Example 2: Create a complex workflow using Best Practice Decision Routing (Manual Decision -> Automated Branches).
     const result = await tools.createProcessDefinition({
         title: "Task Process with Review",
         locationId: "tcm:0-5-1",
-        description: "A workflow with a perform step, an automated assignment, a review decision, and accept/decline branches.",
+        description: "A workflow with a perform step, an automated assignment, a review decision, and automated accept/decline branches.",
         activityDefinitions: [
           {
             "title": "Perform Task",
@@ -81,6 +97,7 @@ Example 2: Create a more complex workflow with a decision point.
           },
           {
             "title": "Assign to Process Creator",
+            "assigneeId": "tcm:0-3-65552",
             "description": "Task was finished and it will be sent to the process creator.",
             "script": "ActivityFinishData finishData = new ActivityFinishData()\\n{\\nMessage = ProcessInstance.Activities.Last().FinishMessage,\\nNextAssignee = new LinkToTrusteeData\\n{\\nIdRef = ProcessInstance.Creator.IdRef\\n}\\n};\\nSessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);",
             "nextActivities": ["Review Task"]
@@ -88,25 +105,27 @@ Example 2: Create a more complex workflow with a decision point.
           {
             "title": "Review Task",
             "activityType": "Decision",
-            "description": "Review and approve the task. Finish process or send it back.",
+            "description": "Manual review. Choose to Accept or Decline.",
             "nextActivities": ["Decline", "Accept"]
           },
           {
             "title": "Decline",
-            "description": "The task was reviewed and will be sent back to the performer.",
+            "assigneeId": "tcm:0-3-65552",
+            "description": "Automated routing: Sends task back to the original performer.",
             "script": "string performedTaskActivityDefinitionId = ProcessInstance.Activities.Cast<ActivityInstanceData>().First().ActivityDefinition.IdRef;\\nActivityFinishData finishData = new ActivityFinishData()\\n{\\nMessage = ProcessInstance.Activities.Last().FinishMessage,\\nNextAssignee = new LinkToTrusteeData\\n{\\nIdRef = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last(activity => activity.ActivityDefinition.IdRef == performedTaskActivityDefinitionId).Owner.IdRef\\n}\\n};\\nSessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);",
             "nextActivities": ["Perform Task"]
           },
           {
             "title": "Accept",
-            "description": "The task process is complete.",
+            "assigneeId": "tcm:0-3-65552",
+            "description": "Automated routing: The task process is complete.",
             "script": "ActivityFinishData finishData = new ActivityFinishData()\\n{\\nMessage = \\"Automatic Activity 'Accept' Finished\\"\\n};\\nSessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);",
             "nextActivities": []
           }
         ]
     });
 
-Example 3: Create a workflow that automatically publishes the item(s) in the workflow package.
+Example 3: Create a workflow with the "Bulletproof" auto-publish script.
     const result = await tools.createProcessDefinition({
         title: "Auto-Publish Workflow",
         locationId: "tcm:0-5-1",
@@ -119,8 +138,9 @@ Example 3: Create a workflow that automatically publishes the item(s) in the wor
             },
             {
                 "title": "Publish Content",
-                "description": "This activity automatically publishes the items.",
-                "script": "PublishInstructionData p=new PublishInstructionData();p.ResolveInstruction=new ResolveInstructionData{IncludeChildPublications=false,IncludeComponentLinks=true,IncludeDynamicVersion=true,IncludeWorkflow=true,StructureResolveOption=StructureResolveOption.OnlyItems};p.RenderInstruction=new RenderInstructionData();string[] i=ProcessInstance.Subjects.Select(s=>{int v=s.IdRef.LastIndexOf(\\"-v\\");return v>-1?s.IdRef.Substring(0,v):s.IdRef;}).ToArray();if(i.Length>0){string[] t=new string[]{\\"tcm:0-3-65538\\"};PublishTransactionData[] tx=SessionAwareCoreServiceClient.Publish(i,p,t,Tridion.ContentManager.CoreService.Client.PublishPriority.Normal,null);ProcessInstance.Variables.Add(\\"PublishTransaction\\",tx[0].Id);}SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id,new ActivityFinishData{Message=\\"Content approved and sent to publisher.\\"},null);"
+                "assigneeId": "tcm:0-3-65552",
+                "description": "This automated activity safely publishes the items.",
+                "script": "string[] itemIds = ProcessInstance.Subjects.Select(s => {\\n    string id = s.IdRef;\\n    int vIndex = id.LastIndexOf(\\"-v\\");\\n    return vIndex > -1 ? id.Substring(0, vIndex) : id;\\n}).ToArray();\\n\\nif (itemIds.Length > 0) {\\n    PublishInstructionData p = new PublishInstructionData {\\n        ResolveInstruction = new ResolveInstructionData {\\n            IncludeComponentLinks = true,\\n            IncludeDynamicVersion = true\\n        },\\n        RenderInstruction = new RenderInstructionData()\\n    };\\n    string[] targets = new string[] { \\"tcm:0-3-65538\\" };\\n    PublishTransactionData[] txs = SessionAwareCoreServiceClient.Publish(itemIds, p, targets, PublishPriority.Normal, null);\\n    if (txs != null && txs.Length > 0) {\\n        ProcessInstance.Variables.Add(\\"PublishTransaction\\", txs[0].Id);\\n    }\\n}\\nSessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, new ActivityFinishData { Message = \\"Automated publishing initiated.\\" }, null);"
             }
         ]
     });
@@ -144,6 +164,7 @@ Example 4: Create a workflow with an automated activity that aborts the entire p
             },
             {
                 "title": "Abort Process",
+                "assigneeId": "tcm:0-3-65552",
                 "description": "This activity automatically aborts and deletes the entire workflow process.",
                 "script": "SessionAwareCoreServiceClient.Delete(ProcessInstance.Id);"
             }
@@ -163,6 +184,7 @@ Example 5: Create a workflow with a timed delay. The script suspends the activit
             },
             {
                 "title": "Wait One Day",
+                "assigneeId": "tcm:0-3-65552",
                 "description": "This automated activity pauses the workflow for 24 hours.",
                 "script": "if (string.IsNullOrEmpty(ResumeBookmark))\\n{\\n    SessionAwareCoreServiceClient.Suspend(CurrentActivityInstance.Id, \\"Suspending for 24 hours\\", DateTime.Now.AddDays(1), \\"ResumeAfterDelay\\", null);\\n}\\nelse if (ResumeBookmark == \\"ResumeAfterDelay\\")\\n{\\n    ActivityFinishData finishData = new ActivityFinishData() { Message = \\"Resumed after 24 hour delay.\\" };\\n    SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\\n}"
             }
