@@ -139,10 +139,15 @@ export const filterResponseData = ({ responseData, details, includeProperties }:
     if (Array.isArray(responseData)) {
         return applyFilterToArray(responseData, filterFn);
     }
-    if (responseData.items && Array.isArray(responseData.items)) {
+
+    // Determine if this is a single CMS Item (which has an Id) 
+    // or a generic API list envelope (which does not have an Id at the root).
+    const isSingleCmsItem = !!responseData.Id;
+
+    if (responseData.items && Array.isArray(responseData.items) && !isSingleCmsItem) {
         return { ...responseData, items: applyFilterToArray(responseData.items, filterFn) };
     }
-    if (responseData.Items && Array.isArray(responseData.Items)) {
+    if (responseData.Items && Array.isArray(responseData.Items) && !isSingleCmsItem) {
         return { ...responseData, Items: applyFilterToArray(responseData.Items, filterFn) };
     }
 
