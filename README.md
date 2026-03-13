@@ -25,18 +25,25 @@ To get the MCP server running on your machine, follow these steps:
    npm install
    ```
 
-3. **Configure Environment Variables:**
-   The server requires the following environment variables to authenticate against the CM REST API. 
-   *(Note: The values below are specific to a particular CMS instance and should be updated to match your target environment).*
+3. **Obtain Service Account Credentials:**
+   To authenticate the server against the CM REST API, you need a valid Client ID and Secret.
+   * Log in to your Tridion Sites **Access Management** console.
+   * Navigate to the **Service accounts** tab.
+   * Locate and click on the relevant service account for your environment (e.g., **Tridion Sites Content Manager API Client (admin)**).
+   * From the details screen, copy your **Client ID** and generate/copy your **Client Secret**.
+
+4. **Configure Environment Variables:**
+   Set the following environment variables using the credentials you just obtained. 
+   *(Note: The URLs below are examples and should be updated to match your target CMS environment).*
 
    ```env
    CORE_API_URL=http://10.100.92.199:81/api/v3.0
    AUTH_TOKEN_URL=http://external-dxui-dev-sites-stg.ted.nl.sdldev.net/access-management/connect/token
-   AUTH_CLIENT_ID=78ffaefc-cd0e-4d12-90bf-c6be42cd7a10
-   AUTH_CLIENT_SECRET=l2J8vixf0NMHqcldUH3BM/vULPQaVQhx8gF9u7hrXZYhq3IQUEy9nQ==
+   AUTH_CLIENT_ID=<your-client-id>
+   AUTH_CLIENT_SECRET=<your-client-secret>
    ```
 
-4. **Start the server:**
+5. **Start the server:**
    ```bash
    npm run start
    ```
@@ -93,3 +100,18 @@ If you are running the MCP server directly with a Gemini environment, you must c
    }
    ```
 3. **Restart your Gemini interface:** Save the file and restart your Gemini application. It will connect to `localhost:8090` and utilize the available tools.
+
+---
+
+## 4. Troubleshooting
+
+### The AI Assistant returns an `invalid_client` authentication error
+If the MCP server is running but the assistant reports that calls to the CMS are failing with an `invalid_client` error, the Tridion authentication server is rejecting your credentials. Check the following:
+
+1. **VS Code Stale Terminals (Most Common):** If you recently set or updated your environment variables locally, **any currently open VS Code terminals will not see the new values**. 
+   * **Fix:** You must completely kill the terminal session by clicking the **Trash Can icon** in the terminal panel, open a new terminal, and run `npm run start` again.
+   * **Verify:** In your new VS Code terminal, you can verify the variable was picked up by running:
+     * *PowerShell:* `echo $env:AUTH_CLIENT_ID`
+     * *Bash/Zsh:* `echo $AUTH_CLIENT_ID`
+
+2. **Old or Revoked Credentials:** Ensure you are using the correct secret for the specific environment URL (`AUTH_TOKEN_URL`) you are targeting. If you are copying a secret shared by a colleague, it may have been regenerated or revoked in Access Management. Generate a fresh secret if necessary.
