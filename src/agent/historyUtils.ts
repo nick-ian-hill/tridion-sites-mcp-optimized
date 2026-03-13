@@ -90,15 +90,16 @@ export function prepareHistoryForModel(history: Content[]): Content[] {
     // However, we MUST NOT drop messages from the 'protectionStartIndex' onwards if possible.
     let currentProtectionIndex = protectionStartIndex;
 
-    while (currentLength > MAX_HISTORY_CHAR_LENGTH && preparedHistory.length > 2) {
-        // If the protected turn has shifted all the way down to index 1, stop deleting!
-        if (currentProtectionIndex <= 1) {
+    while (currentLength > MAX_HISTORY_CHAR_LENGTH && preparedHistory.length > 3) {
+        // If the protected turn has shifted all the way down to index 2, stop deleting!
+        if (currentProtectionIndex <= 2) {
             console.warn("History Debug] Critical: Context limit reached, but cannot drop older frames without breaking current turn.");
             break;
         }
 
-        preparedHistory.splice(1, 1);
-        currentProtectionIndex--; // Update the index because everything shifted left
+        // Remove TWO messages (a pair) to maintain alternating roles
+        preparedHistory.splice(1, 2);
+        currentProtectionIndex -= 2;
         currentLength = JSON.stringify(preparedHistory).length;
     }
 

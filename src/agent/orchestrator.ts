@@ -1,10 +1,12 @@
 import http from 'node:http';
+import { z } from 'zod';
 import { filterResponseData } from '../utils/responseFiltering.js';
 import { Task, PlanStep, MessageEmitter, Content, AgentContext, Attachment } from './types.js';
 import { determineNextStep, summarizeToolOutput, assessTaskProgress, summarizeFailureState } from './gemini.js';
 import { READ_ONLY_TOOLS } from './readOnlyTools.js';
 import { AxiosError } from 'axios';
 import { prepareHistoryForModel } from './historyUtils.js';
+import { formatForAgent } from '../utils/fieldReordering.js';
 
 interface OrchestratorOptions {
     req: http.IncomingMessage;
@@ -135,9 +137,37 @@ export class Orchestrator {
         return parts.length > 0 ? `\n\nUser's Current Context:\n${parts.join('\n')}` : '';
     };
 
+    /**
+         * Recursively compares the raw LLM arguments with the Zod-parsed arguments.
+         * Returns an array of any key paths that were stripped out by Zod due to schema mismatches.
+         */
+    private findStrippedKeys(raw: any, parsed: any, path: string = ""): string[] {
+        let stripped: string[] = [];
+
+        if (Array.isArray(raw) && Array.isArray(parsed)) {
+            for (let i = 0; i < raw.length; i++) {
+                // If the item was dropped entirely from the array
+                if (parsed[i] === undefined) {
+                    stripped.push(`${path}[${i}]`);
+                } else {
+                    stripped.push(...this.findStrippedKeys(raw[i], parsed[i], `${path}[${i}]`));
+                }
+            }
+        } else if (typeof raw === 'object' && raw !== null && typeof parsed === 'object' && parsed !== null) {
+            for (const key of Object.keys(raw)) {
+                if (!(key in parsed)) {
+                    stripped.push(`${path ? path + '.' : ''}${key}`);
+                } else {
+                    stripped.push(...this.findStrippedKeys(raw[key], parsed[key], `${path ? path + '.' : ''}${key}`));
+                }
+            }
+        }
+        return stripped;
+    }
+
     private async executePlan(task: Task, availableTools: any[], latestPrompt: string): Promise<string> {
         let maxTurns = 20; // Starting limit
-        let extensionsUsed = 0; 
+        let extensionsUsed = 0;
         const maxExtensions = 2; // Allow up to two +10 extensions (max 40 turns total)
         let consecutiveFailures = 0;
         let useAdvancedModel = false;
@@ -165,16 +195,15 @@ export class Orchestrator {
 
             let hasFailures = false;
 
-            // Execute parallel actions concurrently
-            const executionPromises = actionSteps.map(async (step) => {
+            // Execute actions sequentially to respect dependencies and reduce rate limit spikes
+            for (const step of actionSteps) {
                 task.plan.push(step);
                 await this.executeStep(step, task);
+
                 if (step.status === 'failed') {
                     hasFailures = true;
                 }
-            });
-
-            await Promise.allSettled(executionPromises);
+            }
 
             // Progress and escalation logic
             if (actionSteps.length > 0) {
@@ -267,7 +296,7 @@ export class Orchestrator {
                     parts: [{ functionResponse: { name: 'finish', response: { status: 'paused' } } }]
                 });
 
-                return assessment.userMessage; 
+                return assessment.userMessage;
             }
         }
         return "Task paused.";
@@ -291,7 +320,58 @@ export class Orchestrator {
 
             // Provide the tools dictionary to the execution context so toolOrchestrator can use them
             const toolsDict: Record<string, any> = {};
-            this.allTools.forEach(t => toolsDict[t.name] = t);
+            this.allTools.forEach(t => {
+                toolsDict[t.name] = {
+                    ...t,
+                    execute: async (args: any, execContext: any) => {
+                        const rawResult = await t.execute(args, execContext);
+
+                        // Automatically unwrap standard text envelopes for the script
+                        if (rawResult?.content && Array.isArray(rawResult.content) && rawResult.content[0]?.type === 'text') {
+                            const textValue = rawResult.content[0].text;
+
+                            // Try to auto-parse if it looks like JSON
+                            try {
+                                const jsonMatch = textValue.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+                                if (jsonMatch) {
+                                    const parsed = JSON.parse(jsonMatch[0]);
+
+                                    // Special convenience unwrapping for generated content (AI output)
+                                    if (parsed.type === 'GeneratedContent' && parsed.Content !== undefined) {
+                                        try {
+                                            // If the AI generated JSON, parse that too!
+                                            const innerMatch = String(parsed.Content).match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+                                            if (innerMatch) {
+                                                return JSON.parse(innerMatch[0]);
+                                            }
+                                        } catch (innerE) {
+                                            // Ignore inner parse error, return raw string below
+                                        }
+                                        return parsed.Content;
+                                    }
+
+                                    return parsed;
+                                }
+                            } catch (e) {
+                                // Not JSON, just return the raw string
+                                return textValue;
+                            }
+                            return textValue; // Fallback to raw string
+                        }
+
+                        return rawResult; // Return as-is if no envelope
+                    }
+                };
+            });
+
+            step.args = formatForAgent(step.args);
+
+            const validatedArgs = z.object(toolToExecute.input).parse(step.args);
+
+            const strippedKeys = this.findStrippedKeys(step.args, validatedArgs);
+            if (strippedKeys.length > 0) {
+                throw new Error(`Validation Error: The following properties are not recognized by the schema and were dropped: [${strippedKeys.join(', ')}]. Please check your property names and casing (e.g., PascalCase vs camelCase).`);
+            }
 
             const result = await toolToExecute.execute(step.args, {
                 request: this.req,
@@ -352,7 +432,12 @@ export class Orchestrator {
 
             task.history.push({ role: 'function', parts: [{ functionResponse: { name: step.tool, response: { error: error.message } } }] });
 
-            this.emit('error', { message: `Step ${step.step} failed: ${error.message}`, step: step.step });
+            this.emit('progress', {
+                isLog: true,
+                logCategory: 'tool-result',
+                toolName: step.tool,
+                message: `Received response from **${step.tool}**.`
+            });
         }
     }
 

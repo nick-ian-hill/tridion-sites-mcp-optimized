@@ -147,20 +147,20 @@ export const determineNextStep = async (
         - If unrecoverable, call 'finish' and explain the failure clearly in 'taskConfirmation'.
 
         **6. Bulk Operations & Orchestration**
-        - If you need to process, inspect, or mutate more than 3 items, you MUST NOT call individual tools sequentially or in parallel.
-        - Instead, use the 'toolOrchestrator' to process the batch server-side.
-        - You MUST include a 'validationScript' to audit the final state.
-        - Resilient Batches: For large batches where some failures are acceptable, remember to set 'stopOnError: false' in the tool parameters so the script completes the batch.
-        - Reporting Bulk Operations: Review the orchestrator's output carefully. If any items failed or generated warnings, you MUST explicitly report the exact number and the reasons in your 'taskConfirmation'. Never claim total success if warnings occurred.
+        - If you need to process, inspect, or mutate more than 3 items, use the 'toolOrchestrator' to process the batch server-side.
+        - **SINGLE-CALL FOR HEAVY DATA:** When importing from Excel, do it in a single orchestrator call. Use 'preProcessingScript' to parse the file and pass data via memory ('preProcessingResult') to the 'mapScript'. Do not dump data into the chat.
+        - **MANDATORY DRY RUN:** Before executing a large batch, you MUST test your script first. Call 'toolOrchestrator' passing ONLY 1 or 2 items in the 'itemIds' array. Evaluate the result. Only proceed with the remaining items if the dry run succeeds.
+        - **FAIL LOUDLY & FAST:** Do NOT wrap your primary mutation API calls (e.g., 'createPage', 'createComponent') in 'try/catch' blocks that return null. Let errors throw naturally. Leave 'stopOnError' as true (the default) so the orchestrator halts immediately on the first error and reports the exact issue to you. DO NOT set stopOnError to false.
+        - **DEFENSIVE VALIDATION:** Your 'validationScript' MUST be defensive. Do not blindly access properties (e.g., 'context.successes[0].result.itemId') without checking if 'result' and 'itemId' are valid, as items may have returned incomplete data.
+        - Reporting Bulk Operations: Review the orchestrator's output carefully. If any items failed or generated warnings, you MUST explicitly report the exact number and the reasons in your 'taskConfirmation'.
 
-        **7. Handling Large Datasets & Excel Files**
+        **7. Handling Large Datasets & Excel Files (Data-Driven Modeling)**
         - NEVER read an entire large Excel data sheet directly into the chat context.
         - Step 1 (Triage): Call 'readUploadedFile' or 'readMultimediaComponent' with 'maxRows': 3.
-        - Step 2 (Analysis): Inspect the rows returned for EACH sheet. 
-           - Detection: Look for sheets named "Notes", "Instructions", or rows containing prose/logic. 
-           - Re-reading: If a sheet contains critical instructions and the data appears truncated (compare 'Data.length' to 'TotalRows'), IMMEDIATELY call the read tool again using the 'targetSheet' parameter for ONLY that specific sheet WITHOUT 'maxRows'.
-           - Data Tables: For standard data sheets, use the 3 rows only to understand the schema.
-        - Step 3 (Execution): Write a 'toolOrchestrator' script. In your 'preProcessingScript', call the read tool for data sheets without 'maxRows' to load the full dataset into the script's memory.
+        - Step 2 (Metadata Analysis): Inspect the rows returned for EACH sheet. Look for sheets named "Notes" or "Instructions". If they contain critical logic and appear truncated (compare 'Data.length' to 'TotalRows'), IMMEDIATELY call the read tool again using the 'targetSheet' parameter for ONLY that specific sheet WITHOUT 'maxRows'.
+        - Step 3 (Schema Verification): Do NOT guess standard fields or layouts (e.g., assuming a single "Main" region on a page). Your Schemas and Templates MUST perfectly match the dataset. If the 3 triage rows are not enough to confirm all required variables, write a 'toolOrchestrator' script (omitting 'mapScript') to read the full file server-side and return a summary of all unique data variations (e.g., an array of all unique regions referenced).
+        - Step 4 (Dry Run Execution): Write your final 'toolOrchestrator' script, but restrict it to process ONLY 1 or 2 rows/items first. This is critical to prevent slow, massive failures if your script logic or mapping has a bug. 
+        - Step 5 (Full Execution): Only after the Dry Run succeeds and your 'validationScript' passes should you use the 'toolOrchestrator' to process the remaining dataset.
 
         **8. Destructive Actions (Requires Consent)**
         - You MUST NEVER delete an item using 'deleteItem', 'undoCheckOutItem' (for items without a major version), or the 'toolOrchestrator' without EXPLICIT, prior confirmation from the user (unless you just created it this turn).
@@ -191,7 +191,7 @@ export const determineNextStep = async (
 
     let result: GenerateContentResponse | undefined;
     let retries = 3;
-    let delayMs = 4000;
+    let delayMs = 2000;
 
     while (retries > 0) {
         try {
@@ -212,6 +212,7 @@ export const determineNextStep = async (
             break;
         } catch (error: any) {
             const errorString = typeof error === 'object' ? JSON.stringify(error) + String(error) : String(error);
+            const statusCode = error?.status || error?.response?.status || "Unknown";
 
             const isRateLimit = errorString.includes('429') || errorString.includes('RESOURCE_EXHAUSTED');
             const isRetryable =
@@ -232,21 +233,22 @@ export const determineNextStep = async (
                         // Extract the seconds, convert to MS, and add a 1-second safety buffer
                         waitTimeMs = Math.ceil(parseFloat(match[1]) * 1000) + 1000;
                     } else {
-                        // Fallback to 60 seconds if we can't parse the exact time
-                        waitTimeMs = 60000;
+                        waitTimeMs = 10000;
                     }
+                } else {
+                    waitTimeMs = delayMs;
                 }
 
-                console.warn(`[Reasoner] API/Network issue detected. Retrying in ${waitTimeMs / 1000} seconds...`);
+                console.warn(`[Reasoner] API/Network issue detected (Status: ${statusCode}). Retrying in ${waitTimeMs / 1000} seconds...`);
                 await new Promise(resolve => setTimeout(resolve, waitTimeMs));
 
                 if (!isRateLimit) {
-                    delayMs *= 1.5; // Only apply normal exponential backoff to non-quota network blips
+                    delayMs *= 1.5; // Apply exponential backoff only to non-quota network blips
                 }
                 retries--;
             } else {
                 console.error("[Reasoner] Gemini API call failed:", error);
-                throw new Error(`Failed to get response from Gemini: ${error instanceof Error ? error.message : String(error)}`);
+                throw new Error(`Failed to get response from Gemini (Status: ${statusCode}): ${error instanceof Error ? error.message : String(error)}`);
             }
         }
     }
@@ -262,22 +264,38 @@ export const determineNextStep = async (
     // This satisfies TypeScript safety and prevents runtime errors in the Orchestrator.
     const validCalls = (calls || []).filter(call => call.name);
 
-    // Handle case where no function calls were generated (fallback to text or 'finish')
-    if (validCalls.length === 0) {
-        console.warn("[Reasoner] Model did not return a valid function call. Assuming task is complete.");
-        const textResponse = (result.text ?? "").trim();
-        const planStep: PlanStep = {
-            step: -1,
-            tool: 'finish',
-            args: { taskConfirmation: textResponse || "Task completed." },
-            description: "Finish with a direct text response from the model.",
-            status: 'pending'
-        };
-        return { planSteps: [planStep], modelResponseContent };
-    }
-
     // Map ALL valid function calls to plan steps (supporting parallel calling)
     const currentFunctionCount = history.filter(h => h.role === 'function').length;
+
+    // Handle case where no function calls were generated (API dropped malformed JSON)
+    if (validCalls.length === 0) {
+        console.warn("[Reasoner] Model did not return a valid function call. Injecting recovery step to continue loop.");
+        
+        const errorMessage = "SYSTEM ALERT: Your previous response was invalid or empty. This usually happens when you try to generate a massive mapScript and make a JSON escaping syntax error. Do not write massive scripts. Simplify your logic or break the task into smaller steps.";
+
+        // 1. Synthesize the model's dropped call so the history structure remains valid
+        const safeContent: Content = { 
+            role: 'model', 
+            parts: [{ 
+                functionCall: {
+                    name: "toolOrchestrator",
+                    args: { preProcessingScript: `throw new Error("${errorMessage}");` }
+                }
+            }] 
+        };
+
+        // 2. Queue the synthesized step. The orchestrator will run this, fail immediately, 
+        // append the helpful error to the history, and trigger the next turn automatically!
+        const planStep: PlanStep = {
+            step: currentFunctionCount + 1,
+            tool: 'toolOrchestrator',
+            args: { preProcessingScript: `throw new Error("${errorMessage}");` },
+            description: "System injected error recovery.",
+            status: 'pending'
+        };
+
+        return { planSteps: [planStep], modelResponseContent: safeContent };
+    }
 
     const nextSteps: PlanStep[] = validCalls.map((call, index) => ({
         step: currentFunctionCount + 1 + index,
