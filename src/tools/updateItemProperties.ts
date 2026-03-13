@@ -79,7 +79,8 @@ export const updateItemProperties = {
 SCHEMA MODIFICATION RULES:
 - If you are modifying HOW a field behaves (e.g., making it optional, changing MaxLength), use 'updateSchemaFieldProperties'.
 - If you are changing WHERE a field lives (or surgically adding/removing one), use 'updateSchemaFieldStructure'.
-- If you are modifying the Schema ITEM ITSELF (Title, Root Element, Region rules) or doing a WHOLESALE OVERWRITE of all fields, use THIS tool ('updateItemProperties').
+- If you are modifying a REGION SCHEMA (adding/removing NestedRegions), you MUST use THIS tool ('updateItemProperties') and provide the fully updated 'regionDefinition' object.
+- If you are modifying the Schema ITEM ITSELF (Title, Root Element) or doing a WHOLESALE OVERWRITE of all fields, use THIS tool ('updateItemProperties').
 
 This tool modifies the definition of an item itself (e.g., its title, its Schema fields, its linked templates). 
 To update only the content of a Component, use the 'updateContent' tool.

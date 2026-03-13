@@ -36,6 +36,10 @@ export const updateSchemaFieldStructure = {
     description: `Surgically updates the structural definition of a Schema's fields by adding, removing, or moving fields.
     This tool is highly efficient as it targets specific field positions without requiring you to replace the entire field array.
 
+Scope:
+- This tool is EXCLUSIVELY for modifying 'Content' or 'Metadata' fields like Text, Number, ComponentLink.
+- DO NOT use this tool to modify Region definitions (i.e., do not pass 'NestedRegion' or 'RegionDefinition' objects). To add or modify regions in a Region Schema, use the 'updateItemProperties' tool and pass the full 'regionDefinition' object.
+
 BluePrint Note:
 Field and Metadata Field definitions can ONLY be modified in the 'Primary' version of the Schema (where IsLocalized and IsShared are false).
 - If you attempt to update a Shared or Localized schema, the update will be blocked.
