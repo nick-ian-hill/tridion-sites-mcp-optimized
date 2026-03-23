@@ -89,7 +89,7 @@ const scriptUtils = {
 
     /**
      * Throws an error if the condition is false.
-     * Useful for validation scripts.
+     * Useful for validation within scripts.
      */
     assert: (condition: boolean, message?: string) => {
         if (!condition) {
@@ -159,17 +159,15 @@ interface OrchestratorResult {
 
 // This plain object defines the input properties, matching your other tools
 const toolOrchestratorInputProperties = {
-    itemIds: z.array(z.string().regex(/^(tcm:\d+-\d+(-\d+)?(-v\d+)?|ecl:[^:\s]+(-v\d+)?)$/))
+    itemIds: z.array(z.string())
         .optional()
-        .describe("An optional array of unique IDs (TCM URIs) to be processed. If you already found IDs in a previous 'Discovery' turn, pass them directly here for Turn 2 so you do not need to rewrite your preProcessingScript filtering logic."),
+        .describe("An optional array of unique IDs or string keys to be processed. If you already found IDs in a previous 'Discovery' turn, pass them directly here for Turn 2 so you do not need to rewrite your preProcessingScript filtering logic."),
     preProcessingScript: z.string().optional()
         .describe("Phase 1 (Setup): An optional async function body that runs once before the loop. Must return `string[]` (item IDs) or `{ itemIds: string[], preProcessingResult?: any }`. Use this for dynamic discovery (e.g. `search`) or setup."),
     mapScript: z.string().optional()
-        .describe("Phase 2 (Map): An optional async function body that runs for EACH item. If omitted, the orchestrator will gracefully exit after Phase 1 and return the discovered items (perfect for Discovery/Turn 1). CRITICAL: If a required lookup fails or an update is impossible, you MUST `throw new Error('Reason')`."),
+        .describe("Phase 2 (Map): An optional async function body that runs for EACH item. If omitted, the orchestrator will gracefully exit after Phase 1 and return the discovered items (perfect for Discovery/Turn 1). CRITICAL: To prevent silent failures, if a required lookup fails or an update is impossible, you MUST `throw new Error('Reason')`."),
     postProcessingScript: z.string().optional()
         .describe("Phase 3 (Reduce): An optional async function body that runs once after all items are processed. Has access to `context.results`, `context.successes`, `context.warnings`, and `context.failures`. Returns the final output."),
-    validationScript: z.string().optional()
-        .describe("Phase 4 (Validation): An async function body that runs LAST. MANDATORY if 'mapScript' is used. You MUST use this to AUDIT the operation by using `tools.getItem` on a sample of the results. Do NOT rely solely on `context.hasSuccesses`. Verify that the items actually contain the data you intended to add (e.g., check `ComponentPresentations.length > 0`)."),
     parameters: z.record(z.any()).optional()
         .describe("An optional JSON object of parameters to pass into all scripts. Use this for simple, static values like search queries, find/replace strings, or target TCM URIs."),
     forceSkipIfPresent: z.boolean().optional().default(false)
@@ -184,20 +182,15 @@ const toolOrchestratorInputProperties = {
         .describe("If true, the full execution log is included in the JSON response.")
 };
 
-const toolOrchestratorSchema = z.object(toolOrchestratorInputProperties)
-    .refine(data => !data.mapScript || data.validationScript, {
-        message: "Safety Guardrail: You provided a 'mapScript' to process items, but you did not provide a 'validationScript'. You MUST provide a validation script to audit the results.",
-        path: ["validationScript"]
-    });
+const toolOrchestratorSchema = z.object(toolOrchestratorInputProperties);
 
 export const toolOrchestrator = {
     name: "toolOrchestrator",
     description: `Executes an advanced, multi-step JavaScript script to perform batch operations, aggregations, or complex workflows.
-    The tool supports up to four phases. (Note: If 'mapScript' is omitted, the orchestrator acts in "Discovery-Only" mode. It will execute Phase 1, return the discovered items, and skip Phases 2, 3, and 4):
+    The tool supports up to three phases. (Note: If 'mapScript' is omitted, the orchestrator acts in "Discovery-Only" mode. It will execute Phase 1, return the discovered items, and skip Phases 2 and 3):
     1.  Setup (preProcessingScript): Dynamically find items (e.g., via 'search') or prepare data.
-    2.  Map (mapScript): Optional. Process each item individually (e.g., 'updateContent', 'getItem').
+    2.  Map (mapScript): Optional. Process each item individually (e.g., 'updateContent', 'getItem'). MUST fail loudly using throws on errors.
     3.  Reduce (postProcessingScript): Optional. Aggregate results or generate a summary.
-    4.  Validate (validationScript): Mandatory ONLY IF 'mapScript' is used. Audit the final state to ensure success.
 
     --- PARTIAL SUCCESS & ERROR HANDLING ---
     This tool implements specific logic for handling failures:
@@ -212,12 +205,12 @@ export const toolOrchestrator = {
     - TO FLAG A FAILURE: You MUST \`throw new Error("Reason")\`.
     - TO FLAG A WARNING: Use \`console.warn("Reason")\`. This will add the item to the 'warnings' count.
 
-    2. "Verify, Don't Trust" (Strong Validation)
-    Do not assume the operation worked just because "succeeded" count is > 0.
-    When you provide a 'mapScript', you MUST also provide a 'validationScript' to perform a "Read-After-Write" check:
-    - Get a sample: \`const sample = context.utils.sample(context.successes, 1)\`.
-    - Fetch the FRESH item: \`const item = await context.tools.getItem({ itemId: sample[0].result.id, ... })\`.
-    - Assert the state: \`context.utils.assert(item.Content.someField === "expected", "Update failed")\`.
+    2. "Fail Loudly" & Read-After-Write (Strong Validation)
+    Do not assume the operation worked just because an update tool was called.
+    Validate *inside* your 'mapScript' immediately after mutating data:
+    - Update the item: \`await context.tools.updateContent({ itemId: context.currentItemId, ... })\`
+    - Fetch the FRESH item: \`const freshItem = await context.tools.getItem({ itemId: context.currentItemId, ... })\`.
+    - Assert the state: \`context.utils.assert(freshItem.Content.someField === "expected", "Update failed to persist")\`.
     
     3. "Find-Then-Fetch" Pattern
     Discovery tools (like 'search', 'getItemsInContainer') ONLY return identification data (Id, Title, type).
@@ -236,8 +229,7 @@ export const toolOrchestrator = {
     - You MUST write defensive 'mapScripts' that anticipate and handle these realities.
     - Wrap risky operations (like 'updateContent', 'deleteItem', etc.) in 'try/catch' blocks or check their prerequisites if known.
     - Do not just look for "409 Conflict" (Item Exists) errors. If you catch a "400 Bad Request" validation error (e.g., trying to map to a Region or Field that does not exist), you MUST log the specific 'e.message' or 'e.response.data using 'context.log()'. This exposes the exact schema mismatch to you so you can self-correct.
-    - If an item cannot be processed, you MUST explicitly track it by using 'console.warn("Reason for skip")' or 'throw new Error("Reason for failure")'. 
-    - NEVER let a script silently swallow an error or return a generic success object if the underlying operation failed. All skipped or failed items must be tracked so you can accurately report the final tally to the user.
+    - NEVER let a script silently swallow an error or return a generic success object if the underlying operation failed. All skipped or failed items must be tracked by throwing errors.
 
     6. Destructive Actions (The Two-Turn Deletion Pattern)
     You MUST NEVER execute a script that deletes items without explicit prior confirmation from the user. Because the orchestrator runs all scripts in a single execution, you must split bulk deletions into TWO distinct tool calls across two conversation turns:
@@ -274,13 +266,6 @@ export const toolOrchestrator = {
     - context.failures: A pre-filtered array of all failed results.
     - context.parameters, context.preProcessingResult, context.tools, context.utils, context.log.
 
-    The 'validationScript' (Phase 4) receives a 'context' object with:
-    - context.output: The final result returned by the postProcessingScript (or the default summary).
-    - context.hasSuccesses: Boolean flag (true if successes.length > 0).
-    - context.hasFailures: Boolean flag (true if failures.length > 0).
-    - context.hasWarnings: Boolean flag (true if warnings.length > 0).
-    - context.results, context.successes, context.warnings, context.failures, context.parameters, context.preProcessingResult, context.tools, context.utils, context.log.
-
     --- STRATEGIES ---
 
     DEBUGGING STRATEGIES
@@ -293,8 +278,7 @@ export const toolOrchestrator = {
     
     ADVANCED RESILIENCE STRATEGIES
     1. Fail Loudly on Mutations: DO NOT wrap 'createItem', 'createPage', 'updateContent', or other data-altering API calls in 'try/catch' blocks that return null. You MUST let these errors throw naturally so the Orchestrator's 'stopOnError' circuit breaker catches them and reports the exact schema mismatch to you.
-    2. Defensive Validation: Your 'validationScript' must be resilient. If your mapScript encounters a logic error, 'context.successes[0].result' might not have the properties you expect (like 'itemId'). Always verify the result object exists and has the necessary IDs before calling 'getItem' in your validation phase.
-    3. Handling Heavy Data & Complex Tasks (Single-Call Pattern): Do not read entire Excel files or large JSON blobs directly into the chat context. Execute Setup, Map, and Validate in a single toolOrchestrator call. Parse the file in 'preProcessingScript' and pass the extracted data to 'mapScript' via memory ('context.preProcessingResult') rather than outputting large lists of IDs to the chat and pasting them into a second tool call.
+    2. Handling Heavy Data & Complex Tasks (Single-Call Pattern): Do not read entire Excel files or large JSON blobs directly into the chat context. Execute Setup, Map, and Reduce in a single toolOrchestrator call. Parse the file in 'preProcessingScript' and pass the extracted data to 'mapScript' via memory ('context.preProcessingResult') rather than outputting large lists of IDs to the chat and pasting them into a second tool call.
 
     NOTES
     - Automatic JSON parsing: All tools have their JSON string responses automatically parsed into JavaScript objects. You do not need to parse tool responses in a script.
@@ -303,8 +287,8 @@ export const toolOrchestrator = {
 
     ### EXAMPLES
 
-    **Example 1: Batch Search & Update with Strong Validation**
-    Finds Components and updates a field. NOTICE: Validation script fetches the item to verify the update persisted.
+    **Example 1: Batch Search & Update with Read-After-Write Validation**
+    Finds Components and updates a field. Validates *inside* the map loop.
     \`\`\`javascript
     const result = await tools.toolOrchestrator({
         parameters: { "schemaId": "tcm:5-20-8", "newValue": "Updated Value" },
@@ -320,42 +304,31 @@ export const toolOrchestrator = {
             return items.map(i => i.Id);
         \`,
         mapScript: \`
-            // Phase 2: Update each item
+            // Phase 2: Update the item
             await context.tools.updateContent({
                 itemId: context.currentItemId,
                 content: { "TextField": context.parameters.newValue }
             });
-            context.log("Updated.");
-            return { id: context.currentItemId };
-        \`,
-        validationScript: \`
-            if (!context.hasSuccesses) return;
             
-            // 1. Pick a random sample of successful items
-            const sample = context.utils.sample(context.successes, 3);
-            context.log(\`Auditing \${sample.length} items...\`);
-
-            for (const item of sample) {
-                // 2. Fetch the actual item from CMS to verify persistence
-                const freshItem = await context.tools.getItem({ 
-                    itemId: item.result.id,
-                    includeProperties: ["Content"]
-                });
-                
-                // 3. Assert the value is correct
-                const actualValue = freshItem.Content.TextField;
-                context.utils.assert(
-                    actualValue === context.parameters.newValue, 
-                    \`Audit Failed for \${item.result.id}. Expected '\${context.parameters.newValue}', got '\${actualValue}'\`
-                );
-            }
-            context.log("Validation passed: Random sample verification successful.");
+            // Read-After-Write Validation
+            const freshItem = await context.tools.getItem({ 
+                itemId: context.currentItemId,
+                includeProperties: ["Content"]
+            });
+            const actualValue = freshItem.Content.TextField;
+            context.utils.assert(
+                actualValue === context.parameters.newValue, 
+                \`Update Failed for \${context.currentItemId}. Expected '\${context.parameters.newValue}', got '\${actualValue}'\`
+            );
+            
+            context.log("Updated and validated.");
+            return { id: context.currentItemId };
         \`
     });
     \`\`\`
 
     **Example 2: Data Aggregation**
-    Finds the Component with the most versions. Validation ensures data was returned.
+    Finds the Component with the most versions.
     \`\`\`javascript
     const result = await tools.toolOrchestrator({
         itemIds: ["tcm:5-100", "tcm:5-101", "tcm:5-102"],
@@ -369,16 +342,12 @@ export const toolOrchestrator = {
             return context.successes.reduce((max, curr) => 
                 (curr.result.count > max.result.count) ? curr : max
             ).result;
-        \`,
-        validationScript: \`
-            // Simple validation to ensure we got a result
-            context.utils.assert(context.output && context.output.count !== undefined, "Failed to aggregate history");
         \`
     });
     \`\`\`
 
     **Example 3: Handling Warnings (Silent Errors)**
-    Skips items that are checked out and marks them as warnings.
+    Skips items that are checked out and marks them as warnings without failing the loop.
     \`\`\`javascript
     const result = await tools.toolOrchestrator({
         itemIds: ["tcm:5-100", "tcm:5-101"],
@@ -393,19 +362,12 @@ export const toolOrchestrator = {
             
             // Perform update...
             return { id: context.currentItemId, status: "Updated" };
-        \`,
-        validationScript: \`
-            // The agent can now see which items were skipped
-            if (context.hasWarnings) {
-                context.log(\`Warning: \${context.warnings.length} items were skipped.\`);
-            }
-            context.utils.assert(context.hasSuccesses || context.hasWarnings, "No items processed");
         \`
     });
     \`\`\`
 
     **Example 4: Complex Analysis / Stale Content Report**
-    Finds Pages, checks Publish status, and deep-inspects.
+    Finds Pages, checks Publish status, and aggregates a report.
     \`\`\`javascript
     const result = await tools.toolOrchestrator({
         preProcessingScript: \`
@@ -436,19 +398,12 @@ export const toolOrchestrator = {
                 stalePages: context.successes.map(s => s.result).filter(r => r !== null),
                 skippedCount: context.warnings.length 
             };
-        \`,
-        validationScript: \`
-            if (context.output.stalePages.length > 0) {
-                const sample = context.utils.sample(context.output.stalePages, 1);
-                const check = await context.tools.getItem({ itemId: sample[0].id });
-                context.utils.assert(check.Id === sample[0].id, "Audit Failed: Item ID mismatch");
-            }
         \`
     });
     \`\`\`
 
     **Example 5: Import with Validation**
-    Imports data, creates items, then audits the result.
+    Imports data, creates items, and validates creation immediately.
     \`\`\`javascript
     const result = await tools.toolOrchestrator({
         parameters: { 
@@ -463,18 +418,12 @@ export const toolOrchestrator = {
         mapScript: \`
             // Create Page logic here...
             // const newId = await context.tools.createPage(...);
+            
+            // Assert creation was successful (Fail Loudly)
+            const check = await context.tools.getItem({ itemId: "tcm:5-99-64" }); // use newId in reality
+            context.utils.assert(check, \`Item creation failed for \${context.currentItemId}\`);
+            
             return { title: context.currentItemId, status: "Created", id: "tcm:5-99-64" };
-        \`,
-        validationScript: \`
-            context.log("Phase 4: Auditing...");
-            if (!context.hasSuccesses) return;
-            
-            // Strong Validation: Fetch the created item
-            const sample = context.successes[0];
-            const check = await context.tools.getItem({ itemId: sample.result.id });
-            if (!check) throw new Error(\`Audit Failed: Created item \${sample.result.id} not found.\`);
-            
-            context.log("Audit Passed: Item exists.");
         \`
     });
     \`\`\`
@@ -501,14 +450,11 @@ export const toolOrchestrator = {
         postProcessingScript: \`
             // Reduce: Filter nulls and report
             return { itemsToReview: context.successes.map(s => s.result).filter(r => r !== null) };
-        \`,
-        validationScript: \`
-             context.utils.assert(Array.isArray(context.results), "No results array produced");
         \`
     });
     \`\`\`
 
-**Example 7: Advanced Cleanup - Large Unused Multimedia Report**
+    **Example 7: Advanced Cleanup - Large Unused Multimedia Report**
     Finds large Multimedia Components (images/videos) that are not used by any published Pages.
     \`\`\`javascript
     const result = await tools.toolOrchestrator({
@@ -559,7 +505,7 @@ export const toolOrchestrator = {
                 return [...new Set(ids)];
             }
             
-            const pageIds = flattenPageIds({ Dependencies: graph }); // Adapt based on tool output structure
+            const pageIds = flattenPageIds({ Dependencies: graph });
             if (pageIds.length === 0) {
                  return { id: item.Id, title: item.Title, size: item.BinaryContent.Size, reason: "Unused by any Page" };
             }
@@ -569,8 +515,6 @@ export const toolOrchestrator = {
                 const publishInfo = await context.tools.getPublishInfo({ 
                     itemId: pageId, includeProperties: ["PublishedAt"] 
                 });
-                
-                // If even one using page is published, this asset is "Live" and shouldn't be touched.
                 if (publishInfo && publishInfo.length > 0) return null;
             }
             
@@ -583,31 +527,6 @@ export const toolOrchestrator = {
                 totalFilesToReview: candidates.length, 
                 filesToReview: candidates 
             };
-        \`,
-        validationScript: \`
-            if (!context.hasSuccesses) return;
-            const report = context.output.filesToReview;
-            if (!report || report.length === 0) {
-                context.log("No large unused files found.");
-                return;
-            }
-
-            // Audit a sample from the report
-            const sample = context.utils.sample(report, 1)[0];
-            context.log(\`Auditing reported file: \${sample.title}\`);
-
-            // Verify it is actually a Large Multimedia component
-            const check = await context.tools.getItem({ 
-                itemId: sample.id,
-                includeProperties: ["ComponentType", "BinaryContent"]
-            });
-
-            const minBytes = context.parameters.minFileSizeMB * 1024 * 1024;
-
-            context.utils.assert(check.ComponentType === 'Multimedia', "Audit Failed: Item is not Multimedia");
-            context.utils.assert(check.BinaryContent.Size >= minBytes, "Audit Failed: Item is smaller than threshold");
-
-            context.log("Audit Passed: Item matches criteria.");
         \`
     });
     \`\`\`
@@ -626,17 +545,8 @@ export const toolOrchestrator = {
                 throw new Error(\`Critical: No mapping found for item \${context.currentItemId}\`);
             }
             
-            return await context.tools.addLink({ parentId: context.currentItemId, childId: targetId });
-        \`,
-        validationScript: \`
-            if (context.hasFailures) {
-                context.log(\`Operation had \${context.failures.length} failures. Check errors.\`);
-            }
-            // Audit successes
-            if (context.hasSuccesses) {
-                const sample = context.utils.sample(context.successes, 1);
-                // ... verify link exists ...
-            }
+            await context.tools.addLink({ parentId: context.currentItemId, childId: targetId });
+            return { status: "Linked" };
         \`
     });
     \`\`\`
@@ -674,7 +584,6 @@ export const toolOrchestrator = {
             preProcessingScript,
             mapScript,
             postProcessingScript,
-            validationScript,
             parameters = {},
             stopOnError,
             maxConcurrency,
@@ -841,7 +750,7 @@ export const toolOrchestrator = {
         }
 
         if (finalItemIds.length === 0) {
-            logs.push("No items provided or found during pre-processing. Skipping Map, Reduce, and Validation phases.");
+            logs.push("No items provided or found during pre-processing. Skipping Map and Reduce phases.");
 
             const emptyResult: OrchestratorResult = {
                 status: "Completed",
@@ -1060,76 +969,49 @@ export const toolOrchestrator = {
             };
         }
 
-        // --- Phase 4: Validation Logic (Audit Phase) ---
-        if (validationScript) {
-            logs.push("\nStarting validation script (audit phase)...");
-            let compiledValidationScript: vm.Script;
-            try {
-                compiledValidationScript = new vm.Script(`(async () => { "use strict"; ${validationScript} })();`, { filename: 'validationScript.js' });
-            } catch (error: any) {
-                return { content: [{ type: "text", text: JSON.stringify({ type: "Error", Message: `Validation Script Compilation Error: ${extractErrorMessage(error)}` }) }] };
-            }
-
-            const valScriptLog = (message: string) => logs.push(`[Validation] ${message}`);
-            const sandboxContext = {
-                ...baseSandbox,
-                context: {
-                    output: Object.freeze(applyItemIdAlias(responsePayload)),
-                    results: Object.freeze(results),
-                    successes: Object.freeze(applyItemIdAlias(successes)),
-                    warnings: Object.freeze(warnings),
-                    failures: Object.freeze(failures),
-                    hasSuccesses: successes.length > 0,
-                    hasFailures: failures.length > 0,
-                    hasWarnings: warnings.length > 0,
-                    parameters: Object.freeze(parameters),
-                    preProcessingResult: preScriptContextData,
-                    tools: toolWrappers,
-                    utils: scriptUtils,
-                    log: valScriptLog
-                },
-                console: { log: valScriptLog }
-            };
-            const sandbox = vm.createContext(sandboxContext);
-            try {
-                const scriptPromise = compiledValidationScript.runInContext(sandbox, { timeout: SYNC_SCRIPT_TIMEOUT_MS });
-                const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error(`Script timed out after ${TOTAL_SCRIPT_TIMEOUT_MS}ms`)), TOTAL_SCRIPT_TIMEOUT_MS));
-                const validationResult = await Promise.race([scriptPromise, timeoutPromise]);
-                logs.push("Validation script finished successfully.");
-                if (validationResult !== undefined) {
-                    responsePayload = validationResult;
-                }
-            } catch (error: any) {
-                const valError: OrchestratorResult = {
-                    status: "StoppedOnError",
-                    summary: "Operation and post-processing succeeded, but Validation failed.",
-                    processedItems: successes.map(s => ({ id: s.itemId, result: s.result })),
-                    output: responsePayload,
-                    failedItem: { id: "ValidationScript", error: extractErrorMessage(error) }
-                };
-                return { content: [{ type: "text", text: JSON.stringify({ type: "Error", Message: valError.summary, Details: valError }) }] };
-            }
-        }
-
         // --- Final Output Construction (Structured) ---
         const finalStatus = failures.length > 0 ? "PartialSuccess" : "Completed";
 
-        // 1. Force truncation on the processed items list (max 3 items)
         const truncatedSuccesses = successes.slice(0, 3).map(s => ({ id: s.itemId, result: s.result }));
         const truncatedFailures = failures.slice(0, 3).map(f => ({ id: f.itemId, error: f.error }));
 
         // 2. Clean up the output payload to prevent echoing massive datasets
         let safeOutput = responsePayload;
-        if (typeof responsePayload === 'object' && responsePayload !== null) {
-            safeOutput = { ...responsePayload };
-            // If the agent passed massive datasets through preProcessingResult, strip them out before returning to LLM
-            delete safeOutput.preProcessingResult;
-            delete safeOutput.sourceData;
 
-            // If the default summary included the full results array, truncate it
-            if (Array.isArray(safeOutput.results)) {
-                safeOutput.results = safeOutput.results.slice(0, 3);
-                safeOutput.resultsTruncated = true;
+        if (typeof responsePayload === 'object' && responsePayload !== null) {
+            // Check if the payload is DIRECTLY an array
+            if (Array.isArray(responsePayload)) {
+                if (responsePayload.length > 10) {
+                    safeOutput = [
+                        ...responsePayload.slice(0, 10),
+                        `... (${responsePayload.length - 10} more items truncated to save tokens)`
+                    ];
+                } else {
+                    safeOutput = [...responsePayload];
+                }
+            } else {
+                // Otherwise, it's an object. Check its properties.
+                safeOutput = { ...responsePayload };
+                delete safeOutput.preProcessingResult;
+                delete safeOutput.sourceData;
+
+                for (const key of Object.keys(safeOutput)) {
+                    if (Array.isArray(safeOutput[key]) && safeOutput[key].length > 10) {
+                        safeOutput[key] = [
+                            ...safeOutput[key].slice(0, 10),
+                            `... (${safeOutput[key].length - 10} more items truncated to save tokens)`
+                        ];
+                    }
+                }
+
+                // If the default summary included the full results array, truncate it
+                if (Array.isArray(safeOutput.results) && safeOutput.results.length > 3) {
+                    safeOutput.results = [
+                        ...safeOutput.results.slice(0, 3),
+                        `... (${safeOutput.results.length - 3} more items truncated)`
+                    ];
+                    safeOutput.resultsTruncated = true;
+                }
             }
         }
 
@@ -1137,7 +1019,7 @@ export const toolOrchestrator = {
             status: finalStatus,
             summary: (typeof responsePayload === 'string') ? responsePayload : (responsePayload?.summary || `Operation ${finalStatus}. Processed: ${finalItemIds.length}, Succeeded: ${successes.length}, Failed: ${failures.length}`),
             processedItems: truncatedSuccesses,
-            failedItem: truncatedFailures.length > 0 ? truncatedFailures[0] : undefined, // Just show the first failure
+            failedItem: truncatedFailures.length > 0 ? truncatedFailures[0] : undefined,
             output: safeOutput
         };
 
