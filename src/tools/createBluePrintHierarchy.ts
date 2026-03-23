@@ -34,18 +34,26 @@ const blueprintDataSchema = z.union([
 // --- Tool Input Properties ---
 const createBluePrintHierarchyInputProperties = {
     hierarchyData: blueprintDataSchema.optional().describe(
-        `The hierarchy data. This can be a raw JSON string, a parsed JSON array, or the full BlueprintHierarchyResponse object. Use this for manually constructed hierarchies, smaller data sets, or when the MCP server is hosted remotely.`
+        `The hierarchy data. This can be a raw JSON string, a parsed JSON array, or the full BlueprintHierarchyResponse object. Use this for manually constructed hierarchies or smaller data sets.`
     ),
     hierarchyFilePath: z.string().optional().describe(
-        `The absolute file path to a JSON file containing the hierarchy data (e.g., 'C:\\Users\\name\\blueprint.json'). STRONGLY RECOMMENDED for large hierarchies. 
-        Note: This ONLY works if the MCP server is running locally on the same machine as your files. If the MCP server is remote, this will fail and you MUST read the file yourself and pass it via 'hierarchyData'. DO NOT use relative paths.`
+        `The absolute file path to a JSON file containing the hierarchy data (e.g., 'C:\\Users\\name\\blueprint.json'). STRONGLY RECOMMENDED for large hierarchies if the MCP server is running locally.`
+    ),
+    attachmentId: z.string().optional().describe(
+        `The temporary file ID returned when the user uploaded the file. Use the 'tempFileId' value from the attachment context. Use this if the user attached a Blueprint JSON file via the chat interface.`
+    ),
+    fileName: z.string().optional().describe(
+        `The file name of the attached file. Required if using 'attachmentId'.`
     ),
     rootStructureGroupTitle: z.string().default("Root").describe("The title of the Root Structure Group to create. This is automatically applied to the single Publication identified as the Root (having no parents).")
 };
 
 const createBluePrintHierarchySchema = z.object(createBluePrintHierarchyInputProperties)
-    .refine(data => data.hierarchyData || data.hierarchyFilePath, {
-        message: "You must provide either 'hierarchyData' or 'hierarchyFilePath'."
+    .refine(data => data.hierarchyData || data.hierarchyFilePath || data.attachmentId, {
+        message: "You must provide either 'hierarchyData', 'hierarchyFilePath', or 'attachmentId'."
+    })
+    .refine(data => !(data.attachmentId && !data.fileName), {
+        message: "You must provide 'fileName' when using 'attachmentId'."
     });
 
 export const createBluePrintHierarchy = {
@@ -55,13 +63,13 @@ export const createBluePrintHierarchy = {
     This tool resolves dependencies automatically using 'Title' properties and provisions the hierarchy from top to bottom.
     
     ### Core Operations
-    1. **Input Resolution**: Accepts data either directly via 'hierarchyData' or by reading a file via 'hierarchyFilePath'.
+    1. **Input Resolution**: Accepts data via direct JSON ('hierarchyData'), a local file path ('hierarchyFilePath'), or a UI attachment ('attachmentId').
     2. **Tiered Batching**: Executes creation in parallel dependency tiers (e.g., all Level 1 items are created simultaneously once the Root is ready), drastically reducing execution time.
     3. **Root Provisioning**: Automatically identifies the **Root Publication** (the one with no parents) and creates a **Root Structure Group** within it.
     4. **Output**: Returns a map of Titles to their newly generated TCM URIs.
 
     ### Supported Format Structure
-    Whether passing data directly or using a file, the structure should match the native BlueprintHierarchyResponse (or just its 'Items' array). Extra metadata like '$type' or 'ApplicableActions' is safely ignored:
+    Regardless of the input method, the JSON structure should match the native BlueprintHierarchyResponse (or just its 'Items' array). Extra metadata like '$type' or 'ApplicableActions' is safely ignored:
     [
         {
             "Item": { "Title": "000 Root", "Parents": [] }
@@ -80,17 +88,21 @@ export const createBluePrintHierarchy = {
         }
     ]
 
-    ### Example 1: Using a File (Recommended for Cloning/Large Hierarchies)
-    If the user asks you to clone a large hierarchy from an attached JSON file, DO NOT parse or pass the JSON data yourself. Just provide the file path:
-    
+    ### Example 1: Using an Attached File (Recommended for UI users)
+    If the user attached a JSON file via the chat UI, use the attachmentId to process it instantly:
     const result = await tools.createBluePrintHierarchy({
-        hierarchyFilePath: "blueprint.json", 
+        attachmentId: "temp-file-id-123",
+        fileName: "blueprint.json",
         rootStructureGroupTitle: "Root"
     });
 
-    ### Example 2: Passing Data Directly (For dynamic/small hierarchies)
-    If you are generating a hierarchy on the fly, pass the object directly into hierarchyData:
+    ### Example 2: Using a Local File Path (Recommended for CLI/Local execution)
+    const result = await tools.createBluePrintHierarchy({
+        hierarchyFilePath: "C:\\data\\blueprint.json", 
+        rootStructureGroupTitle: "Root"
+    });
 
+    ### Example 3: Passing Data Directly (For dynamic/small hierarchies)
     const result = await tools.createBluePrintHierarchy({
         hierarchyData: generatedHierarchyArray,
         rootStructureGroupTitle: "Root"
@@ -103,7 +115,7 @@ export const createBluePrintHierarchy = {
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
         const userSessionId = match ? match[1] : null;
 
-        const { hierarchyData, hierarchyFilePath, rootStructureGroupTitle } = input;
+        const { hierarchyData, hierarchyFilePath, attachmentId, fileName, rootStructureGroupTitle } = input;
         const authenticatedAxios = createAuthenticatedAxios(userSessionId);
 
         const idMap = new Map<string, string>();
@@ -116,7 +128,25 @@ export const createBluePrintHierarchy = {
             // --- 0. Resolve & Normalize Input Data ---
             let rawData: any;
 
-            if (hierarchyFilePath) {
+            if (attachmentId && fileName) {
+                // Download directly from CMS temp storage (matches readUploadedFile.ts)
+                const downloadResponse = await authenticatedAxios.get('/binary/download', {
+                    params: { tempFileId: attachmentId, filename: fileName },
+                    responseType: 'arraybuffer',
+                });
+
+                if (downloadResponse.status !== 200) {
+                    throw new Error(`Failed to download attached file '${fileName}'. Status: ${downloadResponse.status}`);
+                }
+
+                const buffer = Buffer.from(downloadResponse.data);
+                const rawFileContent = buffer.toString('utf-8');
+                try {
+                    rawData = JSON.parse(rawFileContent);
+                } catch (e: any) {
+                    throw new Error(`Failed to parse JSON from attached file '${fileName}': ${e.message}`);
+                }
+            } else if (hierarchyFilePath) {
                 const resolvedPath = path.resolve(hierarchyFilePath);
                 if (!fs.existsSync(resolvedPath)) {
                     throw new Error(`File not found at path: ${resolvedPath}`);
