@@ -1,101 +1,99 @@
 import { z } from "zod";
+import * as fs from 'fs';
+import * as path from 'path';
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { toLinkArray } from "../utils/links.js";
 import { handleAxiosError } from "../utils/errorUtils.js";
-import { createJsonGraphSchema } from "../schemas/bluePrintGraphSchema.js";
 
 // --- Internal Validation Schemas ---
-// These are used to validate the parsed JSON inside the execute function.
+const parentRefSchema = z.object({
+    Title: z.string()
+}).passthrough();
 
-// Schema for the top-level Root Publication
-const rootPublicationSchema = z.object({
-    title: z.string().describe("The title of the root publication. Must be unique."),
-    key: z.string().optional().describe("The publication key. Defaults to title if omitted."),
-    locale: z.string().optional().describe("The locale (e.g., 'en-US')."),
-    publicationType: z.string().optional().describe("The publication type (e.g., 'Content' or 'Web').")
-});
+const blueprintNodeSchema = z.object({
+    Item: z.object({
+        Title: z.string().describe("The title of the publication. Must be unique."),
+        Key: z.string().optional().describe("The publication key."),
+        PublicationUrl: z.string().optional().describe("Server-relative URL (e.g., '/nl')."),
+        PublicationPath: z.string().optional().describe("Physical path on server."),
+        MultimediaUrl: z.string().optional(),
+        MultimediaPath: z.string().optional(),
+        Locale: z.string().optional(),
+        PublicationType: z.string().optional(),
+        Parents: z.array(parentRefSchema).optional().describe("Array of parent references by Title.")
+    }).passthrough()
+}).passthrough();
 
-// Specific Write-Model for the Node Data (Child Publications)
-const hierarchyNodeDataSchema = z.object({
-    title: z.string().describe("The title of the child publication."),
-    key: z.string().optional().describe("The publication key."),
-    publicationUrl: z.string().optional().describe("Server-relative URL (e.g., '/nl')."),
-    publicationPath: z.string().optional().describe("Physical path on server."),
-    multimediaUrl: z.string().optional(),
-    multimediaPath: z.string().optional(),
-    locale: z.string().optional(),
-    publicationType: z.string().optional()
-});
-
-// Generate the specific Graph Schema using the shared factory
-const jsonGraphSchema = createJsonGraphSchema(hierarchyNodeDataSchema);
+// Flexible schema that accepts strings, objects, or arrays
+const blueprintDataSchema = z.union([
+    z.string(),
+    z.object({ Items: z.array(blueprintNodeSchema) }).passthrough(),
+    z.array(blueprintNodeSchema)
+]);
 
 // --- Tool Input Properties ---
-// defined as a plain object to match the project pattern
 const createBluePrintHierarchyInputProperties = {
-    rootPublicationJson: z.string().describe("A JSON string representing the Root Publication. Structure: { title: string, key?: string, locale?: string, publicationType?: string }"),
-    rootStructureGroupTitle: z.string().default("Root").describe("The title of the Root Structure Group to create. Mandatory for the Root Publication."),
-    hierarchyJson: z.string().describe("A JSON string representing the hierarchy graph. Structure: { nodes: [{ id, data: {...} }], edges: [{ source, target }] }")
+    hierarchyData: blueprintDataSchema.optional().describe(
+        `The hierarchy data. This can be a raw JSON string, a parsed JSON array, or the full BlueprintHierarchyResponse object. Use this for manually constructed hierarchies, smaller data sets, or when the MCP server is hosted remotely.`
+    ),
+    hierarchyFilePath: z.string().optional().describe(
+        `The absolute file path to a JSON file containing the hierarchy data (e.g., 'C:\\Users\\name\\blueprint.json'). STRONGLY RECOMMENDED for large hierarchies. 
+        Note: This ONLY works if the MCP server is running locally on the same machine as your files. If the MCP server is remote, this will fail and you MUST read the file yourself and pass it via 'hierarchyData'. DO NOT use relative paths.`
+    ),
+    rootStructureGroupTitle: z.string().default("Root").describe("The title of the Root Structure Group to create. This is automatically applied to the single Publication identified as the Root (having no parents).")
 };
 
-// Internal schema for type inference
-const createBluePrintHierarchySchema = z.object(createBluePrintHierarchyInputProperties);
+const createBluePrintHierarchySchema = z.object(createBluePrintHierarchyInputProperties)
+    .refine(data => data.hierarchyData || data.hierarchyFilePath, {
+        message: "You must provide either 'hierarchyData' or 'hierarchyFilePath'."
+    });
 
 export const createBluePrintHierarchy = {
     name: "createBluePrintHierarchy",
-    description: `Creates an entire BluePrint hierarchy of Publications in a single operation.
+    description: `Creates an entire BluePrint hierarchy of Publications in a single, parallelized operation.
     
-    This tool abstracts away the complexity of managing dependencies and sequential API calls.
-    1. It creates the **Root Publication** based on 'rootPublicationJson'.
-    2. It **always** creates a **Root Structure Group** in the new Root.
-    3. It parses 'hierarchyJson' and creates child publications in the correct topological order.
-    4. Returns a map of temporary IDs to real TCM URIs.
-
-    ### Example: Create a 'Diamond' BluePrint Hierarchy (5 Levels)
-    This example creates a structure where content splits into 'Design' and 'Global' streams and merges back into 'Master Content'.
+    This tool resolves dependencies automatically using 'Title' properties and provisions the hierarchy from top to bottom.
     
-    // 1. Define the hierarchy object
-    const hierarchy = {
-        nodes: [
-            // Level 1
-            { id: "schema", data: { title: "100 Schema Master", publicationType: "Content" } },
-            // Level 2 (Split)
-            { id: "design", data: { title: "200 Design Master", publicationType: "Content" } },
-            { id: "global", data: { title: "210 Global Content", publicationType: "Content" } },
-            // Level 3 (Merge)
-            { id: "master", data: { title: "300 Master Content", publicationType: "Content" } },
-            // Level 4 (Web Master)
-            { id: "web", data: { title: "400 Website Master", publicationType: "Web", publicationUrl: "/" } },
-            // Level 5 (Localized Sites)
-            { id: "nl", data: { title: "510 Dutch Website", publicationType: "Web", publicationUrl: "/nl", locale: "nl-NL" } },
-            { id: "id", data: { title: "520 Indonesian Website", publicationType: "Web", publicationUrl: "/id", locale: "id-ID" } }
-        ],
-        edges: [
-            // Root -> Schema
-            { source: "ROOT", target: "schema" },
-            // Schema -> Design & Global
-            { source: "schema", target: "design" },
-            { source: "schema", target: "global" },
-            // Design & Global -> Master (Diamond Merge)
-            { source: "design", target: "master" },
-            { source: "global", target: "master" },
-            // Master -> Web
-            { source: "master", target: "web" },
-            // Web -> Local Sites
-            { source: "web", target: "nl" },
-            { source: "web", target: "id" }
-        ]
-    };
+    ### Core Operations
+    1. **Input Resolution**: Accepts data either directly via 'hierarchyData' or by reading a file via 'hierarchyFilePath'.
+    2. **Tiered Batching**: Executes creation in parallel dependency tiers (e.g., all Level 1 items are created simultaneously once the Root is ready), drastically reducing execution time.
+    3. **Root Provisioning**: Automatically identifies the **Root Publication** (the one with no parents) and creates a **Root Structure Group** within it.
+    4. **Output**: Returns a map of Titles to their newly generated TCM URIs.
 
-    // 2. Call the tool, passing the objects as JSON strings
+    ### Supported Format Structure
+    Whether passing data directly or using a file, the structure should match the native BlueprintHierarchyResponse (or just its 'Items' array). Extra metadata like '$type' or 'ApplicableActions' is safely ignored:
+    [
+        {
+            "Item": { "Title": "000 Root", "Parents": [] }
+        },
+        {
+            "Item": { 
+                "Title": "010 Schema Master", 
+                "Parents": [{ "Title": "000 Root" }] 
+            }
+        },
+        {
+            "Item": { 
+                "Title": "020 Content Master", 
+                "Parents": [{ "Title": "010 Schema Master" }] 
+            }
+        }
+    ]
+
+    ### Example 1: Using a File (Recommended for Cloning/Large Hierarchies)
+    If the user asks you to clone a large hierarchy from an attached JSON file, DO NOT parse or pass the JSON data yourself. Just provide the file path:
+    
     const result = await tools.createBluePrintHierarchy({
-        rootPublicationJson: JSON.stringify({
-            title: "000 Empty",
-            key: "000-Empty",
-            locale: "en-US"
-        }),
-        rootStructureGroupTitle: "Root",
-        hierarchyJson: JSON.stringify(hierarchy)
+        hierarchyFilePath: "blueprint.json", 
+        rootStructureGroupTitle: "Root"
+    });
+
+    ### Example 2: Passing Data Directly (For dynamic/small hierarchies)
+    If you are generating a hierarchy on the fly, pass the object directly into hierarchyData:
+
+    const result = await tools.createBluePrintHierarchy({
+        hierarchyData: generatedHierarchyArray,
+        rootStructureGroupTitle: "Root"
     });
     `,
     input: createBluePrintHierarchyInputProperties,
@@ -105,136 +103,155 @@ export const createBluePrintHierarchy = {
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
         const userSessionId = match ? match[1] : null;
 
-        const { rootPublicationJson, hierarchyJson, rootStructureGroupTitle } = input;
+        const { hierarchyData, hierarchyFilePath, rootStructureGroupTitle } = input;
         const authenticatedAxios = createAuthenticatedAxios(userSessionId);
 
-        // Maps specific temporary IDs (e.g. "design-master") to Real TCM URIs (e.g. "tcm:0-5-1")
-        const idMap = new Map<string, string>(); 
+        const idMap = new Map<string, string>();
         const createdPublications: Record<string, string> = {};
-        const executionLog: string[] = [];
 
-        // State management for dependency resolution
-        const pendingNodes = new Map<string, z.infer<typeof hierarchyNodeDataSchema>>();
+        const pendingNodes = new Map<string, any>();
         const nodeParents = new Map<string, Set<string>>();
 
         try {
-            // --- 0. Parse and Validate JSON Inputs ---
-            let rootPublication;
-            let hierarchy;
+            // --- 0. Resolve & Normalize Input Data ---
+            let rawData: any;
 
-            try {
-                const rawRoot = JSON.parse(rootPublicationJson);
-                const rawHierarchy = JSON.parse(hierarchyJson);
-                
-                // Validate against internal Zod schemas
-                rootPublication = rootPublicationSchema.parse(rawRoot);
-                hierarchy = jsonGraphSchema.parse(rawHierarchy);
-            } catch (parseError: any) {
-                throw new Error(`Invalid JSON input or schema mismatch: ${parseError.message}`);
+            if (hierarchyFilePath) {
+                const resolvedPath = path.resolve(hierarchyFilePath);
+                if (!fs.existsSync(resolvedPath)) {
+                    throw new Error(`File not found at path: ${resolvedPath}`);
+                }
+                const rawFileContent = fs.readFileSync(resolvedPath, 'utf-8');
+                try {
+                    rawData = JSON.parse(rawFileContent);
+                } catch (e: any) {
+                    throw new Error(`Failed to parse JSON from file ${resolvedPath}: ${e.message}`);
+                }
+            } else if (hierarchyData) {
+                if (typeof hierarchyData === 'string') {
+                    try {
+                        rawData = JSON.parse(hierarchyData);
+                    } catch (e: any) {
+                        throw new Error(`Failed to parse JSON string provided in hierarchyData: ${e.message}`);
+                    }
+                } else {
+                    rawData = hierarchyData;
+                }
             }
 
-            // --- 1. Initialize Graph Data ---
-            hierarchy.nodes.forEach(node => {
-                if (node.id === "ROOT") throw new Error("Node ID 'ROOT' is reserved.");
-                if (pendingNodes.has(node.id)) throw new Error(`Duplicate node ID: ${node.id}`);
-                
-                pendingNodes.set(node.id, node.data);
-                nodeParents.set(node.id, new Set());
-            });
+            const itemsArray = Array.isArray(rawData) ? rawData : rawData.Items;
 
-            hierarchy.edges.forEach(edge => {
-                if (edge.target === "ROOT") throw new Error("'ROOT' cannot be a target.");
-                if (!pendingNodes.has(edge.target)) throw new Error(`Edge target '${edge.target}' not found.`);
-                if (edge.source !== "ROOT" && !pendingNodes.has(edge.source)) {
-                    throw new Error(`Edge source '${edge.source}' not found.`);
+            if (!itemsArray || !Array.isArray(itemsArray)) {
+                throw new Error("Invalid input: Could not resolve an array of Items from the provided data or file.");
+            }
+
+            // --- 1. Initialize Graph Data by Title & Validate Single Root ---
+            let rootCount = 0;
+            itemsArray.forEach(node => {
+                const item = node.Item;
+                const title = item.Title;
+
+                if (pendingNodes.has(title)) throw new Error(`Duplicate Publication Title found: ${title}`);
+
+                pendingNodes.set(title, item);
+
+                const parents = new Set<string>();
+                if (item.Parents && Array.isArray(item.Parents) && item.Parents.length > 0) {
+                    item.Parents.forEach((p: any) => parents.add(p.Title));
+                } else {
+                    rootCount++;
                 }
-                nodeParents.get(edge.target)?.add(edge.source);
+                nodeParents.set(title, parents);
             });
 
-            // --- 2. Create Root Publication ---
+            if (rootCount !== 1) {
+                throw new Error(`A BluePrint hierarchy must have exactly one root publication. Found ${rootCount}.`);
+            }
+
+            // Fetch base publication model once to reuse
             const pubModelResponse = await authenticatedAxios.get('/item/defaultModel/Publication');
             const basePubModel = pubModelResponse.data;
 
-            const rootPayload = JSON.parse(JSON.stringify(basePubModel));
-            rootPayload.Title = rootPublication.title;
-            rootPayload.Key = rootPublication.key || rootPublication.title;
-            if (rootPublication.locale) rootPayload.Locale = rootPublication.locale;
-            if (rootPublication.publicationType) rootPayload.PublicationType = rootPublication.publicationType;
-
-            executionLog.push(`Creating Root Publication: "${rootPublication.title}"...`);
-            const rootRes = await authenticatedAxios.post('/items', rootPayload);
-            
-            if (rootRes.status !== 201) throw new Error(`Failed to create Root Publication. Status: ${rootRes.status}`);
-            
-            const realRootId = rootRes.data.Id;
-            idMap.set("ROOT", realRootId);
-            createdPublications["ROOT"] = realRootId;
-            executionLog.push(`-> Success: ${realRootId}`);
-
-            // --- 3. Create Root Structure Group ---
-            executionLog.push(`Creating Root SG ("${rootStructureGroupTitle}") in ${realRootId}...`);
-            const sgModelRes = await authenticatedAxios.get('/item/defaultModel/StructureGroup', { params: { containerId: realRootId }});
-            const sgPayload = sgModelRes.data;
-            sgPayload.Title = rootStructureGroupTitle;
-            
-            if(!sgPayload.LocationInfo?.OrganizationalItem?.IdRef) {
-                    sgPayload.LocationInfo = { 
-                        ...sgPayload.LocationInfo, 
-                        OrganizationalItem: { IdRef: realRootId } 
-                    };
-            }
-            const sgRes = await authenticatedAxios.post('/items', sgPayload);
-            if (sgRes.status !== 201) throw new Error(`Failed to create Root SG. Status: ${sgRes.status}`);
-            
-            executionLog.push(`-> Success: Root SG Created (${sgRes.data.Id}).`);
-
-            // --- 4. Process Dependency Loop ---
+            // --- 2. Process Dependency Loop (Tiered Parallelization) ---
+            let depthLevel = 0;
             let progressMade = true;
+
             while (pendingNodes.size > 0 && progressMade) {
                 progressMade = false;
                 const nodesReadyToCreate: string[] = [];
 
-                for (const [tempId, _] of pendingNodes) {
-                    const parents = nodeParents.get(tempId)!;
+                for (const [title, _] of pendingNodes) {
+                    const parents = nodeParents.get(title)!;
                     let allParentsExist = true;
-                    for (const parentTempId of parents) {
-                        if (!idMap.has(parentTempId)) {
+                    for (const parentTitle of parents) {
+                        if (!idMap.has(parentTitle)) {
                             allParentsExist = false;
                             break;
                         }
                     }
-                    if (allParentsExist) nodesReadyToCreate.push(tempId);
+                    if (allParentsExist) nodesReadyToCreate.push(title);
                 }
 
-                for (const tempId of nodesReadyToCreate) {
-                    const nodeData = pendingNodes.get(tempId)!;
-                    const parentsTempIds = nodeParents.get(tempId)!;
-                    const parentRealIds: string[] = [];
-                    parentsTempIds.forEach(pId => parentRealIds.push(idMap.get(pId)!));
-
-                    const childPayload = JSON.parse(JSON.stringify(basePubModel));
-                    childPayload.Title = nodeData.title;
-                    childPayload.Key = nodeData.key || nodeData.title;
-                    childPayload.Parents = toLinkArray(parentRealIds);
-                    
-                    if (nodeData.publicationUrl) childPayload.PublicationUrl = nodeData.publicationUrl;
-                    if (nodeData.publicationPath) childPayload.PublicationPath = nodeData.publicationPath;
-                    if (nodeData.multimediaUrl) childPayload.MultimediaUrl = nodeData.multimediaUrl;
-                    if (nodeData.multimediaPath) childPayload.MultimediaPath = nodeData.multimediaPath;
-                    if (nodeData.locale) childPayload.Locale = nodeData.locale;
-                    if (nodeData.publicationType) childPayload.PublicationType = nodeData.publicationType;
-
-                    executionLog.push(`Creating Child: "${nodeData.title}"...`);
-                    const createRes = await authenticatedAxios.post('/items', childPayload);
-
-                    if (createRes.status !== 201) throw new Error(`Failed to create '${nodeData.title}'. Status: ${createRes.status}`);
-
-                    const newId = createRes.data.Id;
-                    idMap.set(tempId, newId);
-                    createdPublications[tempId] = newId;
-                    pendingNodes.delete(tempId);
+                if (nodesReadyToCreate.length > 0) {
                     progressMade = true;
-                    executionLog.push(`-> Success: ${newId}`);
+
+                    const batchPromises = nodesReadyToCreate.map(async (title) => {
+                        const nodeData = pendingNodes.get(title)!;
+                        const parentsTempTitles = nodeParents.get(title)!;
+
+                        const parentRealIds: string[] = [];
+                        parentsTempTitles.forEach(pTitle => parentRealIds.push(idMap.get(pTitle)!));
+
+                        const childPayload = JSON.parse(JSON.stringify(basePubModel));
+                        childPayload.Title = nodeData.Title;
+                        childPayload.Key = nodeData.Key || nodeData.Title;
+
+                        if (parentRealIds.length > 0) {
+                            childPayload.Parents = toLinkArray(parentRealIds);
+                        }
+
+                        if (nodeData.PublicationUrl) childPayload.PublicationUrl = nodeData.PublicationUrl;
+                        if (nodeData.PublicationPath) childPayload.PublicationPath = nodeData.PublicationPath;
+                        if (nodeData.MultimediaUrl) childPayload.MultimediaUrl = nodeData.MultimediaUrl;
+                        if (nodeData.MultimediaPath) childPayload.MultimediaPath = nodeData.MultimediaPath;
+                        if (nodeData.Locale) childPayload.Locale = nodeData.Locale;
+                        if (nodeData.PublicationType) childPayload.PublicationType = nodeData.PublicationType;
+
+                        let newId: string;
+
+                        const createRes = await authenticatedAxios.post('/items', childPayload);
+                        if (createRes.status !== 201) throw new Error(`Status ${createRes.status}`);
+
+                        newId = createRes.data.Id;
+
+                        // --- 3. Create Root Structure Group for the Root Publication ---
+                        if (parentRealIds.length === 0) {
+                            const sgModelRes = await authenticatedAxios.get('/item/defaultModel/StructureGroup', { params: { containerId: newId } });
+                            const sgPayload = sgModelRes.data;
+                            sgPayload.Title = rootStructureGroupTitle;
+
+                            if (!sgPayload.LocationInfo?.OrganizationalItem?.IdRef) {
+                                sgPayload.LocationInfo = {
+                                    ...sgPayload.LocationInfo,
+                                    OrganizationalItem: { IdRef: newId }
+                                };
+                            }
+                            const sgRes = await authenticatedAxios.post('/items', sgPayload);
+                            if (sgRes.status !== 201) throw new Error(`Failed to create Root SG. Status: ${sgRes.status}`);
+                        }
+
+                        return { title, id: newId };
+                    });
+
+                    const batchResults = await Promise.all(batchPromises);
+
+                    batchResults.forEach(res => {
+                        idMap.set(res.title, res.id);
+                        createdPublications[res.title] = res.id;
+                        pendingNodes.delete(res.title);
+                    });
+
+                    depthLevel++;
                 }
             }
 
@@ -247,10 +264,8 @@ export const createBluePrintHierarchy = {
                 content: [{
                     type: "text",
                     text: JSON.stringify({
-                        message: "BluePrint Hierarchy created successfully.",
-                        rootId: realRootId,
-                        idMap: createdPublications,
-                        log: executionLog
+                        message: `BluePrint Hierarchy created successfully. Provisioned ${Object.keys(createdPublications).length} Publications across ${depthLevel} tiers.`,
+                        idMap: createdPublications
                     }, null, 2)
                 }]
             };
