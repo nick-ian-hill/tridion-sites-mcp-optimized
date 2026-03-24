@@ -1,9 +1,51 @@
-import { Content, FunctionResponsePart } from './types.js';
-import { filterResponseData } from '../utils/responseFiltering.js';
+import { Content } from './types.js';
 
 export const MAX_HISTORY_CHAR_LENGTH = 500000;
 
-const COMPRESSION_THRESHOLD = 50000;
+// --- Helper to aggressively truncate large arrays, objects, and strings in past turns ---
+function compressPastPayload(data: any, maxItems: number = 3, maxKeys: number = 20): any {
+    // 1. Catch and compress massive strings (e.g., base64 blobs, huge text logs)
+    if (typeof data === 'string' && data.length > 2000) {
+        // Keep the first 200 characters so the LLM has a tiny bit of context of what it was,
+        // then append the truncation note.
+        return `${data.substring(0, 200)}... [_compressionNote: Archived string truncated. Original length: ${data.length} chars]`;
+    }
+
+    // 2. Compress Arrays
+    if (Array.isArray(data)) {
+        if (data.length > maxItems) {
+            return [
+                ...data.slice(0, maxItems),
+                { _compressionNote: `[Archived Turn] Array truncated. ${data.length - maxItems} items hidden.` }
+            ];
+        }
+        return data.map(item => compressPastPayload(item, maxItems, maxKeys));
+    } 
+    
+    // 3. Compress Objects recursively (with width limiting)
+    else if (data !== null && typeof data === 'object') {
+        const keys = Object.keys(data);
+        const compressedObj: any = {};
+        
+        // A. If the object is too wide, truncate the keys
+        if (keys.length > maxKeys) {
+            for (const key of keys.slice(0, maxKeys)) {
+                compressedObj[key] = compressPastPayload(data[key], maxItems, maxKeys);
+            }
+            compressedObj._compressionNote = `[Archived Turn] Object truncated. ${keys.length - maxKeys} keys hidden.`;
+            return compressedObj;
+        }
+
+        // B. If the object is a normal size, process all keys
+        for (const key of keys) {
+            compressedObj[key] = compressPastPayload(data[key], maxItems, maxKeys);
+        }
+        return compressedObj;
+    }
+
+    // 4. Return standard small types (numbers, booleans, small strings)
+    return data;
+}
 
 export function prepareHistoryForModel(history: Content[]): Content[] {
     const originalLength = JSON.stringify(history).length;
@@ -35,50 +77,29 @@ export function prepareHistoryForModel(history: Content[]): Content[] {
             return msg;
         }
 
-        // 2. COMPRESS PREVIOUS TURNS
-        // For older history, we compress large function args and responses to save context window.
-        const processedParts = msg.parts.map(part => {
+        // 2. COMPRESS PAST TURNS
+        const compressedParts = msg.parts.map(part => {
 
-            // Handle Model Function Calls (Compress Large Args)
-            // Note: We use ...part to preserve thoughtSignature even in older history, though it's less critical there.
-            if (msg.role === 'model' && 'functionCall' in part) {
-                const argsString = JSON.stringify(part.functionCall.args);
-                if (argsString.length > COMPRESSION_THRESHOLD) {
-                    return {
-                        ...part, // Important: Preserves 'thoughtSignature' if present
-                        functionCall: {
-                            name: part.functionCall.name,
-                            args: { summary: `Large payload of ${argsString.length} chars` }
-                        }
-                    };
-                }
-            }
-
-            // Handle Function Responses (Compress Large Outputs)
-            if (msg.role === 'function' && 'functionResponse' in part) {
-                const responseString = JSON.stringify(part.functionResponse.response);
-
-                // Only compress if the output is actually large
-                if (responseString.length > COMPRESSION_THRESHOLD) {
-                    const filteredResponse = filterResponseData({
-                        responseData: part.functionResponse.response,
-                        details: 'IdAndTitle'
-                    });
-                    const newPart: FunctionResponsePart = {
-                        functionResponse: { name: part.functionResponse.name, response: filteredResponse }
-                    };
-                    return newPart;
-                }
-
-                // If it is small enough, return it as-is (full fidelity)
+            // A. Leave functionCalls (and their thoughtSignatures) EXACTLY as they are.
+            if ('functionCall' in part) {
                 return part;
             }
 
-            // Preserve everything else (specifically Thoughts/Reasoning parts or simple Text)
+            // B. Aggressively truncate past function responses. 
+            if ('functionResponse' in part) {
+                const fr = part.functionResponse as any;
+                return {
+                    functionResponse: {
+                        name: fr.name,
+                        response: compressPastPayload(fr.response, 3)
+                    }
+                };
+            }
+
             return part;
         });
 
-        return { ...msg, parts: processedParts };
+        return { ...msg, parts: compressedParts };
     });
 
     let currentLength = JSON.stringify(preparedHistory).length;
@@ -93,7 +114,7 @@ export function prepareHistoryForModel(history: Content[]): Content[] {
     while (currentLength > MAX_HISTORY_CHAR_LENGTH && preparedHistory.length > 3) {
         // If the protected turn has shifted all the way down to index 2, stop deleting!
         if (currentProtectionIndex <= 2) {
-            console.warn("History Debug] Critical: Context limit reached, but cannot drop older frames without breaking current turn.");
+            console.warn("[History Debug] Critical: Context limit reached, but cannot drop older frames without breaking current turn.");
             break;
         }
 
