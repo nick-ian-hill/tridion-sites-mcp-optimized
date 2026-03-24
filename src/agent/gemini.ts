@@ -148,10 +148,11 @@ export const determineNextStep = async (
 
         **6. Bulk Operations & Orchestration**
         - If you need to process, inspect, or mutate more than 3 items, use the 'toolOrchestrator' to process the batch server-side.
-        - **SINGLE-CALL FOR HEAVY DATA:** When importing from Excel, do it in a single orchestrator call. Use 'preProcessingScript' to parse the file and pass data via memory ('preProcessingResult') to the 'mapScript'. Do not dump data into the chat.
-        - **MANDATORY DRY RUN:** Before executing a large batch, you MUST test your script first. Call 'toolOrchestrator' passing ONLY 1 or 2 items in the 'itemIds' array. Evaluate the result. Only proceed with the remaining items if the dry run succeeds.
+        - **DATA HANDLING (NO MASSIVE ARGUMENTS):** Never pass huge arrays of IDs or massive JSON objects directly into your tool arguments, and NEVER hardcode massive arrays or datasets inside your scripts. This pollutes the context window.
+           - For sequential data: Use JavaScript loops ('for', 'while') inside the script to generate the data programmatically.
+           - For heavy data/files (Excel, JSON): Do NOT extract the text into the chat. Write a 'preProcessingScript' that calls 'await context.tools.readUploadedFile(...)' to load and parse the file natively on the server, then pass the parsed data via memory ('preProcessingResult') to your 'mapScript'.        - **MANDATORY DRY RUN:** Before executing a large batch, you MUST test your script first. Call 'toolOrchestrator' passing ONLY 1 or 2 items in the 'itemIds' array. Evaluate the result. Only proceed with the remaining items if the dry run succeeds.
         - **FAIL LOUDLY & FAST:** Do NOT wrap your primary mutation API calls (e.g., 'createPage', 'createComponent') in 'try/catch' blocks that return null. Let errors throw naturally. Leave 'stopOnError' as true (the default) so the orchestrator halts immediately on the first error and reports the exact issue to you. DO NOT set stopOnError to false.
-        - **DEFENSIVE VALIDATION:** Your 'validationScript' MUST be defensive. Do not blindly access properties (e.g., 'context.successes[0].result.itemId') without checking if 'result' and 'itemId' are valid, as items may have returned incomplete data.
+        - **DEFENSIVE VALIDATION:** You MUST validate inside your 'mapScript' immediately after mutating data. For example, after 'updateContent', fetch the fresh item using 'getItem' and 'context.utils.assert()' that the expected state matches. Do not assume an operation worked just because an API call was made.
         - Reporting Bulk Operations: Review the orchestrator's output carefully. If any items failed or generated warnings, you MUST explicitly report the exact number and the reasons in your 'taskConfirmation'.
 
         **7. Handling Large Datasets & Excel Files (Data-Driven Modeling)**
@@ -160,7 +161,7 @@ export const determineNextStep = async (
         - Step 2 (Metadata Analysis): Inspect the rows returned for EACH sheet. Look for sheets named "Notes" or "Instructions". If they contain critical logic and appear truncated (compare 'Data.length' to 'TotalRows'), IMMEDIATELY call the read tool again using the 'targetSheet' parameter for ONLY that specific sheet WITHOUT 'maxRows'.
         - Step 3 (Schema Verification): Do NOT guess standard fields or layouts (e.g., assuming a single "Main" region on a page). Your Schemas and Templates MUST perfectly match the dataset. If the 3 triage rows are not enough to confirm all required variables, write a 'toolOrchestrator' script (omitting 'mapScript') to read the full file server-side and return a summary of all unique data variations (e.g., an array of all unique regions referenced).
         - Step 4 (Dry Run Execution): Write your final 'toolOrchestrator' script, but restrict it to process ONLY 1 or 2 rows/items first. This is critical to prevent slow, massive failures if your script logic or mapping has a bug. 
-        - Step 5 (Full Execution): Only after the Dry Run succeeds and your 'validationScript' passes should you use the 'toolOrchestrator' to process the remaining dataset.
+        - Step 5 (Full Execution): Only after the Dry Run succeeds and your 'mapScript' validation assertions pass should you use the 'toolOrchestrator' to process the remaining dataset.
 
         **8. Destructive Actions (Requires Consent)**
         - You MUST NEVER delete an item using 'deleteItem', 'undoCheckOutItem' (for items without a major version), or the 'toolOrchestrator' without EXPLICIT, prior confirmation from the user (unless you just created it this turn).
