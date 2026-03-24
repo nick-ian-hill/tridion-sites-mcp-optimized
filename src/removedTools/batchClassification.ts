@@ -10,7 +10,7 @@ const batchClassificationInputProperties = {
         .describe("An array of unique IDs (TCM URIs) for the items to modify. Use 'search' or 'getItemsInContainer' to find items."),
     keywordIdsToAdd: z.array(z.string().regex(/^(tcm:\d+-\d+-1024|ecl:[^:\s]+)$/))
         .optional()
-        .describe("An array of unique IDs (TCM URIs) for Keywords to apply to the items. Use 'getCategories' and 'getKeywordsForCategory' to find available keywords."),
+        .describe("An array of unique IDs (TCM URIs) for Keywords to apply to the items. Use 'getCategories' followed by 'getItemsInContainer' or 'getClassificationKeywordsForCategory' to find available keywords."),
     keywordIdsToRemove: z.array(z.string().regex(/^(tcm:\d+-\d+-1024|ecl:[^:\s]+)$/))
         .optional()
         .describe("An array of unique IDs (TCM URIs) for Keywords to remove from the items. Use 'bulkReadItems' in combination with the 'includeProperties' property (or set the 'loadFullItems' property to true) to find the currently used keywords for each item."),

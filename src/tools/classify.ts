@@ -9,7 +9,7 @@ const classifyInputProperties = {
         .describe("The unique ID (TCM URI) of the item to modify."),
     keywordIdsToAdd: z.array(z.string().regex(/^(tcm:\d+-\d+-1024|ecl:[^:\s]+)$/))
         .optional()
-        .describe("An array of unique IDs (TCM URIs) for Keywords to apply to the item. To find available keywords, first use 'getCategories' to get a list of categories, then use 'getKeywordsForCategory' to list the keywords within a category."),
+        .describe("An array of unique IDs (TCM URIs) for Keywords to apply to the item. To find available keywords, first use 'getCategories' to get a list of categories, then use 'getClassificationKeywordsForCategory' to list the relevant keywords within a category."),
     keywordIdsToRemove: z.array(z.string().regex(/^(tcm:\d+-\d+-1024|ecl:[^:\s]+)$/))
         .optional()
         .describe("An array of unique IDs (TCM URIs) for Keywords to remove from the item."),

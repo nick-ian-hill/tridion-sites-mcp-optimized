@@ -4,13 +4,20 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 import { formatForAgent } from "../utils/fieldReordering.js";
 import { filterResponseData } from "../utils/responseFiltering.js";
 
-export const getKeywordsForCategory = {
-    name: "getKeywordsForCategory",
-    description: `Retrieves the list of keywords for the specified category, including nested keywords. This is the second step in finding keywords, used after 'getCategories'. The keyword IDs returned by this tool are used as input for tools like 'classify', and 'getItemsClassifiedByKeyword'.
-    Keywords can be associated with items via 'keyword' fields in an item's content or metadata.
-    Keywords with the 'Abstract' property set to true are typically used for defining hierarchical navigation.
-    Keywords with the 'Abstract' property set to false can be used for both navigation and for classifying items.
-    When used in classification, the keywords' title property is usually assumed to reflect some aspect of the item's content/metadata.`,
+export const getClassificationKeywordsForCategory = {
+    name: "getClassificationKeywordsForCategory",
+    description: `Retrieves a list of all non-abstract keywords for the specified category.
+    
+    This tool is specifically designed to find keywords that can be used to tag/classify content. It automatically filters out 'Abstract' keywords (which are used purely for hierarchical navigation).
+    
+    The keyword IDs returned by this tool are used as input for tools like 'classify' and 'getItemsClassifiedByKeyword'.
+
+    Note that Keywords can be associated with items via 'keyword' fields in an item's content or metadata.
+    
+    NOTE: If you need to view the entire taxonomy tree (including Abstract parent keywords) or need to see hierarchical relationships, use the 'getItemsInContainer' tool instead.
+    
+    ### "Find-Then-Fetch" Pattern
+    This tool returns ONLY minimal identification data (Id, Title, type). To inspect other properties, use the 'getItem' tool.`,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/).describe("The unique ID of the category (e.g., 'tcm:5-123-512'). Use 'getCategories' to find a Category ID."),
     },
@@ -29,7 +36,7 @@ export const getKeywordsForCategory = {
             if (response.status === 200) {
                 const finalData = filterResponseData({ 
                     responseData: response.data, 
-                    includeProperties: ["IsAbstract"] 
+                    details: "IdAndTitle" 
                 });
                 
                 const formattedResponseData = formatForAgent(finalData);

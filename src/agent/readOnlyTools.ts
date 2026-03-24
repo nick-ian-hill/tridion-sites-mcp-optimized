@@ -30,7 +30,7 @@ export const READ_ONLY_TOOLS = [
     'getPublications',
     'getPublicationTypes',
     'getCategories',
-    'getKeywordsForCategory',
+    'getClassificationKeywordsForCategory',
     'getPublishTransactions',
     'getPublishInfo',
     'getTargetTypes',

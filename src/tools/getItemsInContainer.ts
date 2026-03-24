@@ -29,6 +29,8 @@ const itemTypeEnum = z.enum([
 export const getItemsInContainer = {
     name: "getItemsInContainer",
     description: `Gets a list of items (Id, Title, type) inside a specified container (e.g., a Publication, Folder, Structure Group).
+
+    NOTE: To retrieve all classification Keywords from a Category (including nested keywords), use the dedicated 'getClassificationKeywordsForCategory' tool instead.
     
     IMPORTANT: This tool returns ONLY identification data. It does NOT return Content, Metadata, or other properties.
     To retrieve item details:

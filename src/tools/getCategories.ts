@@ -8,7 +8,7 @@ export const getCategories = {
     name: "getCategories",
     description: `Retrieves the list of categories for a specified publication (Id, Title, Type).
     
-    This is the first step in finding available keywords. After getting a category's ID from this tool, use 'getKeywordsForCategory' to see the keywords within it.
+    This is the first step in finding available keywords. After getting a category's ID from this tool, use 'getItemsInContainer' or 'getClassificationKeywordsForCategory' to see the keywords within it.
 
     A category represents a set of keywords, possibly hierarchically structured.
     Keyword hierarchies arise when one or more keywords has one or more parent keywords.
