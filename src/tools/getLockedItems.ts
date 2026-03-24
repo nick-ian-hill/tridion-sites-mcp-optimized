@@ -44,8 +44,7 @@ export const getLockedItems = {
     Example 1: Find all items that HAVE the 'CheckedOut' state.
     const result = await tools.getLockedItems({
         allOfLockStates: ["CheckedOut"],
-        forAllUsers: true,
-        includeProperties: ["LocationInfo.Path"]
+        forAllUsers: true
     });
 
     Example 2: Find all items that have BOTH 'InWorkflow' AND 'CheckedOut' states.
