@@ -8,7 +8,7 @@ export const getActivities = {
     name: "getActivities",
     description: `Gets a list of workflow activities, which can be filtered by user and state.
     
-    IMPORTANT: This tool returns the Id and Title of the requested activities., ActivityState).
+    IMPORTANT: This tool returns the Id and Title of the requested activities.
     
     ### "Find-Then-Fetch" Pattern
     To retrieve detailed information about specific activities (e.g., to generate a report of all "Suspended" activities and their error messages):
