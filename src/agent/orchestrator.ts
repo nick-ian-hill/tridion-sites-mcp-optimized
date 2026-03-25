@@ -186,8 +186,27 @@ export class Orchestrator {
                 useAdvancedModel
             );
 
+            // Push whatever the model outputted to the history
             if (modelResponseContent) {
                 task.history.push(modelResponseContent as Content);
+            }
+
+            // --- INTERCEPT DROPPED TOOL CALLS ---
+            // If the model outputted plain text without calling a tool, nextSteps will be empty.
+            if (nextSteps.length === 0) {
+                this.emit('progress', { 
+                    isLog: true, 
+                    message: `Agent formatting error (Turn ${i + 1}/${maxTurns}). Reprompting to use tools...` 
+                });
+                
+                // Punish the agent by adding a reprimand to the history
+                task.history.push({
+                    role: 'user',
+                    parts: [{ text: "SYSTEM ALERT: Your previous response was invalid. You MUST call a tool (like 'toolOrchestrator' or 'finish'). Do not just output plain text or markdown scripts directly to the user. Use the tool configuration provided." }]
+                });
+                
+                // Immediately jump to the next iteration of the loop without executing any tools, to give the model a chance to correct itself and call the appropriate tool on the next turn.
+                continue; 
             }
 
             const finishStep = nextSteps.find(s => s.tool === 'finish');
@@ -257,7 +276,7 @@ export class Orchestrator {
             }
 
             // End execution if task is genuinely complete
-            if (nextSteps.length === 0 || (finishStep && !hasFailures)) {
+            if (finishStep && !hasFailures) {
                 if (modelResponseContent) {
                     const textParts = modelResponseContent.parts
                         ?.filter((part: any) => 'text' in part)

@@ -262,42 +262,12 @@ export const determineNextStep = async (
     const modelResponseContent = result.candidates?.[0]?.content ?? null;
 
     // Filter to ensure we only process valid calls that have a name.
-    // This satisfies TypeScript safety and prevents runtime errors in the Orchestrator.
     const validCalls = (calls || []).filter(call => call.name);
 
-    // Map ALL valid function calls to plan steps (supporting parallel calling)
     const currentFunctionCount = history.filter(h => h.role === 'function').length;
-
-    // Handle case where no function calls were generated (API dropped malformed JSON)
-    if (validCalls.length === 0) {
-        console.warn("[Reasoner] Model did not return a valid function call. Injecting recovery step to continue loop.");
-        
-        const errorMessage = "SYSTEM ALERT: Your previous response was invalid or empty. This usually happens when you try to generate a massive mapScript and make a JSON escaping syntax error. Do not write massive scripts. Simplify your logic or break the task into smaller steps.";
-
-        // 1. Synthesize the model's dropped call so the history structure remains valid
-        const safeContent: Content = { 
-            role: 'model', 
-            parts: [{ 
-                functionCall: {
-                    name: "toolOrchestrator",
-                    args: { preProcessingScript: `throw new Error("${errorMessage}");` }
-                }
-            }] 
-        };
-
-        // 2. Queue the synthesized step. The orchestrator will run this, fail immediately, 
-        // append the helpful error to the history, and trigger the next turn automatically!
-        const planStep: PlanStep = {
-            step: currentFunctionCount + 1,
-            tool: 'toolOrchestrator',
-            args: { preProcessingScript: `throw new Error("${errorMessage}");` },
-            description: "System injected error recovery.",
-            status: 'pending'
-        };
-
-        return { planSteps: [planStep], modelResponseContent: safeContent };
-    }
-
+    
+    // If validCalls is empty (e.g. the model dropped the tool call and output raw text), 
+    // nextSteps will simply be an empty array, which the orchestrator will intercept.
     const nextSteps: PlanStep[] = validCalls.map((call, index) => ({
         step: currentFunctionCount + 1 + index,
         description: `Call tool: ${call.name}`,
