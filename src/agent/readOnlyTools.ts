@@ -26,6 +26,7 @@ export const READ_ONLY_TOOLS = [
     'getProcessDefinitions',
     'readMultimediaComponent',
     'readUploadedFile',
+    'getApprovalStatuses',
     'getBluePrintHierarchy',
     'getPublications',
     'getPublicationTypes',
