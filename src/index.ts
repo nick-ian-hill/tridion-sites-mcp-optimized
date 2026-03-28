@@ -48,10 +48,12 @@ function createMcpServer(tools: Tool[]): McpServer {
     }, {} as Record<string, Tool>);
 
     for (const potentialTool of tools) {
-        server.tool(
+        server.registerTool(
             potentialTool.name,
-            potentialTool.description,
-            potentialTool.input,
+            {
+                description: potentialTool.description,
+                inputSchema: potentialTool.input,
+            },
             (args: any, context: any) => {
                 let finalContext = context;
                 if (potentialTool.name === 'toolOrchestrator') {
