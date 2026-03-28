@@ -2,8 +2,10 @@ import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { randomUUID } from 'node:crypto';
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { handleStartChat, handlePollChat } from './agent/agent.js';
 
 // --- Direct imports for Assistant-specific tools ---
@@ -37,9 +39,37 @@ function isTool(obj: any): obj is Tool {
     );
 }
 
+function createMcpServer(tools: Tool[]): McpServer {
+    const server = new McpServer({ name: "tridion-sites-mcp-server", version: "1.0.0" });
+
+    const toolsAsRecord: Record<string, Tool> = tools.reduce((acc, tool) => {
+        acc[tool.name] = tool;
+        return acc;
+    }, {} as Record<string, Tool>);
+
+    for (const potentialTool of tools) {
+        server.tool(
+            potentialTool.name,
+            potentialTool.description,
+            potentialTool.input,
+            (args: any, context: any) => {
+                let finalContext = context;
+                if (potentialTool.name === 'toolOrchestrator') {
+                    finalContext = {
+                        ...context,
+                        tools: toolsAsRecord
+                    };
+                }
+                return potentialTool.execute(args, finalContext);
+            }
+        );
+    }
+
+    return server;
+}
+
 async function startServer() {
-    const mcpServer = new McpServer({ name: "tridion-sites-mcp-server", version: "1.0.0" });
-    const mcpTransport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+    const sessions = new Map<string, StreamableHTTPServerTransport>();
 
     const tools: Tool[] = [];
 
@@ -82,29 +112,6 @@ async function startServer() {
             }
         }
 
-        const toolsAsRecord: Record<string, Tool> = tools.reduce((acc, tool) => {
-            acc[tool.name] = tool;
-            return acc;
-        }, {} as Record<string, Tool>);
-
-        for (const potentialTool of tools) {
-            mcpServer.tool(
-                potentialTool.name,
-                potentialTool.description,
-                potentialTool.input,
-                (args: any, context: any) => {
-                    let finalContext = context;
-                    if (potentialTool.name === 'toolOrchestrator') {
-                        finalContext = {
-                            ...context,
-                            tools: toolsAsRecord
-                        };
-                    }
-                    return potentialTool.execute(args, finalContext);
-                }
-            );
-        }
-
         console.log(`Successfully loaded and registered ${tools.length} tools.`);
 
     } catch (error) {
@@ -113,10 +120,9 @@ async function startServer() {
         process.exit(1);
     }
 
-    mcpServer.connect(mcpTransport);
     const MCP_API_KEY = process.env.MCP_API_KEY || "demo-secret-key";
 
-    const httpServer = http.createServer((req, res) => {
+    const httpServer = http.createServer(async (req, res) => {
         res.setHeader('Access-Control-Allow-Origin', 'http://localhost:8080');
         res.setHeader('Access-Control-Allow-Credentials', 'true');
         if (req.method === 'OPTIONS') {
@@ -223,19 +229,54 @@ async function startServer() {
             return;
         }
 
+        const sessionId = req.headers['mcp-session-id'] as string | undefined;
+
         if (req.method === 'POST') {
             let body = '';
             req.on('data', chunk => { body += chunk.toString(); });
-            req.on('end', () => {
+            req.on('end', async () => {
+                let parsed: unknown;
                 try {
-                    mcpTransport.handleRequest(req, res, JSON.parse(body));
+                    parsed = JSON.parse(body);
                 } catch (e) {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ error: 'Invalid JSON' }));
+                    return;
+                }
+
+                if (sessionId && sessions.has(sessionId)) {
+                    // Existing session
+                    await sessions.get(sessionId)!.handleRequest(req, res, parsed);
+                } else if (!sessionId && isInitializeRequest(parsed)) {
+                    // New session
+                    const transport = new StreamableHTTPServerTransport({
+                        sessionIdGenerator: () => randomUUID(),
+                        onsessioninitialized: (newSessionId) => {
+                            sessions.set(newSessionId, transport);
+                        }
+                    });
+                    transport.onclose = () => {
+                        const sid = transport.sessionId;
+                        if (sid) sessions.delete(sid);
+                    };
+                    const server = createMcpServer(tools);
+                    await server.connect(transport);
+                    await transport.handleRequest(req, res, parsed);
+                } else {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'Bad request: missing or invalid session ID' }));
                 }
             });
+        } else if (req.method === 'GET' || req.method === 'DELETE') {
+            if (sessionId && sessions.has(sessionId)) {
+                await sessions.get(sessionId)!.handleRequest(req, res);
+            } else {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Bad request: missing or invalid session ID' }));
+            }
         } else {
-            mcpTransport.handleRequest(req, res);
+            res.writeHead(405, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Method not allowed' }));
         }
     });
 
