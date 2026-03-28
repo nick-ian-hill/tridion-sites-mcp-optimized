@@ -262,17 +262,25 @@ async function startServer() {
                     const server = createMcpServer(tools);
                     await server.connect(transport);
                     await transport.handleRequest(req, res, parsed);
+                } else if (sessionId && !sessions.has(sessionId)) {
+                    // Stale session ID (e.g. after server restart) — 404 signals clients to re-initialize
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'Session not found' }));
                 } else {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ error: 'Bad request: missing or invalid session ID' }));
+                    res.end(JSON.stringify({ error: 'Bad request' }));
                 }
             });
         } else if (req.method === 'GET' || req.method === 'DELETE') {
             if (sessionId && sessions.has(sessionId)) {
                 await sessions.get(sessionId)!.handleRequest(req, res);
+            } else if (sessionId && !sessions.has(sessionId)) {
+                // Stale session ID — 404 signals clients to re-initialize
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Session not found' }));
             } else {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: 'Bad request: missing or invalid session ID' }));
+                res.end(JSON.stringify({ error: 'Bad request: missing session ID' }));
             }
         } else {
             res.writeHead(405, { 'Content-Type': 'application/json' });
