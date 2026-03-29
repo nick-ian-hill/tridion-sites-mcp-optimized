@@ -1,4 +1,5 @@
 import { z } from "zod";
+import axios from "axios";
 import { createAuthenticatedAxios } from "../utils/axios.js";
 import { toLink } from "../utils/links.js";
 import { convertItemIdToContextPublication } from "../utils/convertItemIdToContextPublication.js";
@@ -28,7 +29,8 @@ const updatePageInputProperties = {
     metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the Page's metadata fields. Can be provided alongside 'metadataSchemaId'. Replaces existing metadata."),
     componentPresentations: z.array(componentPresentationSchemaForTyping).optional().describe("A complete array of Component Presentation objects to REPLACE the existing ones on the top-level of the page. WARNING: This overwrites the entire list."),
     regions: z.array(regionSchemaForTyping).optional().describe("A complete array of Region objects to replace the existing region data. WARNING: This overwrites the entire region structure."),
-    componentPresentationUpdates: z.array(componentPresentationUpdateOperationSchema).optional().describe("A list of atomic operations to Add or Remove Component Presentations from the Page or specific Regions. Use this for safe updates in loops or partial modifications.")
+    componentPresentationUpdates: z.array(componentPresentationUpdateOperationSchema).optional().describe("A list of atomic operations to Add or Remove Component Presentations from the Page or specific Regions. Use this for safe updates in loops or partial modifications."),
+    overrideRegionOrder: z.boolean().optional().describe("If true, the regions will be ordered exactly as provided in the 'regions' array. If false or omitted, the tool preserves the page's EXISTING region order (unlike createPage, which follows schema order by default).")
 };
 
 const updatePageInputSchema = z.object(updatePageInputProperties).refine(
@@ -109,12 +111,17 @@ This tool can modify various aspects of a Page, including its title, file name, 
 Versioning is handled automatically. If the item is not checked out, it will be checked out, updated, and then checked back in. If the item is already checked out by you, it will remain checked out after the update. The operation will be aborted if the item is checked out by another user.
 
 STRATEGIES FOR UPDATING CONTENT:
-1. Full Replacement: Use 'componentPresentations' (for top-level) or 'regions' (for nested content). This completely overwrites the existing data with what you provide.
+1. Full Replacement: Use 'componentPresentations' (for top-level) or 'regions' (for nested content). This completely overwrites the existing data with what you provide. 
+   *Region Order Note:* When using full replacement for regions, the tool will automatically preserve the page's EXISTING region order. Any new mandatory regions added to the Schema since the page was last updated will be appended to the end.
 2. Atomic Updates (Recommended): Use 'componentPresentationUpdates'. This allows you to Add or Remove specific items from the Page or specific Regions without touching the rest of the content.
+3. Structural Reordering: To explicitly change the order of the regions themselves, use Full Replacement (strategy 1) and set 'overrideRegionOrder: true'.
 
 Constraints:
 - The content provided must adhere to any constraints defined in the Page Template's Region Schemas.
 - For atomic updates, the target Region must already exist on the Page.
+
+Best Practice — Swapping the Page Template:
+If you change 'pageTemplateId' to a template that requires a different metadata schema, you MUST provide the new 'metadataSchemaId' (and any mandatory 'metadata' values) in the SAME call. Splitting this into two sequential updates (template first, then schema) will cause the first update to fail if the new template enforces schema constraints.
 
 Verification: API success (200 OK) guarantees the request was received, but not necessarily that complex nested structures (like Regions) were populated as intended. For critical updates, you should fetch the item using getItem to verify the changes were persisted correctly before reporting completion to the user.
 If called from the toolOrchestrator, consider auditing one or more updated pages to validate that the script performed as intended.
@@ -192,6 +199,25 @@ Example 7: Remove the Metadata Schema from a Page.
     const result = await tools.updatePage({
         itemId: "tcm:1-123-64",
         metadataSchemaId: "tcm:0-0-0"
+    });
+
+Example 8: Reorder the structural Regions on a Page.
+To move the 'Sidebar' region above the 'Main' region, you must perform a full replacement and explicitly set 'overrideRegionOrder' to true.
+    const result = await tools.updatePage({
+        itemId: "tcm:1-123-64",
+        overrideRegionOrder: true,
+        regions: [
+            { 
+                "type": "EmbeddedRegion", 
+                "RegionName": "Sidebar",
+                "ComponentPresentations": [ /* existing sidebar content */ ]
+            },
+            { 
+                "type": "EmbeddedRegion", 
+                "RegionName": "Main",
+                "ComponentPresentations": [ /* existing main content */ ]
+            }
+        ]
     });
 `,
     input: updatePageInputProperties,
@@ -288,9 +314,20 @@ Example 7: Remove the Metadata Schema from a Page.
                 if (!pageTemplateId) {
                     throw new Error(`Could not determine the Page Template for Page ${itemId} to process regions.`);
                 }
-                itemToUpdate.Regions = await processRegions(updates.regions as RegionForTyping[], itemId, pageTemplateId, authenticatedAxios);
+                
+                // Extract the existing regions to preserve their custom order
+                const existingRegions = itemToUpdate.Regions || [];
+                
+                // Pass existingRegions as the final parameter
+                itemToUpdate.Regions = await processRegions(
+                    updates.regions as RegionForTyping[], 
+                    itemId, 
+                    pageTemplateId, 
+                    authenticatedAxios, 
+                    updates.overrideRegionOrder,
+                    existingRegions
+                );
             }
-
             // --- Atomic Update Logic (General) ---
             if (updates.componentPresentationUpdates) {
                 for (const operation of updates.componentPresentationUpdates) {
@@ -325,7 +362,49 @@ Example 7: Remove the Metadata Schema from a Page.
             }
 
             // --- Commit Changes ---
-            const updateResponse = await authenticatedAxios.put(`/items/${restItemId}`, itemToUpdate);
+            // First attempt. If the CMS rejects the PUT because a region is no longer in the schema
+            // ("Unexpected region" error — caused by a schema change after the page was last saved),
+            // strip the stale region(s) and retry once. This avoids paying the schema lookup cost
+            // on every call when stale regions are rare.
+            let updateResponse: any;
+            try {
+                updateResponse = await authenticatedAxios.put(`/items/${restItemId}`, itemToUpdate);
+            } catch (putError) {
+                const isStaleRegionError =
+                    axios.isAxiosError(putError) &&
+                    putError.response &&
+                    JSON.stringify(putError.response.data).toLowerCase().includes('unexpected region');
+
+                if (isStaleRegionError && (itemToUpdate.Regions as any[])?.length > 0) {
+                    const pageTemplateId = itemToUpdate.PageTemplate?.IdRef;
+                    if (pageTemplateId) {
+                        const ptResponse = await authenticatedAxios.get(`/items/${pageTemplateId.replace(':', '_')}`);
+                        const pageSchemaId = ptResponse.data?.PageSchema?.IdRef;
+                        if (pageSchemaId) {
+                            const schemaResponse = await authenticatedAxios.get(`/items/${pageSchemaId.replace(':', '_')}`);
+                            const validNames = new Set<string>(
+                                (schemaResponse.data?.RegionDefinition?.NestedRegions || [])
+                                    .map((r: any) => r.RegionName as string)
+                            );
+                            const staleNames = (itemToUpdate.Regions as any[])
+                                .filter((r: any) => !validNames.has(r.RegionName))
+                                .map((r: any) => r.RegionName as string);
+                            if (staleNames.length > 0) {
+                                itemToUpdate.Regions = (itemToUpdate.Regions as any[]).filter((r: any) => validNames.has(r.RegionName));
+                                updateResponse = await authenticatedAxios.put(`/items/${restItemId}`, itemToUpdate);
+                            } else {
+                                throw putError;
+                            }
+                        } else {
+                            throw putError;
+                        }
+                    } else {
+                        throw putError;
+                    }
+                } else {
+                    throw putError;
+                }
+            }
             if (updateResponse.status !== 200) {
                 return handleUnexpectedResponse(updateResponse);
             }

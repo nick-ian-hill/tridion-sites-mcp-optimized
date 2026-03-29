@@ -18,7 +18,8 @@ const createPageInputProperties = {
     metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of a Schema for the Page's metadata. Use 'getSchemaLinks' to find available schemas. If the Page Template defines a Region Schema, that Region Schema can be used here."),
     metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the Page's metadata fields as defined by the schema with URI metadataSchemaId."),
     componentPresentations: z.array(componentPresentationSchemaForTyping).optional().describe("An array of Component Presentation objects to be placed directly on the Page, outside of any Regions. Each object must have 'type': 'ComponentPresentation', a 'Component' property (a Link), and an optional 'ComponentTemplate' property (a Link)."),
-    regions: z.array(regionSchemaForTyping).optional().describe("An array of Region objects. The RegionName for each region must match a region defined in the Page Template. To discover the correct region names and structure, first use the 'getItem' tool to inspect the 'pageTemplateId'.")
+    regions: z.array(regionSchemaForTyping).optional().describe("An array of Region objects to place on the Page. If omitted, all regions defined in the Page Template's schema are automatically created as empty, schema-compliant structures — this is the standard approach for creating a new empty page. If provided, each RegionName must match a region defined in the Page Template. Use the 'getItem' tool to inspect the 'pageTemplateId' to discover available region names and structures."),
+    overrideRegionOrder: z.boolean().optional().describe("If true, the regions will be ordered exactly as provided in the 'regions' array. If false or omitted, the tool will automatically reorder the provided regions to match the order defined in the parent Region Schema.")
 };
 
 const createPageInputSchema = z.object(createPageInputProperties);
@@ -32,7 +33,7 @@ export const createPage = {
 BluePrint Inheritance Note:
 The Page will be created in the specified Structure Group and be automatically inherited by all descendant Publications.
 
-IMPORTANT: Before creating a Page with regions, you MUST first use the 'getItem' tool to inspect the 'pageTemplateId'. This will reveal the required region names, whether they are repeatable, and the schemas for their metadata, which is crucial for correctly formatting the 'regions' parameter.
+IMPORTANT: Regions are optional. If you omit the 'regions' parameter entirely, the tool will automatically pre-populate the page with all regions defined in the Page Template's schema as empty structures. This is the recommended approach when creating a fresh page with no initial content. If you want to create a page with specific content already in a region, provide the 'regions' array with only the regions you want to populate — the tool will auto-fill the rest.
 
 A Page holds content using Component Presentations (CPs). These CPs can be placed in two locations:
 1.  Directly on the Page: Use the top-level 'componentPresentations' property for this. These CPs are not associated with any specific Region.
@@ -159,6 +160,20 @@ This example shows a two-column layout within the main content area.
                 ]
             }
         ]
+    });
+    
+Example 5: Create a page with a custom region layout that ignores the default Schema order.
+By setting 'overrideRegionOrder' to true, the resulting page will place the 'Sidebar' region above the 'Main' region, even if the Schema defines 'Main' first.
+    const result = await tools.createPage({
+        title: "Custom Layout Page",
+        locationId: "tcm:1-1-4",
+        fileName: "custom.html",
+        pageTemplateId: "tcm:1-40-128",
+        overrideRegionOrder: true,
+        regions: [
+            { "type": "EmbeddedRegion", "RegionName": "Sidebar" },
+            { "type": "EmbeddedRegion", "RegionName": "Main" }
+        ]
     });`,
     input: createPageInputProperties,
 
@@ -174,7 +189,7 @@ This example shows a two-column layout within the main content area.
 
         const {
             title, locationId, fileName, pageTemplateId, metadataSchemaId,
-            metadata, componentPresentations, regions
+            metadata, componentPresentations, regions, overrideRegionOrder
         } = args;
         
         const createErrorResponse = (message: string) => {
@@ -297,7 +312,8 @@ This example shows a two-column layout within the main content area.
             payload.ComponentPresentations = processComponentPresentations(parsedComponentPresentations, locationId);
 
             if (contextualPageTemplateId) {
-                payload.Regions = await processRegions(parsedRegions as RegionForTyping[], locationId, contextualPageTemplateId, authenticatedAxios);
+                // Pass the overrideRegionOrder flag to the utility
+                payload.Regions = await processRegions(parsedRegions as RegionForTyping[], locationId, contextualPageTemplateId, authenticatedAxios, overrideRegionOrder);
             } else if (parsedRegions && parsedRegions.length > 0) {
                 return createErrorResponse(`Error: Regions were provided, but no Page Template could be determined.`);
             } else {

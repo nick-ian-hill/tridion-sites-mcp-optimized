@@ -1,5 +1,13 @@
 import axios, { InternalAxiosRequestConfig } from "axios";
 
+// Extend Axios config type to allow custom retry tracking properties
+declare module 'axios' {
+    interface InternalAxiosRequestConfig {
+        _networkRetryCount?: number;
+        _retry?: boolean;
+    }
+}
+
 // --- Configuration Constants ---
 
 // 1. Service API (Bearer Token) - For automated/service-to-service calls
@@ -29,9 +37,17 @@ let cachedAccessToken: string | null = null;
 let tokenExpirationTime: number = 0;
 let refreshPromise: Promise<string> | null = null;
 
+// Network error codes that are safe to retry (transient connectivity failures)
+const RETRYABLE_ERROR_CODES = new Set(['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN']);
+const TOKEN_REQUEST_TIMEOUT_MS = 10000; // Fail fast per attempt rather than waiting for OS TCP timeout
+const MAX_TOKEN_FETCH_RETRIES = 3;
+const MAX_API_RETRIES = 3;
+const API_RETRY_BASE_DELAY_MS = 1000;
+
 /**
  * Fetches a new access token or returns a valid cached one.
- * Implements promise locking to handle concurrent refresh requests.
+ * Implements promise locking to handle concurrent refresh requests,
+ * and retries with exponential backoff on transient network errors.
  */
 async function getDebugAccessToken(): Promise<string> {
     // 1. If we have a cached token and it's not expired (buffer of 30s), use it.
@@ -47,8 +63,6 @@ async function getDebugAccessToken(): Promise<string> {
     // 3. Start a new refresh operation
     refreshPromise = (async () => {
         try {
-            console.log("[AUTH] Fetching new debug access token...");
-
             // Basic Auth Header for Token Endpoint
             const credentials = `${AUTH_CLIENT_ID}:${AUTH_CLIENT_SECRET}`;
             const encodedCredentials = Buffer.from(credentials).toString('base64');
@@ -57,25 +71,47 @@ async function getDebugAccessToken(): Promise<string> {
             const params = new URLSearchParams();
             params.append("grant_type", "client_credentials");
 
-            const response = await axios.post(AUTH_TOKEN_URL, params, {
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                    "Authorization": `Basic ${encodedCredentials}`
+            let lastError: unknown;
+            for (let attempt = 1; attempt <= MAX_TOKEN_FETCH_RETRIES; attempt++) {
+                if (attempt === 1) {
+                    console.log("[AUTH] Fetching new access token...");
+                } else {
+                    const delayMs = Math.pow(2, attempt - 2) * 1000; // 1s, 2s
+                    console.warn(`[AUTH] Retrying token fetch (attempt ${attempt}/${MAX_TOKEN_FETCH_RETRIES}) after ${delayMs}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, delayMs));
                 }
-            });
 
-            if (response.data && response.data.access_token) {
-                cachedAccessToken = response.data.access_token;
-                // Calculate absolute expiry time (expires_in is in seconds)
-                const expiresIn = response.data.expires_in || 3600;
-                tokenExpirationTime = Date.now() + (expiresIn * 1000);
-                return cachedAccessToken as string;
-            } else {
-                throw new Error("Invalid response format from token endpoint.");
+                try {
+                    const response = await axios.post(AUTH_TOKEN_URL, params, {
+                        timeout: TOKEN_REQUEST_TIMEOUT_MS,
+                        headers: {
+                            "Content-Type": "application/x-www-form-urlencoded",
+                            "Authorization": `Basic ${encodedCredentials}`
+                        }
+                    });
+
+                    if (response.data && response.data.access_token) {
+                        cachedAccessToken = response.data.access_token;
+                        // Calculate absolute expiry time (expires_in is in seconds)
+                        const expiresIn = response.data.expires_in || 3600;
+                        tokenExpirationTime = Date.now() + (expiresIn * 1000);
+                        return cachedAccessToken as string;
+                    } else {
+                        throw new Error("Invalid response format from token endpoint.");
+                    }
+                } catch (error: any) {
+                    lastError = error;
+                    // Only retry on transient network errors, not auth/format errors
+                    const code: string | undefined = error?.code ?? error?.cause?.code;
+                    if (!RETRYABLE_ERROR_CODES.has(code ?? '') || attempt === MAX_TOKEN_FETCH_RETRIES) {
+                        break;
+                    }
+                    console.warn(`[AUTH] Token fetch attempt ${attempt} failed with ${code}.`);
+                }
             }
-        } catch (error) {
-            console.error("[AUTH] Failed to fetch debug access token:", error);
-            throw error;
+
+            console.error("[AUTH] Failed to fetch access token after all retries:", lastError);
+            throw lastError;
         } finally {
             // Always clear the lock when the promise settles (success or fail)
             refreshPromise = null;
@@ -165,6 +201,30 @@ export const createAuthenticatedAxios = (userSessionId?: string | null, referer?
         );
     }
 
+    // --- Network Error Retry Interceptor (both modes) ---
+    // Registered before the Service Mode interceptors so it runs last in LIFO order,
+    // acting as the outermost fallback after other interceptors have had a chance to handle the error.
+    instance.interceptors.response.use(
+        (response) => response,
+        async (error) => {
+            const config = error.config;
+            if (!config) return Promise.reject(error);
+
+            const code: string | undefined = error?.code ?? error?.cause?.code;
+            config._networkRetryCount = config._networkRetryCount ?? 0;
+
+            if (RETRYABLE_ERROR_CODES.has(code ?? '') && config._networkRetryCount < MAX_API_RETRIES) {
+                config._networkRetryCount++;
+                const delayMs = Math.pow(2, config._networkRetryCount - 1) * API_RETRY_BASE_DELAY_MS; // 1s, 2s, 4s
+                console.warn(`[API] Network error ${code} on ${config.url}. Retrying (${config._networkRetryCount}/${MAX_API_RETRIES}) after ${delayMs}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delayMs));
+                return instance(config);
+            }
+
+            return Promise.reject(error);
+        }
+    );
+
     // --- Async Interceptor for Service Mode (Bearer Token) ---
     if (!useSessionMode) {
         // 1. Request Interceptor: Inject Token
@@ -191,9 +251,19 @@ export const createAuthenticatedAxios = (userSessionId?: string | null, referer?
                 // Check if it's a 401 and we haven't already retried this request
                 if (error.response?.status === 401 && !originalRequest._retry) {
                     originalRequest._retry = true; // Mark as retried to prevent infinite loops
-                    console.warn("[AUTH] 401 Unauthorized detected. Clearing cache and refreshing token...");
 
                     try {
+                        // Check if another concurrent request already refreshed the token.
+                        // If the cached token differs from the one that caused this 401, skip the
+                        // refresh and retry directly with the already-current token.
+                        const tokenUsed = (originalRequest.headers['Authorization'] as string | undefined)?.split(' ')[1];
+                        if (cachedAccessToken && cachedAccessToken !== tokenUsed) {
+                            console.warn("[AUTH] 401 detected but token already refreshed by another request. Retrying with current token.");
+                            originalRequest.headers['Authorization'] = `Bearer ${cachedAccessToken}`;
+                            return instance(originalRequest);
+                        }
+
+                        console.warn("[AUTH] 401 Unauthorized detected. Clearing cache and refreshing token...");
                         // Force clear the cache to ensure getDebugAccessToken triggers a refresh
                         // (or joins an existing one)
                         cachedAccessToken = null;

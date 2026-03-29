@@ -9,9 +9,12 @@ import { convertItemIdToContextPublication } from "../utils/convertItemIdToConte
 export const getItem = {
     name: "getItem",
     description: `Retrieves read-only details for a single Content Manager System (CMS) item.
-This is the primary tool for fetching the FULL data of an item.
-The default response includes extensive system metadata and HATEOAS links.
-To avoid polluting the context window, use the 'includeProperties' parameter to request only what you need. However, do include all relevant propeties to avoid sequential requests for the same item. 
+Use the 'includeProperties' parameter to request only the properties you need. This is the standard usage pattern — omitting it returns the full item, which includes hundreds of lines of permissions, HATEOAS links, and system metadata that consume context window space without adding value to most tasks.
+
+When 'includeProperties' is appropriate (most cases): looking up a title, checking BluePrintInfo, reading metadata values, inspecting schema field names, verifying a publication's parents, confirming a lock status.
+When omitting 'includeProperties' is justified (full data genuinely needed): preparing to call an update tool that requires the complete item payload (e.g., updatePage, updateContent), or inspecting the full field definitions of a Schema.
+
+Always include all relevant properties in a single call rather than making sequential calls for the same item. 
 
 ### Contextual Retrieval
 You can inspect the state of an item in a specified Publication context (e.g., to check if it is localized, shared, or accessible in a sibling/parent) by providing the 'contextPublicationId' parameter. The tool will automatically resolve the correct ID for that context.
@@ -224,7 +227,11 @@ You can limit the response to combinations of the following properties by provid
             const response = await authenticatedAxios.get(`/items/${restItemId}`, { params });
 
             if (response.status === 200) {
-                const finalData = filterResponseData({ responseData: response.data, includeProperties });
+                const finalData = filterResponseData({
+                    responseData: response.data,
+                    includeProperties,
+                    details: 'CoreDetails'
+                });
                 const formattedFinalData = formatForAgent(finalData);
                 return {
                     content: [{
