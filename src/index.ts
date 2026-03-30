@@ -122,6 +122,11 @@ async function startServer() {
         process.exit(1);
     }
 
+    const toolsAsRecord: Record<string, Tool> = tools.reduce((acc, tool) => {
+        acc[tool.name] = tool;
+        return acc;
+    }, {} as Record<string, Tool>);
+
     const MCP_API_KEY = process.env.MCP_API_KEY || "demo-secret-key";
 
     const httpServer = http.createServer(async (req, res) => {
@@ -150,13 +155,6 @@ async function startServer() {
                 try {
                     const input = JSON.parse(body || '{}');
 
-                    // 1. Re-construct the tools map for this execution context
-                    // (We do this here to ensure we have the latest reference to the loaded tools array)
-                    const toolsAsRecord = tools.reduce((acc, tool) => {
-                        acc[tool.name] = tool;
-                        return acc;
-                    }, {} as Record<string, Tool>);
-
                     const orchestratorTool = toolsAsRecord['toolOrchestrator'];
 
                     if (!orchestratorTool) {
@@ -165,17 +163,17 @@ async function startServer() {
                         return;
                     }
 
-                    // 2. Manually construct the context expected by toolOrchestrator.ts
+                    // 1. Manually construct the context expected by toolOrchestrator.ts
                     // The orchestrator expects { tools: ... } in the context to function.
                     const executionContext = {
                         tools: toolsAsRecord
                     };
 
-                    // 3. Execute the tool
+                    // 2. Execute the tool
                     // This bypasses the McpServer wrapper and calls the underlying tool code directly.
                     const result = await orchestratorTool.execute(input, executionContext);
 
-                    // 4. Unwrap the MCP response format to return clean JSON to the UI.
+                    // 3. Unwrap the MCP response format to return clean JSON to the UI.
                     // MCP returns { content: [{ type: 'text', text: 'JSON_STRING' }] }
                     // We want to return just JSON_OBJECT.
                     let cleanResponse = result;
@@ -249,8 +247,9 @@ async function startServer() {
                 if (sessionId && sessions.has(sessionId)) {
                     // Existing session
                     await sessions.get(sessionId)!.handleRequest(req, res, parsed);
-                } else if (!sessionId && isInitializeRequest(parsed)) {
-                    // New session
+                } else if (isInitializeRequest(parsed)) {
+                    // New session — allow re-initialization even if a stale session ID was provided
+                    // (e.g. after server restart, clients like Gemini CLI may re-send initialize with their old session ID)
                     const transport = new StreamableHTTPServerTransport({
                         sessionIdGenerator: () => randomUUID(),
                         onsessioninitialized: (newSessionId) => {
@@ -265,9 +264,15 @@ async function startServer() {
                     await server.connect(transport);
                     await transport.handleRequest(req, res, parsed);
                 } else if (sessionId && !sessions.has(sessionId)) {
-                    // Stale session ID (e.g. after server restart) — 404 signals clients to re-initialize
-                    res.writeHead(404, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ error: 'Session not found' }));
+                    // Stale session ID with a non-initialize request (e.g. after server restart).
+                    // Handle statelessly — create a fresh per-request transport so clients like
+                    // Gemini CLI don't need to reinitialize manually after a server restart.
+                    const transport = new StreamableHTTPServerTransport({
+                        sessionIdGenerator: undefined, // stateless: no session ID assigned or stored
+                    });
+                    const server = createMcpServer(tools);
+                    await server.connect(transport);
+                    await transport.handleRequest(req, res, parsed);
                 } else {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ error: 'Bad request' }));
