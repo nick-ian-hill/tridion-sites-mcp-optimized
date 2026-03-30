@@ -15,7 +15,7 @@ const updateItemPropertiesInputProperties = {
     itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/).describe("The unique ID of the CMS item to update."),
     itemType: z.enum([
         "Component", "Folder", "StructureGroup", "Keyword",
-        "Category", "Schema", "Bundle", "SearchFolder", "PageTemplate", "ComponentTemplate"
+        "Category", "Schema", "Bundle", "SearchFolder", "PageTemplate", "ComponentTemplate", "ApprovalStatus"
     ]).describe("The type of the CMS item to update."),
     title: z.string().optional().describe("The new title for the item."),
     metadataSchemaId: z.string().regex(/^(tcm:\d+-\d+-8|tcm:0-0-0)$/).optional().describe("The TCM URI of the Metadata Schema for the item's metadata. Replaces the existing schema. Pass 'tcm:0-0-0' to remove the metadata schema."),
@@ -53,6 +53,8 @@ const updateItemPropertiesInputProperties = {
     priority: z.number().int().optional().describe("For 'ComponentTemplate' type. Priority used for resolving Component links."),
     relatedSchemaIds: z.array(z.string().regex(/^tcm:\d+-\d+-8$/)).optional().describe("For 'ComponentTemplate' type. An array of Schema TCM URIs to link to this template. Replaces any existing links."),
     bundleProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("For 'Component', 'Multimedia Component' and 'Bundle' schema types. The TCM URI of a Process Definition (workflow) used for reviewing and approving changes to the item based on the schema. If specified, the item based on the schema needs to be added to a bundle that is associated with the same workflow process."),
+    position: z.number().int().optional().describe("For 'ApprovalStatus' type. The ordered position of the status."),
+    isDeleted: z.boolean().optional().describe("For 'ApprovalStatus' type. Flags the status as deleted (suppressed from lists)."),
 };
 
 const updateItemPropertiesSchema = z.object(updateItemPropertiesInputProperties)
@@ -384,6 +386,10 @@ This example updates a basic Region Schema (e.g., 'tcm:5-3875-8') to make it non
                 if (updates.outputFormat) itemToUpdate.OutputFormat = updates.outputFormat;
                 if (updates.priority !== undefined) itemToUpdate.Priority = updates.priority;
                 if (updates.relatedSchemaIds) itemToUpdate.RelatedSchemas = toLinkArray(updates.relatedSchemaIds);
+            }
+            if (itemType === 'ApprovalStatus') {
+                if (updates.position !== undefined) itemToUpdate.Position = updates.position;
+                if (updates.isDeleted !== undefined) itemToUpdate.IsDeleted = updates.isDeleted;
             }
 
             const updateResponse = await authenticatedAxios.put(`/items/${restItemId}`, itemToUpdate);

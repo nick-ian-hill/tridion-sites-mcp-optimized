@@ -13,7 +13,7 @@ import { getCachedDefaultModel } from "../utils/defaultModelCache.js";
 const createItemInputProperties = {
     itemType: z.enum([
         "Folder", "StructureGroup", "Keyword", "Category",
-        "Bundle", "SearchFolder", "PageTemplate", "ComponentTemplate"
+        "Bundle", "SearchFolder", "PageTemplate", "ComponentTemplate", "ApprovalStatus"
     ]).describe("The type of CMS item to create."),
     title: z.string().describe("The title for the new item. Note that creation will fail if an item of the same type exists in the current container (e.g., 'Folder'), or in the inherited copy of the container in a child or descendent 'Publication'. In other words, for a given container and item type, the title needs to be unique across the BluePrint hierarchy."),
     locationId: z.string().regex(/^tcm:\d+-\d+-\d+$/).describe(`The TCM URI of the parent container.
@@ -25,7 +25,7 @@ Constraints by Item Type:
     metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("Optional. The TCM URI of the 'Metadata' Schema (or 'Bundle' Schema for Bundles). Use 'getSchemaLinks' (with SchemaPurpose 'Metadata' or 'Bundle') to find available Schemas."),
     metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the item's metadata fields. The order of keys in your JSON object does not matter - the tool will automatically order the fields to match the Schema definition."),
     isAbstract: z.boolean().optional().describe("Only for 'Keyword' type. Set to true to create an abstract Keyword."),
-    description: z.string().optional().describe("A description for the item. Applicable to Keyword, Category, Bundle, and Search Folder types."),
+    description: z.string().optional().describe("A description for the item. Applicable to Keyword, Category, Bundle, Search Folder, and ApprovalStatus types."),
     directory: z.string().optional().describe("Required for 'StructureGroup' type. The directory name used in the URL path (e.g., 'pages')."),
     key: z.string().optional().describe("A custom key for the Keyword."),
     parentKeywords: z.array(z.string().regex(/^(tcm:\d+-\d+-1024|ecl:[^:\s]+)$/)).optional().describe("An array of URIs for parent Keywords. Use 'getItemsInContainer' or 'getClassificationKeywordsForCategory' to find potential parent keywords."),
@@ -40,7 +40,8 @@ Constraints by Item Type:
     isRepositoryPublishable: z.boolean().optional().describe("For 'ComponentTemplate' type. Whether the template renders dynamic Component Presentations. Defaults to false."),
     outputFormat: z.string().optional().describe("For 'ComponentTemplate' type. Defaults to 'HTML Fragment'."),
     priority: z.number().int().optional().describe("For 'ComponentTemplate' type. Defaults to 200."),
-    relatedSchemaIds: z.array(z.string().regex(/^tcm:\d+-\d+-8$/)).optional().describe("For 'ComponentTemplate' type. An array of Schema TCM URIs this template is linked to. Use 'getSchemaLinks' to find schemas.")
+    relatedSchemaIds: z.array(z.string().regex(/^tcm:\d+-\d+-8$/)).optional().describe("For 'ComponentTemplate' type. An array of Schema TCM URIs this template is linked to. Use 'getSchemaLinks' to find schemas."),
+    position: z.number().int().optional().describe("For 'ApprovalStatus' type. The ordered position of the status (determines minimum publishable status).")
 };
 
 const createItemInputSchema = z.object(createItemInputProperties)
@@ -285,7 +286,7 @@ The provided 'locationId' (${locationId}) is a '${locationType}'.`;
             convertLinksRecursively(args.metadata, locationId);
         }
 
-        let { title, metadataSchemaId, metadata, isAbstract, description, key, parentKeywords, relatedKeywords, itemsInBundle, searchQuery, resultLimit = 100, fileExtension, pageSchemaId, templateBuildingBlocks, allowOnPage, isRepositoryPublishable, outputFormat, priority, relatedSchemaIds, directory } = args;
+        let { title, metadataSchemaId, metadata, isAbstract, description, key, parentKeywords, relatedKeywords, itemsInBundle, searchQuery, resultLimit = 100, fileExtension, pageSchemaId, templateBuildingBlocks, allowOnPage, isRepositoryPublishable, outputFormat, priority, relatedSchemaIds, directory, position } = args;
         
         const authenticatedAxios = createAuthenticatedAxios(userSessionId);
 
@@ -374,10 +375,14 @@ The provided 'locationId' (${locationId}) is a '${locationType}'.`;
             if (itemType === 'Bundle') {
                 payload.Items = toLinkArray(itemsInBundle);
             }
-            if ((itemType === 'Category' || itemType === 'Bundle' || itemType === 'SearchFolder') && description) {
+            if ((itemType === 'Category' || itemType === 'Bundle' || itemType === 'SearchFolder' || itemType === 'ApprovalStatus') && description) {
                 payload.Description = description;
             }
-            if (!payload.LocationInfo?.OrganizationalItem?.IdRef) {
+            if (itemType === 'ApprovalStatus' && typeof position === 'number') {
+                payload.Position = position;
+            }
+            // Only set LocationInfo for items that live inside a container (not SystemWideObjects like ApprovalStatus)
+            if (itemType !== 'ApprovalStatus' && !payload.LocationInfo?.OrganizationalItem?.IdRef) {
                 payload.LocationInfo = { ...payload.LocationInfo, OrganizationalItem: { IdRef: locationId } };
             }
 

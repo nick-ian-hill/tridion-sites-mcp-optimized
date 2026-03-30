@@ -88,8 +88,15 @@ IMPORTANT: Tridion enforces strict deletion rules. The current version of an ite
 
             const itemType = itemResponse.data.$type;
 
-            // --- STEP 2: GATHER DELETION BLOCKERS ---
-            const blockers = {
+            // System-wide objects (e.g. ApprovalStatus) don't live in a Publication,
+            // so the /bluePrintHierarchy and /dependencyGraph endpoints return 400 for them.
+            // Skip all blocker-gathering steps and proceed directly to the delete call.
+            // The API handles ApprovalStatus deletion as a soft-delete (sets IsDeleted = true).
+            const isSystemWideObject = typeof itemType === 'string' && itemType.includes('ApprovalStatus');
+
+            let hasBlockers = false;
+            let hasHardBlockers = false;
+            let blockers = {
                 isLocked: false,     // Resolvable via undoCheckOut
                 inWorkflow: false,   // Hard Blocker
                 isNotEmptyContainer: false, // Soft Blocker (Triggers Analysis Warning, allows Cascade in Execution)
@@ -99,6 +106,9 @@ IMPORTANT: Tridion enforces strict deletion rules. The current version of an ite
                 publishedItems: [] as any[],
                 dependenciesToResolve: [] as any[]
             };
+
+            if (!isSystemWideObject) {
+            // --- STEP 2: GATHER DELETION BLOCKERS ---
 
             // 2a. Check Locks and Workflows on Primary
             const primaryItemResponse = await authenticatedAxios.get(`/items/${primaryIdEscaped}`, {
@@ -187,95 +197,93 @@ IMPORTANT: Tridion enforces strict deletion rules. The current version of an ite
                 }
             }
 
-            const hasHardBlockers = blockers.publishedItems.length > 0 || 
+            hasHardBlockers = blockers.publishedItems.length > 0 || 
                                     blockers.dependenciesToResolve.length > 0 || 
                                     blockers.inWorkflow;
                                     
             // Include isNotEmptyContainer in hasBlockers to ensure we trigger the Warning in Analysis Mode
-            const hasBlockers = blockers.isLocked || blockers.localizationsToUndo.length > 0 || hasHardBlockers || blockers.isNotEmptyContainer;
+            hasBlockers = blockers.isLocked || blockers.localizationsToUndo.length > 0 || hasHardBlockers || blockers.isNotEmptyContainer;
 
-            // --- STEP 3: HANDLE BLOCKERS ---
-            if (hasBlockers) {
-                if (!forceDelete) {
-                    
-                    let analysisMessage = hasHardBlockers
-                        ? "Item cannot be deleted. HARD BLOCKERS DETECTED: You must manually finish workflows, unpublish items, and/or resolve dependencies."
-                        : (blockers.isLocked || blockers.localizationsToUndo.length > 0)
-                            ? "Item blocked by locks or localizations. You can run this tool again with forceDelete: true to auto-resolve these."
-                            : "No standard blockers detected, but review the warnings below.";
+            } // end: if (!isSystemWideObject)
 
-                    if (blockers.isNotEmptyContainer) {
-                        analysisMessage += `\nWARNING - CASCADE DELETE: This container holds ${blockers.containerItemCount} item(s). Deep dependency scanning on contents was skipped. Forcing deletion will attempt to permanently delete all contents. The CMS will block this if any child item is in use or published.`;
+            // --- STEP 3: HANDLE BLOCKERS & ANALYSIS MODE ---
+            // If we are in Analysis Mode (!forceDelete), we must ALWAYS return a report
+            // and NEVER proceed to Step 4.
+            if (!forceDelete) {
+                let analysisMessage = "No standard blockers detected. Safe to delete.";
+
+                if (isSystemWideObject) {
+                    analysisMessage = "System-wide object (Approval Status). Deletion will softly flag it as IsDeleted=true. Safe to delete.";
+                } else if (hasHardBlockers) {
+                    analysisMessage = "Item cannot be deleted. HARD BLOCKERS DETECTED: You must manually finish workflows, unpublish items, and/or resolve dependencies.";
+                } else if (blockers.isLocked || blockers.localizationsToUndo.length > 0) {
+                    analysisMessage = "Item blocked by locks or localizations. You can run this tool again with forceDelete: true to auto-resolve these.";
+                }
+
+                if (blockers.isNotEmptyContainer) {
+                    analysisMessage += `\nWARNING - CASCADE DELETE: This container holds ${blockers.containerItemCount} item(s). Deep dependency scanning on contents was skipped. Forcing deletion will attempt to permanently delete all contents. The CMS will block this if any child item is in use or published.`;
+                }
+
+                return {
+                    content: [{
+                        type: "text",
+                        text: JSON.stringify({
+                            type: "DeleteAnalysisReport",
+                            TargetItem: itemId,
+                            PrimaryItemToTarget: primaryId,
+                            CanDelete: !hasHardBlockers,
+                            HasHardBlockers: hasHardBlockers,
+                            IsSystemWideObject: isSystemWideObject,
+                            Blockers: blockers,
+                            Message: analysisMessage
+                        }, null, 2)
+                    }],
+                };
+            }
+
+            // If we reach here, forceDelete IS true.
+            // We only need to resolve standard blockers if they exist and it's not a system-wide object.
+            if (hasBlockers && !isSystemWideObject) {
+                if (hasHardBlockers) {
+                    let errorMsg = `Cannot force delete. Hard blockers detected:\n`;
+                    if (blockers.inWorkflow) {
+                        errorMsg += `- Workflow: Item is currently in workflow (locked by ${blockers.lockUser}). You must finish the workflow first.\n`;
                     }
-
-                    return {
-                        content: [{
-                            type: "text",
-                            text: JSON.stringify({
-                                type: "DeleteAnalysisReport",
-                                TargetItem: itemId,
-                                PrimaryItemToTarget: primaryId,
-                                CanDelete: !hasHardBlockers,
-                                HasHardBlockers: hasHardBlockers,
-                                Blockers: blockers,
-                                Message: analysisMessage
-                            }, null, 2)
-                        }],
-                    };
-                } else {
-                    if (hasHardBlockers) {
-                        let errorMsg = `Cannot force delete. Hard blockers detected:\n`;
-                        if (blockers.inWorkflow) {
-                            errorMsg += `- Workflow: Item is currently in workflow (locked by ${blockers.lockUser}). You must finish the workflow first.\n`;
-                        }
-                        if (blockers.publishedItems.length > 0) {
-                            errorMsg += `- Published Items: ${blockers.publishedItems.length} instances are published. You must unpublish them first.\n`;
-                        }
-                        if (blockers.dependenciesToResolve.length > 0) {
-                            errorMsg += `- Dependencies: Actively used by ${blockers.dependenciesToResolve.length} other item(s).\n`;
-                        }
-                        throw new Error(errorMsg + `\nBlocker Details: ${JSON.stringify({ 
-                            InWorkflow: blockers.inWorkflow, 
-                            Published: blockers.publishedItems, 
-                            Dependencies: blockers.dependenciesToResolve 
-                        })}`);
+                    if (blockers.publishedItems.length > 0) {
+                        errorMsg += `- Published Items: ${blockers.publishedItems.length} instances are published. You must unpublish them first.\n`;
                     }
-
-                    for (const locId of blockers.localizationsToUndo) {
-                        const escLocId = locId.replace(':', '_');
-                        await authenticatedAxios.post(`/items/${escLocId}/unlocalize`, null, { params: { useDynamicVersion: true }});
+                    if (blockers.dependenciesToResolve.length > 0) {
+                        errorMsg += `- Dependencies: Actively used by ${blockers.dependenciesToResolve.length} other item(s).\n`;
                     }
+                    throw new Error(errorMsg + `\nBlocker Details: ${JSON.stringify({ 
+                        InWorkflow: blockers.inWorkflow, 
+                        Published: blockers.publishedItems, 
+                        Dependencies: blockers.dependenciesToResolve 
+                    })}`);
+                }
 
-                    if (blockers.isLocked) {
-                        try {
-                            await authenticatedAxios.post(`/items/${primaryIdEscaped}/undoCheckOut`, {
-                                "$type": "UndoCheckOutRequest",
-                                RemovePermanentLock: true
-                            });
-                        } catch (undoError: any) {
-                            if (undoError.response?.status === 404) {
-                                // Item was deleted by undoCheckOut (v0.1 edge case), skip.
-                            } else {
-                                throw undoError;
-                            }
+                for (const locId of blockers.localizationsToUndo) {
+                    const escLocId = locId.replace(':', '_');
+                    await authenticatedAxios.post(`/items/${escLocId}/unlocalize`, null, { params: { useDynamicVersion: true }});
+                }
+
+                if (blockers.isLocked) {
+                    try {
+                        await authenticatedAxios.post(`/items/${primaryIdEscaped}/undoCheckOut`, {
+                            "$type": "UndoCheckOutRequest",
+                            RemovePermanentLock: true
+                        });
+                    } catch (undoError: any) {
+                        if (undoError.response?.status === 404) {
+                            // Item was deleted by undoCheckOut (v0.1 edge case), skip.
+                        } else {
+                            throw undoError;
                         }
                     }
                 }
             }
 
             // --- STEP 4: FINAL DELETION (Live Item) ---
-            if (!confirmed) {
-                 return {
-                    elicit: {
-                        input: "confirmed",
-                        content: [{
-                            type: "text",
-                            text: `Are you sure you want to permanently delete the primary item ${primaryId}? This action cannot be undone.`
-                        }],
-                    }
-                };
-            }
-
             try {
                 const deleteResponse = await authenticatedAxios.delete(`/items/${primaryIdEscaped}`);
                 
