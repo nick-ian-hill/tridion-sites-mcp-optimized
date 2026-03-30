@@ -51,7 +51,7 @@ To make an activity "automated", define it as a "Normal" activity type and provi
 - **Referenced Assemblies vs. Namespaces**: 
   - **Rule 1 (Namespaces)**: Most 'Tridion.ContentManager.CoreService.Client' types (like 'ActivityFinishData', 'PublishInstructionData', 'LinkToTrusteeData') are implicitly in scope and do NOT need full qualification. The confirmed exception is 'PublishPriority', which MUST always be fully qualified as 'Tridion.ContentManager.CoreService.Client.PublishPriority' due to naming collisions.
   - **Rule 2 (LINQ & Type Inference)**: The inline compiler struggles with implicit type inference. If you use LINQ on collections like 'ProcessInstance.Subjects' or 'ProcessInstance.Activities', you MUST explicitly cast the collection first (e.g., 'ProcessInstance.Activities.Cast<ActivityInstanceData>().First()'). If you do not want to cast, use standard procedural 'for'/'foreach' loops instead.
-- **Formatting**: Ensure your C# code is correctly formatted as a single string, with newlines represented as '\\n' and quotes escaped as '\\"'.
+- **Formatting**: Write multi-line scripts as template literals (backtick strings) with actual line breaks — do NOT use \`\\n\` escape sequences. Within a template literal, double quotes do not need to be escaped.
 
 ### State Management (Passing Variables)
 Use \`ProcessInstance.Variables\` to pass state/data between activities. All values added must be strings or cast to strings.
@@ -137,7 +137,11 @@ Example 2: Create a complex workflow using Best Practice Decision Routing (Manua
             "title": "Assign to Process Creator",
             "assigneeId": "tcm:0-3-65552",
             "description": "Task was finished and it will be sent to the process creator.",
-            "script": "ActivityFinishData finishData = new ActivityFinishData();\\nfinishData.Message = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last().FinishMessage;\\nfinishData.NextAssignee = new LinkToTrusteeData();\\nfinishData.NextAssignee.IdRef = ProcessInstance.Creator.IdRef;\\nSessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);",
+            "script": \`ActivityFinishData finishData = new ActivityFinishData();
+finishData.Message = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last().FinishMessage;
+finishData.NextAssignee = new LinkToTrusteeData();
+finishData.NextAssignee.IdRef = ProcessInstance.Creator.IdRef;
+SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
             "nextActivities": ["Review Task"]
           },
           {
@@ -150,14 +154,21 @@ Example 2: Create a complex workflow using Best Practice Decision Routing (Manua
             "title": "Decline",
             "assigneeId": "tcm:0-3-65552",
             "description": "Automated routing: Sends task back to the original performer.",
-            "script": "string performedTaskActivityDefinitionId = ProcessInstance.Activities.Cast<ActivityInstanceData>().First().ActivityDefinition.IdRef;\\nActivityFinishData finishData = new ActivityFinishData();\\nfinishData.Message = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last().FinishMessage;\\nfinishData.NextAssignee = new LinkToTrusteeData();\\nfinishData.NextAssignee.IdRef = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last(activity => activity.ActivityDefinition.IdRef == performedTaskActivityDefinitionId).Owner.IdRef;\\nSessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);",
+            "script": \`string performedTaskActivityDefinitionId = ProcessInstance.Activities.Cast<ActivityInstanceData>().First().ActivityDefinition.IdRef;
+ActivityFinishData finishData = new ActivityFinishData();
+finishData.Message = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last().FinishMessage;
+finishData.NextAssignee = new LinkToTrusteeData();
+finishData.NextAssignee.IdRef = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last(activity => activity.ActivityDefinition.IdRef == performedTaskActivityDefinitionId).Owner.IdRef;
+SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
             "nextActivities": ["Perform Task"]
           },
           {
             "title": "Accept",
             "assigneeId": "tcm:0-3-65552",
             "description": "Automated routing: The task process is complete.",
-            "script": "ActivityFinishData finishData = new ActivityFinishData();\\nfinishData.Message = \\"Automatic Activity 'Accept' Finished\\";\\nSessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);",
+            "script": \`ActivityFinishData finishData = new ActivityFinishData();
+finishData.Message = "Automatic Activity 'Accept' Finished";
+SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
             "nextActivities": []
           }
         ]
@@ -179,14 +190,34 @@ Example 3: Create a workflow with an auto-publish script.
                 "title": "Reject",
                 "assigneeId": "tcm:0-3-65552",
                 "description": "Automated rejection routing.",
-                "script": "ActivityFinishData finishData = new ActivityFinishData();\\nfinishData.Message = \\"Item rejected for publishing.\\";\\nSessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);",
+                "script": \`ActivityFinishData finishData = new ActivityFinishData();
+finishData.Message = "Item rejected for publishing.";
+SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
                 "nextActivities": []
             },
             {
                 "title": "Approve and Publish",
                 "assigneeId": "tcm:0-3-65552",
                 "description": "This automated activity safely publishes the items.",
-                "script": "if (ProcessInstance.Subjects != null && ProcessInstance.Subjects.Length > 0)\\n{\\n    string[] itemIds = new string[ProcessInstance.Subjects.Length];\\n    for (int i = 0; i < ProcessInstance.Subjects.Length; i++)\\n    {\\n        string id = ProcessInstance.Subjects[i].IdRef;\\n        int vIndex = id.LastIndexOf(\\"-v\\");\\n        itemIds[i] = (vIndex > -1) ? id.Substring(0, vIndex) : id;\\n    }\\n    PublishInstructionData instruction = new PublishInstructionData();\\n    instruction.ResolveInstruction = new ResolveInstructionData();\\n    instruction.ResolveInstruction.IncludeComponentLinks = true;\\n    instruction.ResolveInstruction.IncludeDynamicVersion = true;\\n    instruction.RenderInstruction = new RenderInstructionData();\\n    SessionAwareCoreServiceClient.Publish(itemIds, instruction, new string[] { \\"tcm:0-2-65538\\" }, Tridion.ContentManager.CoreService.Client.PublishPriority.Normal, null);\\n}\\nActivityFinishData finishData = new ActivityFinishData();\\nfinishData.Message = \\"Automated publishing initiated.\\";\\nSessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);"
+                "script": \`if (ProcessInstance.Subjects != null && ProcessInstance.Subjects.Length > 0)
+{
+    string[] itemIds = new string[ProcessInstance.Subjects.Length];
+    for (int i = 0; i < ProcessInstance.Subjects.Length; i++)
+    {
+        string id = ProcessInstance.Subjects[i].IdRef;
+        int vIndex = id.LastIndexOf("-v");
+        itemIds[i] = (vIndex > -1) ? id.Substring(0, vIndex) : id;
+    }
+    PublishInstructionData instruction = new PublishInstructionData();
+    instruction.ResolveInstruction = new ResolveInstructionData();
+    instruction.ResolveInstruction.IncludeComponentLinks = true;
+    instruction.ResolveInstruction.IncludeDynamicVersion = true;
+    instruction.RenderInstruction = new RenderInstructionData();
+    SessionAwareCoreServiceClient.Publish(itemIds, instruction, new string[] { "tcm:0-2-65538" }, Tridion.ContentManager.CoreService.Client.PublishPriority.Normal, null);
+}
+ActivityFinishData finishData = new ActivityFinishData();
+finishData.Message = "Automated publishing initiated.";
+SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`
             }
         ]
     });
@@ -232,7 +263,16 @@ Example 5: Create a workflow with a timed delay. The script suspends the activit
                 "title": "Wait One Day",
                 "assigneeId": "tcm:0-3-65552",
                 "description": "This automated activity pauses the workflow for 24 hours.",
-                "script": "if (string.IsNullOrEmpty(ResumeBookmark))\\n{\\n    SessionAwareCoreServiceClient.SuspendActivity(CurrentActivityInstance.Id, \\"Suspending for 24 hours\\", System.DateTime.Now.AddDays(1), \\"ResumeAfterDelay\\", null);\\n}\\nelse if (ResumeBookmark == \\"ResumeAfterDelay\\")\\n{\\n    ActivityFinishData finishData = new ActivityFinishData();\\n    finishData.Message = \\"Resumed after 24 hour delay.\\";\\n    SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\\n}"
+                "script": \`if (string.IsNullOrEmpty(ResumeBookmark))
+{
+    SessionAwareCoreServiceClient.SuspendActivity(CurrentActivityInstance.Id, "Suspending for 24 hours", System.DateTime.Now.AddDays(1), "ResumeAfterDelay", null);
+}
+else if (ResumeBookmark == "ResumeAfterDelay")
+{
+    ActivityFinishData finishData = new ActivityFinishData();
+    finishData.Message = "Resumed after 24 hour delay.";
+    SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);
+}\`
             }
         ]
     });
@@ -247,14 +287,21 @@ Example 6: Passing variables between activities using indexers.
                 "title": "Save State",
                 "assigneeId": "tcm:0-3-65552",
                 "description": "Saves a custom string to the Process Variables.",
-                "script": "ProcessInstance.Variables[\\"MyCustomKey\\"] = \\"ActionCompleted\\";\\nActivityFinishData finishData = new ActivityFinishData();\\nfinishData.Message = \\"Saved variable\\";\\nSessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);",
+                "script": \`ProcessInstance.Variables["MyCustomKey"] = "ActionCompleted";
+ActivityFinishData finishData = new ActivityFinishData();
+finishData.Message = "Saved variable";
+SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
                 "nextActivities": ["Read State"]
             },
             {
                 "title": "Read State",
                 "assigneeId": "tcm:0-3-65552",
                 "description": "Retrieves the variable and uses it.",
-                "script": "string storedVal = ProcessInstance.Variables[\\"MyCustomKey\\"];\\nLogger.Information(\\"Retrieved state: \\" + storedVal);\\nActivityFinishData finishData = new ActivityFinishData();\\nfinishData.Message = \\"Read variable: \\" + storedVal;\\nSessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);",
+                "script": \`string storedVal = ProcessInstance.Variables["MyCustomKey"];
+Logger.Information("Retrieved state: " + storedVal);
+ActivityFinishData finishData = new ActivityFinishData();
+finishData.Message = "Read variable: " + storedVal;
+SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
                 "nextActivities": []
             }
         ]
@@ -270,7 +317,17 @@ Example 7: Using Script Directives and Defining Methods.
                 "title": "Log and Finish",
                 "assigneeId": "tcm:0-3-65552",
                 "description": "Uses a custom method to generate the finish message.",
-                "script": "<%@ Import Namespace=\\"System.ServiceModel\\"%>\\n<%!\\n    private string FinishedMessage()\\n    {\\n        return \\"Finished \\" + BasicHttpSecurityMode.Message.ToString();\\n    }\\n%>\\nLogger.Verbose(\\"Executing C# script\\");\\nActivityFinishData finishData = new ActivityFinishData();\\nfinishData.Message = FinishedMessage();\\nSessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);",
+                "script": \`<%@ Import Namespace="System.ServiceModel"%>
+<%!
+    private string FinishedMessage()
+    {
+        return "Finished " + BasicHttpSecurityMode.Message.ToString();
+    }
+%>
+Logger.Verbose("Executing C# script");
+ActivityFinishData finishData = new ActivityFinishData();
+finishData.Message = FinishedMessage();
+SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
                 "nextActivities": []
             }
         ]

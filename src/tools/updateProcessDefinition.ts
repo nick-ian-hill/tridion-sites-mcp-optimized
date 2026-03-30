@@ -47,7 +47,11 @@ Example 1: Update the title of a Process Definition and the description of one o
             "title": "Assign to Process Creator",
             "assigneeId": "tcm:0-3-65552",
             "description": "Task finished. Automatically routing to the process creator for review.",
-            "script": "ActivityFinishData finishData = new ActivityFinishData()\\n{\\n    Message = ProcessInstance.Activities.Last().FinishMessage,\\n    NextAssignee = new LinkToTrusteeData\\n    {\\n        IdRef = ProcessInstance.Creator.IdRef\\n    }\\n};\\nSessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);",
+            "script": \`ActivityFinishData finishData = new ActivityFinishData();
+finishData.Message = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last().FinishMessage;
+finishData.NextAssignee = new LinkToTrusteeData();
+finishData.NextAssignee.IdRef = ProcessInstance.Creator.IdRef;
+SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
             "nextActivities": ["Review Task"]
           },
           {
@@ -60,14 +64,21 @@ Example 1: Update the title of a Process Definition and the description of one o
             "title": "Decline",
             "assigneeId": "tcm:0-3-65552",
             "description": "The task was reviewed and will be sent back to the performer.",
-            "script": "string performedTaskActivityDefinitionId = ProcessInstance.Activities.Cast<ActivityInstanceData>().First().ActivityDefinition.IdRef;\\nActivityFinishData finishData = new ActivityFinishData()\\n{\\n    Message = ProcessInstance.Activities.Last().FinishMessage,\\n    NextAssignee = new LinkToTrusteeData\\n    {\\n        IdRef = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last(activity => activity.ActivityDefinition.IdRef == performedTaskActivityDefinitionId).Owner.IdRef\\n    }\\n};\\nSessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);",
+            "script": \`string performedTaskActivityDefinitionId = ProcessInstance.Activities.Cast<ActivityInstanceData>().First().ActivityDefinition.IdRef;
+ActivityFinishData finishData = new ActivityFinishData();
+finishData.Message = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last().FinishMessage;
+finishData.NextAssignee = new LinkToTrusteeData();
+finishData.NextAssignee.IdRef = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last(activity => activity.ActivityDefinition.IdRef == performedTaskActivityDefinitionId).Owner.IdRef;
+SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
             "nextActivities": ["Perform Task"]
           },
           {
             "title": "Accept",
             "assigneeId": "tcm:0-3-65552",
             "description": "The task process is complete.",
-            "script": "ActivityFinishData finishData = new ActivityFinishData()\\n{\\n    Message = \\"Automatic Activity 'Accept' Finished\\"\\n};\\nSessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);",
+            "script": \`ActivityFinishData finishData = new ActivityFinishData();
+finishData.Message = "Automatic Activity 'Accept' Finished";
+SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
             "nextActivities": []
           }
         ]
@@ -88,7 +99,11 @@ Example 2: Add a new 'Abort' step to an existing workflow.
             "title": "Assign to Process Creator",
             "assigneeId": "tcm:0-3-65552",
             "description": "Task finished. Automatically routing to the process creator for review.",
-            "script": "ActivityFinishData finishData = new ActivityFinishData()\\n{\\n    Message = ProcessInstance.Activities.Last().FinishMessage,\\n    NextAssignee = new LinkToTrusteeData\\n    {\\n        IdRef = ProcessInstance.Creator.IdRef\\n    }\\n};\\nSessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);",
+            "script": \`ActivityFinishData finishData = new ActivityFinishData();
+finishData.Message = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last().FinishMessage;
+finishData.NextAssignee = new LinkToTrusteeData();
+finishData.NextAssignee.IdRef = ProcessInstance.Creator.IdRef;
+SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
             "nextActivities": ["Review Task"]
           },
           {
@@ -101,14 +116,21 @@ Example 2: Add a new 'Abort' step to an existing workflow.
             "title": "Decline",
             "assigneeId": "tcm:0-3-65552",
             "description": "The task was reviewed and will be sent back to the performer.",
-            "script": "string performedTaskActivityDefinitionId = ProcessInstance.Activities.Cast<ActivityInstanceData>().First().ActivityDefinition.IdRef;\\nActivityFinishData finishData = new ActivityFinishData()\\n{\\n    Message = ProcessInstance.Activities.Last().FinishMessage,\\n    NextAssignee = new LinkToTrusteeData\\n    {\\n        IdRef = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last(activity => activity.ActivityDefinition.IdRef == performedTaskActivityDefinitionId).Owner.IdRef\\n    }\\n};\\nSessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);",
+            "script": \`string performedTaskActivityDefinitionId = ProcessInstance.Activities.Cast<ActivityInstanceData>().First().ActivityDefinition.IdRef;
+ActivityFinishData finishData = new ActivityFinishData();
+finishData.Message = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last().FinishMessage;
+finishData.NextAssignee = new LinkToTrusteeData();
+finishData.NextAssignee.IdRef = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last(activity => activity.ActivityDefinition.IdRef == performedTaskActivityDefinitionId).Owner.IdRef;
+SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
             "nextActivities": ["Perform Task"]
           },
           {
             "title": "Accept",
             "assigneeId": "tcm:0-3-65552",
             "description": "The task process is complete.",
-            "script": "ActivityFinishData finishData = new ActivityFinishData()\\n{\\n    Message = \\"Automatic Activity 'Accept' Finished\\"\\n};\\nSessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);",
+            "script": \`ActivityFinishData finishData = new ActivityFinishData();
+finishData.Message = "Automatic Activity 'Accept' Finished";
+SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
             "nextActivities": []
           },
           {
