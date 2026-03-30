@@ -27,19 +27,23 @@ This tool returns a 'FinishActivityResult'. If 'NextActivityInstance' is absent,
         nextActivityDueDate: z.string().datetime({ message: "Invalid ISO 8601 datetime format." })
             .optional()
             .describe("An optional due date for the next activity in ISO 8601 format (e.g., '2025-12-31T17:00:00Z')."),
+        nextActivityTitle: z.string().optional()
+            .describe("An optional custom title for the next activity instance. By default, activity instances get an auto-generated title from their position and definition title."),
     },    
     execute: async ({ 
         activityId, 
         nextActivityDefinitionId,
         comment, 
         nextAssigneeId, 
-        nextActivityDueDate 
+        nextActivityDueDate,
+        nextActivityTitle
     }: {
         activityId: string;
         nextActivityDefinitionId?: string;
         comment?: string;
         nextAssigneeId?: string;
         nextActivityDueDate?: string;
+        nextActivityTitle?: string;
     }, context: any) => {
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
@@ -78,6 +82,9 @@ This tool returns a 'FinishActivityResult'. If 'NextActivityInstance' is absent,
                     "$type": "DecisionActivityFinishRequest",
                     NextActivity: toLink(nextActivityDefinitionId),
                     Message: comment,
+                    NextAssignee: toLink(nextAssigneeId),
+                    NextActivityDueDate: nextActivityDueDate,
+                    NextActivityTitle: nextActivityTitle,
                 };
             } else {
                 requestModel = {
@@ -85,6 +92,7 @@ This tool returns a 'FinishActivityResult'. If 'NextActivityInstance' is absent,
                     Message: comment,
                     NextAssignee: toLink(nextAssigneeId),
                     NextActivityDueDate: nextActivityDueDate,
+                    NextActivityTitle: nextActivityTitle,
                 };
             }
 
