@@ -3,10 +3,17 @@ import { createAuthenticatedAxios } from "../utils/axios.js";
 import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.js";
 import { toLink } from "../utils/links.js";
 import { formatForAgent } from "../utils/fieldReordering.js";
+import { filterResponseData } from "../utils/responseFiltering.js";
 
 export const finishActivity = {
     name: "finishActivity",
-    description: "Finishes a workflow activity that is in 'Assigned' or 'Started' state. This moves the workflow to the next step, if one is defined. Automatically handles both standard activities and decision activities by inspecting the activity's definition.",
+    description: `Finishes a workflow activity that is in 'Assigned' or 'Started' state. This moves the workflow to the next step, if one is defined. Automatically handles both standard activities and decision activities by inspecting the activity's definition.
+    
+IMPORTANT BUSINESS RULE: When a workflow process completes fully, the process and all its activities are converted into "histories". Their URIs mutate:
+- Process Instances (ending in '-131076') become Process Histories (ending in '-131080').
+- Activity Instances (ending in '-131104') become Activity Histories (ending in '-131136').
+
+This tool returns a 'FinishActivityResult'. If 'NextActivityInstance' is absent, this was the terminal step — the process is complete and history IDs are available immediately via 'getItem'. The 'WorkflowHistoryHint' in the response will contain the exact IDs to use. Otherwise, the workflow is still active and no history IDs are provided.`,
     input: {
         activityId: z.string().regex(/^tcm:\d+-\d+-131104$/)
             .describe("The unique ID of the workflow activity instance to finish (e.g., 'tcm:1-2-131104'). Use 'getActivities' to find the ID."),
@@ -20,7 +27,8 @@ export const finishActivity = {
         nextActivityDueDate: z.string().datetime({ message: "Invalid ISO 8601 datetime format." })
             .optional()
             .describe("An optional due date for the next activity in ISO 8601 format (e.g., '2025-12-31T17:00:00Z')."),
-    },    execute: async ({ 
+    },    
+    execute: async ({ 
         activityId, 
         nextActivityDefinitionId,
         comment, 
@@ -62,7 +70,6 @@ export const finishActivity = {
             // 3. Determine the correct request model based on ActivityType
             if (activityDefinition?.ActivityType === "Decision") {
                 if (!nextActivityDefinitionId) {
-                    // If it's a decision but no choice was made, return a helpful error
                     const availableOptions = activityDefinition.NextActivityDefinitions.map((def: any) => ({ title: def.Title, id: def.IdRef }));
                     const errorMessage = `This is a decision activity. You must provide a 'nextActivityDefinitionId'. Available options: ${JSON.stringify(availableOptions)}`;
                     return handleAxiosError(new Error(errorMessage), `Missing required parameter for decision activity '${activityId}'`);
@@ -73,7 +80,6 @@ export const finishActivity = {
                     Message: comment,
                 };
             } else {
-                // It's a standard activity
                 requestModel = {
                     "$type": "ActivityFinishRequest",
                     Message: comment,
@@ -86,11 +92,34 @@ export const finishActivity = {
             const response = await authenticatedAxios.post(endpoint, requestModel);
 
             if (response.status === 200) {
-                const formattedResponseData = formatForAgent(response.data);
+                // Safely filter the returned state data
+                const filteredData = filterResponseData({
+                    responseData: response.data,
+                    details: "CoreDetails" 
+                });
+                const formattedResponseData = formatForAgent(filteredData);
+                
+                const isTerminalStep = !response.data.NextActivityInstance;
+
+                const responsePayload: Record<string, unknown> = {
+                    Message: `Successfully finished activity '${activityId}'.`,
+                    Data: formattedResponseData
+                };
+
+                if (isTerminalStep) {
+                    const activityHistoryId = activityId.replace('-131104', '-131136');
+                    let historyNote = `Process complete. Activity History ID: ${activityHistoryId}`;
+                    if (activityInstance.Process?.IdRef) {
+                        const processHistoryId = activityInstance.Process.IdRef.replace('-131076', '-131080');
+                        historyNote += `, Process History ID: ${processHistoryId}`;
+                    }
+                    responsePayload.WorkflowHistoryHint = historyNote;
+                }
+
                 return {
                     content: [{
                         type: "text",
-                        text: JSON.stringify(formattedResponseData, null, 2)
+                        text: JSON.stringify(responsePayload, null, 2)
                     }],
                 };
             } else {
