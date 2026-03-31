@@ -37,8 +37,11 @@ IMPORTANT: The tool assumes the backend can resolve temporary references during 
 ### Predefined Script Variables (The Sandbox)
 Inline C# scripts execute within a predefined method and have automatic access to the following globally scoped variables. You do NOT need to declare or instantiate these:
 - **SessionAwareCoreServiceClient** (ISessionAwareCoreService): The primary client for CMS interactions (Publish, FinishActivity, SuspendActivity, etc.).
-- **CurrentActivityInstance** (ActivityInstanceData): Represents the current executing step (use \`.Id\` for finishing/suspending).
-- **ProcessInstance** (ProcessInstanceData): Represents the entire workflow. Use \`.Variables\` for state management, \`.Subjects\` for the items in workflow, and \`.Activities\` for history.
+- **CurrentActivityInstance** (ActivityInstanceData): Represents the current executing step.
+  Common Properties: \`.Id\`, \`.FinishMessage\`, \`.Owner\`, \`.ActivityDefinition\`.
+  **Warning:** Do not confuse runtime objects with static item data. Use \`.FinishMessage\`, never \`.PreviousMessage\` (which belongs to WorkflowInfo).
+- **ProcessInstance** (ProcessInstanceData): Represents the entire workflow.
+  Common Properties: \`.Id\`, \`.Creator\`, \`.Variables\` (state management), \`.Subjects\` (the items in workflow), and \`.Activities\` (history).
 - **ResumeBookmark** (string): Used to evaluate if a script is starting fresh or waking up from a suspended state.
 - **Logger**: A utility for debugging. Use \`Logger.Information("msg")\`, \`Logger.Warning("msg")\`, or \`Logger.Verbose("msg")\` to write to the Windows Event Log.
 - **CoreServiceBatchClient** (ICoreServiceBatch): Used for executing commands on a large set of items simultaneously.
@@ -84,7 +87,7 @@ You can use ProcessInstance history to dynamically route workflows.
 - **Pattern B (Return to Last Performer)**: Trace history to send a task back to the specific person who completed an earlier step. Use LINQ on \`ProcessInstance.Activities\`.
 
 ### Troubleshooting
-- **No Object Initializers:** The inline compiler does not support C# object initializers. You MUST instantiate objects and assign properties on separate lines.
+- **No Object Initializers:** The inline compiler does not support C# object initializers. You MUST instantiate objects and assign properties on separate lines. (Note: All examples in this document already follow this strict syntax—do not deviate from them).
   *Bad:* \`ActivityFinishData data = new ActivityFinishData { Message = "Done" };\`
   *Good:* \`ActivityFinishData data = new ActivityFinishData(); data.Message = "Done";\`
 - **Error: "A namespace cannot directly contain members such as fields or methods"**: You attempted to define a C# method inside the script but forgot to wrap it in the \`<%! ... %>\` directive. All custom methods must be enclosed in these specific tags.
@@ -92,7 +95,8 @@ You can use ProcessInstance history to dynamically route workflows.
   1. You failed to fully qualify an ambiguous type (like \`Tridion.ContentManager.CoreService.Client.PublishPriority\`).
   2. You used an object initializer instead of separating instantiation and assignment.
   3. You used a LINQ extension method without explicitly casting the collection first (e.g., missing '.Cast<TargetType>()').
-  4. You have a standard C# syntax error (missing semicolon, mismatched braces). 
+  4. You have a standard C# syntax error (missing semicolon, mismatched braces).
+  5. You attempted to access a property that doesn't exist on the runtime object (e.g., trying to call \`.PreviousMessage\` on an ActivityInstanceData object instead of the correct \`.FinishMessage\`).
   *Fix:* Revert to procedural C# loops, fully qualified exceptions, and sequential property assignments.
 - **Error: "Next activity 'X' does not exist"**: Ensure the exact string in 'nextActivities' matches the 'title' property of another activity defined in the same array.
 - **UI Error: "Not found" on an automated step**: This usually indicates the C# script crashed. Add a try-catch block to log errors to \`ProcessInstance.Variables["Error"]\` for easier debugging.
