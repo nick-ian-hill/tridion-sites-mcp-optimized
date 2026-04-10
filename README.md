@@ -136,7 +136,30 @@ To use the MCP server as context for testing inside VS Code, follow these steps:
 
 ---
 
-## 4. Usage with Gemini CLI/Environment
+## 4. Usage with Google Antigravity
+
+To register the MCP server with Google Antigravity, you need to update its `mcp_config.json` file.
+
+1. **Locate your MCP config file:** The configuration file is typically located at `~/.gemini/antigravity/mcp_config.json` on macOS/Linux.
+2. **Update the `mcpServers` block:** Add the following configuration to point Antigravity to your local server. You can also disable specific tools if preferred:
+   ```json
+   {
+     "mcpServers": {
+       "tridion": {
+         "serverUrl": "http://localhost:8090",
+         "disabled": false,
+         "disabledTools": [
+           "autoClassifyItem",
+           "autoClassifyMultimediaComponent"
+         ]
+       }
+     }
+   }
+   ```
+
+---
+
+## 5. Usage with Gemini CLI/Environment
 
 If you are running the MCP server directly with a Gemini environment, you must configure your settings file to register the server and exclude specific tools if necessary.
 
@@ -164,7 +187,7 @@ If you are running the MCP server directly with a Gemini environment, you must c
 
 ---
 
-## 5. Troubleshooting
+## 6. Troubleshooting
 
 ### The AI Assistant returns an `invalid_client` authentication error
 If the MCP server is running but the assistant reports that calls to the CMS are failing with an `invalid_client` error, the Tridion authentication server is rejecting your credentials. Check the following:
