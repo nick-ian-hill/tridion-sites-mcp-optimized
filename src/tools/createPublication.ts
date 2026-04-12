@@ -5,6 +5,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 export const createPublication = {
     name: "createPublication",
+    summary: "Creates a new Publication in the BluePrint hierarchy. Use this for setting up new websites or shared content layers.",
     description: `Creates a new Publication in the Content Management System.
 
 Introduction to Publications and BluePrints

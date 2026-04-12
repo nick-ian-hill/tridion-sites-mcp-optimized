@@ -4,6 +4,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 export const revertProcess = {
     name: "revertProcess",
+    summary: "Terminates an active Workflow Process and discards all changes, resetting items to their pre-workflow state.",
     description: "Terminates an active Workflow Process and reverts all involved items back to the state they were in before the workflow started. This undoes any changes made during the workflow and removes the process entirely. Under the hood, this is achieved by deleting the Process Instance.",
     input: {
         processInstanceId: z.string().regex(/^tcm:\d+-\d+-131076$/)

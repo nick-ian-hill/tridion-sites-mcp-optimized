@@ -4,6 +4,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 export const rollbackItem = {
     name: "rollbackItem",
+    summary: "Reverts an item to a previous version by creating a new major version from it.",
     description: "Rolls back an item to a specific prior version. This action creates a new major version of the item with the content and metadata from the specified older version. Use 'getItem' with a versioned ID (e.g., 'tcm:5-2774-v2') to check the details of the item version before rolling back to it.",
     input: {
         itemId: z.string().regex(/^tcm:\d+-\d+(-\d+)?-v\d+$/)

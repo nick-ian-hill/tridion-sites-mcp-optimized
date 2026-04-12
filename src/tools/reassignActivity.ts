@@ -4,6 +4,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 export const reassignActivity = {
     name: "reassignActivity",
+    summary: "Reassigns a workflow activity to a different user or group.",
     description: "Reassigns a workflow activity to a different user or group. The activity must be in a state that allows reassignment (e.g., 'Assigned' or 'Started'). Use 'getUsers' to find the ID of the new assignee.",
     input: {
         activityId: z.string().regex(/^tcm:\d+-\d+-131104$/)

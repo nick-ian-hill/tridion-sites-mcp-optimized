@@ -9,6 +9,7 @@ import { getCachedDefaultModel } from "../utils/defaultModelCache.js";
 
 export const createMetadataSchema = {
     name: "createMetadataSchema",
+    summary: "Creates a Schema for metadata that can be applied to Folders, Structure Groups, Pages, etc. Used for administrative data.",
     description: `Creates a new Content Manager System (CMS) item of type 'Schema' with a purpose of 'Metadata'.
     
 Metadata Schemas define the structure for metadata fields that can be applied to items like Folders, Structure Groups, Pages, Keywords, etc.

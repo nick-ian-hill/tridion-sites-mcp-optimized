@@ -22,6 +22,7 @@ type CreateComponentInput = z.infer<typeof createComponentInputSchema>;
 
 export const createComponent = {
     name: "createComponent",
+    summary: "Creates a new content Component in a specified Folder using a given Schema. Use this for adding structured content like articles, news, or banners.",
     description: `Creates a new Content Manager System (CMS) item of type 'Component'.
 This is the dedicated tool for creating content Components. It simplifies the process and ensures correct metadata handling.
 

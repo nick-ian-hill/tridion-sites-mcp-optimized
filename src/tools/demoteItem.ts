@@ -4,6 +4,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 export const demoteItem = {
     name: "demoteItem",
+    summary: "Moves an item down the BluePrint hierarchy to a child Publication.",
     description: `Demotes a shared item down the BluePrint hierarchy to a child Publication. This action breaks the inheritance from a parent by creating a localized copy of the item in the selected child Publication. This is the opposite of the 'promoteItem' tool.
 Before using, it's recommended to understand the item's position in the hierarchy using the 'getBluePrintHierarchy' tool and to check its 'BluePrintInfo' with the 'getItem' tool. The operation will fail if the item is not shared from the specified Publication.`,
     input: {

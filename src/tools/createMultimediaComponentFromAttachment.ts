@@ -26,6 +26,7 @@ const createMultimediaComponentFromAttachmentSchema = z.object(createMultimediaC
 
 export const createMultimediaComponentFromAttachment = {
     name: "createMultimediaComponentFromAttachment",
+    summary: "Creates a Multimedia Component from a file that was uploaded or attached by the user.",
     description: `Creates a new multimedia component directly from a file that was attached by the user.
 
 Use this tool when the user has attached a file (image, video, PDF, etc.) AND wants to save it as a new multimedia component in the CMS.

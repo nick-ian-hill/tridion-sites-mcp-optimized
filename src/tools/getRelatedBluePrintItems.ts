@@ -37,6 +37,7 @@ const getRelatedBluePrintItemsSchema = z.object(getRelatedBluePrintItemsInputPro
 
 export const getRelatedBluePrintItems = {
     name: "getRelatedBluePrintItems",
+    summary: "Lists related items in the BluePrint (Children, Parents, Ancestors, Localized/Shared copies).",
     description: `Retrieves related items within the BluePrint hierarchy based on a specific relationship.
     Note: If the user asks for a visual diagram, image, or full graph structure, use 'getBluePrintHierarchy' instead.
 

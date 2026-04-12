@@ -62,6 +62,7 @@ type CreateItemInput = z.infer<typeof createItemInputSchema>;
 
 export const createItem = {
     name: "createItem",
+    summary: "Generic tool for creating various CMS items (Folders, Structure Groups, etc.). Use this for structural setup when no dedicated tool exists.",
     description: `Creates a new item in the Content Management System (CMS) of a specified type.
 
 This is a **general-purpose creation tool** used for creating:

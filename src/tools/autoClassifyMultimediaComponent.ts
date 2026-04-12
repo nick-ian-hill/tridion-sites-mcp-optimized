@@ -33,6 +33,7 @@ const getMimeType = (filename: string): string | null => {
 
 export const autoClassifyMultimediaComponent = {
     name: "autoClassifyMultimediaComponent",
+    summary: "Automatically classifies an image component by analyzing its visual content using AI.",
     description: `Analyzes an image component and automatically classifies it by applying relevant Keywords from the item's Metadata Schema.
     
     This tool reads the item's Schema to find Keyword fields marked with 'AllowAutoClassification'. 

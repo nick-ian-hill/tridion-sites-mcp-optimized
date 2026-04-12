@@ -84,6 +84,7 @@ function resolveFileType(mimeType: string | undefined, fileName: string): { file
 
 export const readMultimediaComponent = {
     name: "readMultimediaComponent",
+    summary: "Extracts and analyzes text or data from a Multimedia Component (Word, PDF, Excel, Image, etc.).",
     description: `Reads and analyses the content of a Multimedia Component. 
 
 Supported file types and their return formats:

@@ -8,44 +8,20 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { handleStartChat, handlePollChat } from './agent/agent.js';
 
-// --- Direct imports for Assistant-specific tools ---
 import { getCurrentTime } from './agent/uiTools/getCurrentTime.js';
 import { requestOpenInEditor } from './agent/uiTools/requestOpenInEditor.js';
 import { requestNavigation } from './agent/uiTools/requestNavigation.js';
+import { initializeToolRegistry, getToolRegistry, Tool } from './utils/toolRegistry.js';
+import { getToolDetails, callTool } from './mcp/metaTools.js';
 
 // Set this to false to hide UI-specific tools from the LLM
 const ENABLE_UI_ASSISTANT_TOOLS = true;
 
-interface Tool {
-    name: string;
-    description: string;
-    input: any;
-    execute: Function;
-}
-
-/**
- * A type guard that checks if an object conforms to the Tool interface.
- * @param obj The object to check.
- * @returns True if the object is a valid Tool, otherwise false.
- */
-function isTool(obj: any): obj is Tool {
-    return (
-        obj &&
-        typeof obj === 'object' &&
-        'name' in obj && typeof obj.name === 'string' &&
-        'description' in obj && typeof obj.description === 'string' &&
-        'input' in obj &&
-        'execute' in obj && typeof obj.execute === 'function'
-    );
-}
+// We'll use the isTool from toolRegistry.ts instead
+import { isTool } from './utils/toolRegistry.js';
 
 function createMcpServer(tools: Tool[]): McpServer {
     const server = new McpServer({ name: "tridion-sites-mcp-server", version: "1.0.0" });
-
-    const toolsAsRecord: Record<string, Tool> = tools.reduce((acc, tool) => {
-        acc[tool.name] = tool;
-        return acc;
-    }, {} as Record<string, Tool>);
 
     for (const potentialTool of tools) {
         server.registerTool(
@@ -55,14 +31,7 @@ function createMcpServer(tools: Tool[]): McpServer {
                 inputSchema: potentialTool.input,
             },
             (args: any, context: any) => {
-                let finalContext = context;
-                if (potentialTool.name === 'toolOrchestrator') {
-                    finalContext = {
-                        ...context,
-                        tools: toolsAsRecord
-                    };
-                }
-                return potentialTool.execute(args, finalContext);
+                return potentialTool.execute(args, context);
             }
         );
     }
@@ -73,59 +42,24 @@ function createMcpServer(tools: Tool[]): McpServer {
 async function startServer() {
     const sessions = new Map<string, StreamableHTTPServerTransport>();
 
-    const tools: Tool[] = [];
-
-    // 1. Manually register the UI assistant specific tools first
+    // 1. Initialize the tool registry
+    const manualTools: Tool[] = [];
     if (ENABLE_UI_ASSISTANT_TOOLS) {
-        if (isTool(getCurrentTime)) {
-            tools.push(getCurrentTime);
-        }
-        if (isTool(requestOpenInEditor)) {
-            tools.push(requestOpenInEditor);
-        }
-        if (isTool(requestNavigation)) {
-            tools.push(requestNavigation);
-        }
+        manualTools.push(getCurrentTime as Tool);
+        manualTools.push(requestOpenInEditor as Tool);
+        manualTools.push(requestNavigation as Tool);
     }
 
-    // 2. Dynamically load standard tools from the tools/ directory
-    const __dirname = path.dirname(fileURLToPath(import.meta.url));
-    const toolsDirPath = path.join(__dirname, 'tools');
+    await initializeToolRegistry(manualTools);
+    const registry = getToolRegistry();
 
-    try {
-        const toolFiles = await fs.readdir(toolsDirPath);
+    // 2. Define the tools to be exposed via MCP (only the meta-tools)
+    const mcpTools = [getToolDetails as Tool, callTool as Tool];
 
-        for (const file of toolFiles) {
-            if (file.endsWith('.ts')) {
-                const modulePath = path.join(toolsDirPath, file);
-                const moduleUrl = pathToFileURL(modulePath).href;
-                const module = await import(moduleUrl);
-
-                const potentialTool = Object.values(module)[0];
-
-                if (isTool(potentialTool)) {
-                    // Avoid duplicate registration
-                    if (!tools.find(t => t.name === potentialTool.name)) {
-                        tools.push(potentialTool);
-                    }
-                } else {
-                    console.warn(`Warning: File ${file} does not export a valid tool object.`);
-                }
-            }
-        }
-
-        console.log(`Successfully loaded and registered ${tools.length} tools.`);
-
-    } catch (error) {
-        console.error("----- FATAL: Could not load tools -----");
-        console.error(error);
-        process.exit(1);
-    }
-
-    const toolsAsRecord: Record<string, Tool> = tools.reduce((acc, tool) => {
-        acc[tool.name] = tool;
-        return acc;
-    }, {} as Record<string, Tool>);
+    const toolsAsRecord: Record<string, Tool> = {};
+    registry.forEach((tool, name) => {
+        toolsAsRecord[name] = tool;
+    });
 
     const MCP_API_KEY = process.env.MCP_API_KEY || "demo-secret-key";
 
@@ -215,7 +149,8 @@ async function startServer() {
                 res.end(JSON.stringify({ error: 'Unauthorized: Missing or invalid API Key' }));
                 return;
             }
-            handleStartChat(req, res, tools);
+            // Pass the meta-tools to the agent chat
+            handleStartChat(req, res, mcpTools);
             return;
         }
 
@@ -260,7 +195,7 @@ async function startServer() {
                         const sid = transport.sessionId;
                         if (sid) sessions.delete(sid);
                     };
-                    const server = createMcpServer(tools);
+                    const server = createMcpServer(mcpTools);
                     await server.connect(transport);
                     await transport.handleRequest(req, res, parsed);
                 } else if (sessionId && !sessions.has(sessionId)) {
@@ -270,7 +205,7 @@ async function startServer() {
                     const transport = new StreamableHTTPServerTransport({
                         sessionIdGenerator: undefined, // stateless: no session ID assigned or stored
                     });
-                    const server = createMcpServer(tools);
+                    const server = createMcpServer(mcpTools);
                     await server.connect(transport);
                     await transport.handleRequest(req, res, parsed);
                 } else {

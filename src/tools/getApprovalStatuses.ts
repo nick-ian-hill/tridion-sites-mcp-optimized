@@ -6,6 +6,7 @@ import { filterResponseData } from "../utils/responseFiltering.js";
 
 export const getApprovalStatuses = {
     name: "getApprovalStatuses",
+    summary: "Lists all Approval Statuses (e.g., 'Draft', 'Live') used to track item readiness in workflows.",
     description: `Retrieves a list of all Approval Statuses in the system. These statuses (e.g., 'Draft', 'Approved for Web') are used in workflows to indicate the current state of an item and determine if it meets the minimum requirements for publishing to certain targets.
     
     IMPORTANT: This tool returns the Id and Title of the requested statuses.

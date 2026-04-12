@@ -20,6 +20,7 @@ const createProcessDefinitionInputSchema = z.object(createProcessDefinitionInput
 
 export const createProcessDefinition = {
     name: "createProcessDefinition",
+    summary: "Creates a new Workflow Process Definition, including activities, logic, and automated C# scripts.",
     description: `Creates a new Workflow Process Definition, including its full sequence of activities and branches.
 
 This tool simplifies workflow creation by allowing you to define the entire flow in a single JSON structure. You define each step (activity) by giving it a title and specifying the title(s) of the subsequent step(s). The tool handles the underlying process of creating all necessary items and linking them together correctly.

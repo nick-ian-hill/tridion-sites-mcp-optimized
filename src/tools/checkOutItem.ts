@@ -4,6 +4,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 export const checkOutItem = {
     name: "checkOutItem",
+    summary: "Locks a versioned item (Component, Page, etc.) for exclusive editing by the current user.",
     description: `Checks out a versioned item (e.g., Component, Page, Schema, ComponentTemplate, or PageTemplate). The tools for updating items (e.g., 'updateContent' and 'updateItemProperties') automatically handle item check-out and check-in. You only need to use this tool if you want to prevent other users from editing it simultaneously. You can use the 'getItem' tool to inspect the 'LockInfo' property to see if an item is already checked out.`,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/).describe("The unique ID (TCM URI) of the versioned item to check out. The version number should not be included."),

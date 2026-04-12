@@ -165,6 +165,7 @@ const generateSvg = (nodes: any[], edges: any[]): string => {
 
 export const getBluePrintHierarchy = {
     name: "getBluePrintHierarchy",
+    summary: "Visualizes or retrieves the raw graph structure of an item's BluePrint hierarchy (localized vs. shared).",
     description: `Generates a visual representation or raw graph structure of the BluePrint hierarchy for an item.
     
 ### When to use this tool:

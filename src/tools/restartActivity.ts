@@ -5,6 +5,7 @@ import { formatForAgent } from "../utils/fieldReordering.js";
 
 export const restartActivity = {
     name: "restartActivity",
+    summary: "Restarts an automated workflow Activity Instance that is in a 'Failed' state.",
     description: "Restarts an automated workflow Activity Instance that is currently in a 'Failed' state. This is highly useful for re-triggering automated scripts or system tasks that failed due to transient issues without having to restart the entire workflow process.",
     input: {
         activityId: z.string().regex(/^tcm:\d+-\d+-131104$/)

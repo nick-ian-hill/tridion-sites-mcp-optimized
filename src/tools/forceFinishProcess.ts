@@ -6,6 +6,7 @@ import { filterResponseData } from "../utils/responseFiltering.js";
 
 export const forceFinishProcess = {
     name: "forceFinishProcess",
+    summary: "Abruptly terminates a Workflow Process and applies a final Approval Status to all items.",
     description: `Force finishes a Workflow Process. This abruptly terminates the workflow process and skips any remaining activities. You must specify an Approval Status to apply to all items within the workflow upon termination.
     
 IMPORTANT BUSINESS RULE: When a process completes, the process and all its associated activities are converted into "histories". Their URIs will mutate:

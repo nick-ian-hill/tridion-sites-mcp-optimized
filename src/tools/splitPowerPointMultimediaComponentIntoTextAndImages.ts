@@ -55,6 +55,7 @@ interface Relationship {
 
 export const splitPowerPointMultimediaComponentIntoTextAndImages = {
     name: "splitPowerPointMultimediaComponentIntoTextAndImages",
+    summary: "Extracts text/images from a PowerPoint and creates components for each image.",
     description: "Splits a PowerPoint file into its constituent parts. It extracts all text and creates new multimedia components for each image, returning a consolidated text summary with image-to-slide mappings. Accepts either a CMS multimedia component ('itemId') or a user attachment ('attachmentId'+'fileName').",
     input: splitPowerPointMultimediaComponentIntoTextAndImagesInputProperties,
     async execute(input: z.infer<typeof splitPowerPointMultimediaComponentIntoTextAndImagesSchema>, context: any) {

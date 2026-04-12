@@ -2,6 +2,7 @@ import { handleAxiosError } from "../../utils/errorUtils.js";
 
 export const getCurrentTime = {
     name: "getCurrentTime",
+    summary: "Returns the current system date and time in ISO 8601 format.",
     description: "Returns the current date and time in ISO 8601 format. Use this to get the precise current time for time-sensitive calculations, especially in long-running conversations.",
     input: {},
     execute: async () => {

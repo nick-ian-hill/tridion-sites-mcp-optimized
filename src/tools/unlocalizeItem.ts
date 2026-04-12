@@ -4,6 +4,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 export const unlocalizeItem = {
     name: "unlocalizeItem",
+    summary: "Reverts a localized item back to its shared state, discarding local changes.",
     description: `Unlocalizes a localized item, discarding any local changes and returing the item to a copy of its parent.
     
     ### Idempotency

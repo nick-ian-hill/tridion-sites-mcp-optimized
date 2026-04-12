@@ -9,6 +9,7 @@ import { formatForAgent, formatForApi } from "../utils/fieldReordering.js";
 
 export const search = {
     name: "search",
+    summary: "Searches the CMS for items matching various criteria (text, schema, date). Returns Ids and Titles only.",
     description: `Performs a comprehensive search on the Content Manager System (CMS) to find item IDs based on various criteria.
     
     This tool is the entry point for finding items based on full-text queries, schemas, modification dates, and lock statuses.

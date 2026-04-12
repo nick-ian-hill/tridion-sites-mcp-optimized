@@ -58,6 +58,7 @@ const createBluePrintHierarchySchema = z.object(createBluePrintHierarchyInputPro
 
 export const createBluePrintHierarchy = {
     name: "createBluePrintHierarchy",
+    summary: "Creates a complete BluePrint hierarchy of Publications in a single operation from JSON data.",
     description: `Creates an entire BluePrint hierarchy of Publications in a single, parallelized operation.
     
     This tool resolves dependencies automatically using 'Title' properties and provisions the hierarchy from top to bottom.

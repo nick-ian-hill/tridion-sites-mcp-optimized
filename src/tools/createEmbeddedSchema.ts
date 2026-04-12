@@ -10,6 +10,7 @@ import { getCachedDefaultModel } from "../utils/defaultModelCache.js";
 
 export const createEmbeddedSchema = {
     name: "createEmbeddedSchema",
+    summary: "Creates a Schema designed to be embedded as a reusable field group within other Schemas.",
     description: `Creates a new Content Manager System (CMS) item of type 'Schema' with a purpose of 'Embedded'.
 
 BluePrint Inheritance Note:

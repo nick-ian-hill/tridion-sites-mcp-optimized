@@ -6,6 +6,7 @@ import { formatForAgent } from "../utils/fieldReordering.js";
 
 export const getCategories = {
     name: "getCategories",
+    summary: "Retrieves the list of Categories for a specified Publication. Categories contain Keywords for classification.",
     description: `Retrieves the list of categories for a specified publication (Id, Title, Type).
     
     This is the first step in finding available keywords. After getting a category's ID from this tool, use 'getItemsInContainer' or 'getClassificationKeywordsForCategory' to see the keywords within it.

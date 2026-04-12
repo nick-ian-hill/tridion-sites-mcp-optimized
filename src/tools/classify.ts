@@ -19,6 +19,7 @@ const classifySchema = z.object(classifyInputProperties);
 
 export const classify = {
     name: "classify",
+    summary: "Adds or removes Keywords from an item for classification.",
     description: `Classifies, unclassifies, or reclassifies a single item by adding and/or removing specified keywords. This is a synchronous operation. 
     
   Important:

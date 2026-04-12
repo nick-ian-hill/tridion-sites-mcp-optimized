@@ -15,6 +15,7 @@ const getItemsClassifiedByKeywordSchema = z.object(getItemsClassifiedByKeywordIn
 
 export const getItemsClassifiedByKeyword = {
     name: "getItemsClassifiedByKeyword",
+    summary: "Finds all items tagged with a specific Keyword. Useful for taxonomy-based content discovery.",
     description: `Gets a list of all items that are classified with a specified Keyword.
 'Classified' means an item has a keyword field that contains the specified Keyword.
 

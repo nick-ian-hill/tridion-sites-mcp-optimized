@@ -4,6 +4,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 export const checkInItem = {
     name: "checkInItem",
+    summary: "Saves changes and unlocks a previously checked-out item, creating a new version.",
     description: `Checks in a versioned item that was previously checked out using 'checkOutItem'. This action saves the changes as a new version of the item and removes the lock, making it available for other users to edit. To discard changes instead, use the 'undoCheckOutItem' tool. Note that checkOut and checkIn are handled automatically when using tools like 'updateContent', 'updateMetdata', 'updatePage', and 'updateItemProperties'.`,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/).describe("The unique ID (TCM URI) of the versioned item to check in. The version number should not be included."),

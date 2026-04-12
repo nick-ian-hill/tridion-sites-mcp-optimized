@@ -6,6 +6,7 @@ import { filterResponseData } from "../utils/responseFiltering.js";
 
 export const getClassificationKeywordsForCategory = {
     name: "getClassificationKeywordsForCategory",
+    summary: "Retrieves a list of all non-abstract keywords for the specified category.",
     description: `Retrieves a list of all non-abstract keywords for the specified category.
     
     This tool is specifically designed to find keywords that can be used to tag/classify content. It automatically filters out 'Abstract' keywords (which are used purely for hierarchical navigation).

@@ -13,6 +13,7 @@ const getTargetTypesSchema = z.object(getTargetTypesInputProperties);
 
 export const getTargetTypes = {
     name: "getTargetTypes",
+    summary: "Lists all Target Types (e.g., 'Staging', 'Live') available for publishing.",
     description: `Retrieves a list of Target Types (Id, Title, type).
     
     This is the **recommended** method when searching for a target to publish to.

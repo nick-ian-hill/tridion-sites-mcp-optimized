@@ -10,6 +10,7 @@ import { getCachedDefaultModel } from "../utils/defaultModelCache.js";
 
 export const createComponentSchema = {
     name: "createComponentSchema",
+    summary: "Creates a new Schema for content Components. Use this to define new content models and their field structures.",
     description: `Creates a new Content Manager System (CMS) item of type 'Schema' with a purpose of 'Component'.
 Component Schemas define the structure for Components, which are the primary content items in the CMS.
 

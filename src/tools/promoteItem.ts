@@ -4,6 +4,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 export const promoteItem = {
     name: "promoteItem",
+    summary: "Moves an item up the BluePrint hierarchy to a parent Publication.",
     description: `Promotes a primary item up the BluePrint hierarchy to a parent Publication. This action makes the item centrally manageable and reusable in child Publications. This is the opposite of the 'demoteItem' tool.
     Before using, it's recommended to understand the item's position in the hierarchy using the 'getBluePrintHierarchy' tool to identify a valid parent Publication to promote to.
     To check whether an item is a primary item, use the 'getItem' tool and verify that BluePrintInfo.IsLocalized and BluePrintInfo.IsShared are both false.

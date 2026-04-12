@@ -21,6 +21,7 @@ const splitWordMultimediaComponentIntoTextAndImagesSchema = z.object(splitWordMu
 
 export const splitWordMultimediaComponentIntoTextAndImages = {
     name: "splitWordMultimediaComponentIntoTextAndImages",
+    summary: "Extracts text/images from a Word doc and creates components for each image.",
     description: "Splits a Word file into its text and images. It returns the text as HTML and creates new multimedia components for each image. Accepts either a CMS multimedia component ('itemId') or a user attachment ('attachmentId'+'fileName').",
     input: splitWordMultimediaComponentIntoTextAndImagesInputProperties,
     async execute(input: z.infer<typeof splitWordMultimediaComponentIntoTextAndImagesSchema>, context: any) {

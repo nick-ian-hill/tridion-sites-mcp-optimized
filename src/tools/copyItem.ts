@@ -4,6 +4,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 export const copyItem = {
     name: "copyItem",
+    summary: "Creates a duplicate of an item in a specified destination container.",
     description: `Creates a copy/duplicate of the item in the specified destination. This is different from the 'moveItem' tool, which relocates the original item.
     The tool will automatically ensure that the title of the copied item is unique in the destination container.
     Items can only be copied to containers of the same type (Folder to Folder, StructureGroup to StructureGroup).

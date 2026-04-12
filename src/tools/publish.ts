@@ -41,6 +41,7 @@ const publishSchema = z.object(publishInputProperties);
 
 export const publish = {
     name: "publish",
+    summary: "Publishes one or more items to specified targets (e.g., 'Staging'). Supports scheduling and dependency resolution.",
     description: "Publishes one or more items to the specified targets. Can be used as a 'dryRun' to see what would be published.",
     input: publishInputProperties,
 

@@ -4,6 +4,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 export const localizeItem = {
     name: "localizeItem",
+    summary: "Creates a local (editable) copy of a shared item in a child Publication.",
     description: `Localizes a shared item in the BluePrint, creating a local copy that can be edited independently of its parent item.
     
     ### Idempotency

@@ -47,6 +47,7 @@ const getPublishTransactionsSchema = z.object(getPublishTransactionsInput);
 
 export const getPublishTransactions = {
     name: "getPublishTransactions",
+    summary: "Lists recent or filtered publish transactions to check status or troubleshoot errors.",
     description: `Gets a list of publish transactions, filtering by criteria like user, state, or date range.
     
     ### "Find-Then-Fetch" Pattern

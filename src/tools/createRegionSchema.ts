@@ -10,6 +10,7 @@ import { getCachedDefaultModel } from "../utils/defaultModelCache.js";
 
 export const createRegionSchema = {
     name: "createRegionSchema",
+    summary: "Creates a Schema for Page Regions. Use this to define the layout and slot constraints of a Page.",
     description: `Creates a new Content Manager System (CMS) item of type 'Schema' with a purpose of 'Region'.
 
 BluePrint Inheritance Note:

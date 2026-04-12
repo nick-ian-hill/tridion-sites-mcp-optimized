@@ -50,6 +50,7 @@ const createJsonError = (message: string) => {
 
 export const updateUserProfile = {
     name: "updateUserProfile",
+    summary: "Update user profile settings (favorites, language, locale, description).",
     description: `Updates a user's profile by modifying specific properties or replacing the entire profile. If 'userId' is not specified, the profile of the currently logged-in user will be updated.
 
 There are three ways to manage favorites:

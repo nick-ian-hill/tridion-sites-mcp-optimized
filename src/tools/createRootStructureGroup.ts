@@ -7,6 +7,7 @@ import { convertLinksRecursively, formatForAgent, formatForApi } from "../utils/
 
 export const createRootStructureGroup = {
     name: "createRootStructureGroup",
+    summary: "Creates the root Structure Group for a Publication.",
     description: `Creates a root Structure Group for the specified Publication.
     This is only required for a root Publication – a Publication that has no parent Publications – when the root Publication is used for constructing a BluePrint hierarchy.
     Children of the root Publication will automatically inherit the root Structure Group and its content.

@@ -7,6 +7,7 @@ import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
 
 export const updateMetadata = {
     name: "updateMetadata",
+    summary: "Updates the metadata fields of an existing item. Use this for modifying administrative data, SEO fields, or classifications.",
     description: `Updates the metadata fields for a specific item in the Content Management System. Versioning is handled automatically. If the item is not checked out, it will be checked out, updated, and then checked back in.
 
 Partial Updates Supported:

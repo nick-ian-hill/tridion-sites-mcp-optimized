@@ -6,6 +6,7 @@ import { formatForAgent } from "../utils/fieldReordering.js";
 
 export const getMultimediaTypes = {
     name: "getMultimediaTypes",
+    summary: "Retrieves a list of all Multimedia Types available in the system (Id, Title).",
     description: `Retrieves a list of all Multimedia Types available in the system (Id, Title).
     Multimedia Types define allowed file extensions and MIME types.
     

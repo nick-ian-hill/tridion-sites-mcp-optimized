@@ -18,6 +18,7 @@ const getPublishInfoSchema = z.object(getPublishInfoInputProperties);
 
 export const getPublishInfo = {
     name: "getPublishInfo",
+    summary: "Checks the current publish state of an item: where, when, and by whom it was last published.",
     description: `Retrieves a list of publish states for a specified item, showing when, where (to which Target Type), and by whom it was last published. This shows the current state, not the history of all publish actions.
     When asked to retrieve publish information for a large set of items, it's recommended that this tool is called via the 'toolOrchestrator'.
     In such cases, only request the information needed, and consider using a post processing script to limit the amount of returned data.`,

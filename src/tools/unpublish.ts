@@ -41,6 +41,7 @@ const unpublishSchema = z.object(unpublishInputProperties);
 
 export const unpublish = {
     name: "unpublish",
+    summary: "Removes published content from specified targets (e.g., 'Staging'). Supports scheduling.",
     description: "Unpublishes one or more items from the specified targets. Can be used as a 'dryRun' to see what would be unpublished.",
     input: unpublishInputProperties,
 

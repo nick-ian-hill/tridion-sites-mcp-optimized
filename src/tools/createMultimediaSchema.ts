@@ -8,6 +8,7 @@ import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
 
 export const createMultimediaSchema = {
     name: "createMultimediaSchema",
+    summary: "Creates a Schema for Multimedia Components (images, videos, etc.) and defines allowed file types.",
     description: `Creates a new Content Manager System (CMS) item of type 'Schema' with a purpose of 'Multimedia'.
     
 Multimedia Schemas define the metadata fields for Multimedia Components (e.g., images, videos, PDFs).

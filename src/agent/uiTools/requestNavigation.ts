@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const requestNavigation = {
     name: "requestNavigation",
+    summary: "Navigates the user's Content Manager view to a specific item or container.",
     description: "Navigates the user's view to a specific item. Only use this tool when the user explicitly asks to 'navigate to', 'select', 'browse into' an item, or words to that effect.",
     input: {
         itemId: z.string().regex(/^tcm:\d+-\d+(-\d+)?$/).describe("The TCM URI of the item to navigate to."),

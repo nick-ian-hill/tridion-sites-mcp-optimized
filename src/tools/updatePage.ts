@@ -106,6 +106,7 @@ function findTargetRegion(regions: any[], pathParts: string[]): any | undefined 
 
 export const updatePage = {
     name: "updatePage",
+    summary: "Updates an existing Page's properties and its collection of Component Presentations. Use this to reorder content or change templates.",
     description: `Updates an existing Page in the Content Management System (CMS).
 This tool can modify various aspects of a Page, including its title, file name, metadata, Component Presentations, and Regions.
 Versioning is handled automatically. If the item is not checked out, it will be checked out, updated, and then checked back in. If the item is already checked out by you, it will remain checked out after the update. The operation will be aborted if the item is checked out by another user.

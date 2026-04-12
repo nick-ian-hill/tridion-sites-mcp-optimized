@@ -26,6 +26,7 @@ const getLockedItemsSchema = z.object(getLockedItemsInput);
 
 export const getLockedItems = {
     name: "getLockedItems",
+    summary: "Lists items that are currently locked (CheckedOut, InWorkflow, etc.) by one or more users.",
     description: `Gets a list of new and locked items (e.g., checked-out, in workflow).
     
     This tool is ideal for finding items in specific states using AND/NOT logic.

@@ -76,6 +76,7 @@ const createJsonError = (message: string) => ({
 
 export const updateItemProperties = {
     name: "updateItemProperties",
+    summary: "Updates core properties (Title, Description) or metadata of any CMS item. Use this for general item maintenance.",
     description: `Updates the core properties and structural definition of an existing Content Management System (CMS) item.
 
 SCHEMA MODIFICATION RULES:

@@ -4,6 +4,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 export const moveItem = {
     name: "moveItem",
+    summary: "Relocates an item to a new container.",
     description: `Moves the specified item to a new location. This is different from the 'copyItem' tool, which creates a duplicate and leaves the original in place.
     IMPORTANT: Moving has strict conditions related to BluePrinting. 
     In particular, it is only possible to move 'primary' items – items for which 'BlueprintInfo.IsLocalized' and 'BlueprintInfo.IsShared' properties are both 'false'.

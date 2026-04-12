@@ -19,6 +19,7 @@ const createMultimediaComponentFromUrlSchema = z.object(createMultimediaComponen
 
 export const createMultimediaComponentFromUrl = {
     name: "createMultimediaComponentFromUrl",
+    summary: "Creates a Multimedia Component by downloading binary content from a public URL.",
     description: "Creates a new multimedia component by uploading a file from a public URL. If the parent Folder has a mandatory schema, it will be used automatically, so there is no need to provide a schemaId. This is one of four ways to create a multimedia component, with the others being 'createMultimediaComponentFromBase64', 'createMultimediaComponentFromPrompt', and 'createMultimediaComponentFromAttachment' (for user-attached files).",
     input: createMultimediaComponentFromUrlInputProperties,
     async execute(input: z.infer<typeof createMultimediaComponentFromUrlSchema>,

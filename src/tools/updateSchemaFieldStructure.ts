@@ -33,6 +33,7 @@ const createJsonError = (message: string) => {
 
 export const updateSchemaFieldStructure = {
     name: "updateSchemaFieldStructure",
+    summary: "Adds, removes, or moves fields within a Schema definition.",
     description: `Surgically updates the structural definition of a Schema's fields by adding, removing, or moving fields.
     This tool is highly efficient as it targets specific field positions without requiring you to replace the entire field array.
 

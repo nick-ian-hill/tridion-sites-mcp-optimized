@@ -6,6 +6,7 @@ import { filterResponseData } from "../utils/responseFiltering.js";
 
 export const getProcessDefinitions = {
     name: "getProcessDefinitions",
+    summary: "Lists available Workflow Process Definitions for a specific Publication.",
     description: "Retrieves the list of available workflow process definitions for a specified publication. A process definition's ID is required to start a new workflow process for an item.",
     input: {
         publicationId: z.string().regex(/^tcm:0-[1-9]\d*-1$/).describe("The unique ID of a Publication (e.g., 'tcm:0-5-1'). Use the 'getPublications' tool to find a Publication ID."),

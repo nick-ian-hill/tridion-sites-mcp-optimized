@@ -8,6 +8,7 @@ import { convertItemIdToContextPublication } from "../utils/convertItemIdToConte
 
 export const getItem = {
     name: "getItem",
+    summary: "Retrieves detailed properties of a single CMS item. Use 'includeProperties' to limit the response size.",
     description: `Retrieves read-only details for a single Content Manager System (CMS) item.
 Use the 'includeProperties' parameter to request only the properties you need. This is the standard usage pattern — omitting it returns the full item, which includes hundreds of lines of permissions, HATEOAS links, and system metadata that consume context window space without adding value to most tasks.
 

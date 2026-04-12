@@ -7,6 +7,7 @@ import { formatForAgent } from "../utils/fieldReordering.js";
 
 export const getUserProfile = {
     name: "getUserProfile",
+    summary: "Retrieves the profile and preferences of a specific user or the current user.",
     description: "Retrieves the profile of a specific user or the currently logged-in user. User profiles contain information like display name, preferences (including favorites), and system runtime details. The tool automatically adds a 'LanguageName' field if a 'LanguageId' is present.",
     input: {
         userId: z.string().regex(/^tcm:0-\d+-65552$/).optional().describe("The TCM URI of the user (e.g., 'tcm:0-20-65552'). If omitted, the profile of the currently logged-in user is retrieved."),

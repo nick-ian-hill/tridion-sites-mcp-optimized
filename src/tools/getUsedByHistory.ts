@@ -13,6 +13,7 @@ const getUsedByHistorySchema = z.object(getUsedByHistoryInputProperties);
 // Define the tool
 export const getUsedByHistory = {
     name: "getUsedByHistory",
+    summary: "Lists all items that have ever used any version of the specified item.",
     description: `Returns a list of all items that use or have previously used the specified item across all its versions.
 This tool is useful for reporting and for understanding the complete historical dependencies of an item, which is different from 'getDependencyGraph' (which checks only the *current* state).
 The tool returns a simplified list including each item's type, ID, title, and an array of its major version numbers that used the specified item.

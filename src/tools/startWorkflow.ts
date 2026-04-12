@@ -5,6 +5,7 @@ import { toLink, toLinkArray } from "../utils/links.js";
 
 export const startWorkflow = {
     name: "startWorkflow",
+    summary: "Initiates a new workflow process for content review and approval.",
     description: "Starts a new workflow process and optionally includes one or more items ('subjects') from the corresponding publication. This is commonly used to ensure changes to items go through a review and approval process.",
     input: {
         publicationId: z.string().regex(/^tcm:0-[1-9]\d*-1$/)

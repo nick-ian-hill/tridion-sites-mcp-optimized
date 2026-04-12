@@ -79,6 +79,7 @@ const createJsonError = (message: string) => {
 
 export const updateSchemaFieldProperties = {
     name: "updateSchemaFieldProperties",
+    summary: "Modifies properties of existing fields in a Schema (e.g., MinOccurs, Description, Pattern).",
     description: `Updates specific properties of one or more fields within a given Schema. For surgical updates, this is more efficient and robust than using the 'updateItemProperties' tool and replacing the entire fields collection.
     
 BluePrint Note:

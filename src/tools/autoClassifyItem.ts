@@ -60,6 +60,7 @@ const extractAllText = (obj: any): string[] => {
 
 export const autoClassifyItem = {
     name: "autoClassifyItem",
+    summary: "Automatically classifies an item by analyzing its text and applying relevant Keywords using AI.",
     description: `Analyzes an item's content and automatically classifies it by applying relevant Keywords.
     
     It respects the item's Schema definition:

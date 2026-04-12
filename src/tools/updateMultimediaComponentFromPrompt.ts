@@ -17,6 +17,7 @@ const updateMultimediaComponentFromPromptSchema = z.object(updateMultimediaCompo
 
 export const updateMultimediaComponentFromPrompt = {
     name: "updateMultimediaComponentFromPrompt",
+    summary: "Modifies an existing Multimedia Component's image based on a text prompt using AI.",
     description: "Updates an existing multimedia component's image based on a text prompt. It downloads the binary, sends it to an AI for modification (optionally using other images as context), and uploads the new version. Versioning is handled automatically. If contextItemIds is not empty, be sure to explain in the prompt how the model should utilize the context item(s).",
     input: updateMultimediaComponentFromPromptInputProperties,
     async execute(input: z.infer<typeof updateMultimediaComponentFromPromptSchema>, context: any) {

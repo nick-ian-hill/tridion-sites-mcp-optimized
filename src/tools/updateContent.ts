@@ -7,6 +7,7 @@ import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
 
 export const updateContent = {
     name: "updateContent",
+    summary: "Updates the content fields of an existing Component. Use this for modifying text, images, or links within a content item.",
     description: `Updates the content fields for an item of type 'Component' in the Content Management System. Versioning is handled automatically. If the item is not checked out, it will be checked out, updated, and then checked back in.
 
 Partial Updates Supported:

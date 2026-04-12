@@ -186,6 +186,7 @@ const toolOrchestratorSchema = z.object(toolOrchestratorInputProperties);
 
 export const toolOrchestrator = {
     name: "toolOrchestrator",
+    summary: "Executes custom JavaScript scripts for batch operations and complex CMS workflows.",
     description: `Executes an advanced, multi-step JavaScript script to perform batch operations, aggregations, or complex workflows.
     The tool supports up to three phases. (Note: If 'mapScript' is omitted, the orchestrator acts in "Discovery-Only" mode. It will execute Phase 1, return the discovered items, and skip Phases 2 and 3):
     1.  Setup (preProcessingScript): Dynamically find items (e.g., via 'search') or prepare data.

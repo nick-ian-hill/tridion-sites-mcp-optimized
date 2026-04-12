@@ -6,6 +6,7 @@ import { formatForAgent } from "../utils/fieldReordering.js";
 
 export const getActivities = {
     name: "getActivities",
+    summary: "Lists workflow activities (tasks) filtered by user and state (e.g., 'Assigned', 'Failed').",
     description: `Gets a list of workflow activities, which can be filtered by user and state.
     
     IMPORTANT: This tool returns the Id and Title of the requested activities.

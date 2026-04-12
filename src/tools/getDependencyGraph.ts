@@ -6,6 +6,7 @@ import { formatForAgent } from "../utils/fieldReordering.js";
 
 export const getDependencyGraph = {
     name: "getDependencyGraph",
+    summary: "Retrieves items that are dependencies of (Uses) or dependent on (UsedBy) the specified item.",
     description: `Returns items in the Content Management System that are either dependencies of (direction = 'Uses') or dependent on (direction = 'UsedBy') the specified item.
     
     This tool is essential for impact analysis (e.g., "what will change if I edit this Schema?") or for safety checks before deletion (e.g., "is this Component used by any Pages?").

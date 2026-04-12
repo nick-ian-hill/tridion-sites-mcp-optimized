@@ -15,6 +15,7 @@ const getUsesForVersionSchema = z.object(getUsesForVersionInputProperties);
 
 export const getUsesForVersion = {
     name: "getUsesForVersion",
+    summary: "Lists all items that were used by a specific historical version of an item.",
     description: `Retrieves a list of items that were used by a *specific version* of a specified item.
     
     This tool is useful for historical analysis, such as reconstructing a Page's dependencies at a particular point in time.

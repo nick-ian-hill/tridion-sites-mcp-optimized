@@ -4,6 +4,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 export const deleteItem = {
     name: "deleteItem",
+    summary: "Permanently removes an item or a specific version with safety checks for dependencies, locks, and publishing.",
     description: `Permanently deletes a single item or a specific historical version of an item from the Content Manager.
 IMPORTANT: Tridion enforces strict deletion rules. The current version of an item cannot be deleted if it is localized, locked, published, or used by other items anywhere across the blueprint.
 

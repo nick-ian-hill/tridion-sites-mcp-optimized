@@ -28,6 +28,7 @@ const createMultimediaComponentFromPromptSchema = z.object(createMultimediaCompo
 
 export const createMultimediaComponentFromPrompt = {
     name: "createMultimediaComponentFromPrompt",
+    summary: "Generates a new image using AI (Gemini) based on a text prompt and creates a Multimedia Component.",
     description: `Generates an image from a text prompt using the Gemini API and creates a new multimedia component from it. Can optionally use existing CMS multimedia components ('contextItemIds') or user-attached images ('contextAttachments') as context for style references, composition, or combining elements. Be sure to explain in the prompt how any reference images should be used. This is one of four ways to create a multimedia component, with the others being 'createMultimediaComponentFromBase64', 'createMultimediaComponentFromUrl', and 'createMultimediaComponentFromAttachment' (for user-attached files).
 
 Example: Style Transfer using a CMS image

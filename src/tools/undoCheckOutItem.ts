@@ -4,6 +4,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 
 export const undoCheckOutItem = {
     name: "undoCheckOutItem",
+    summary: "Discards changes and unlocks a previously checked-out item, reverting it to its last major version.",
     description: `Reverts (undoes) the check-out of a versioned item. Often referred to as revertItem.
     This action discards any changes made since the item was checked out and removes the lock, reverting it to its last major version.
     If the item does not have a major version, it will be removed (i.e., deleted) from the system.`,

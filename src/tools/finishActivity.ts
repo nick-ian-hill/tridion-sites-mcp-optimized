@@ -7,6 +7,7 @@ import { filterResponseData } from "../utils/responseFiltering.js";
 
 export const finishActivity = {
     name: "finishActivity",
+    summary: "Completes a workflow activity (standard or decision), moving the process to the next step.",
     description: `Finishes a workflow activity that is in 'Assigned' or 'Started' state. This moves the workflow to the next step, if one is defined. Automatically handles both standard activities and decision activities by inspecting the activity's definition.
     
 IMPORTANT BUSINESS RULE: When a workflow process completes fully, the process and all its activities are converted into "histories". Their URIs mutate:

@@ -6,6 +6,7 @@ import { formatForAgent } from "../utils/fieldReordering.js";
 
 export const getPublications = {
     name: "getPublications",
+    summary: "Lists all Publications in the system. Publications are the root containers for content and security.",
     description: `Retrieves a list of all Publications (Id, Title and type).
     
     This is a primary discovery tool, as a Publication ID is often required by other tools like 'getCategories', 'getSchemaLinks', 'createRootStructureGroup', or to scope a query with the 'search' tool.

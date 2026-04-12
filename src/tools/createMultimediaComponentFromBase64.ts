@@ -19,6 +19,7 @@ const createMultimediaComponentFromBase64Schema = z.object(createMultimediaCompo
 
 export const createMultimediaComponentFromBase64 = {
     name: "createMultimediaComponentFromBase64",
+    summary: "Creates a Multimedia Component by uploading binary content as a base64 string.",
     description: "Creates a new multimedia component by uploading a file from a base64 encoded string. If the parent Folder has a mandatory schema, it will be used automatically, so there is no need to provide a schemaId in this case. This is one of four ways to create a multimedia component, with the others being 'createMultimediaComponentFromUrl', 'createMultimediaComponentFromPrompt', and 'createMultimediaComponentFromAttachment' (for user-attached files).",
     input: createMultimediaComponentFromBase64InputProperties,
     async execute(input: z.infer<typeof createMultimediaComponentFromBase64Schema>,

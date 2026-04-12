@@ -6,6 +6,7 @@ import { formatForAgent } from "../utils/fieldReordering.js";
 
 export const bulkReadItems = {
     name: "bulkReadItems",
+    summary: "Retrieves details for multiple CMS items at once. More efficient than multiple 'getItem' calls for bulk data retrieval.",
     description: `Retrieves read-only details for multiple Content Manager System (CMS) items using their IDs.
 This tool is the most efficient way to get 'Content', 'Metadata', or 'BinaryContent' properties for multiple items. To retrieve them, you use the 'includeProperties' parameter (e.g., ['Metadata', 'BinaryContent.Size']).
 The returned data is an 'IdentifiableObjectDictionary' type, which maps each item ID to its details.

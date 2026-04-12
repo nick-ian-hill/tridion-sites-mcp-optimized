@@ -28,6 +28,7 @@ type CreatePageInput = z.infer<typeof createPageInputSchema>;
 
 export const createPage = {
     name: "createPage",
+    summary: "Creates a new Page in a specific Structure Group. Use this to add new URLs to a website and define its initial layout.",
     description: `Creates a new Page in the Content Management System (CMS). A Page is a container for content that is structured by a Page Template. Note that pages are contained in Structure Groups (e.g., tcm:5-5-4) not Folders (e.g., tcm:5-1-2).
 
 BluePrint Inheritance Note:

@@ -9,6 +9,7 @@ import { diagnoseBluePrintError } from "../utils/bluePrintDiagnostics.js";
 
 export const updatePublication = {
     name: "updatePublication",
+    summary: "Updates properties of an existing Publication, such as its Title or web delivery settings.",
     description: `Updates an existing Publication.
     
     Publications are the main organizational units in the Content Management System, acting as containers for content and design items.

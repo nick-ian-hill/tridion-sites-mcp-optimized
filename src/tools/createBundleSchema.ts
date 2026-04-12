@@ -7,6 +7,7 @@ import { processAndOrderFieldDefinitions, formatForApi, formatForAgent } from ".
 
 export const createBundleSchema = {
     name: "createBundleSchema",
+    summary: "Creates a new Schema of type 'Bundle' for defining metadata on collections of items.",
     description: `Creates a new Content Manager System (CMS) item of type 'Schema' with a purpose of 'Bundle'.
     
 Bundle Schemas define the metadata fields for Bundles. Bundles are collections of other CMS items, often used for workflow or publishing purposes.

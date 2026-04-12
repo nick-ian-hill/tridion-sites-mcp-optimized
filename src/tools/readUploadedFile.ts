@@ -98,6 +98,7 @@ function resolveFileType(
 
 export const readUploadedFile = {
     name: "readUploadedFile",
+    summary: "Extracts and analyzes text or data from a file that was attached or uploaded by the user.",
     description: `Reads and analyses the **content** of a file that was attached by the user. Use this when the user wants to extract, summarise, or act on what is inside the file.
 
 If the user wants to **save the file as a new multimedia component** in the CMS instead, use 'createMultimediaComponentFromAttachment'.

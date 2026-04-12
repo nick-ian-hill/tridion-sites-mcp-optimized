@@ -5,6 +5,7 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 
 export const generateContentFromPrompt = {
     name: "generateContentFromPrompt",
+    summary: "Generates text content using an AI model based on a prompt and optional source text.",
     description: `Generates text content based on a prompt, with optional context and stylistic guidance.
     This tool is designed to be a flexible generation engine. 
     - Use 'prompt' for the specific task (e.g., "Summarize this", "Translate to Spanish").

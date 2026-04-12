@@ -19,6 +19,7 @@ type UpdateProcessDefinitionInput = z.infer<typeof updateProcessDefinitionInputS
 
 export const updateProcessDefinition = {
     name: "updateProcessDefinition",
+    summary: "Updates an existing Workflow Process Definition, including title, description, and activity sequence.",
     description: `Updates an existing Workflow Process Definition.
 
 This tool can modify the title, description, and the entire sequence of activities within a workflow.
