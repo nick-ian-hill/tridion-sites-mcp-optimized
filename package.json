@@ -1,7 +1,7 @@
 {
-  "name": "tridion-sites-mcp3",
-  "version": "1.0.0",
-  "description": "Minimal MCP server example for Gemini agent",
+  "name": "tridion-sites-mcp-optimized",
+  "version": "0.1.0",
+  "description": "Optimized Tridion Sites MCP server. Uses a discovery-based pattern (getToolDetails/callTool) to minimize LLM token consumption.",
   "main": "src/index.js",
   "type": "module",
   "scripts": {
