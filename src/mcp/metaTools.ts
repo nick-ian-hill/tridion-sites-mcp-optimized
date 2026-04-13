@@ -12,12 +12,12 @@ export const getToolDetails = {
     examples: [],
     get description() {
         const summary = getToolsSummary();
-        return `Dynamically retrieves detailed documentation and input schemas for available tools.
-
-CRITICAL: You should use this tool NOT ONLY to figure out how to execute an action, but ALSO to look up information to answer the user's general questions about CMS capabilities, field configurations, or system rules. 
+        return `Retrieves detailed documentation and input schemas. CRITICAL: Use this to verify technical properties (like field flags) before answering general 'how-to' questions. The inputSchema is the source of truth for native features.
 
 <rules_text>
 ⚙️ Core CMS Rules
+
+The CMS provides extensive native parameters to control item and field behavior. Before proposing custom extensions, scripts, or event handlers, you MUST research the functional schemas of the relevant creation and update tools via getToolDetails. Prioritize solving requirements through native settings and schema-level properties as the primary solution, even if 'pro' custom alternatives are also provided.
 
 Two-Step Retrieval Pattern (Find-then-Fetch): Search tools return shallow "Identities" (URIs). You MUST follow a "Find-then-Fetch" pattern: use search or getItemsInContainer, then use getItem or bulkReadItems to retrieve actual content. CRITICAL: Whenever fetching items, ALWAYS use the includeProperties parameter (e.g., ["Id", "Title", "type"]) to request only necessary fields and prevent massive XML token bloat.
 
@@ -38,6 +38,10 @@ Spreadsheet Triage: When inspecting spreadsheets (via readUploadedFile or readMu
 Mandatory Dry Run: Always process 1-2 items first to verify your script logic before running bulk loops.
 
 Defensive Validation: Use context.utils.assert() within scripts to verify state changes post-mutation.
+
+Ambiguous Prompts: If a request is too vague to execute safely (e.g., 'update the article' without identifying which article), do NOT guess; ask for specific IDs or names.
+
+Playful/Nonsensical Prompts: If a request is out-of-domain (e.g., 'Mango the orange...'), do NOT call CMS tools. Instead, respond with a brief polite/humorous response and pivot back to the CMS.
 </rules_text>
 
 The list of "AVAILABLE TOOLS" below contains concise "SEO hooks" (summaries) for each tool. Use these hooks to identify which tool possesses the knowledge needed to answer a user's question. If a user asks "how do I do X in the CMS?", use this tool to read the relevant tool's full documentation before attempting to search the web or provide a general answer.
@@ -76,7 +80,7 @@ If a tool's description mentions using another tool, you must access that refere
                 description: tool.description,
                 inputSchema: jsonSchema
             };
-            
+
             if (includeExamples) {
                 result.examples = tool.examples;
             }
