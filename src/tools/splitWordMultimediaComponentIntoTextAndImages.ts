@@ -22,7 +22,7 @@ const splitWordMultimediaComponentIntoTextAndImagesSchema = z.object(splitWordMu
 export const splitWordMultimediaComponentIntoTextAndImages = {
     name: "splitWordMultimediaComponentIntoTextAndImages",
     summary: "Extracts text/images from a Word doc and creates components for each image.",
-    description: "Splits a Word file into its text and images. It returns the text as HTML and creates new multimedia components for each image. Accepts either a CMS multimedia component ('itemId') or a user attachment ('attachmentId'+'fileName').",
+    description: `Splits a Word file into its text and images. It returns the text as HTML and creates new multimedia components for each image. Accepts either a CMS multimedia component ('itemId') or a user attachment ('attachmentId'+'fileName').`,
     input: splitWordMultimediaComponentIntoTextAndImagesInputProperties,
     async execute(input: z.infer<typeof splitWordMultimediaComponentIntoTextAndImagesSchema>, context: any) {
         const { itemId, attachmentId, fileName, locationId } = input;
@@ -67,7 +67,7 @@ export const splitWordMultimediaComponentIntoTextAndImages = {
             };
 
             let { value: htmlContent } = await mammoth.convertToHtml({ buffer: wordFileBuffer }, mammothOptions);
-            
+
             let createdImageComponents: any[] = [];
 
             if (images.length > 0) {
@@ -79,38 +79,38 @@ export const splitWordMultimediaComponentIntoTextAndImages = {
                         fileName: img.placeholderSrc,
                         locationId: locationId,
                     }, context);
-                    
+
                     const resultText = result.content[0].text || "";
                     let newId = 'FailedToCreate';
-                    
+
                     try {
                         const jsonResult = JSON.parse(resultText);
                         newId = jsonResult.Id || 'FailedToParseId';
                     } catch (e) {
                         const newIdMatch = resultText.match(/tcm:\d+-\d+/);
-                         if (newIdMatch) newId = newIdMatch[0];
+                        if (newIdMatch) newId = newIdMatch[0];
                     }
-                    
+
                     img.newId = newId;
                     return {
                         OriginalName: img.placeholderSrc,
                         ComponentId: newId
                     };
                 });
-                
+
                 createdImageComponents = await Promise.all(createdImagePromises);
 
                 images.forEach(img => {
                     if (img.newId && img.newId.startsWith('tcm:')) {
                         // Replace placeholder src with a valid CMS link structure for XHTML fields
                         htmlContent = htmlContent.replace(
-                            `src="${img.placeholderSrc}"`, 
+                            `src="${img.placeholderSrc}"`,
                             `src="${img.newId}" xlink:href="${img.newId}" xmlns:xlink="http://www.w3.org/1999/xlink" xlink:title=""`
                         );
                     }
                 });
             }
-            
+
             const responseData = {
                 type: "SplitWordDocResult",
                 Id: itemId ?? fileName,
@@ -127,5 +127,7 @@ export const splitWordMultimediaComponentIntoTextAndImages = {
         } catch (error) {
             return handleAxiosError(error, `Failed to split Word document '${itemId ?? fileName}'`);
         }
-    }
+    },
+    examples: [
+    ]
 };

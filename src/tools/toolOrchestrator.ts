@@ -286,292 +286,274 @@ export const toolOrchestrator = {
     - Script Limits: All scripts are sandboxed. Sync code max 5s, Async max 600s.
     - Disallowed Tools: 'toolOrchestrator' cannot be called recursively.
 
-    ### EXAMPLES
-
-    **Example 1: Batch Search & Update with Read-After-Write Validation**
-    Finds Components and updates a field. Validates *inside* the map loop.
-    \`\`\`javascript
-    const result = await tools.toolOrchestrator({
-        parameters: { "schemaId": "tcm:5-20-8", "newValue": "Updated Value" },
-        preProcessingScript: \`
-            context.log('Phase 1: Finding items...');
-            const items = await context.tools.search({
-                searchQuery: { 
-                    ItemTypes: ["Component"], 
-                    BasedOnSchemas: [{ schemaUri: context.parameters.schemaId }],
-                    SearchIn: "tcm:0-5-1" 
-                }
-            });
-            return items.map(i => i.Id);
-        \`,
-        mapScript: \`
-            // Phase 2: Update the item
-            await context.tools.updateContent({
-                itemId: context.currentItemId,
-                content: { "TextField": context.parameters.newValue }
-            });
-            
-            // Read-After-Write Validation
-            const freshItem = await context.tools.getItem({ 
-                itemId: context.currentItemId,
-                includeProperties: ["Content"]
-            });
-            const actualValue = freshItem.Content.TextField;
-            context.utils.assert(
-                actualValue === context.parameters.newValue, 
-                \`Update Failed for \${context.currentItemId}. Expected '\${context.parameters.newValue}', got '\${actualValue}'\`
-            );
-            
-            context.log("Updated and validated.");
-            return { id: context.currentItemId };
-        \`
-    });
-    \`\`\`
-
-    **Example 2: Data Aggregation**
-    Finds the Component with the most versions.
-    \`\`\`javascript
-    const result = await tools.toolOrchestrator({
-        itemIds: ["tcm:5-100", "tcm:5-101", "tcm:5-102"],
-        mapScript: \`
-            const history = await context.tools.getItemHistory({ itemId: context.currentItemId });
-            return { id: context.currentItemId, count: history.length };
-        \`,
-        postProcessingScript: \`
-            // Find max in context.successes
-            if (context.successes.length === 0) throw new Error("No items processed.");
-            return context.successes.reduce((max, curr) => 
-                (curr.result.count > max.result.count) ? curr : max
-            ).result;
-        \`
-    });
-    \`\`\`
-
-    **Example 3: Handling Warnings (Silent Errors)**
-    Skips items that are checked out and marks them as warnings without failing the loop.
-    \`\`\`javascript
-    const result = await tools.toolOrchestrator({
-        itemIds: ["tcm:5-100", "tcm:5-101"],
-        mapScript: \`
-            // Check lock status first
-            const item = await context.tools.getItem({ itemId: context.currentItemId });
-            if (item.LockInfo.LockType !== 'None') {
-                // Use warning to flag this without failing the script
-                console.warn(\`Skipping \${context.currentItemId} because it is locked by \${item.LockInfo.LockUser.Title}\`);
-                return null;
-            }
-            
-            // Perform update...
-            return { id: context.currentItemId, status: "Updated" };
-        \`
-    });
-    \`\`\`
-
-    **Example 4: Complex Analysis / Stale Content Report**
-    Finds Pages, checks Publish status, and aggregates a report.
-    \`\`\`javascript
-    const result = await tools.toolOrchestrator({
-        preProcessingScript: \`
-            const items = await context.tools.getItemsInContainer({ 
-                containerId: "tcm:0-5-1", itemTypes: ["Page"], recursive: true 
-            });
-            return items.map(i => i.Id);
-        \`,
-        mapScript: \`
-            const item = await context.tools.getItem({ 
-                itemId: context.currentItemId, 
-                includeProperties: ["VersionInfo.RevisionDate", "Title"] 
-            });
-
-            const pubInfo = await context.tools.getPublishInfo({ itemId: context.currentItemId });
-            
-            // Explicitly log why an item is excluded
-            if (!pubInfo || pubInfo.length === 0) {
-                console.warn(\`Skipped \${context.currentItemId}: Not published\`);
-                return null;
-            }
-            
-            // Check if stale...
-            return { id: item.Id, title: item.Title, status: "Stale" };
-        \`,
-        postProcessingScript: \`
-            return { 
-                stalePages: context.successes.map(s => s.result).filter(r => r !== null),
-                skippedCount: context.warnings.length 
-            };
-        \`
-    });
-    \`\`\`
-
-    **Example 5: Import with Validation**
-    Imports data, creates items, and validates creation immediately.
-    \`\`\`javascript
-    const result = await tools.toolOrchestrator({
-        parameters: { 
-            "data": [{ "title": "Page 1", "file": "p1.html" }, { "title": "Page 2", "file": "p2.html" }] 
-        },
-        preProcessingScript: \`
-            return {
-                itemIds: context.parameters.data.map(d => d.title),
-                preProcessingResult: { sourceData: context.parameters.data }
-            };
-        \`,
-        mapScript: \`
-            // Create Page logic here...
-            // const newId = await context.tools.createPage(...);
-            
-            // Assert creation was successful (Fail Loudly)
-            const check = await context.tools.getItem({ itemId: "tcm:5-99-64" }); // use newId in reality
-            context.utils.assert(check, \`Item creation failed for \${context.currentItemId}\`);
-            
-            return { title: context.currentItemId, status: "Created", id: "tcm:5-99-64" };
-        \`
-    });
-    \`\`\`
-
-    **Example 6: Compliance Report**
-    Finds Pages published to Staging but not Live.
-    \`\`\`javascript
-    const result = await tools.toolOrchestrator({
-        parameters: { "stagingId": "tcm:0-1-65537", "liveId": "tcm:0-2-65537" },
-        preProcessingScript: \`
-            const pages = await context.tools.getItemsInContainer({
-               containerId: "tcm:0-5-1", itemTypes: ["Page"], recursive: true
-            });
-            return pages.map(p => p.Id);
-        \`,
-        mapScript: \`
-            const info = await context.tools.getPublishInfo({ itemId: context.currentItemId });
-            const onStaging = info.some(i => i.TargetType.IdRef === context.parameters.stagingId);
-            const onLive = info.some(i => i.TargetType.IdRef === context.parameters.liveId);
-
-            if (onStaging && !onLive) return { id: context.currentItemId, status: "Needs Live Publish" };
-            return null;
-        \`,
-        postProcessingScript: \`
-            // Reduce: Filter nulls and report
-            return { itemsToReview: context.successes.map(s => s.result).filter(r => r !== null) };
-        \`
-    });
-    \`\`\`
-
-    **Example 7: Advanced Cleanup - Large Unused Multimedia Report**
-    Finds large Multimedia Components (images/videos) that are not used by any published Pages.
-    \`\`\`javascript
-    const result = await tools.toolOrchestrator({
-        parameters: { "minFileSizeMB": 10 },
-        preProcessingScript: \`
-            // Setup: Find ALL components
-            context.log('Finding ALL components in Publication...');
-            const allItems = await context.tools.getItemsInContainer({
-                containerId: "tcm:0-5-1", itemTypes: ["Component"], recursive: true, details: "IdAndTitle"
-            });
-            return allItems.map(item => item.Id);
-        \`,
-        mapScript: \`
-            const minBytes = context.parameters.minFileSizeMB * 1024 * 1024;
-
-            // 1. Fetch properties to identify type and size
-            const item = await context.tools.getItem({ 
-                itemId: context.currentItemId,
-                includeProperties: ["Title", "ComponentType", "BinaryContent.Size"]
-            });
-
-            // 2. Filter: Must be Multimedia and Large
-            if (!item || item.ComponentType !== 'Multimedia' || !item.BinaryContent) return null;
-            if (item.BinaryContent.Size < minBytes) return null;
-
-            context.log(\`Found large file: \${item.Title} (\${item.BinaryContent.Size} bytes)\`);
-
-            // 3. Usage Check: Get dependency graph
-            const graph = await context.tools.getDependencyGraph({
-                itemId: context.currentItemId,
-                direction: "UsedBy",
-                rloItemTypes: ["Page"], // Only care about Page usages
-                details: "IdAndTitle"
-            });
-
-            // Helper to recursively flatten graph
-            function flattenPageIds(node) {
-                let ids = [];
-                if (!node) return ids;
-                // If this node is a Page, add it
-                if (node.Item && node.Item.ItemType === 'Page') ids.push(node.Item.Id);
-                
-                if (node.Dependencies) {
-                    for (const child of node.Dependencies) {
-                         ids = ids.concat(flattenPageIds(child));
-                    }
-                }
-                return [...new Set(ids)];
-            }
-            
-            const pageIds = flattenPageIds({ Dependencies: graph });
-            if (pageIds.length === 0) {
-                 return { id: item.Id, title: item.Title, size: item.BinaryContent.Size, reason: "Unused by any Page" };
-            }
-
-            // 4. Check if any using Pages are published
-            for (const pageId of pageIds) {
-                const publishInfo = await context.tools.getPublishInfo({ 
-                    itemId: pageId, includeProperties: ["PublishedAt"] 
-                });
-                if (publishInfo && publishInfo.length > 0) return null;
-            }
-            
-            return { id: item.Id, title: item.Title, size: item.BinaryContent.Size, reason: "Used only by unpublished Pages" };
-        \`,
-        postProcessingScript: \`
-            // Reduce: Collect list of candidates for deletion
-            const candidates = context.successes.map(s => s.result).filter(r => r !== null);
-            return { 
-                totalFilesToReview: candidates.length, 
-                filesToReview: candidates 
-            };
-        \`
-    });
-    \`\`\`
-
-    **Example 8: "Fail Loudly" Pattern (Handling Missing Dependencies)**
-    Ensures that if a dependency is missing, the script throws an Error instead of silently continuing.
-    \`\`\`javascript
-    const result = await tools.toolOrchestrator({
-        mapScript: \`
-            const mapping = context.preProcessingResult.mapping;
-            const targetId = mapping[context.currentItemId];
-            
-            // FAIL LOUDLY: Do not just return null or console.log.
-            // Throwing an error ensures this item is counted as "failed" in the summary.
-            if (!targetId) {
-                throw new Error(\`Critical: No mapping found for item \${context.currentItemId}\`);
-            }
-            
-            await context.tools.addLink({ parentId: context.currentItemId, childId: targetId });
-            return { status: "Linked" };
-        \`
-    });
-    \`\`\`
-
-    **Example 9: Discovery-Only (The "Turn 1" Pattern)**
-    Finds items and returns them immediately without mapping or validating. Perfect for generating lists for user confirmation before a destructive action.
-    \`\`\`javascript
-    const result = await tools.toolOrchestrator({
-        preProcessingScript: \`
-            context.log('Phase 1: Finding items to delete...');
-            const items = await context.tools.getItemsInContainer({
-                containerId: "tcm:5-1505-2", itemTypes: ["Folder"]
-            });
-            // Return the array of IDs for Turn 2.
-            // For 'preProcessingResult', map the items to return ONLY the Id and Title 
-            // to save tokens, as that is all you need for the user confirmation message.
-            return {
-                itemIds: items.map(i => i.Id),
-                preProcessingResult: items.map(i => ({ Id: i.Id, Title: i.Title }))
-            };
-        \`
-    });
-    \`\`\`
 `,
+    examples: [
+        {
+            description: "Batch Search & Update with Read-After-Write Validation: Finds Components and updates a field. Validates *inside* the map loop.",
+            payload: `const result = await tools.toolOrchestrator({
+    parameters: { "schemaId": "tcm:5-20-8", "newValue": "Updated Value" },
+    preProcessingScript: \`
+        context.log('Phase 1: Finding items...');
+        const items = await context.tools.search({
+            searchQuery: { 
+                ItemTypes: ["Component"], 
+                BasedOnSchemas: [{ schemaUri: context.parameters.schemaId }],
+                SearchIn: "tcm:0-5-1" 
+            }
+        });
+        return items.map(i => i.Id);
+    \`,
+    mapScript: \`
+        // Phase 2: Update the item
+        await context.tools.updateContent({
+            itemId: context.currentItemId,
+            content: { "TextField": context.parameters.newValue }
+        });
+        
+        // Read-After-Write Validation
+        const freshItem = await context.tools.getItem({ 
+            itemId: context.currentItemId,
+            includeProperties: ["Content"]
+        });
+        const actualValue = freshItem.Content.TextField;
+        context.utils.assert(
+            actualValue === context.parameters.newValue, 
+            \`Update Failed for \${context.currentItemId}. Expected '\${context.parameters.newValue}', got '\${actualValue}'\`
+        );
+        
+        context.log("Updated and validated.");
+        return { id: context.currentItemId };
+    \`
+});`
+        },
+        {
+            description: "Data Aggregation: Finds the Component with the most versions.",
+            payload: `const result = await tools.toolOrchestrator({
+    itemIds: ["tcm:5-100", "tcm:5-101", "tcm:5-102"],
+    mapScript: \`
+        const history = await context.tools.getItemHistory({ itemId: context.currentItemId });
+        return { id: context.currentItemId, count: history.length };
+    \`,
+    postProcessingScript: \`
+        // Find max in context.successes
+        if (context.successes.length === 0) throw new Error("No items processed.");
+        return context.successes.reduce((max, curr) => 
+            (curr.result.count > max.result.count) ? curr : max
+        ).result;
+    \`
+});`
+        },
+        {
+            description: "Handling Warnings (Silent Errors): Skips items that are checked out and marks them as warnings without failing the loop.",
+            payload: `const result = await tools.toolOrchestrator({
+    itemIds: ["tcm:5-100", "tcm:5-101"],
+    mapScript: \`
+        // Check lock status first
+        const item = await context.tools.getItem({ itemId: context.currentItemId });
+        if (item.LockInfo.LockType !== 'None') {
+            // Use warning to flag this without failing the script
+            console.warn(\`Skipping \${context.currentItemId} because it is locked by \${item.LockInfo.LockUser.Title}\`);
+            return null;
+        }
+        
+        // Perform update...
+        return { id: context.currentItemId, status: "Updated" };
+    \`
+});`
+        },
+        {
+            description: "Complex Analysis / Stale Content Report: Finds Pages, checks Publish status, and aggregates a report.",
+            payload: `const result = await tools.toolOrchestrator({
+    preProcessingScript: \`
+        const items = await context.tools.getItemsInContainer({ 
+            containerId: "tcm:0-5-1", itemTypes: ["Page"], recursive: true 
+        });
+        return items.map(i => i.Id);
+    \`,
+    mapScript: \`
+        const item = await context.tools.getItem({ 
+            itemId: context.currentItemId, 
+            includeProperties: ["VersionInfo.RevisionDate", "Title"] 
+        });
+
+        const pubInfo = await context.tools.getPublishInfo({ itemId: context.currentItemId });
+        
+        if (!pubInfo || pubInfo.length === 0) {
+            console.warn(\`Skipped \${context.currentItemId}: Not published\`);
+            return null;
+        }
+        
+        // Check if stale...
+        return { id: item.Id, title: item.Title, status: "Stale" };
+    \`,
+    postProcessingScript: \`
+        return { 
+            stalePages: context.successes.map(s => s.result).filter(r => r !== null),
+            skippedCount: context.warnings.length 
+        };
+    \`
+});`
+        },
+        {
+            description: "Import with Validation: Imports data, creates items, and validates creation immediately.",
+            payload: `const result = await tools.toolOrchestrator({
+    parameters: { 
+        "data": [{ "title": "Page 1", "file": "p1.html" }, { "title": "Page 2", "file": "p2.html" }] 
+    },
+    preProcessingScript: \`
+        return {
+            itemIds: context.parameters.data.map(d => d.title),
+            preProcessingResult: { sourceData: context.parameters.data }
+        };
+    \`,
+    mapScript: \`
+        // Create Page logic here...
+        // const newId = await context.tools.createPage(...);
+        
+        // Assert creation was successful (Fail Loudly)
+        const check = await context.tools.getItem({ itemId: "tcm:5-99-64" }); // use newId in reality
+        context.utils.assert(check, \`Item creation failed for \${context.currentItemId}\`);
+        
+        return { title: context.currentItemId, status: "Created", id: "tcm:5-99-64" };
+    \`
+});`
+        },
+        {
+            description: "Compliance Report: Finds Pages published to Staging but not Live.",
+            payload: `const result = await tools.toolOrchestrator({
+    parameters: { "stagingId": "tcm:0-1-65537", "liveId": "tcm:0-2-65537" },
+    preProcessingScript: \`
+        const pages = await context.tools.getItemsInContainer({
+           containerId: "tcm:0-5-1", itemTypes: ["Page"], recursive: true
+        });
+        return pages.map(p => p.Id);
+    \`,
+    mapScript: \`
+        const info = await context.tools.getPublishInfo({ itemId: context.currentItemId });
+        const onStaging = info.some(i => i.TargetType.IdRef === context.parameters.stagingId);
+        const onLive = info.some(i => i.TargetType.IdRef === context.parameters.liveId);
+
+        if (onStaging && !onLive) return { id: context.currentItemId, status: "Needs Live Publish" };
+        return null;
+    \`,
+    postProcessingScript: \`
+        // Reduce: Filter nulls and report
+        return { itemsToReview: context.successes.map(s => s.result).filter(r => r !== null) };
+    \`
+});`
+        },
+        {
+            description: "Advanced Cleanup - Large Unused Multimedia Report: Finds large Multimedia Components (images/videos) that are not used by any published Pages.",
+            payload: `const result = await tools.toolOrchestrator({
+    parameters: { "minFileSizeMB": 10 },
+    preProcessingScript: \`
+        // Setup: Find ALL components
+        context.log('Finding ALL components in Publication...');
+        const allItems = await context.tools.getItemsInContainer({
+            containerId: "tcm:0-5-1", itemTypes: ["Component"], recursive: true, details: "IdAndTitle"
+        });
+        return allItems.map(item => item.Id);
+    \`,
+    mapScript: \`
+        const minBytes = context.parameters.minFileSizeMB * 1024 * 1024;
+
+        // 1. Fetch properties to identify type and size
+        const item = await context.tools.getItem({ 
+            itemId: context.currentItemId,
+            includeProperties: ["Title", "ComponentType", "BinaryContent.Size"]
+        });
+
+        // 2. Filter: Must be Multimedia and Large
+        if (!item || item.ComponentType !== 'Multimedia' || !item.BinaryContent) return null;
+        if (item.BinaryContent.Size < minBytes) return null;
+
+        context.log(\`Found large file: \${item.Title} (\${item.BinaryContent.Size} bytes)\`);
+
+        // 3. Usage Check: Get dependency graph
+        const graph = await context.tools.getDependencyGraph({
+            itemId: context.currentItemId,
+            direction: "UsedBy",
+            rloItemTypes: ["Page"], // Only care about Page usages
+            details: "IdAndTitle"
+        });
+
+        // Helper to recursively flatten graph
+        function flattenPageIds(node) {
+            let ids = [];
+            if (!node) return ids;
+            // If this node is a Page, add it
+            if (node.Item && node.Item.ItemType === 'Page') ids.push(node.Item.Id);
+            
+            if (node.Dependencies) {
+                for (const child of node.Dependencies) {
+                     ids = ids.concat(flattenPageIds(child));
+                }
+            }
+            return [...new Set(ids)];
+        }
+        
+        const pageIds = flattenPageIds({ Dependencies: graph });
+        if (pageIds.length === 0) {
+             return { id: item.Id, title: item.Title, size: item.BinaryContent.Size, reason: "Unused by any Page" };
+        }
+
+        // 4. Check if any using Pages are published
+        for (const pageId of pageIds) {
+            const publishInfo = await context.tools.getPublishInfo({ 
+                itemId: pageId, includeProperties: ["PublishedAt"] 
+            });
+            if (publishInfo && publishInfo.length > 0) return null;
+        }
+        
+        return { id: item.Id, title: item.Title, size: item.BinaryContent.Size, reason: "Used only by unpublished Pages" };
+    \`,
+    postProcessingScript: \`
+        // Reduce: Collect list of candidates for deletion
+        const candidates = context.successes.map(s => s.result).filter(r => r !== null);
+        return { 
+            totalFilesToReview: candidates.length, 
+            filesToReview: candidates 
+        };
+    \`
+});`
+        },
+        {
+            description: "\"Fail Loudly\" Pattern (Handling Missing Dependencies): Ensures that if a dependency is missing, the script throws an Error instead of silently continuing.",
+            payload: `const result = await tools.toolOrchestrator({
+    mapScript: \`
+        const mapping = context.preProcessingResult.mapping;
+        const targetId = mapping[context.currentItemId];
+        
+        // FAIL LOUDLY: Do not just return null or console.log.
+        // Throwing an error ensures this item is counted as "failed" in the summary.
+        if (!targetId) {
+            throw new Error(\`Critical: No mapping found for item \${context.currentItemId}\`);
+        }
+        
+        await context.tools.addLink({ parentId: context.currentItemId, childId: targetId });
+        return { status: "Linked" };
+    \`
+});`
+        },
+        {
+            description: "Discovery-Only (The \"Turn 1\" Pattern): Finds items and returns them immediately without mapping or validating. Perfect for generating lists for user confirmation before a destructive action.",
+            payload: `const result = await tools.toolOrchestrator({
+    preProcessingScript: \`
+        context.log('Phase 1: Finding items to delete...');
+        const items = await context.tools.getItemsInContainer({
+            containerId: "tcm:5-1505-2", itemTypes: ["Folder"]
+        });
+        // Return the array of IDs for Turn 2.
+        // For 'preProcessingResult', map the items to return ONLY the Id and Title 
+        // to save tokens, as that is all you need for the user confirmation message.
+        return {
+            itemIds: items.map(i => i.Id),
+            preProcessingResult: items.map(i => ({ Id: i.Id, Title: i.Title }))
+        };
+    \`
+});`
+        }
+    ],
 
     input: toolOrchestratorInputProperties,
 

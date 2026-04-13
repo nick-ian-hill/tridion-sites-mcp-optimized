@@ -35,11 +35,11 @@ export const getClassificationKeywordsForCategory = {
             const response = await authenticatedAxios.get(endpoint);
 
             if (response.status === 200) {
-                const finalData = filterResponseData({ 
-                    responseData: response.data, 
-                    details: "IdAndTitle" 
+                const finalData = filterResponseData({
+                    responseData: response.data,
+                    details: "IdAndTitle"
                 });
-                
+
                 const formattedResponseData = formatForAgent(finalData);
                 return {
                     content: [{
@@ -53,5 +53,7 @@ export const getClassificationKeywordsForCategory = {
         } catch (error) {
             return handleAxiosError(error, `Failed to retrieve keywords for item '${itemId}'`);
         }
-    }
+    },
+    examples: [
+    ]
 };

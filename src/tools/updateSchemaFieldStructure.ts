@@ -50,53 +50,7 @@ Operations:
 - 'add': Inserts a new field. Requires 'fieldDefinition'.
 - 'remove': Deletes a field. Requires 'fieldName'.
 - 'move': Repositions an existing field. Requires 'fieldName'.
-- 'insertAfter': Optional for 'add' and 'move'. Specifies the machine name of the field to place the targeted field after. Use '[TOP]' to place it at the beginning. If omitted, the field is placed at the very end.
-
-Example 1: Add a new 'subtitle' field after the 'title' field.
-    const result = await tools.updateSchemaFieldStructure({
-        schemaId: "tcm:2-104-8",
-        operations: [
-            {
-                action: "add",
-                fieldLocation: "Content",
-                insertAfter: "title",
-                fieldDefinition: {
-                    type: "SingleLineTextFieldDefinition",
-                    Name: "subtitle",
-                    Description: "A brief subtitle",
-                    MinOccurs: 0,
-                    MaxOccurs: 1
-                }
-            }
-        ]
-    });
-
-Example 2: Move the 'author' metadata field to the very top of the metadata section.
-    const result = await tools.updateSchemaFieldStructure({
-        schemaId: "tcm:2-104-8",
-        operations: [
-            {
-                action: "move",
-                fieldLocation: "Metadata",
-                fieldName: "author",
-                insertAfter: "[TOP]"
-            }
-        ]
-    });
-    
-Example 3: Remove an obsolete field and apply to primary if inherited.
-    const result = await tools.updateSchemaFieldStructure({
-        schemaId: "tcm:5-213-8",
-        applyToPrimary: true,
-        operations: [
-            {
-                action: "remove",
-                fieldLocation: "Content",
-                fieldName: "legacyCode"
-            }
-        ]
-    });
-    `,
+- 'insertAfter': Optional for 'add' and 'move'. Specifies the machine name of the field to place the targeted field after. Use '[TOP]' to place it at the beginning. If omitted, the field is placed at the very end.`,
 
     input: updateSchemaFieldStructureInputProperties,
 
@@ -116,7 +70,7 @@ Example 3: Remove an obsolete field and apply to primary if inherited.
         try {
             let currentSchemaId = schemaId;
             let restItemId = currentSchemaId.replace(':', '_');
-            
+
             // 1. Fetch the Schema from the API
             let getItemResponse = await authenticatedAxios.get(`/items/${restItemId}`, { params: { useDynamicVersion: true } });
             if (getItemResponse.status !== 200) return handleUnexpectedResponse(getItemResponse);
@@ -169,11 +123,11 @@ Example 3: Remove an obsolete field and apply to primary if inherited.
                         return createJsonError(`Operation ${i + 1} failed: Cannot remove field '${op.fieldName}'. It does not exist in the ${op.fieldLocation} definition.`);
                     }
                     targetArray.splice(idx, 1);
-                } 
+                }
                 else if (op.action === 'add') {
                     formatForApi(op.fieldDefinition); // Make sure $type is properly formatted
                     const newFieldName = op.fieldDefinition?.Name;
-                    
+
                     if (targetArray.some(f => f.Name === newFieldName)) {
                         return createJsonError(`Operation ${i + 1} failed: A field named '${newFieldName}' already exists in the ${op.fieldLocation} definition.`);
                     }
@@ -189,16 +143,16 @@ Example 3: Remove an obsolete field and apply to primary if inherited.
                         insertIdx = afterIdx + 1;
                     }
                     targetArray.splice(insertIdx, 0, op.fieldDefinition);
-                } 
+                }
                 else if (op.action === 'move') {
                     const idx = targetArray.findIndex(f => f.Name === op.fieldName);
                     if (idx === -1) {
                         return createJsonError(`Operation ${i + 1} failed: Cannot move field '${op.fieldName}'. It does not exist in the ${op.fieldLocation} definition.`);
                     }
-                    
+
                     // Remove from current position
                     const [movedField] = targetArray.splice(idx, 1);
-                    
+
                     let insertIdx = targetArray.length; // Default to end
                     if (op.insertAfter === '[TOP]') {
                         insertIdx = 0;
@@ -209,7 +163,7 @@ Example 3: Remove an obsolete field and apply to primary if inherited.
                         }
                         insertIdx = afterIdx + 1;
                     }
-                    
+
                     // Insert at new position
                     targetArray.splice(insertIdx, 0, movedField);
                 }
@@ -265,11 +219,61 @@ Example 3: Remove an obsolete field and apply to primary if inherited.
 
         } catch (error) {
             await diagnoseBluePrintError(error, params, schemaId, authenticatedAxios);
-            
+
             if (error instanceof Error) {
                 return createJsonError(error.message);
             }
             return handleAxiosError(error, `Failed to update field structure for Schema ${schemaId}`);
         }
-    }
+    },
+    examples: [
+        {
+            description: "Add a new 'subtitle' field after the 'title' field",
+            payload: `const result = await tools.updateSchemaFieldStructure({
+        schemaId: "tcm:2-104-8",
+        operations: [
+            {
+                action: "add",
+                fieldLocation: "Content",
+                insertAfter: "title",
+                fieldDefinition: {
+                    type: "SingleLineTextFieldDefinition",
+                    Name: "subtitle",
+                    Description: "A brief subtitle",
+                    MinOccurs: 0,
+                    MaxOccurs: 1
+                }
+            }
+        ]
+    });`
+        },
+        {
+            description: "Move the 'author' metadata field to the very top of the metadata section",
+            payload: `const result = await tools.updateSchemaFieldStructure({
+        schemaId: "tcm:2-104-8",
+        operations: [
+            {
+                action: "move",
+                fieldLocation: "Metadata",
+                fieldName: "author",
+                insertAfter: "[TOP]"
+            }
+        ]
+    });`
+        },
+        {
+            description: "Remove an obsolete field and apply to primary if inherited",
+            payload: `const result = await tools.updateSchemaFieldStructure({
+        schemaId: "tcm:5-213-8",
+        applyToPrimary: true,
+        operations: [
+            {
+                action: "remove",
+                fieldLocation: "Content",
+                fieldName: "legacyCode"
+            }
+        ]
+    });`
+        }
+    ]
 };

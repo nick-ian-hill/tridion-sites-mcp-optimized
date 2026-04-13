@@ -42,7 +42,7 @@ const unpublishSchema = z.object(unpublishInputProperties);
 export const unpublish = {
     name: "unpublish",
     summary: "Removes published content from specified targets (e.g., 'Staging'). Supports scheduling.",
-    description: "Unpublishes one or more items from the specified targets. Can be used as a 'dryRun' to see what would be unpublished.",
+    description: `Unpublishes one or more items from the specified targets. Can be used as a 'dryRun' to see what would be unpublished.`,
     input: unpublishInputProperties,
 
     execute: async (input: z.infer<typeof unpublishSchema>, context: any) => {
@@ -101,7 +101,7 @@ export const unpublish = {
             const response = await authenticatedAxios.post(endpoint, requestBody);
 
             if (response.status === successStatus) {
-                
+
                 // 1. Handle Dry Run (Array of Items)
                 if (dryRun && Array.isArray(response.data)) {
                     const resolvedItems = response.data.map((item: any) => ({
@@ -139,9 +139,9 @@ export const unpublish = {
 
                 // 2. Handle Actual Unpublish (Object with Transaction IDs)
                 const transactionIds = response.data?.PublishTransactionIds || [];
-                
+
                 if (transactionIds.length === 0) {
-                     return {
+                    return {
                         content: [{
                             type: "text",
                             text: JSON.stringify({
@@ -172,5 +172,7 @@ export const unpublish = {
         } catch (error) {
             return handleAxiosError(error, `Failed to ${action} items`);
         }
-    }
+    },
+    examples: [
+    ]
 };

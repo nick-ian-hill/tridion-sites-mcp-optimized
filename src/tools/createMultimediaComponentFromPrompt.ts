@@ -29,36 +29,7 @@ const createMultimediaComponentFromPromptSchema = z.object(createMultimediaCompo
 export const createMultimediaComponentFromPrompt = {
     name: "createMultimediaComponentFromPrompt",
     summary: "Generates a new image using AI (Gemini) based on a text prompt and creates a Multimedia Component.",
-    description: `Generates an image from a text prompt using the Gemini API and creates a new multimedia component from it. Can optionally use existing CMS multimedia components ('contextItemIds') or user-attached images ('contextAttachments') as context for style references, composition, or combining elements. Be sure to explain in the prompt how any reference images should be used. This is one of four ways to create a multimedia component, with the others being 'createMultimediaComponentFromBase64', 'createMultimediaComponentFromUrl', and 'createMultimediaComponentFromAttachment' (for user-attached files).
-
-Example: Style Transfer using a CMS image
-// Use an existing "Brand Style" image (tcm:5-88) as a reference to generate a new banner image.
-const result = await tools.createMultimediaComponentFromPrompt({
-    prompt: "A modern, collaborative workspace with a diverse team brainstorming around a whiteboard. High energy, professional atmosphere. Use the provided image as a reference.",
-    title: "Team Collaboration Banner",
-    fileName: "team-collab-banner.jpg",
-    locationId: "tcm:5-10-2",
-    aspectRatio: "16:9",
-    contextItemIds: ["tcm:5-88"]
-});
-
-Example: Style Transfer using a user-attached image
-// Use a sketch the user has attached as a style reference.
-const result = await tools.createMultimediaComponentFromPrompt({
-    prompt: "Generate a polished product banner in the same style and colour palette as the attached sketch.",
-    title: "Product Banner",
-    fileName: "product-banner.jpg",
-    locationId: "tcm:5-10-2",
-    aspectRatio: "16:9",
-    contextAttachments: [{ attachmentId: "abc-123", fileName: "sketch.png" }]
-});
-
-Expected JSON Output:
-{
-  "type": "MultimediaComponent",
-  "Id": "tcm:5-2024",
-  "Message": "Successfully created tcm:5-2024"
-}`,
+    description: `Generates an image from a text prompt using the Gemini API and creates a new multimedia component from it. Can optionally use existing CMS multimedia components ('contextItemIds') or user-attached images ('contextAttachments') as context for style references, composition, or combining elements. Be sure to explain in the prompt how any reference images should be used. This is one of four ways to create a multimedia component, with the others being 'createMultimediaComponentFromBase64', 'createMultimediaComponentFromUrl', and 'createMultimediaComponentFromAttachment' (for user-attached files).`,
     input: createMultimediaComponentFromPromptInputProperties,
     async execute(input: z.infer<typeof createMultimediaComponentFromPromptSchema>,
         context: any
@@ -73,17 +44,17 @@ Expected JSON Output:
 
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
-            
+
             // Build the contents array
             const contents: any[] = [{ text: prompt }];
 
             // If context items are provided, fetch their binaries and add them to the payload
             if (contextItemIds && contextItemIds.length > 0) {
                 console.log(`Fetching ${contextItemIds.length} context items...`);
-                
+
                 for (const contextId of contextItemIds) {
                     const restContextId = contextId.replace(':', '_');
-                    
+
                     // 1. Verify item type
                     const itemResponse = await authenticatedAxios.get(`/items/${restContextId}`);
                     if (itemResponse.status !== 200) {
@@ -104,7 +75,7 @@ Expected JSON Output:
                     if (downloadResponse.status === 200) {
                         const buffer = Buffer.from(downloadResponse.data);
                         const mimeType = downloadResponse.headers['content-type'] || 'image/jpeg';
-                        
+
                         contents.push({
                             inlineData: {
                                 mimeType: mimeType,
@@ -149,9 +120,9 @@ Expected JSON Output:
 
             console.log(`Generating image for prompt: "${prompt}" with ${contents.length - 1} context images.`);
             let base64Content: string | undefined;
-            
+
             const ai = new GoogleGenAI({ vertexai: false, apiKey: GEMINI_API_KEY });
-            
+
             const generationConfig: any = {
                 responseModalities: ['IMAGE']
             };
@@ -210,7 +181,7 @@ Expected JSON Output:
             } catch (error) {
                 console.warn(`An error occurred while fetching items for uniqueness check. Proceeding with original title.`, error);
             }
-            
+
             let uniqueTitle = title;
             let counter = 1;
             while (existingTitles.has(uniqueTitle.toLowerCase())) {
@@ -236,5 +207,36 @@ Expected JSON Output:
             console.log(contextMessage);
             return handleAxiosError(error, contextMessage);
         }
-    }
+    },
+    examples: [
+        {
+            description: "Style Transfer using a CMS image (tcm:5-88) as a reference to generate a new banner image.",
+            payload: `const result = await tools.createMultimediaComponentFromPrompt({
+    prompt: "A modern, collaborative workspace with a diverse team brainstorming around a whiteboard. High energy, professional atmosphere. Use the provided image as a reference.",
+    title: "Team Collaboration Banner",
+    fileName: "team-collab-banner.jpg",
+    locationId: "tcm:5-10-2",
+    aspectRatio: "16:9",
+    contextItemIds: ["tcm:5-88"]
+});`
+        },
+        {
+            description: "Style Transfer using a user-attached image",
+            payload: `const result = await tools.createMultimediaComponentFromPrompt({
+    prompt: "Generate a polished product banner in the same style and colour palette as the attached sketch.",
+    title: "Product Banner",
+    fileName: "product-banner.jpg",
+    locationId: "tcm:5-10-2",
+    aspectRatio: "16:9",
+    contextAttachments: [{ attachmentId: "abc-123", fileName: "sketch.png" }]
+});
+
+Expected JSON Output:
+{
+  "type": "MultimediaComponent",
+  "Id": "tcm:5-2024",
+  "Message": "Successfully created tcm:5-2024"
+}`
+        }
+    ]
 };

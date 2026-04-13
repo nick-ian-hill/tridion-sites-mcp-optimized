@@ -158,45 +158,7 @@ If creation fails due to a schema validation error on a Component Link field ('C
 
 ## 6. Validation Rules
 
-- Creation will fail if an item of the **same type and title** already exists in the target Folder or Structure Group.
-
-Examples:
-
-Example 1: Create a Folder for a campaign.
-    const result = await tools.createItem({
-        itemType: "Folder",
-        locationId: "tcm:5-53-2",
-        title: "Campaigns",
-        metadataSchemaId: "tcm:5-984-8",
-        metadata: {
-            "Regions": [
-                {
-                    "type": "Link",
-                    "IdRef": "tcm:5-1200-1024",
-                },
-                {
-                    "type": "Link",
-                    "IdRef": "tcm:5-1201-1024",
-                }
-            ]
-        }
-    });
-Example 2: Create a new Category in a Publication. If used for classifying content, the selected publication should be the "master" content publication or one of its parents/ancestors.
-const result = await tools.createItem({
-        itemType: "Category",
-        locationId: "tcm:0-5-1", // ID of the Publication
-        title: "News Categories",
-        description: "A category for classifying news articles."
-    });
-Example 3: Create a new Keyword.
-    const result = await tools.createItem({
-        itemType: "Keyword",
-        locationId: "tcm:5-123-512",
-        title: "New Product",
-        description: "Keyword for new products.",
-        key: "NEW_PRODUCT"
-    });
-`,
+- Creation will fail if an item of the **same type and title** already exists in the target Folder or Structure Group.`,
     input: createItemInputProperties,
 
     execute: async (args: CreateItemInput,
@@ -288,7 +250,7 @@ The provided 'locationId' (${locationId}) is a '${locationType}'.`;
         }
 
         let { title, metadataSchemaId, metadata, isAbstract, description, key, parentKeywords, relatedKeywords, itemsInBundle, searchQuery, resultLimit = 100, fileExtension, pageSchemaId, templateBuildingBlocks, allowOnPage, isRepositoryPublishable, outputFormat, priority, relatedSchemaIds, directory, position } = args;
-        
+
         const authenticatedAxios = createAuthenticatedAxios(userSessionId);
 
         try {
@@ -304,7 +266,7 @@ The provided 'locationId' (${locationId}) is a '${locationType}'.`;
             try {
                 payload = await getCachedDefaultModel(itemType, locationId, authenticatedAxios);
             } catch (error: any) {
-                 return handleAxiosError(error, `Failed to load default model for ${itemType}`);
+                return handleAxiosError(error, `Failed to load default model for ${itemType}`);
             }
             // 2. Customize the payload
             payload.Title = title;
@@ -414,5 +376,47 @@ The provided 'locationId' (${locationId}) is a '${locationType}'.`;
             await diagnoseBluePrintError(error, diagnosticsArgs, locationId, authenticatedAxios);
             return handleAxiosError(error, "Failed to create CMS item");
         }
-    }
+    },
+    examples: [
+        {
+            description: "Create a Folder for a campaign",
+            payload: `const result = await tools.createItem({
+        itemType: "Folder",
+        locationId: "tcm:5-53-2",
+        title: "Campaigns",
+        metadataSchemaId: "tcm:5-984-8",
+        metadata: {
+            "Regions": [
+                {
+                    "type": "Link",
+                    "IdRef": "tcm:5-1200-1024",
+                },
+                {
+                    "type": "Link",
+                    "IdRef": "tcm:5-1201-1024",
+                }
+            ]
+        }
+    });`
+        },
+        {
+            description: "Create a new Category in a Publication. If used for classifying content, the selected publication should be the \"master\" content publication or one of its parents/ancestors",
+            payload: `const result = await tools.createItem({
+        itemType: "Category",
+        locationId: "tcm:0-5-1", // ID of the Publication
+        title: "News Categories",
+        description: "A category for classifying news articles."
+    });`
+        },
+        {
+            description: "Create a new Keyword",
+            payload: `const result = await tools.createItem({
+        itemType: "Keyword",
+        locationId: "tcm:5-123-512",
+        title: "New Product",
+        description: "Keyword for new products.",
+        key: "NEW_PRODUCT"
+    });`
+        }
+    ]
 };

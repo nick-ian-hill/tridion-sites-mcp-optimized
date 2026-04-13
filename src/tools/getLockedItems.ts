@@ -40,33 +40,7 @@ export const getLockedItems = {
     
     For example, to find all items checked out by a user and check their file size:
     1. Call 'getLockedItems' with 'allOfLockStates: ["CheckedOut"]' and the appropriate 'lockUserId'.
-    2. Pass the resulting IDs to 'toolOrchestrator' to call 'getItem' for 'BinaryContent.Size'.
- 
-    Example 1: Find all items that HAVE the 'CheckedOut' state.
-    const result = await tools.getLockedItems({
-        allOfLockStates: ["CheckedOut"],
-        forAllUsers: true
-    });
-
-    Example 2: Find all items that have BOTH 'InWorkflow' AND 'CheckedOut' states.
-    const result = await tools.getLockedItems({
-        allOfLockStates: ["InWorkflow", "CheckedOut"],
-        forAllUsers: true
-    });
-
-    Example 3: Find all items that HAVE 'InWorkflow' but do NOT have 'CheckedOut' or 'Permanent'.
-    const result = await tools.getLockedItems({
-        allOfLockStates: ["InWorkflow"],
-        noneOfLockStates: ["CheckedOut", "Permanent"],
-        forAllUsers: true
-    });
-
-    Example 4: Find all items that do NOT have the 'CheckedOut' state.
-    const result = await tools.getLockedItems({
-        noneOfLockStates: ["CheckedOut"],
-        forAllUsers: true
-    });
-    `,
+    2. Pass the resulting IDs to 'toolOrchestrator' to call 'getItem' for 'BinaryContent.Size'.`,
     input: getLockedItemsInput,
     
     execute: async (
@@ -147,5 +121,36 @@ export const getLockedItems = {
         } catch (error) {
             return handleAxiosError(error, "Failed to retrieve locked items");
         }
-    }
+    },
+    examples: [
+                        {
+                            description: "Find all items that HAVE the 'CheckedOut' state",
+                            payload: `const result = await tools.getLockedItems({
+        allOfLockStates: ["CheckedOut"],
+        forAllUsers: true
+    });`
+                        },
+                        {
+                            description: "Find all items that have BOTH 'InWorkflow' AND 'CheckedOut' states",
+                            payload: `const result = await tools.getLockedItems({
+        allOfLockStates: ["InWorkflow", "CheckedOut"],
+        forAllUsers: true
+    });`
+                        },
+                        {
+                            description: "Find all items that HAVE 'InWorkflow' but do NOT have 'CheckedOut' or 'Permanent'",
+                            payload: `const result = await tools.getLockedItems({
+        allOfLockStates: ["InWorkflow"],
+        noneOfLockStates: ["CheckedOut", "Permanent"],
+        forAllUsers: true
+    });`
+                        },
+                        {
+                            description: "Find all items that do NOT have the 'CheckedOut' state",
+                            payload: `const result = await tools.getLockedItems({
+        noneOfLockStates: ["CheckedOut"],
+        forAllUsers: true
+    });`
+                        }
+                    ]
 };

@@ -39,9 +39,9 @@ export const getCategories = {
             const response = await authenticatedAxios.get(endpoint);
 
             if (response.status === 200) {
-                const finalData = filterResponseData({ 
-                    responseData: response.data, 
-                    details: "IdAndTitle" 
+                const finalData = filterResponseData({
+                    responseData: response.data,
+                    details: "IdAndTitle"
                 });
 
                 const formattedFinalData = formatForAgent(finalData);
@@ -58,5 +58,7 @@ export const getCategories = {
         } catch (error) {
             return handleAxiosError(error, `Failed to retrieve categories for publication '${itemId}'`);
         }
-    }
+    },
+    examples: [
+    ]
 };

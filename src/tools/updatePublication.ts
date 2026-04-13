@@ -16,47 +16,7 @@ export const updatePublication = {
     Updating a Publication might be necessary to change its URL settings, adjust paths for multimedia, set a different locale, or reconfigure default templates and workflow processes.
     Publications are central to BluePrinting, where they can be parents (sharing content) or children (inheriting content).
     
-    This tool modifies the properties of a single, existing Publication.
-
-    Examples:
-
-    Example 1: Updates the title and publication URL for the Publication with ID tcm:0-1-1.
-        const result = await tools.updatePublication({
-            itemId: "tcm:0-1-1",
-            title: "Global Website - Updated",
-            publicationUrl: "/global-site"
-        });
-
-    Example 2: Changes the locale to French (France) and sets a new default Page Template for the Publication with ID tcm:0-5-1.
-        const result = await tools.updatePublication({
-            itemId: "tcm:0-5-1",
-            locale: "fr-FR",
-            defaultPageTemplate: "tcm:5-123-128"
-        });
-
-    Example 3: Update the default task process and enable workflow process associations for a Publication.
-        const result = await tools.updatePublication({
-            itemId: "tcm:0-5-1",
-            defaultTaskProcessId: "tcm:5-1-131074",
-            enableWorkflowProcessAssociations: true
-        });
-
-    Example 4: Update the metadata of a Publication.
-        const result = await tools.updatePublication({
-            itemId: "tcm:0-5-1",
-            metadataSchemaId: "tcm:5-200-8", 
-            metadata: {
-                "configurationKey": "value",
-                "apiEndpoint": "https://api.example.com"
-            }
-        });
-
-    Example 5: Remove the metadata schema from a Publication.
-        const result = await tools.updatePublication({
-            itemId: "tcm:0-5-1",
-            metadataSchemaId: "tcm:0-0-0"
-        });
-    `,
+    This tool modifies the properties of a single, existing Publication.`,
     input: {
         itemId: z.string().regex(/^tcm:\d+-\d+-1$/).describe("The unique ID of the Publication to update."),
         title: z.string().optional().describe("The new title for the Publication."),
@@ -122,8 +82,8 @@ export const updatePublication = {
             }
 
             if (updates.metadata && updates.metadataSchemaId !== 'tcm:0-0-0') {
-                let schemaIdForMetadata = updates.metadataSchemaId 
-                    ? convertItemIdToContextPublication(updates.metadataSchemaId, itemId) 
+                let schemaIdForMetadata = updates.metadataSchemaId
+                    ? convertItemIdToContextPublication(updates.metadataSchemaId, itemId)
                     : itemToUpdate.MetadataSchema?.IdRef;
 
                 if (!schemaIdForMetadata || schemaIdForMetadata === 'tcm:0-0-0') {
@@ -133,7 +93,7 @@ export const updatePublication = {
                 convertLinksRecursively(updates.metadata, itemId);
 
                 const orderedMetadata = await reorderFieldsBySchema(updates.metadata, schemaIdForMetadata, 'metadata', authenticatedAxios);
-                
+
                 itemToUpdate.Metadata = orderedMetadata;
             }
 
@@ -143,18 +103,18 @@ export const updatePublication = {
             if (updates.defaultMultimediaSchema) itemToUpdate.DefaultMultimediaSchema = toLink(convertItemIdToContextPublication(updates.defaultMultimediaSchema, itemId));
             if (updates.pageSnapshotTemplate) itemToUpdate.PageSnapshotTemplate = toLink(convertItemIdToContextPublication(updates.pageSnapshotTemplate, itemId));
             if (updates.componentSnapshotTemplate) itemToUpdate.ComponentSnapshotTemplate = toLink(convertItemIdToContextPublication(updates.componentSnapshotTemplate, itemId));
-            
+
             if (updates.pageTemplateProcessId) itemToUpdate.PageTemplateProcess = toLink(convertItemIdToContextPublication(updates.pageTemplateProcessId, itemId));
             if (updates.componentTemplateProcessId) itemToUpdate.ComponentTemplateProcess = toLink(convertItemIdToContextPublication(updates.componentTemplateProcessId, itemId));
             if (updates.defaultTaskProcessId) itemToUpdate.DefaultProcessDefinitions = toLinkArray([convertItemIdToContextPublication(updates.defaultTaskProcessId, itemId)]);
             if (updates.templateBundleProcess) itemToUpdate.TemplateBundleProcess = toLink(convertItemIdToContextPublication(updates.templateBundleProcess, itemId));
-            
+
             if (updates.parentPublications) itemToUpdate.Parents = toLinkArray(updates.parentPublications);
 
             const updateResponse = await authenticatedAxios.put(`/items/${restItemId}`, itemToUpdate);
             if (updateResponse.status === 200) {
-                 const updatedItem = updateResponse.data;
-                 const responseData = {
+                const updatedItem = updateResponse.data;
+                const responseData = {
                     type: updatedItem['$type'],
                     Id: updatedItem.Id,
                     Message: `Successfully updated ${updatedItem.Id}`
@@ -174,5 +134,49 @@ export const updatePublication = {
             await diagnoseBluePrintError(error, diagnosticsArgs, itemId, authenticatedAxios);
             return handleAxiosError(error, `Failed to update Publication ${itemId}`);
         }
-    }
+    },
+    examples: [
+        {
+            description: "Updates the title and publication URL for the Publication with ID tcm:0-1-1",
+            payload: `const result = await tools.updatePublication({
+            itemId: "tcm:0-1-1",
+            title: "Global Website - Updated",
+            publicationUrl: "/global-site"
+        });`
+        },
+        {
+            description: "Changes the locale to French (France) and sets a new default Page Template for the Publication with ID tcm:0-5-1",
+            payload: `const result = await tools.updatePublication({
+            itemId: "tcm:0-5-1",
+            locale: "fr-FR",
+            defaultPageTemplate: "tcm:5-123-128"
+        });`
+        },
+        {
+            description: "Update the default task process and enable workflow process associations for a Publication",
+            payload: `const result = await tools.updatePublication({
+            itemId: "tcm:0-5-1",
+            defaultTaskProcessId: "tcm:5-1-131074",
+            enableWorkflowProcessAssociations: true
+        });`
+        },
+        {
+            description: "Update the metadata of a Publication",
+            payload: `const result = await tools.updatePublication({
+            itemId: "tcm:0-5-1",
+            metadataSchemaId: "tcm:5-200-8", 
+            metadata: {
+                "configurationKey": "value",
+                "apiEndpoint": "https://api.example.com"
+            }
+        });`
+        },
+        {
+            description: "Remove the metadata schema from a Publication",
+            payload: `const result = await tools.updatePublication({
+            itemId: "tcm:0-5-1",
+            metadataSchemaId: "tcm:0-0-0"
+        });`
+        }
+    ]
 };

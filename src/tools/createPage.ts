@@ -56,126 +56,7 @@ In this scenario, you will either need to
 - create a new item in the context Publication or a parent/ancestor, or
 - promote the item(s) you are trying to reference to a parent or ancestor Publication using the 'promoteItem' tool.
 
-To find the parent Publications, call getItem on your current Publication URI (e.g., 'tcm:0-99-1') and set includeProperties to ['Parents'].
-
-Examples:
-
-Example 1: Create a simple Page with its required 'Main' region left empty.
-This is a common pattern, as many Page Templates require at least one region to be specified, even if it's empty.
-    const result = await tools.createPage({
-        title: "Contact Us",
-        locationId: "tcm:1-1-4",
-        fileName: "contact.html",
-        pageTemplateId: "tcm:1-15-128",
-        regions: [
-            { "type": "EmbeddedRegion", "RegionName": "Main" }
-        ]
-    });
-
-Example 2: Create a Page with a Component Presentation on the page and an empty 'Main' region.
-    const result = await tools.createPage({
-        title: "Homepage",
-        locationId: "tcm:1-1-4",
-        fileName: "index.html",
-        pageTemplateId: "tcm:1-20-128",
-        componentPresentations: [
-            {
-                "type": "ComponentPresentation",
-                "Component": { "type": "Link", "IdRef": "tcm:1-101-16" },
-                "ComponentTemplate": { "type": "Link", "IdRef": "tcm:1-102-32" }
-            }
-        ],
-        regions: [
-            { "type": "EmbeddedRegion", "RegionName": "Main" }
-        ]
-    });
-
-Example 3: Create a page with content on the page and in a region.
-This demonstrates a mixed content model.
-    const result = await tools.createPage({
-        title: "Mixed Content Page",
-        locationId: "tcm:1-1-4",
-        fileName: "mixed.html",
-        pageTemplateId: "tcm:1-25-128",
-        componentPresentations: [
-            {
-                "type": "ComponentPresentation",
-                "Component": { "type": "Link", "IdRef": "tcm:1-101-16" },
-                "ComponentTemplate": { "type": "Link", "IdRef": "tcm:1-102-32" }
-            }
-        ],
-        regions: [
-            {
-                "type": "EmbeddedRegion",
-                "RegionName": "Main",
-                "ComponentPresentations": [
-                    {
-                        "type": "ComponentPresentation",
-                        "Component": { "type": "Link", "IdRef": "tcm:1-203-16" },
-                        "ComponentTemplate": { "type": "Link", "IdRef": "tcm:1-204-32" }
-                    }
-                ]
-            }
-        ]
-    });
-
-Example 4: Create a complex Page with page-level metadata and nested regions.
-This example shows a two-column layout within the main content area.
-    const result = await tools.createPage({
-        "title": "Landing Page with Columns",
-        "locationId": "tcm:1-1-4",
-        "fileName": "landing.html",
-        "pageTemplateId": "tcm:1-30-128",
-        "metadataSchemaId": "tcm:1-28-8",
-        "metadata": {
-            "seoTitle": "My Awesome Landing Page",
-            "seoDescription": "This page is full of great content."
-        },
-        "regions": [
-            {
-                "type": "EmbeddedRegion",
-                "RegionName": "MainContent",
-                "Regions": [
-                    {
-                        "type": "EmbeddedRegion",
-                        "RegionName": "ColumnLeft",
-                        "ComponentPresentations": [
-                            {
-                                "type": "ComponentPresentation",
-                                "Component": { "type": "Link", "IdRef": "tcm:1-301-16" },
-                                "ComponentTemplate": { "type": "Link", "IdRef": "tcm:1-302-32" }
-                            }
-                        ]
-                    },
-                    {
-                        "type": "EmbeddedRegion",
-                        "RegionName": "ColumnRight",
-                        "ComponentPresentations": [
-                            {
-                                "type": "ComponentPresentation",
-                                "Component": { "type": "Link", "IdRef": "tcm:1-303-16" },
-                                "ComponentTemplate": { "type": "Link", "IdRef": "tcm:1-304-32" }
-                            }
-                        ]
-                    }
-                ]
-            }
-        ]
-    });
-    
-Example 5: Create a page with a custom region layout that ignores the default Schema order.
-By setting 'overrideRegionOrder' to true, the resulting page will place the 'Sidebar' region above the 'Main' region, even if the Schema defines 'Main' first.
-    const result = await tools.createPage({
-        title: "Custom Layout Page",
-        locationId: "tcm:1-1-4",
-        fileName: "custom.html",
-        pageTemplateId: "tcm:1-40-128",
-        overrideRegionOrder: true,
-        regions: [
-            { "type": "EmbeddedRegion", "RegionName": "Sidebar" },
-            { "type": "EmbeddedRegion", "RegionName": "Main" }
-        ]
-    });`,
+To find the parent Publications, call getItem on your current Publication URI (e.g., 'tcm:0-99-1') and set includeProperties to ['Parents'].`,
     input: createPageInputProperties,
 
     execute: async (args: CreatePageInput,
@@ -346,5 +227,125 @@ By setting 'overrideRegionOrder' to true, the resulting page will place the 'Sid
             await diagnoseBluePrintError(error, diagnosticsArgs, locationId, authenticatedAxios);
             return handleAxiosError(error, "Failed to create CMS item");
         }
-    }
+    },
+    examples: [
+        {
+            description: "Create a simple Page with its required 'Main' region left empty. This is a common pattern, as many Page Templates require at least one region to be specified, even if it's empty.",
+            payload: `const result = await tools.createPage({
+    title: "Contact Us",
+    locationId: "tcm:1-1-4",
+    fileName: "contact.html",
+    pageTemplateId: "tcm:1-15-128",
+    regions: [
+        { "type": "EmbeddedRegion", "RegionName": "Main" }
+    ]
+});`
+        },
+        {
+            description: "Create a Page with a Component Presentation on the page and an empty 'Main' region.",
+            payload: `const result = await tools.createPage({
+    title: "Homepage",
+    locationId: "tcm:1-1-4",
+    fileName: "index.html",
+    pageTemplateId: "tcm:1-20-128",
+    componentPresentations: [
+        {
+            "type": "ComponentPresentation",
+            "Component": { "type": "Link", "IdRef": "tcm:1-101-16" },
+            "ComponentTemplate": { "type": "Link", "IdRef": "tcm:1-102-32" }
+        }
+    ],
+    regions: [
+        { "type": "EmbeddedRegion", "RegionName": "Main" }
+    ]
+});`
+        },
+        {
+            description: "Create a page with content on the page and in a region. This demonstrates a mixed content model.",
+            payload: `const result = await tools.createPage({
+    title: "Mixed Content Page",
+    locationId: "tcm:1-1-4",
+    fileName: "mixed.html",
+    pageTemplateId: "tcm:1-25-128",
+    componentPresentations: [
+        {
+            "type": "ComponentPresentation",
+            "Component": { "type": "Link", "IdRef": "tcm:1-101-16" },
+            "ComponentTemplate": { "type": "Link", "IdRef": "tcm:1-102-32" }
+        }
+    ],
+    regions: [
+        {
+            "type": "EmbeddedRegion",
+            "RegionName": "Main",
+            "ComponentPresentations": [
+                {
+                    "type": "ComponentPresentation",
+                    "Component": { "type": "Link", "IdRef": "tcm:1-203-16" },
+                    "ComponentTemplate": { "type": "Link", "IdRef": "tcm:1-204-32" }
+                }
+            ]
+        }
+    ]
+});`
+        },
+        {
+            description: "Create a complex Page with page-level metadata and nested regions. This example shows a two-column layout within the main content area.",
+            payload: `const result = await tools.createPage({
+    title: "Landing Page with Columns",
+    locationId: "tcm:1-1-4",
+    fileName: "landing.html",
+    pageTemplateId: "tcm:1-30-128",
+    metadataSchemaId: "tcm:1-28-8",
+    metadata: {
+        "seoTitle": "My Awesome Landing Page",
+        "seoDescription": "This page is full of great content."
+    },
+    regions: [
+        {
+            "type": "EmbeddedRegion",
+            "RegionName": "MainContent",
+            "Regions": [
+                {
+                    "type": "EmbeddedRegion",
+                    "RegionName": "ColumnLeft",
+                    "ComponentPresentations": [
+                        {
+                            "type": "ComponentPresentation",
+                            "Component": { "type": "Link", "IdRef": "tcm:1-301-16" },
+                            "ComponentTemplate": { "type": "Link", "IdRef": "tcm:1-302-32" }
+                        }
+                    ]
+                },
+                {
+                    "type": "EmbeddedRegion",
+                    "RegionName": "ColumnRight",
+                    "ComponentPresentations": [
+                        {
+                            "type": "ComponentPresentation",
+                            "Component": { "type": "Link", "IdRef": "tcm:1-303-16" },
+                            "ComponentTemplate": { "type": "Link", "IdRef": "tcm:1-304-32" }
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+});`
+        },
+        {
+            description: "Create a page with a custom region layout that ignores the default Schema order. By setting 'overrideRegionOrder' to true, the resulting page will place the 'Sidebar' region above the 'Main' region, even if the Schema defines 'Main' first.",
+            payload: `const result = await tools.createPage({
+    title: "Custom Layout Page",
+    locationId: "tcm:1-1-4",
+    fileName: "custom.html",
+    pageTemplateId: "tcm:1-40-128",
+    overrideRegionOrder: true,
+    regions: [
+        { "type": "EmbeddedRegion", "RegionName": "Sidebar" },
+        { "type": "EmbeddedRegion", "RegionName": "Main" }
+    ]
+});`
+        }
+    ]
 };

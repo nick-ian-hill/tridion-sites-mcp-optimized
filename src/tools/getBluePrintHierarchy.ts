@@ -26,7 +26,7 @@ const generateSvg = (nodes: any[], edges: any[]): string => {
     const NODE_WIDTH = 250;
     const NODE_HEIGHT = 60;
     const HORIZONTAL_GAP = 120;
-    const VERTICAL_GAP = 20;    
+    const VERTICAL_GAP = 20;
     const PADDING = 40;
     const CORNER_RADIUS = 4;
     const HEADER_HEIGHT = 24;
@@ -34,7 +34,7 @@ const generateSvg = (nodes: any[], edges: any[]): string => {
     // 1. Build Adjacency Map & Calculate Ranks
     const nodeMap = new Map<string, any>(nodes.map(n => [n.id, n]));
     const ranks = new Map<string, number>();
-    
+
     nodes.forEach(n => ranks.set(n.id, 0));
 
     for (let i = 0; i < 50; i++) {
@@ -47,7 +47,7 @@ const generateSvg = (nodes: any[], edges: any[]): string => {
                 changed = true;
             }
         });
-        if (!changed) break; 
+        if (!changed) break;
     }
 
     // 2. Group by Rank & Sort
@@ -71,11 +71,11 @@ const generateSvg = (nodes: any[], edges: any[]): string => {
 
     columns.forEach((colIds, rankIndex) => {
         const x = PADDING + (rankIndex * (NODE_WIDTH + HORIZONTAL_GAP));
-        
+
         colIds.forEach((nodeId, rowIndex) => {
             const y = PADDING + (rowIndex * (NODE_HEIGHT + VERTICAL_GAP));
             const rawNode = nodeMap.get(nodeId);
-            
+
             const item = rawNode.data?.item;
             const isLocalized = item?.BluePrintInfo?.IsLocalized;
             const itemTitle = item?.Title || "";
@@ -83,13 +83,13 @@ const generateSvg = (nodes: any[], edges: any[]): string => {
             const label = rawNode.label;
 
             let subLabel = "";
-            
+
             if (itemId.endsWith("-1")) {
                 subLabel = itemId;
             } else {
                 subLabel = itemTitle;
             }
-            
+
             const color = isLocalized ? "#2E7D32" : "#4D2C91";
 
             layoutNodes.set(nodeId, {
@@ -133,10 +133,10 @@ const generateSvg = (nodes: any[], edges: any[]): string => {
     // -- Draw Nodes --
     layoutNodes.forEach(n => {
         svgContent += `<g transform="translate(${n.x},${n.y})">`;
-        
+
         // Main Box Border (White Fill, Colored Stroke)
         svgContent += `<rect width="${n.width}" height="${n.height}" rx="${CORNER_RADIUS}" fill="white" stroke="${n.color}" stroke-width="2"/>`;
-        
+
         // Colored Header Bar
         const headerPath = `
             M 0,${CORNER_RADIUS} 
@@ -148,7 +148,7 @@ const generateSvg = (nodes: any[], edges: any[]): string => {
             Z`.replace(/\s+/g, ' ');
 
         svgContent += `<path d="${headerPath}" fill="${n.color}" />`;
-        
+
         const escTitle = n.label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const escSub = n.subLabel.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -212,7 +212,7 @@ Example Structure:
 
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
-            
+
             const isSvgMode = outputFormat === 'Svg';
             const apiDetails = isSvgMode ? 'Contentless' : 'IdAndTitleOnly';
             const propsToInclude = isSvgMode ? ['BluePrintInfo.IsLocalized'] : [];
@@ -303,5 +303,21 @@ Example Structure:
         } catch (error) {
             return handleAxiosError(error, `Failed to process BluePrint hierarchy request for item ${itemId}`);
         }
-    }
+    },
+    examples: [
+        {
+            description: "Get the raw Graph JSON for a specific item.",
+            payload: `const result = await tools.getBluePrintHierarchy({
+    itemId: "tcm:2-123-64",
+    outputFormat: "JsonGraph"
+});`
+        },
+        {
+            description: "Generate an SVG visualization of the hierarchy.",
+            payload: `const result = await tools.getBluePrintHierarchy({
+    itemId: "tcm:2-123-64",
+    outputFormat: "Svg"
+});`
+        }
+    ]
 };

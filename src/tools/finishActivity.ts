@@ -30,12 +30,12 @@ This tool returns a 'FinishActivityResult'. If 'NextActivityInstance' is absent,
             .describe("An optional due date for the next activity in ISO 8601 format (e.g., '2025-12-31T17:00:00Z')."),
         nextActivityTitle: z.string().optional()
             .describe("An optional custom title for the next activity instance. By default, activity instances get an auto-generated title from their position and definition title."),
-    },    
-    execute: async ({ 
-        activityId, 
+    },
+    execute: async ({
+        activityId,
         nextActivityDefinitionId,
-        comment, 
-        nextAssigneeId, 
+        comment,
+        nextAssigneeId,
         nextActivityDueDate,
         nextActivityTitle
     }: {
@@ -54,7 +54,7 @@ This tool returns a 'FinishActivityResult'. If 'NextActivityInstance' is absent,
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const escapedActivityId = activityId.replace(':', '_');
-            
+
             // 1. Get the Activity Instance to inspect its definition
             const instanceResponse = await authenticatedAxios.get(`/items/${escapedActivityId}`);
             const activityInstance = instanceResponse.data;
@@ -104,10 +104,10 @@ This tool returns a 'FinishActivityResult'. If 'NextActivityInstance' is absent,
                 // Safely filter the returned state data
                 const filteredData = filterResponseData({
                     responseData: response.data,
-                    details: "CoreDetails" 
+                    details: "CoreDetails"
                 });
                 const formattedResponseData = formatForAgent(filteredData);
-                
+
                 const isTerminalStep = !response.data.NextActivityInstance;
 
                 const responsePayload: Record<string, unknown> = {
@@ -137,5 +137,7 @@ This tool returns a 'FinishActivityResult'. If 'NextActivityInstance' is absent,
         } catch (error) {
             return handleAxiosError(error, `Failed to finish activity '${activityId}'`);
         }
-    }
+    },
+    examples: [
+    ]
 };

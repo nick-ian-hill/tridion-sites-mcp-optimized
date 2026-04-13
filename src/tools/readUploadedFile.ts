@@ -263,4 +263,29 @@ the mapScript can iterate every row and create or update CMS Components.`,
             return handleAxiosError(error, `Failed to read uploaded file '${fileName}'`);
         }
     },
+    examples: [
+        {
+            description: "Read an uploaded text file or document.",
+            payload: `const result = await tools.readUploadedFile({
+    attachmentId: "temp-file-id-123",
+    fileName: "report.pdf"
+});`
+        },
+        {
+            description: "Read an uploaded Excel file, limiting the output to the first 3 rows for preview.",
+            payload: `const result = await tools.readUploadedFile({
+    attachmentId: "temp-file-id-456",
+    fileName: "data.xlsx",
+    maxRows: 3
+});`
+        },
+        {
+            description: "Read an uploaded image with a specific prompt for the vision model.",
+            payload: `const result = await tools.readUploadedFile({
+    attachmentId: "temp-file-id-789",
+    fileName: "scanned_doc.png",
+    prompt: "Extract all visible text from this document."
+});`
+        }
+    ]
 };

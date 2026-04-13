@@ -19,12 +19,12 @@ The tool will return the new, actual History ID. You must use this new History I
         approvalStatusId: z.string().regex(/^tcm:0-\d+-\d+$/)
             .describe("The TCM URI of the Approval Status to apply to all items in the Workflow Process (e.g., 'tcm:0-7-131089'). Use the 'getApprovalStatuses' tool to find a valid ID."),
     },
-    execute: async ({ 
-        instanceId, 
-        approvalStatusId 
-    }: { 
-        instanceId: string; 
-        approvalStatusId: string; 
+    execute: async ({
+        instanceId,
+        approvalStatusId
+    }: {
+        instanceId: string;
+        approvalStatusId: string;
     }, context: any) => {
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
@@ -40,7 +40,7 @@ The tool will return the new, actual History ID. You must use this new History I
             const response = await authenticatedAxios.post(endpoint, null, {
                 params: {
                     approvalStatusId: approvalStatusId,
-                    returnFullProcessHistory: true 
+                    returnFullProcessHistory: true
                 }
             });
 
@@ -49,11 +49,11 @@ The tool will return the new, actual History ID. You must use this new History I
 
                 const filteredData = filterResponseData({
                     responseData: response.data,
-                    details: "IdAndTitle" 
+                    details: "IdAndTitle"
                 });
-                
+
                 const formattedData = formatForAgent(filteredData);
-                
+
                 return {
                     content: [{
                         type: "text",
@@ -70,5 +70,7 @@ The tool will return the new, actual History ID. You must use this new History I
         } catch (error) {
             return handleAxiosError(error, `Failed to force finish process for instance '${instanceId}'`);
         }
-    }
+    },
+    examples: [
+    ]
 };

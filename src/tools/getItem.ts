@@ -20,47 +20,6 @@ Always include all relevant properties in a single call rather than making seque
 ### Contextual Retrieval
 You can inspect the state of an item in a specified Publication context (e.g., to check if it is localized, shared, or accessible in a sibling/parent) by providing the 'contextPublicationId' parameter. The tool will automatically resolve the correct ID for that context.
 
-**Example 1: Contextual Retrieval (Success). Using includeProperties to request only the information needed.**
-Request:
-getItem({
-  itemId: "tcm:5-123",
-  contextPublicationId: "tcm:0-10-1",
-  includeProperties: [
-    "BluePrintInfo.IsShared",
-    "BluePrintInfo.OwningRepository.Title"
-]})
-
-Response:
-{
-  "type": "Component",
-  "Id": "tcm:10-123",
-  "Title": "About Us",
-  "BluePrintInfo": { "IsShared": true, "OwningRepository": { "Title": "05 Master" } }
-}
-
-**Example 2: Contextual Retrieval (Error / Not Found)**
-If the item does not exist in the requested context (e.g., it is in a sibling publication), the tool returns a helpful error map instead of a generic 404.
-
-Response:
-{
-  "type": "BluePrintContextError",
-  "Message": "The item 'tcm:5-123' exists, but it is NOT visible in ... 'tcm:0-12-1'.",
-  "ValidContexts": [
-        { 
-            "PublicationId": "tcm:0-5-1", 
-            "PublicationTitle": "05 Master",
-            "ItemId": "tcm:5-123",
-            "Title": "About Us" 
-        },
-        { 
-            "PublicationId": "tcm:0-10-1", 
-            "PublicationTitle": "10 Website EN",
-            "ItemId": "tcm:10-123",
-            "Title": "About Us - EN" 
-        }
-    ]
-}
-
 ### MASTER PROPERTY REFERENCE
 You can limit the response to combinations of the following properties by providing the path in the 'includeProperties' array using dot notation (e.g., 'VersionInfo.RevisionDate', 'BinaryContent.MimeType').
 
@@ -291,5 +250,48 @@ You can limit the response to combinations of the following properties by provid
 
             return handleAxiosError(error, "Failed to authenticate or retrieve item");
         }
-    }
+    },
+    examples: [
+        {
+            description: "Contextual Retrieval (Success). Using includeProperties to request only the information needed.",
+            payload: `const result = await tools.getItem({
+  itemId: "tcm:5-123",
+  contextPublicationId: "tcm:0-10-1",
+  includeProperties: [
+    "BluePrintInfo.IsShared",
+    "BluePrintInfo.OwningRepository.Title"
+  ]
+});
+
+Response:
+{
+  "type": "Component",
+  "Id": "tcm:10-123",
+  "Title": "About Us",
+  "BluePrintInfo": { "IsShared": true, "OwningRepository": { "Title": "05 Master" } }
+}`
+        },
+        {
+            description: "Contextual Retrieval (Error / Not Found) - If the item does not exist in the requested context (e.g., it is in a sibling publication), the tool returns a helpful error map instead of a generic 404.",
+            payload: `Response:
+{
+  "type": "BluePrintContextError",
+  "Message": "The item 'tcm:5-123' exists, but it is NOT visible in ... 'tcm:0-12-1'.",
+  "ValidContexts": [
+        { 
+            "PublicationId": "tcm:0-5-1", 
+            "PublicationTitle": "05 Master",
+            "ItemId": "tcm:5-123",
+            "Title": "About Us" 
+        },
+        { 
+            "PublicationId": "tcm:0-10-1", 
+            "PublicationTitle": "10 Website EN",
+            "ItemId": "tcm:10-123",
+            "Title": "About Us - EN" 
+        }
+    ]
+}`
+        }
+    ]
 };

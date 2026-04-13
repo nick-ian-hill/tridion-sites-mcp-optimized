@@ -18,7 +18,7 @@ const updateMultimediaComponentFromPromptSchema = z.object(updateMultimediaCompo
 export const updateMultimediaComponentFromPrompt = {
     name: "updateMultimediaComponentFromPrompt",
     summary: "Modifies an existing Multimedia Component's image based on a text prompt using AI.",
-    description: "Updates an existing multimedia component's image based on a text prompt. It downloads the binary, sends it to an AI for modification (optionally using other images as context), and uploads the new version. Versioning is handled automatically. If contextItemIds is not empty, be sure to explain in the prompt how the model should utilize the context item(s).",
+    description: `Updates an existing multimedia component's image based on a text prompt. It downloads the binary, sends it to an AI for modification (optionally using other images as context), and uploads the new version. Versioning is handled automatically. If contextItemIds is not empty, be sure to explain in the prompt how the model should utilize the context item(s).`,
     input: updateMultimediaComponentFromPromptInputProperties,
     async execute(input: z.infer<typeof updateMultimediaComponentFromPromptSchema>, context: any) {
         const req = context?.request;
@@ -34,7 +34,7 @@ export const updateMultimediaComponentFromPrompt = {
             console.log(`Fetching item details for ${itemId}`);
             const getInitialItemResponse = await authenticatedAxios.get(`/items/${restItemId}`, { params: { useDynamicVersion: true } });
             if (getInitialItemResponse.status !== 200) return handleUnexpectedResponse(getInitialItemResponse);
-            
+
             const itemToUpdate = getInitialItemResponse.data;
 
             if (itemToUpdate.ComponentType !== 'Multimedia') {
@@ -46,7 +46,7 @@ export const updateMultimediaComponentFromPrompt = {
                 responseType: 'arraybuffer'
             });
             if (downloadResponse.status !== 200) return handleUnexpectedResponse(downloadResponse);
-            
+
             const originalImageBuffer = Buffer.from(downloadResponse.data);
             const originalMimeType = downloadResponse.headers['content-type'] || 'image/jpeg';
             console.log(`Successfully downloaded binary: ${originalImageBuffer.length} bytes, MIME type: ${originalMimeType}`);
@@ -68,13 +68,13 @@ export const updateMultimediaComponentFromPrompt = {
             // If context items are provided, fetch their binaries and add them to the payload
             if (contextItemIds && contextItemIds.length > 0) {
                 console.log(`Fetching ${contextItemIds.length} context items...`);
-                
+
                 for (const contextId of contextItemIds) {
                     // Skip if the context item is the same as the target item to avoid duplication
                     if (contextId === itemId) continue;
 
                     const restContextId = contextId.replace(':', '_');
-                    
+
                     // 1. Verify item type
                     const itemResponse = await authenticatedAxios.get(`/items/${restContextId}`);
                     if (itemResponse.status !== 200) {
@@ -95,7 +95,7 @@ export const updateMultimediaComponentFromPrompt = {
                     if (downloadCtxResponse.status === 200) {
                         const buffer = Buffer.from(downloadCtxResponse.data);
                         const mimeType = downloadCtxResponse.headers['content-type'] || 'image/jpeg';
-                        
+
                         contents.push({
                             inlineData: {
                                 mimeType: mimeType,
@@ -124,7 +124,7 @@ export const updateMultimediaComponentFromPrompt = {
                 contents: contents,
                 config: generationConfig
             });
-            
+
             if (result?.candidates?.[0]?.content?.parts) {
                 for (const part of result.candidates[0].content.parts) {
                     if (part.inlineData?.data) {
@@ -159,7 +159,7 @@ export const updateMultimediaComponentFromPrompt = {
             console.log(`Updating component ${itemId} with new binary.`);
             const updateResponse = await authenticatedAxios.put(`/items/${restItemId}`, itemToUpdate);
             if (updateResponse.status !== 200) return handleUnexpectedResponse(updateResponse);
-            
+
             const updatedItem = updateResponse.data;
             const responseData = {
                 type: updatedItem['$type'],
@@ -174,5 +174,7 @@ export const updateMultimediaComponentFromPrompt = {
         } catch (error) {
             return handleAxiosError(error, `Failed to update multimedia component ${itemId} from prompt`);
         }
-    }
+    },
+    examples: [
+    ]
 };

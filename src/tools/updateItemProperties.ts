@@ -134,84 +134,88 @@ IMPORTANT:
 - For versioned items (Component, Schema, PageTemplate, ComponentTemplate), items that are not checked out will be automatically checked back in after updating. Items that are checked out before updating will remain checked out.
 - The operation will be aborted if the item is checked out by another user.
 
-Example 1: Update the core properties of a Schema.
-This example modifies the Title and Root Element Name of an existing Schema, which are properties that cannot be reached by the surgical field tools.
-    const result = await tools.updateItemProperties({
-        itemId: "tcm:2-104-8",
-        itemType: "Schema",
-        title: "Redesigned News Article",
-        rootElementName: "NewsArticleRoot"
-    });
-
-Example 2: Change the Metadata Schema of a Folder and provide the mandatory values for the new schema.
-    const result = await tools.updateItemProperties({
-        itemId: "tcm:5-123-2",
-        itemType: "Folder",
-        metadataSchemaId: "tcm:5-322-8",
-        metadata: {
-            "campaignYear": 2025,
-            "campaignManager": {
-                "name": "Jane Doe",
-                "email": "jane.doe@example.com"
-            },
-            "featuredProducts": [
-                {
-                    "productLink": {
-                        "type": "Link",
-                        "IdRef": "tcm:5-801"
-                    },
-                    "promoText": "Early bird special!"
-                },
-                {
-                    "productLink": {
-                        "type": "Link",
-                        "IdRef": "tcm:5-802"
-                    },
-                    "promoText": "Limited time offer."
-                }
-            ]
-        }
-    });
-
-Example 3: Update a Region Schema to add constraints and nested regions.
-This example updates a basic Region Schema (e.g., 'tcm:5-3875-8') to make it non-localizable, add constraints, and link two nested region schemas ('tcm:5-3873-8' and 'tcm:5-3874-8').
-    const result = await tools.updateItemProperties({
-        itemId: "tcm:5-3875-8",
-        itemType: "Schema",
-        regionDefinition: {
-            "type": "RegionDefinition",
-            "ComponentPresentationConstraints": [
-                {
-                    "type": "OccurrenceConstraint",
-                    "MaxOccurs": 10,
-                    "MinOccurs": 0
-                },
-                {
-                    "type": "TypeConstraint",
-                    "BasedOnSchema": { "type": "Link", "IdRef": "tcm:5-103-8" }
-                }
-            ],
-            "NestedRegions": [
-                {
-                    "type": "NestedRegion",
-                    "RegionName": "LeftColumn",
-                    "RegionSchema": {
-                        "type": "ExpandableLink",
-                        "IdRef": "tcm:5-3873-8"
-                    }
-                },
-                {
-                    "type": "NestedRegion",
-                    "RegionName": "RightColumn",
-                    "RegionSchema": {
-                        "type": "ExpandableLink",
-                        "IdRef": "tcm:5-3874-8"
-                    }
-                }
-            ]
-        }
-    });
 `,
+    examples: [
+        {
+            description: "Update the core properties of a Schema. This example modifies the Title and Root Element Name of an existing Schema, which are properties that cannot be reached by the surgical field tools.",
+            payload: `const result = await tools.updateItemProperties({
+    itemId: "tcm:2-104-8",
+    itemType: "Schema",
+    title: "Redesigned News Article",
+    rootElementName: "NewsArticleRoot"
+});`
+        },
+        {
+            description: "Change the Metadata Schema of a Folder and provide the mandatory values for the new schema.",
+            payload: `const result = await tools.updateItemProperties({
+    itemId: "tcm:5-123-2",
+    itemType: "Folder",
+    metadataSchemaId: "tcm:5-322-8",
+    metadata: {
+        "campaignYear": 2025,
+        "campaignManager": {
+            "name": "Jane Doe",
+            "email": "jane.doe@example.com"
+        },
+        "featuredProducts": [
+            {
+                "productLink": {
+                    "type": "Link",
+                    "IdRef": "tcm:5-801"
+                },
+                "promoText": "Early bird special!"
+            },
+            {
+                "productLink": {
+                    "type": "Link",
+                    "IdRef": "tcm:5-802"
+                },
+                "promoText": "Limited time offer."
+            }
+        ]
+    }
+});`
+        },
+        {
+            description: "Update a Region Schema to add constraints and nested regions. This example updates a basic Region Schema (e.g., 'tcm:5-3875-8') to make it non-localizable, add constraints, and link two nested region schemas ('tcm:5-3873-8' and 'tcm:5-3874-8').",
+            payload: `const result = await tools.updateItemProperties({
+    itemId: "tcm:5-3875-8",
+    itemType: "Schema",
+    regionDefinition: {
+        "type": "RegionDefinition",
+        "ComponentPresentationConstraints": [
+            {
+                "type": "OccurrenceConstraint",
+                "MaxOccurs": 10,
+                "MinOccurs": 0
+            },
+            {
+                "type": "TypeConstraint",
+                "BasedOnSchema": { "type": "Link", "IdRef": "tcm:5-103-8" }
+            }
+        ],
+        "NestedRegions": [
+            {
+                "type": "NestedRegion",
+                "RegionName": "LeftColumn",
+                "RegionSchema": {
+                    "type": "ExpandableLink",
+                    "IdRef": "tcm:5-3873-8"
+                }
+            },
+            {
+                "type": "NestedRegion",
+                "RegionName": "RightColumn",
+                "RegionSchema": {
+                    "type": "ExpandableLink",
+                    "IdRef": "tcm:5-3874-8"
+                }
+            }
+        ]
+    }
+});`
+        }
+    ],
     input: updateItemPropertiesInputProperties,
     execute: async (params: UpdateItemPropertiesInput, context: any) => {
         try {

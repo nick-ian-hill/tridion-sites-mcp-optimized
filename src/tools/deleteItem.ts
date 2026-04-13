@@ -36,7 +36,7 @@ IMPORTANT: Tridion enforces strict deletion rules. The current version of an ite
                     input: "confirmed",
                     content: [{
                         type: "text",
-                        text: isVersionDeletion 
+                        text: isVersionDeletion
                             ? `Are you sure you want to permanently delete the historical version ${itemId}? This cannot be undone.`
                             : `Are you sure you want to forcibly delete ${itemId}? This will automatically unlocalize child copies, discard check-outs, and permanently delete the Primary Item (and its content if it is a container). This cannot be undone.`
                     }],
@@ -56,7 +56,7 @@ IMPORTANT: Tridion enforces strict deletion rules. The current version of an ite
             // --- BRANCH A: VERSION DELETION ---
             if (isVersionDeletion) {
                 const deleteResponse = await authenticatedAxios.delete(`/items/${initialIdEscaped}`);
-                
+
                 if (deleteResponse.status === 204 || deleteResponse.status === 200) {
                     return {
                         content: [{
@@ -78,10 +78,10 @@ IMPORTANT: Tridion enforces strict deletion rules. The current version of an ite
             const itemResponse = await authenticatedAxios.get(`/items/${initialIdEscaped}`, {
                 params: { includeProperties: ["BluePrintInfo"] }
             });
-            
+
             let primaryId = itemId;
             let primaryIdEscaped = initialIdEscaped;
-            
+
             if (itemResponse.data.BluePrintInfo?.PrimaryBluePrintParentItem?.IdRef) {
                 primaryId = itemResponse.data.BluePrintInfo.PrimaryBluePrintParentItem.IdRef;
                 primaryIdEscaped = primaryId.replace(':', '_');
@@ -109,101 +109,101 @@ IMPORTANT: Tridion enforces strict deletion rules. The current version of an ite
             };
 
             if (!isSystemWideObject) {
-            // --- STEP 2: GATHER DELETION BLOCKERS ---
+                // --- STEP 2: GATHER DELETION BLOCKERS ---
 
-            // 2a. Check Locks and Workflows on Primary
-            const primaryItemResponse = await authenticatedAxios.get(`/items/${primaryIdEscaped}`, {
-                params: { includeProperties: ["LockInfo", "WorkflowInfo"] }
-            });
-            
-            const lockInfo = primaryItemResponse.data.LockInfo;
-            const rawLockType = lockInfo?.LockType;
-            const lockTypes = Array.isArray(rawLockType) ? rawLockType : (rawLockType ? [rawLockType] : []);
-            
-            const workflowInfo = primaryItemResponse.data.WorkflowInfo;
-            const processId = workflowInfo?.ProcessInstance?.IdRef;
-            const activityId = workflowInfo?.ActivityInstance?.IdRef;
+                // 2a. Check Locks and Workflows on Primary
+                const primaryItemResponse = await authenticatedAxios.get(`/items/${primaryIdEscaped}`, {
+                    params: { includeProperties: ["LockInfo", "WorkflowInfo"] }
+                });
 
-            const isStrictlyInWorkflow = lockTypes.includes('InWorkflow') || 
-                (processId && processId !== 'tcm:0-0-0') || 
-                (activityId && activityId !== 'tcm:0-0-0');
+                const lockInfo = primaryItemResponse.data.LockInfo;
+                const rawLockType = lockInfo?.LockType;
+                const lockTypes = Array.isArray(rawLockType) ? rawLockType : (rawLockType ? [rawLockType] : []);
 
-            if (isStrictlyInWorkflow) {
-                blockers.inWorkflow = true;
-                blockers.lockUser = workflowInfo?.Assignee?.Title || lockInfo?.LockUser?.Title || "Unknown User";
-            } else if (lockTypes.includes('CheckedOut') || lockTypes.includes('Permanent')) {
-                blockers.isLocked = true;
-                blockers.lockUser = lockInfo?.LockUser?.Title || "Unknown User";
-            }
+                const workflowInfo = primaryItemResponse.data.WorkflowInfo;
+                const processId = workflowInfo?.ProcessInstance?.IdRef;
+                const activityId = workflowInfo?.ActivityInstance?.IdRef;
 
-            // 2b. Check Localizations AND Publish States across the BluePrint
-            const bpResponse = await authenticatedAxios.get(`/items/${primaryIdEscaped}/bluePrintHierarchy`, {
-                params: { details: 'Contentless' }
-            });
-            
-            if (bpResponse.status === 200 && bpResponse.data.Items) {
-                const allBlueprintItemIds = bpResponse.data.Items
-                    .filter((node: any) => node.Item && node.Item.Id)
-                    .map((node: any) => node.Item.Id);
+                const isStrictlyInWorkflow = lockTypes.includes('InWorkflow') ||
+                    (processId && processId !== 'tcm:0-0-0') ||
+                    (activityId && activityId !== 'tcm:0-0-0');
 
-                blockers.localizationsToUndo = bpResponse.data.Items
-                    .filter((node: any) => node.Item && node.Item.BluePrintInfo?.IsLocalized)
-                    .map((node: any) => node.Item.Id);
+                if (isStrictlyInWorkflow) {
+                    blockers.inWorkflow = true;
+                    blockers.lockUser = workflowInfo?.Assignee?.Title || lockInfo?.LockUser?.Title || "Unknown User";
+                } else if (lockTypes.includes('CheckedOut') || lockTypes.includes('Permanent')) {
+                    blockers.isLocked = true;
+                    blockers.lockUser = lockInfo?.LockUser?.Title || "Unknown User";
+                }
 
-                for (const bpItemId of allBlueprintItemIds) {
-                    try {
-                        const escBpItemId = bpItemId.replace(':', '_');
-                        const pubInfoResponse = await authenticatedAxios.get(`/items/${escBpItemId}/publishInfo`);
-                        
-                        if (pubInfoResponse.status === 200 && pubInfoResponse.data && pubInfoResponse.data.length > 0) {
-                            const targets = pubInfoResponse.data.map((pi: any) => pi.PublishContext?.PublicationTarget?.Title || "Unknown Target");
-                            blockers.publishedItems.push({
-                                Id: bpItemId,
-                                Targets: [...new Set(targets)] 
-                            });
+                // 2b. Check Localizations AND Publish States across the BluePrint
+                const bpResponse = await authenticatedAxios.get(`/items/${primaryIdEscaped}/bluePrintHierarchy`, {
+                    params: { details: 'Contentless' }
+                });
+
+                if (bpResponse.status === 200 && bpResponse.data.Items) {
+                    const allBlueprintItemIds = bpResponse.data.Items
+                        .filter((node: any) => node.Item && node.Item.Id)
+                        .map((node: any) => node.Item.Id);
+
+                    blockers.localizationsToUndo = bpResponse.data.Items
+                        .filter((node: any) => node.Item && node.Item.BluePrintInfo?.IsLocalized)
+                        .map((node: any) => node.Item.Id);
+
+                    for (const bpItemId of allBlueprintItemIds) {
+                        try {
+                            const escBpItemId = bpItemId.replace(':', '_');
+                            const pubInfoResponse = await authenticatedAxios.get(`/items/${escBpItemId}/publishInfo`);
+
+                            if (pubInfoResponse.status === 200 && pubInfoResponse.data && pubInfoResponse.data.length > 0) {
+                                const targets = pubInfoResponse.data.map((pi: any) => pi.PublishContext?.PublicationTarget?.Title || "Unknown Target");
+                                blockers.publishedItems.push({
+                                    Id: bpItemId,
+                                    Targets: [...new Set(targets)]
+                                });
+                            }
+                        } catch (pubError) {
+                            // Suppress 404s
                         }
-                    } catch (pubError) {
-                        // Suppress 404s
                     }
                 }
-            }
 
-            // 2c. Check Dependencies (UsedBy)
-            const depResponse = await authenticatedAxios.get(`/items/${primaryIdEscaped}/dependencyGraph`, {
-                params: { direction: 'UsedBy', details: 'IdAndTitleOnly' }
-            });
-            
-            if (depResponse.status === 200 && depResponse.data.Dependencies) {
-                const traverseDeps = (node: any) => {
-                    if (node.Item && node.Item.Id !== primaryId) {
-                        blockers.dependenciesToResolve.push({ Id: node.Item.Id, Title: node.Item.Title });
-                    }
-                    if (node.Dependencies) {
-                        node.Dependencies.forEach(traverseDeps);
-                    }
-                };
-                depResponse.data.Dependencies.forEach(traverseDeps);
-            }
+                // 2c. Check Dependencies (UsedBy)
+                const depResponse = await authenticatedAxios.get(`/items/${primaryIdEscaped}/dependencyGraph`, {
+                    params: { direction: 'UsedBy', details: 'IdAndTitleOnly' }
+                });
 
-            // 2d. Check Container Status (Folders, Structure Groups, Categories)
-            if (['Folder', 'StructureGroup', 'Category'].includes(itemType)) {
-                try {
-                    const listResponse = await authenticatedAxios.get(`/items/${primaryIdEscaped}/list`);
-                    if (listResponse.status === 200 && listResponse.data.Items && listResponse.data.Items.length > 0) {
-                        blockers.isNotEmptyContainer = true;
-                        blockers.containerItemCount = listResponse.data.Items.length;
-                    }
-                } catch (listError) {
-                    // Suppress error and fall back to relying on CMS validation if the list check fails
+                if (depResponse.status === 200 && depResponse.data.Dependencies) {
+                    const traverseDeps = (node: any) => {
+                        if (node.Item && node.Item.Id !== primaryId) {
+                            blockers.dependenciesToResolve.push({ Id: node.Item.Id, Title: node.Item.Title });
+                        }
+                        if (node.Dependencies) {
+                            node.Dependencies.forEach(traverseDeps);
+                        }
+                    };
+                    depResponse.data.Dependencies.forEach(traverseDeps);
                 }
-            }
 
-            hasHardBlockers = blockers.publishedItems.length > 0 || 
-                                    blockers.dependenciesToResolve.length > 0 || 
-                                    blockers.inWorkflow;
-                                    
-            // Include isNotEmptyContainer in hasBlockers to ensure we trigger the Warning in Analysis Mode
-            hasBlockers = blockers.isLocked || blockers.localizationsToUndo.length > 0 || hasHardBlockers || blockers.isNotEmptyContainer;
+                // 2d. Check Container Status (Folders, Structure Groups, Categories)
+                if (['Folder', 'StructureGroup', 'Category'].includes(itemType)) {
+                    try {
+                        const listResponse = await authenticatedAxios.get(`/items/${primaryIdEscaped}/list`);
+                        if (listResponse.status === 200 && listResponse.data.Items && listResponse.data.Items.length > 0) {
+                            blockers.isNotEmptyContainer = true;
+                            blockers.containerItemCount = listResponse.data.Items.length;
+                        }
+                    } catch (listError) {
+                        // Suppress error and fall back to relying on CMS validation if the list check fails
+                    }
+                }
+
+                hasHardBlockers = blockers.publishedItems.length > 0 ||
+                    blockers.dependenciesToResolve.length > 0 ||
+                    blockers.inWorkflow;
+
+                // Include isNotEmptyContainer in hasBlockers to ensure we trigger the Warning in Analysis Mode
+                hasBlockers = blockers.isLocked || blockers.localizationsToUndo.length > 0 || hasHardBlockers || blockers.isNotEmptyContainer;
 
             } // end: if (!isSystemWideObject)
 
@@ -256,16 +256,16 @@ IMPORTANT: Tridion enforces strict deletion rules. The current version of an ite
                     if (blockers.dependenciesToResolve.length > 0) {
                         errorMsg += `- Dependencies: Actively used by ${blockers.dependenciesToResolve.length} other item(s).\n`;
                     }
-                    throw new Error(errorMsg + `\nBlocker Details: ${JSON.stringify({ 
-                        InWorkflow: blockers.inWorkflow, 
-                        Published: blockers.publishedItems, 
-                        Dependencies: blockers.dependenciesToResolve 
+                    throw new Error(errorMsg + `\nBlocker Details: ${JSON.stringify({
+                        InWorkflow: blockers.inWorkflow,
+                        Published: blockers.publishedItems,
+                        Dependencies: blockers.dependenciesToResolve
                     })}`);
                 }
 
                 for (const locId of blockers.localizationsToUndo) {
                     const escLocId = locId.replace(':', '_');
-                    await authenticatedAxios.post(`/items/${escLocId}/unlocalize`, null, { params: { useDynamicVersion: true }});
+                    await authenticatedAxios.post(`/items/${escLocId}/unlocalize`, null, { params: { useDynamicVersion: true } });
                 }
 
                 if (blockers.isLocked) {
@@ -287,7 +287,7 @@ IMPORTANT: Tridion enforces strict deletion rules. The current version of an ite
             // --- STEP 4: FINAL DELETION (Live Item) ---
             try {
                 const deleteResponse = await authenticatedAxios.delete(`/items/${primaryIdEscaped}`);
-                
+
                 if (deleteResponse.status === 204 || deleteResponse.status === 200) {
                     return {
                         content: [{
@@ -296,7 +296,7 @@ IMPORTANT: Tridion enforces strict deletion rules. The current version of an ite
                                 type: 'Success',
                                 Id: primaryId,
                                 OriginalTarget: itemId,
-                                Message: forceDelete && hasBlockers 
+                                Message: forceDelete && hasBlockers
                                     ? `Successfully force-deleted Primary Item ${primaryId}. Auto-resolved locks/localizations.`
                                     : `Successfully deleted Primary Item ${primaryId}.`,
                             }, null, 2)
@@ -308,7 +308,7 @@ IMPORTANT: Tridion enforces strict deletion rules. The current version of an ite
             } catch (deleteError: any) {
                 // Check if it's the v0.1 undoCheckOut edge case
                 if (deleteError.response?.status === 404 && blockers.isLocked && forceDelete) {
-                     return {
+                    return {
                         content: [{
                             type: "text",
                             text: JSON.stringify({
@@ -332,5 +332,7 @@ IMPORTANT: Tridion enforces strict deletion rules. The current version of an ite
         } catch (error) {
             return handleAxiosError(error, `Failed to execute delete workflow for item ${itemId}`);
         }
-    }
+    },
+    examples: [
+    ]
 };

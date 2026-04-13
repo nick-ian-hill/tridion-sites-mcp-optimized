@@ -65,7 +65,7 @@ export const search = {
 
                 const categoryId = searchQuery.SearchIn.replace(':', '_');
                 const keywordsResponse = await authenticatedAxios.get(`/items/${categoryId}/keywords`);
-                
+
                 if (keywordsResponse.status === 200) {
                     let keywords = keywordsResponse.data;
 
@@ -73,7 +73,7 @@ export const search = {
                     if (searchQuery.Title) {
                         const searchTitle = searchQuery.Title;
                         const isCaseSensitive = searchQuery.IsTitleCaseSensitive === true;
-                        
+
                         keywords = keywords.filter((k: any) => {
                             const kTitle = k.Title || "";
                             if (isCaseSensitive) {
@@ -89,12 +89,12 @@ export const search = {
                     }
 
                     // Format
-                    const finalData = filterResponseData({ 
-                        responseData: keywords, 
-                        details: "IdAndTitle" 
+                    const finalData = filterResponseData({
+                        responseData: keywords,
+                        details: "IdAndTitle"
                     });
                     const formattedFinalData = formatForAgent(finalData);
-                    
+
                     return {
                         content: [{
                             type: "text",
@@ -206,9 +206,9 @@ export const search = {
             );
 
             if (response.status === 200) {
-                const finalData = filterResponseData({ 
-                    responseData: response.data, 
-                    details: "IdAndTitle" 
+                const finalData = filterResponseData({
+                    responseData: response.data,
+                    details: "IdAndTitle"
                 });
                 const formattedFinalData = formatForAgent(finalData);
 
@@ -226,5 +226,7 @@ export const search = {
         } catch (error) {
             return handleAxiosError(error, "Failed to perform search");
         }
-    }
+    },
+    examples: [
+    ]
 };

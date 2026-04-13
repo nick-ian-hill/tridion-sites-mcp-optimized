@@ -51,45 +51,7 @@ When populating a Component Link field (ComponentLinkFieldDefinition), the linke
 If you encounter a schema validation error on a component link field, use the following strategy:
 - Use 'getItem' to retrieve the main Schema's definition.
 - Inspect the AllowedTargetSchemas property for the specific field causing the error.
-- Use the 'search' tool with the BasedOnSchemas filter to find a valid Component URI to use in the link.
-
-Examples:
-
-Example 1: Create a simple Component with only content fields.
-    const result = await tools.createComponent({
-        itemType: "Component",
-        locationId: "tcm:5-53-2",
-        title: "Site Header",
-        schemaId: "tcm:5-72-8",
-        content: {
-            "siteTitle": "Global News Network",
-            "tagline": "Your trusted source for news"
-        }
-    });
-
-Example 2: Create a Component with both content fields and metadata fields.
-    const result = await tools.createComponent({
-        itemType: "Component",
-        locationId: "tcm:5-53-2",
-        title: "New AI Breakthrough Article",
-        schemaId: "tcm:5-74-8",
-        content: {
-            "headline": "New AI Model Surpasses Human Benchmarks",
-            "body": "<p>Today, researchers announced a new model...</p>",
-            "author": {
-                "name": "Dr. Alex Chen",
-                "biography": "Lead AI researcher."
-            }
-        },
-        metadata: {
-            "category": {
-                "type": "Link",
-                "IdRef": "tcm:5-189-1024"
-            },
-            "seoKeywords": "AI, Technology, Breakthrough"
-        }
-    });
-`,
+- Use the 'search' tool with the BasedOnSchemas filter to find a valid Component URI to use in the link.`,
     input: createComponentInputProperties,
 
     execute: async (args: CreateComponentInput,
@@ -103,7 +65,7 @@ Example 2: Create a Component with both content fields and metadata fields.
         const userSessionId = match ? match[1] : null;
 
         let { locationId, schemaId, title, content, metadata } = args;
-        
+
         const authenticatedAxios = createAuthenticatedAxios(userSessionId);
 
         try {
@@ -114,7 +76,7 @@ Example 2: Create a Component with both content fields and metadata fields.
             if (metadata) {
                 convertLinksRecursively(metadata, locationId);
             }
-        
+
             // Reorder content and metadata fields based on the Component Schema.
             if (content) {
                 content = await reorderFieldsBySchema(content, schemaId, 'content', authenticatedAxios);
@@ -128,16 +90,16 @@ Example 2: Create a Component with both content fields and metadata fields.
             try {
                 payload = await getCachedDefaultModel("Component", locationId, authenticatedAxios);
             } catch (error: any) {
-                 return handleAxiosError(error, "Failed to load default model for Component");
+                return handleAxiosError(error, "Failed to load default model for Component");
             }
-            
+
             // 2. Customize the payload
             payload.Title = title;
             payload.Schema = toLink(schemaId);
-            
+
             if (content) payload.Content = content;
             if (metadata) payload.Metadata = metadata;
-            
+
             if (!payload.LocationInfo?.OrganizationalItem?.IdRef) {
                 payload.LocationInfo = { ...payload.LocationInfo, OrganizationalItem: toLink(locationId) };
             }
@@ -169,5 +131,44 @@ Example 2: Create a Component with both content fields and metadata fields.
             await diagnoseBluePrintError(error, diagnosticsArgs, locationId, authenticatedAxios);
             return handleAxiosError(error, "Failed to create Component");
         }
-    }
+    },
+    examples: [
+        {
+            description: "Create a simple Component with only content fields",
+            payload: `const result = await tools.createComponent({
+        itemType: "Component",
+        locationId: "tcm:5-53-2",
+        title: "Site Header",
+        schemaId: "tcm:5-72-8",
+        content: {
+            "siteTitle": "Global News Network",
+            "tagline": "Your trusted source for news"
+        }
+    });`
+        },
+        {
+            description: "Create a Component with both content fields and metadata fields",
+            payload: `const result = await tools.createComponent({
+        itemType: "Component",
+        locationId: "tcm:5-53-2",
+        title: "New AI Breakthrough Article",
+        schemaId: "tcm:5-74-8",
+        content: {
+            "headline": "New AI Model Surpasses Human Benchmarks",
+            "body": "<p>Today, researchers announced a new model...</p>",
+            "author": {
+                "name": "Dr. Alex Chen",
+                "biography": "Lead AI researcher."
+            }
+        },
+        metadata: {
+            "category": {
+                "type": "Link",
+                "IdRef": "tcm:5-189-1024"
+            },
+            "seoKeywords": "AI, Technology, Breakthrough"
+        }
+    });`
+        }
+    ]
 };

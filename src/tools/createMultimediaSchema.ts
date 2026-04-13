@@ -14,35 +14,7 @@ export const createMultimediaSchema = {
 Multimedia Schemas define the metadata fields for Multimedia Components (e.g., images, videos, PDFs).
 They also specify which file types are allowed using the 'allowedMultimediaTypes' property.
 
-The schema's structure is defined using the 'metadataFields' property, which is an array of field definitions.
-
-Examples:
-
-Example 1: Create a simple Multimedia Schema for images.
-    const result = await tools.createMultimediaSchema({
-        title: "Image Schema",
-        locationId: "tcm:1-2-2",
-        description: "A schema for image metadata.",
-        allowedMultimediaTypes: [
-            "tcm:0-2-65544", // JPEG
-            "tcm:0-3-65544"  // PNG
-        ],
-        metadataFields: [
-            {
-                "type": "SingleLineTextFieldDefinition",
-                "Name": "altText",
-                "Description": "Alternative text for accessibility.",
-                "MinOccurs": 1
-            },
-            {
-                "type": "SingleLineTextFieldDefinition",
-                "Name": "caption",
-                "Description": "A caption for the image.",
-                "MinOccurs": 0
-            }
-        ]
-    });
-    `,
+The schema's structure is defined using the 'metadataFields' property, which is an array of field definitions.`,
     input: {
         title: z.string().nonempty().describe("The title for the new Multimedia Schema."),
         locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new Schema will be created."),
@@ -66,7 +38,7 @@ Example 1: Create a simple Multimedia Schema for images.
         } = args;
 
         const authenticatedAxios = createAuthenticatedAxios(userSessionId);
-        
+
         try {
             const processedMetadataFields = metadataFields ? await processAndOrderFieldDefinitions(metadataFields, locationId, authenticatedAxios) : undefined;
 
@@ -88,7 +60,7 @@ Example 1: Create a simple Multimedia Schema for images.
             if (bundleProcessId) payload.BundleProcess = toLink(bundleProcessId);
             if (typeof isIndexable === 'boolean') payload.IsIndexable = isIndexable;
             if (typeof isPublishable === 'boolean') payload.IsPublishable = isPublishable;
-            
+
             if (!payload.LocationInfo?.OrganizationalItem?.IdRef) {
                 payload.LocationInfo = { ...payload.LocationInfo, OrganizationalItem: toLink(locationId) };
             }
@@ -114,5 +86,33 @@ Example 1: Create a simple Multimedia Schema for images.
             await diagnoseBluePrintError(error, args, locationId, authenticatedAxios);
             return handleAxiosError(error, "Failed to create Multimedia Schema");
         }
-    }
+    },
+    examples: [
+        {
+            description: "Create a simple Multimedia Schema for images",
+            payload: `const result = await tools.createMultimediaSchema({
+        title: "Image Schema",
+        locationId: "tcm:1-2-2",
+        description: "A schema for image metadata.",
+        allowedMultimediaTypes: [
+            "tcm:0-2-65544", // JPEG
+            "tcm:0-3-65544"  // PNG
+        ],
+        metadataFields: [
+            {
+                "type": "SingleLineTextFieldDefinition",
+                "Name": "altText",
+                "Description": "Alternative text for accessibility.",
+                "MinOccurs": 1
+            },
+            {
+                "type": "SingleLineTextFieldDefinition",
+                "Name": "caption",
+                "Description": "A caption for the image.",
+                "MinOccurs": 0
+            }
+        ]
+    });`
+        }
+    ]
 };

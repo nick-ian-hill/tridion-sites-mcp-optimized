@@ -18,37 +18,7 @@ export const getDependencyGraph = {
     
     To analyze the dependencies (e.g., to find "Used By" pages that are currently *published*):
     1.  **Find:** Use this tool to get the list of dependent item IDs.
-    2.  **Fetch:** Use the 'toolOrchestrator' to process this list. In the 'mapScript', call 'getPublishInfo' or 'getItem' for each ID to check its status.
-
-Examples:
-
-Example 1: Finds all items that are directly using a Schema.
-    const result = await tools.getDependencyGraph({
-        itemId: "tcm:5-256-8",
-        direction: "UsedBy"
-    });
-
-Example 2: Finds all Components used by a Page.
-    const result = await tools.getDependencyGraph({
-        itemId: "tcm:5-314-64",
-        direction: "Uses",
-        rloItemTypes: ["Component"]
-    });
-
-Expected JSON Output for Example 2 (Flat Mode):
-[
-  {
-    "Id": "tcm:5-292",
-    "Title": "blueprint",
-    "type": "Component"
-  },
-  {
-    "Id": "tcm:5-307",
-    "Title": "All Articles Intro",
-    "type": "Component"
-  }
-]
-`,
+    2.  **Fetch:** Use the 'toolOrchestrator' to process this list. In the 'mapScript', call 'getPublishInfo' or 'getItem' for each ID to check its status.`,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/).describe("The unique ID of the item for which the dependency graph should be retrieved."),
         direction: z.enum(["Uses", "UsedBy"]).optional().default("Uses").describe("Specifies the direction of the dependencies. 'Uses' returns items this item depends on; 'UsedBy' returns items that depend on this item."),
@@ -82,12 +52,12 @@ Expected JSON Output for Example 2 (Flat Mode):
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const restItemId = itemId.replace(':', '_');
-            
+
             const apiDetails = 'IdAndTitleOnly';
 
             const params = { direction, contextRepositoryId, rloItemTypes, includeContainers, resultLimit, details: apiDetails };
             const cleanParams = Object.fromEntries(Object.entries(params).filter(([_, v]) => v !== undefined));
-            
+
             const response = await authenticatedAxios.get(`/items/${restItemId}/dependencyGraph`, {
                 params: cleanParams
             });
@@ -112,9 +82,9 @@ Expected JSON Output for Example 2 (Flat Mode):
                     dataToProcess = Array.from(uniqueItems.values());
                 }
 
-                const finalData = filterResponseData({ 
-                    responseData: dataToProcess, 
-                    details: "IdAndTitle" 
+                const finalData = filterResponseData({
+                    responseData: dataToProcess,
+                    details: "IdAndTitle"
                 });
                 const formattedFinalData = formatForAgent(finalData);
                 return {
@@ -129,5 +99,36 @@ Expected JSON Output for Example 2 (Flat Mode):
         } catch (error) {
             return handleAxiosError(error, `Failed to retrieve dependency graph for item ${itemId}`);
         }
-    }
+    },
+    examples: [
+        {
+            description: "Finds all items that are directly using a Schema",
+            payload: `const result = await tools.getDependencyGraph({
+        itemId: "tcm:5-256-8",
+        direction: "UsedBy"
+    });`
+        },
+        {
+            description: "Finds all Components used by a Page",
+            payload: `const result = await tools.getDependencyGraph({
+        itemId: "tcm:5-314-64",
+        direction: "Uses",
+        rloItemTypes: ["Component"]
+    });
+
+Expected JSON Output for Example 2 (Flat Mode):
+[
+  {
+    "Id": "tcm:5-292",
+    "Title": "blueprint",
+    "type": "Component"
+  },
+  {
+    "Id": "tcm:5-307",
+    "Title": "All Articles Intro",
+    "type": "Component"
+  }
+]`
+        }
+    ]
 };

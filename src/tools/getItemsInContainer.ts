@@ -43,10 +43,10 @@ export const getItemsInContainer = {
         useDynamicVersion: z.boolean().optional().default(true).describe("The default setting of `true` ensures that the latest data is returned for versioned items."),
         itemTypes: z.array(itemTypeEnum).optional().describe("An array of item types to filter the results, e.g., ['Component', 'Page', 'Folder']. If omitted, all item types are returned."),
     },
-    execute: async ({ containerId, recursive = false, useDynamicVersion = true, itemTypes }: { 
-        containerId: string, 
-        recursive?: boolean, 
-        useDynamicVersion?: boolean, 
+    execute: async ({ containerId, recursive = false, useDynamicVersion = true, itemTypes }: {
+        containerId: string,
+        recursive?: boolean,
+        useDynamicVersion?: boolean,
         itemTypes?: string[]
     }, context: any) => {
         const req = context?.request;
@@ -70,9 +70,9 @@ export const getItemsInContainer = {
             });
 
             if (response.status === 200) {
-                const finalData = filterResponseData({ 
-                    responseData: response.data, 
-                    details: "IdAndTitle" 
+                const finalData = filterResponseData({
+                    responseData: response.data,
+                    details: "IdAndTitle"
                 });
                 const formattedFinalData = formatForAgent(finalData);
                 return {
@@ -87,5 +87,7 @@ export const getItemsInContainer = {
         } catch (error) {
             return handleAxiosError(error, "Failed to retrieve items from container");
         }
-    }
+    },
+    examples: [
+    ]
 };

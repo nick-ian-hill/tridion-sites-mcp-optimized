@@ -127,100 +127,108 @@ If you change 'pageTemplateId' to a template that requires a different metadata 
 Verification: API success (200 OK) guarantees the request was received, but not necessarily that complex nested structures (like Regions) were populated as intended. For critical updates, you should fetch the item using getItem to verify the changes were persisted correctly before reporting completion to the user.
 If called from the toolOrchestrator, consider auditing one or more updated pages to validate that the script performed as intended.
 
-Examples:
-
-Example 1: Update the title and file name of a Page.
-    const result = await tools.updatePage({
-        itemId: "tcm:1-123-64",
-        title: "New About Us Title",
-        fileName: "new-about-us.html"
-    });
-
-Example 2: Update metadata.
-    const result = await tools.updatePage({
-        itemId: "tcm:1-123-64",
-        metadata: { "seoTitle": "Updated Title" }
-    });
-
-Example 3: Reorder Component Presentations in a specific Region.
-    const result = await tools.updatePage({
-        itemId: "tcm:1-123-64",
-        regions: [
-            {
-                "type": "EmbeddedRegion",
-                "RegionName": "Main",
-                "ComponentPresentations": [
-                    { "type": "ComponentPresentation", "Component": { "type": "Link", "IdRef": "tcm:1-201-16" }, "ComponentTemplate": { "type": "Link", "IdRef": "tcm:1-202-32" } },
-                    { "type": "ComponentPresentation", "Component": { "type": "Link", "IdRef": "tcm:1-101-16" }, "ComponentTemplate": { "type": "Link", "IdRef": "tcm:1-102-32" } }
-                ]
-            }
-        ]
-    });
-
-Example 4: Atomically Add a Component to the 'Main' Region.
-    const result = await tools.updatePage({
-        itemId: "tcm:1-123-64",
-        componentPresentationUpdates: [
-            {
-                "regionPath": "Main",
-                "addComponentPresentations": [
-                    { 
-                        "type": "ComponentPresentation", 
-                        "Component": { "type": "Link", "IdRef": "tcm:1-500-16" }, 
-                        "ComponentTemplate": { "type": "Link", "IdRef": "tcm:1-202-32" } 
-                    }
-                ]
-            }
-        ]
-    });
-
-Example 5: Remove a specific Component from the top-level Page.
-    const result = await tools.updatePage({
-        itemId: "tcm:1-123-64",
-        componentPresentationUpdates: [
-            {
-                "removeComponentPresentations": [
-                    { "Component": { "type": "Link", "IdRef": "tcm:1-999-16" } }
-                ]
-            }
-        ]
-    });
-
-Example 6: Change the Metadata Schema and provide metadata for the new fields. Specifying metadata values with this tool is necessary when the new metadata schema has mandatory fields.
-    const result = await tools.updatePage({
-        itemId: "tcm:1-123-64",
-        metadataSchemaId: "tcm:1-987-8",
-        metadata: {
-            "pageType": "Landing Page",
-            "campaignCode": "Q4-2025"
-        }
-    });
-
-Example 7: Remove the Metadata Schema from a Page.
-    const result = await tools.updatePage({
-        itemId: "tcm:1-123-64",
-        metadataSchemaId: "tcm:0-0-0"
-    });
-
-Example 8: Reorder the structural Regions on a Page.
-To move the 'Sidebar' region above the 'Main' region, you must perform a full replacement and explicitly set 'overrideRegionOrder' to true.
-    const result = await tools.updatePage({
-        itemId: "tcm:1-123-64",
-        overrideRegionOrder: true,
-        regions: [
-            { 
-                "type": "EmbeddedRegion", 
-                "RegionName": "Sidebar",
-                "ComponentPresentations": [ /* existing sidebar content */ ]
-            },
-            { 
-                "type": "EmbeddedRegion", 
-                "RegionName": "Main",
-                "ComponentPresentations": [ /* existing main content */ ]
-            }
-        ]
-    });
 `,
+    examples: [
+        {
+            description: "Update the title and file name of a Page.",
+            payload: `const result = await tools.updatePage({
+    itemId: "tcm:1-123-64",
+    title: "New About Us Title",
+    fileName: "new-about-us.html"
+});`
+        },
+        {
+            description: "Update metadata.",
+            payload: `const result = await tools.updatePage({
+    itemId: "tcm:1-123-64",
+    metadata: { "seoTitle": "Updated Title" }
+});`
+        },
+        {
+            description: "Reorder Component Presentations in a specific Region.",
+            payload: `const result = await tools.updatePage({
+    itemId: "tcm:1-123-64",
+    regions: [
+        {
+            "type": "EmbeddedRegion",
+            "RegionName": "Main",
+            "ComponentPresentations": [
+                { "type": "ComponentPresentation", "Component": { "type": "Link", "IdRef": "tcm:1-201-16" }, "ComponentTemplate": { "type": "Link", "IdRef": "tcm:1-202-32" } },
+                { "type": "ComponentPresentation", "Component": { "type": "Link", "IdRef": "tcm:1-101-16" }, "ComponentTemplate": { "type": "Link", "IdRef": "tcm:1-102-32" } }
+            ]
+        }
+    ]
+});`
+        },
+        {
+            description: "Atomically Add a Component to the 'Main' Region.",
+            payload: `const result = await tools.updatePage({
+    itemId: "tcm:1-123-64",
+    componentPresentationUpdates: [
+        {
+            "regionPath": "Main",
+            "addComponentPresentations": [
+                { 
+                    "type": "ComponentPresentation", 
+                    "Component": { "type": "Link", "IdRef": "tcm:1-500-16" }, 
+                    "ComponentTemplate": { "type": "Link", "IdRef": "tcm:1-202-32" } 
+                }
+            ]
+        }
+    ]
+});`
+        },
+        {
+            description: "Remove a specific Component from the top-level Page.",
+            payload: `const result = await tools.updatePage({
+    itemId: "tcm:1-123-64",
+    componentPresentationUpdates: [
+        {
+            "removeComponentPresentations": [
+                { "Component": { "type": "Link", "IdRef": "tcm:1-999-16" } }
+            ]
+        }
+    ]
+});`
+        },
+        {
+            description: "Change the Metadata Schema and provide metadata for the new fields. Specifying metadata values with this tool is necessary when the new metadata schema has mandatory fields.",
+            payload: `const result = await tools.updatePage({
+    itemId: "tcm:1-123-64",
+    metadataSchemaId: "tcm:1-987-8",
+    metadata: {
+        "pageType": "Landing Page",
+        "campaignCode": "Q4-2025"
+    }
+});`
+        },
+        {
+            description: "Remove the Metadata Schema from a Page.",
+            payload: `const result = await tools.updatePage({
+    itemId: "tcm:1-123-64",
+    metadataSchemaId: "tcm:0-0-0"
+});`
+        },
+        {
+            description: "Reorder the structural Regions on a Page. To move the 'Sidebar' region above the 'Main' region, you must perform a full replacement and explicitly set 'overrideRegionOrder' to true.",
+            payload: `const result = await tools.updatePage({
+    itemId: "tcm:1-123-64",
+    overrideRegionOrder: true,
+    regions: [
+        { 
+            "type": "EmbeddedRegion", 
+            "RegionName": "Sidebar",
+            "ComponentPresentations": [ /* existing sidebar content */ ]
+        },
+        { 
+            "type": "EmbeddedRegion", 
+            "RegionName": "Main",
+            "ComponentPresentations": [ /* existing main content */ ]
+        }
+    ]
+});`
+        }
+    ],
     input: updatePageInputProperties,
     
     execute: async (params: UpdatePageInput, context: any) => {

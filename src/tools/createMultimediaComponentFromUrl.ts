@@ -20,7 +20,7 @@ const createMultimediaComponentFromUrlSchema = z.object(createMultimediaComponen
 export const createMultimediaComponentFromUrl = {
     name: "createMultimediaComponentFromUrl",
     summary: "Creates a Multimedia Component by downloading binary content from a public URL.",
-    description: "Creates a new multimedia component by uploading a file from a public URL. If the parent Folder has a mandatory schema, it will be used automatically, so there is no need to provide a schemaId. This is one of four ways to create a multimedia component, with the others being 'createMultimediaComponentFromBase64', 'createMultimediaComponentFromPrompt', and 'createMultimediaComponentFromAttachment' (for user-attached files).",
+    description: `Creates a new multimedia component by uploading a file from a public URL. If the parent Folder has a mandatory schema, it will be used automatically, so there is no need to provide a schemaId. This is one of four ways to create a multimedia component, with the others being 'createMultimediaComponentFromBase64', 'createMultimediaComponentFromPrompt', and 'createMultimediaComponentFromAttachment' (for user-attached files).`,
     input: createMultimediaComponentFromUrlInputProperties,
     async execute(input: z.infer<typeof createMultimediaComponentFromUrlSchema>,
         context: any
@@ -32,7 +32,7 @@ export const createMultimediaComponentFromUrl = {
         const userSessionId = match ? match[1] : null;
 
         const { mediaUrl, title, fileName, locationId, schemaId, metadata } = input;
-        
+
         const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
 
         try {
@@ -44,9 +44,9 @@ export const createMultimediaComponentFromUrl = {
             };
 
             console.log(`Checking file size for: ${mediaUrl}`);
-            const headResponse = await axios.head(mediaUrl, { 
+            const headResponse = await axios.head(mediaUrl, {
                 timeout: 5000,
-                headers: requestHeaders 
+                headers: requestHeaders
             });
             const contentLength = headResponse.headers['content-length'];
 
@@ -56,10 +56,10 @@ export const createMultimediaComponentFromUrl = {
                     Message: `Error: File size of ${contentLength} bytes exceeds the limit of ${MAX_FILE_SIZE_BYTES} bytes.`
                 };
                 return {
-                   content: [{
-                       type: "text",
-                       text: JSON.stringify(errorResponse, null, 2)
-                   }],
+                    content: [{
+                        type: "text",
+                        text: JSON.stringify(errorResponse, null, 2)
+                    }],
                 };
             }
 
@@ -88,7 +88,7 @@ export const createMultimediaComponentFromUrl = {
             if (uploadResponse.status !== 202) {
                 return handleUnexpectedResponse(uploadResponse);
             }
-            
+
             const cmsTempFileId = uploadResponse.data.TempFileId;
             console.log(`Binary uploaded successfully. CMS Temporary File ID: ${cmsTempFileId}`);
 
@@ -132,7 +132,7 @@ export const createMultimediaComponentFromUrl = {
                 if (!defaultMultimediaSchemaId || defaultMultimediaSchemaId === 'tcm:0-0-0') {
                     throw new Error(`The Publication (${publicationId}) does not have a Default Multimedia Schema defined.`);
                 }
-                
+
                 console.log(`Using Publication's default multimedia schema: ${defaultMultimediaSchemaId}`);
                 payload.Schema = { ...payload.Schema, IdRef: defaultMultimediaSchemaId };
             }
@@ -181,5 +181,7 @@ export const createMultimediaComponentFromUrl = {
             }
             return handleAxiosError(error, "Failed to create multimedia component from URL");
         }
-    }
+    },
+    examples: [
+    ]
 };

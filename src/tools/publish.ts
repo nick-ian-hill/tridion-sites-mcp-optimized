@@ -42,7 +42,7 @@ const publishSchema = z.object(publishInputProperties);
 export const publish = {
     name: "publish",
     summary: "Publishes one or more items to specified targets (e.g., 'Staging'). Supports scheduling and dependency resolution.",
-    description: "Publishes one or more items to the specified targets. Can be used as a 'dryRun' to see what would be published.",
+    description: `Publishes one or more items to the specified targets. Can be used as a 'dryRun' to see what would be published.`,
     input: publishInputProperties,
 
     execute: async (input: z.infer<typeof publishSchema>, context: any) => {
@@ -142,7 +142,7 @@ export const publish = {
 
                 // 2. Handle Actual Publish (Object with Transaction IDs)
                 const transactionIds = response.data?.PublishTransactionIds || [];
-                
+
                 if (transactionIds.length === 0) {
                     const warningData = {
                         type: "PublishingWarning",
@@ -176,5 +176,7 @@ export const publish = {
         } catch (error) {
             return handleAxiosError(error, `Failed to ${action} items`);
         }
-    }
+    },
+    examples: [
+    ]
 };

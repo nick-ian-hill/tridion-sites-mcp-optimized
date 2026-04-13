@@ -82,7 +82,7 @@ export const autoClassifyMultimediaComponent = {
             const restSchemaId = schemaId.replace(':', '_');
             const schemaResponse = await authenticatedAxios.get(`/items/${restSchemaId}`);
             if (schemaResponse.status !== 200) return handleUnexpectedResponse(schemaResponse);
-            
+
             const schema = schemaResponse.data;
             const metadataFields = schema.MetadataFields || {};
             const targetCategories: { id: string, title: string, fieldName: string }[] = [];
@@ -102,8 +102,8 @@ export const autoClassifyMultimediaComponent = {
             }
 
             if (targetCategories.length === 0) {
-                const msg = restrictToAutoClassificationFields 
-                    ? "No metadata fields found marked for Auto Classification." 
+                const msg = restrictToAutoClassificationFields
+                    ? "No metadata fields found marked for Auto Classification."
                     : "No Keyword fields found in the Metadata Schema.";
                 return { content: [{ type: "text", text: JSON.stringify({ message: msg }) }] };
             }
@@ -134,11 +134,11 @@ export const autoClassifyMultimediaComponent = {
 
             // 5. Download Binary
             const downloadResponse = await authenticatedAxios.get<ArrayBuffer>(
-                `/items/${restItemId}/binary/download`, 
+                `/items/${restItemId}/binary/download`,
                 { responseType: 'arraybuffer' }
             );
             if (downloadResponse.status !== 200) return handleUnexpectedResponse(downloadResponse);
-            
+
             const imageBuffer = Buffer.from(downloadResponse.data);
             const base64Content = imageBuffer.toString('base64');
 
@@ -159,7 +159,7 @@ export const autoClassifyMultimediaComponent = {
             Return ONLY a JSON object containing a 'selectedKeywords' array of strings.`;
 
             const genAI = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-            
+
             const imagePart = {
                 inlineData: {
                     data: base64Content,
@@ -240,5 +240,7 @@ export const autoClassifyMultimediaComponent = {
         } catch (error) {
             return handleAxiosError(error, `Failed to auto-classify multimedia component ${itemId}`);
         }
-    }
+    },
+    examples: [
+    ]
 };

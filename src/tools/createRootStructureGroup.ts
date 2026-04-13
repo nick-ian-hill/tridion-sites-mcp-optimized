@@ -11,35 +11,17 @@ export const createRootStructureGroup = {
     description: `Creates a root Structure Group for the specified Publication.
     This is only required for a root Publication – a Publication that has no parent Publications – when the root Publication is used for constructing a BluePrint hierarchy.
     Children of the root Publication will automatically inherit the root Structure Group and its content.
-    A BluePrint hierarchy enables content reuse via inheritance. To create a child publication, use the 'createPublication' tool.
-    
-Examples:
-
-Example 1: Creates a simple root Structure Group named 'Website Root' in the Publication with ID tcm:0-10-1.
-    const result = await tools.createRootStructureGroup({
-        title: "Website Root",
-        publicationId: "tcm:0-10-1"
-    });
-
-Example 2: Creates a root Structure Group with a title and applies metadata to it within Publication tcm:0-1-1.
-    const result = await tools.createRootStructureGroup({
-        title: "Root for Global Site",
-        publicationId: "tcm:0-1-1",
-        metadataSchemaId: "tcm:1-123-8",
-        metadata: {
-            "siteName": "Global",
-            "region": "Worldwide"
-        }
-    });`,
+    A BluePrint hierarchy enables content reuse via inheritance. To create a child publication, use the 'createPublication' tool.`,
     input: {
         title: z.string().describe("The title for the new root Structure Group."),
         publicationId: z.string().regex(/^tcm:0-\d+-1$/).describe("The TCM URI of the root Publication that will contain this Structure Group. Use 'getPublications' to find the ID of a Publication."),
         metadataSchemaId: z.string().regex(/^tcm:\d+-\d+-8$/).optional().describe("The TCM URI of a Metadata Schema to apply to the root Structure Group."),
         metadata: z.record(fieldValueSchema).optional().describe("A JSON object containing the values for the metadata fields, structured according to the Metadata Schema.")
     },
-    execute: async (args: { title: string; publicationId: string; metadataSchemaId?: string; metadata?: Record<string, any>
-     },
-    context: any) => {
+    execute: async (args: {
+        title: string; publicationId: string; metadataSchemaId?: string; metadata?: Record<string, any>
+    },
+        context: any) => {
         formatForApi(args);
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
@@ -65,7 +47,7 @@ Example 2: Creates a root Structure Group with a title and applies metadata to i
             if (defaultModelResponse.status !== 200) {
                 return handleUnexpectedResponse(defaultModelResponse);
             }
-            
+
             const payload = defaultModelResponse.data;
 
             // 2. Customize the payload
@@ -77,7 +59,7 @@ Example 2: Creates a root Structure Group with a title and applies metadata to i
             if (metadataSchemaId) {
                 payload.MetadataSchema = { ...payload.MetadataSchema, IdRef: metadataSchemaId };
             }
-            
+
             // 3. Post the customized payload to the /items endpoint to create the item
             const createResponse = await authenticatedAxios.post('/items', payload);
 
@@ -103,5 +85,26 @@ Example 2: Creates a root Structure Group with a title and applies metadata to i
         } catch (error) {
             return handleAxiosError(error, "Failed to create root Structure Group");
         }
-    }
+    },
+    examples: [
+        {
+            description: "Creates a simple root Structure Group named 'Website Root' in the Publication with ID tcm:0-10-1",
+            payload: `const result = await tools.createRootStructureGroup({
+        title: "Website Root",
+        publicationId: "tcm:0-10-1"
+    });`
+        },
+        {
+            description: "Creates a root Structure Group with a title and applies metadata to it within Publication tcm:0-1-1",
+            payload: `const result = await tools.createRootStructureGroup({
+        title: "Root for Global Site",
+        publicationId: "tcm:0-1-1",
+        metadataSchemaId: "tcm:1-123-8",
+        metadata: {
+            "siteName": "Global",
+            "region": "Worldwide"
+        }
+    });`
+        }
+    ]
 };

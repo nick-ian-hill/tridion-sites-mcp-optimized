@@ -28,121 +28,7 @@ IMPORTANT: When updating 'activityDefinitions', the entire existing set of activ
 
 Shared items ('BluePrintInfo.IsShared' is true) cannot be updated. To modify an inherited Process Definition, you must update the parent item in the BluePrint chain.
 
-For comprehensive details on how to structure activities, write robust C# scripts for automation, dynamically route tasks, and appropriately configure manual 'Decision' activities with automated branch routing, please refer to the extensive documentation in the 'createProcessDefinition' tool.
-
-Examples:
-
-Example 1: Update the title of a Process Definition and the description of one of its activities. Ensure automated steps use the System User (tcm:0-3-65552).
-    const result = await tools.updateProcessDefinition({
-        itemId: "tcm:5-1-131074",
-        title: "Task Process (Reviewed)",
-        activityDefinitions: [
-          {
-            "title": "Perform Task",
-            "description": "User performs the assigned task. Due date can now be overridden.",
-            "assigneeId": "tcm:0-1-65568",
-            "allowOverrideDueDate": true,
-            "nextActivities": ["Assign to Process Creator"]
-          },
-          {
-            "title": "Assign to Process Creator",
-            "assigneeId": "tcm:0-3-65552",
-            "description": "Task finished. Automatically routing to the process creator for review.",
-            "script": \`ActivityFinishData finishData = new ActivityFinishData();
-finishData.Message = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last().FinishMessage;
-finishData.NextAssignee = new LinkToTrusteeData();
-finishData.NextAssignee.IdRef = ProcessInstance.Creator.IdRef;
-SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
-            "nextActivities": ["Review Task"]
-          },
-          {
-            "title": "Review Task",
-            "activityType": "Decision",
-            "description": "Review and approve the task. Finish process or send it back.",
-            "nextActivities": ["Decline", "Accept"]
-          },
-          {
-            "title": "Decline",
-            "assigneeId": "tcm:0-3-65552",
-            "description": "The task was reviewed and will be sent back to the performer.",
-            "script": \`string performedTaskActivityDefinitionId = ProcessInstance.Activities.Cast<ActivityInstanceData>().First().ActivityDefinition.IdRef;
-ActivityFinishData finishData = new ActivityFinishData();
-finishData.Message = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last().FinishMessage;
-finishData.NextAssignee = new LinkToTrusteeData();
-finishData.NextAssignee.IdRef = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last(activity => activity.ActivityDefinition.IdRef == performedTaskActivityDefinitionId).Owner.IdRef;
-SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
-            "nextActivities": ["Perform Task"]
-          },
-          {
-            "title": "Accept",
-            "assigneeId": "tcm:0-3-65552",
-            "description": "The task process is complete.",
-            "script": \`ActivityFinishData finishData = new ActivityFinishData();
-finishData.Message = "Automatic Activity 'Accept' Finished";
-SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
-            "nextActivities": []
-          }
-        ]
-    });
-
-Example 2: Add a new 'Abort' step to an existing workflow.
-    const result = await tools.updateProcessDefinition({
-        itemId: "tcm:5-1-131074",
-        activityDefinitions: [
-          {
-            "title": "Perform Task",
-            "description": "User performs the assigned task.",
-            "assigneeId": "tcm:0-1-65568",
-            "allowOverrideDueDate": true,
-            "nextActivities": ["Assign to Process Creator"]
-          },
-          {
-            "title": "Assign to Process Creator",
-            "assigneeId": "tcm:0-3-65552",
-            "description": "Task finished. Automatically routing to the process creator for review.",
-            "script": \`ActivityFinishData finishData = new ActivityFinishData();
-finishData.Message = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last().FinishMessage;
-finishData.NextAssignee = new LinkToTrusteeData();
-finishData.NextAssignee.IdRef = ProcessInstance.Creator.IdRef;
-SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
-            "nextActivities": ["Review Task"]
-          },
-          {
-            "title": "Review Task",
-            "activityType": "Decision",
-            "description": "Review and approve the task. Finish process, send it back, or abort.",
-            "nextActivities": ["Decline", "Accept", "Abort"]
-          },
-          {
-            "title": "Decline",
-            "assigneeId": "tcm:0-3-65552",
-            "description": "The task was reviewed and will be sent back to the performer.",
-            "script": \`string performedTaskActivityDefinitionId = ProcessInstance.Activities.Cast<ActivityInstanceData>().First().ActivityDefinition.IdRef;
-ActivityFinishData finishData = new ActivityFinishData();
-finishData.Message = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last().FinishMessage;
-finishData.NextAssignee = new LinkToTrusteeData();
-finishData.NextAssignee.IdRef = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last(activity => activity.ActivityDefinition.IdRef == performedTaskActivityDefinitionId).Owner.IdRef;
-SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
-            "nextActivities": ["Perform Task"]
-          },
-          {
-            "title": "Accept",
-            "assigneeId": "tcm:0-3-65552",
-            "description": "The task process is complete.",
-            "script": \`ActivityFinishData finishData = new ActivityFinishData();
-finishData.Message = "Automatic Activity 'Accept' Finished";
-SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
-            "nextActivities": []
-          },
-          {
-            "title": "Abort",
-            "assigneeId": "tcm:0-3-65552",
-            "description": "This new activity aborts and deletes the workflow process.",
-            "script": "SessionAwareCoreServiceClient.Delete(ProcessInstance.Id);"
-          }
-        ]
-    });
-`,
+For comprehensive details on how to structure activities, write robust C# scripts for automation, dynamically route tasks, and appropriately configure manual 'Decision' activities with automated branch routing, please refer to the extensive documentation in the 'createProcessDefinition' tool.`,
     input: updateProcessDefinitionInputProperties,
     execute: async (params: UpdateProcessDefinitionInput, context: any) => {
         formatForApi(params);
@@ -237,5 +123,120 @@ SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishD
         } catch (error) {
             return handleAxiosError(error, `Failed to update Process Definition ${itemId}`);
         }
-    }
+    },
+    examples: [
+                        {
+                            description: "Update the title of a Process Definition and the description of one of its activities. Ensure automated steps use the System User (tcm:0-3-65552)",
+                            payload: `const result = await tools.updateProcessDefinition({
+        itemId: "tcm:5-1-131074",
+        title: "Task Process (Reviewed)",
+        activityDefinitions: [
+          {
+            "title": "Perform Task",
+            "description": "User performs the assigned task. Due date can now be overridden.",
+            "assigneeId": "tcm:0-1-65568",
+            "allowOverrideDueDate": true,
+            "nextActivities": ["Assign to Process Creator"]
+          },
+          {
+            "title": "Assign to Process Creator",
+            "assigneeId": "tcm:0-3-65552",
+            "description": "Task finished. Automatically routing to the process creator for review.",
+            "script": \`ActivityFinishData finishData = new ActivityFinishData();
+finishData.Message = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last().FinishMessage;
+finishData.NextAssignee = new LinkToTrusteeData();
+finishData.NextAssignee.IdRef = ProcessInstance.Creator.IdRef;
+SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
+            "nextActivities": ["Review Task"]
+          },
+          {
+            "title": "Review Task",
+            "activityType": "Decision",
+            "description": "Review and approve the task. Finish process or send it back.",
+            "nextActivities": ["Decline", "Accept"]
+          },
+          {
+            "title": "Decline",
+            "assigneeId": "tcm:0-3-65552",
+            "description": "The task was reviewed and will be sent back to the performer.",
+            "script": \`string performedTaskActivityDefinitionId = ProcessInstance.Activities.Cast<ActivityInstanceData>().First().ActivityDefinition.IdRef;
+ActivityFinishData finishData = new ActivityFinishData();
+finishData.Message = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last().FinishMessage;
+finishData.NextAssignee = new LinkToTrusteeData();
+finishData.NextAssignee.IdRef = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last(activity => activity.ActivityDefinition.IdRef == performedTaskActivityDefinitionId).Owner.IdRef;
+SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
+            "nextActivities": ["Perform Task"]
+          },
+          {
+            "title": "Accept",
+            "assigneeId": "tcm:0-3-65552",
+            "description": "The task process is complete.",
+            "script": \`ActivityFinishData finishData = new ActivityFinishData();
+finishData.Message = "Automatic Activity 'Accept' Finished";
+SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
+            "nextActivities": []
+          }
+        ]
+    });`
+                        },
+                        {
+                            description: "Add a new 'Abort' step to an existing workflow",
+                            payload: `const result = await tools.updateProcessDefinition({
+        itemId: "tcm:5-1-131074",
+        activityDefinitions: [
+          {
+            "title": "Perform Task",
+            "description": "User performs the assigned task.",
+            "assigneeId": "tcm:0-1-65568",
+            "allowOverrideDueDate": true,
+            "nextActivities": ["Assign to Process Creator"]
+          },
+          {
+            "title": "Assign to Process Creator",
+            "assigneeId": "tcm:0-3-65552",
+            "description": "Task finished. Automatically routing to the process creator for review.",
+            "script": \`ActivityFinishData finishData = new ActivityFinishData();
+finishData.Message = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last().FinishMessage;
+finishData.NextAssignee = new LinkToTrusteeData();
+finishData.NextAssignee.IdRef = ProcessInstance.Creator.IdRef;
+SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
+            "nextActivities": ["Review Task"]
+          },
+          {
+            "title": "Review Task",
+            "activityType": "Decision",
+            "description": "Review and approve the task. Finish process, send it back, or abort.",
+            "nextActivities": ["Decline", "Accept", "Abort"]
+          },
+          {
+            "title": "Decline",
+            "assigneeId": "tcm:0-3-65552",
+            "description": "The task was reviewed and will be sent back to the performer.",
+            "script": \`string performedTaskActivityDefinitionId = ProcessInstance.Activities.Cast<ActivityInstanceData>().First().ActivityDefinition.IdRef;
+ActivityFinishData finishData = new ActivityFinishData();
+finishData.Message = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last().FinishMessage;
+finishData.NextAssignee = new LinkToTrusteeData();
+finishData.NextAssignee.IdRef = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last(activity => activity.ActivityDefinition.IdRef == performedTaskActivityDefinitionId).Owner.IdRef;
+SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
+            "nextActivities": ["Perform Task"]
+          },
+          {
+            "title": "Accept",
+            "assigneeId": "tcm:0-3-65552",
+            "description": "The task process is complete.",
+            "script": \`ActivityFinishData finishData = new ActivityFinishData();
+finishData.Message = "Automatic Activity 'Accept' Finished";
+SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
+            "nextActivities": []
+          },
+          {
+            "title": "Abort",
+            "assigneeId": "tcm:0-3-65552",
+            "description": "This new activity aborts and deletes the workflow process.",
+            "script": "SessionAwareCoreServiceClient.Delete(ProcessInstance.Id);"
+          }
+        ]
+    });`
+                        }
+                    ]
 };

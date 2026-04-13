@@ -89,25 +89,7 @@ export const createBluePrintHierarchy = {
         }
     ]
 
-    ### Example 1: Using an Attached File (Recommended for UI users)
-    If the user attached a JSON file via the chat UI, use the attachmentId to process it instantly:
-    const result = await tools.createBluePrintHierarchy({
-        attachmentId: "temp-file-id-123",
-        fileName: "blueprint.json",
-        rootStructureGroupTitle: "Root"
-    });
-
-    ### Example 2: Using a Local File Path (Recommended for CLI/Local execution)
-    const result = await tools.createBluePrintHierarchy({
-        hierarchyFilePath: "C:\\data\\blueprint.json", 
-        rootStructureGroupTitle: "Root"
-    });
-
-    ### Example 3: Passing Data Directly (For dynamic/small hierarchies)
-    const result = await tools.createBluePrintHierarchy({
-        hierarchyData: generatedHierarchyArray,
-        rootStructureGroupTitle: "Root"
-    });
+    ]
     `,
     input: createBluePrintHierarchyInputProperties,
     execute: async (input: z.infer<typeof createBluePrintHierarchySchema>, context: any) => {
@@ -304,5 +286,29 @@ export const createBluePrintHierarchy = {
         } catch (error) {
             return handleAxiosError(error, "Failed to create BluePrint Hierarchy");
         }
-    }
+    },
+    examples: [
+        {
+            description: "Using an Attached File (Recommended for UI users). If the user attached a JSON file via the chat UI, use the attachmentId to process it instantly.",
+            payload: `const result = await tools.createBluePrintHierarchy({
+    attachmentId: "temp-file-id-123",
+    fileName: "blueprint.json",
+    rootStructureGroupTitle: "Root"
+});`
+        },
+        {
+            description: "Using a Local File Path (Recommended for CLI/Local execution).",
+            payload: `const result = await tools.createBluePrintHierarchy({
+    hierarchyFilePath: "C:\\\\data\\\\blueprint.json", 
+    rootStructureGroupTitle: "Root"
+});`
+        },
+        {
+            description: "Passing Data Directly (For dynamic/small hierarchies).",
+            payload: `const result = await tools.createBluePrintHierarchy({
+    hierarchyData: generatedHierarchyArray,
+    rootStructureGroupTitle: "Root"
+});`
+        }
+    ]
 };

@@ -39,7 +39,7 @@ export const checkInItem = {
                     responseData = {
                         type: response.data['$type'],
                         Id: response.data.Id,
-                        Message:`Successfully checked in ${response.data.Id}`
+                        Message: `Successfully checked in ${response.data.Id}`
                     };
                 }
                 return {
@@ -54,5 +54,7 @@ export const checkInItem = {
         } catch (error) {
             return handleAxiosError(error, `Failed to check in item ${itemId}`);
         }
-    }
+    },
+    examples: [
+    ]
 };

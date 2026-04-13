@@ -45,34 +45,7 @@ RETURNS:
     The tool returns a JSON object containing:
     - "Id": The TCM URI of the new Publication.
     - "RootFolder": A Link object ({ IdRef, Title }) to the Publication's root Folder.
-    - "RootStructureGroup": A Link object ({ IdRef, Title }) to the Publication's root Structure Group (if one exists).
-
-Examples:
-
-Example 1: Creates a new child Publication with a title, a publication URL for web content, a specific URL for multimedia items, and sets its locale to US English.
-    const result = await tools.createPublication({
-        title: "My New Website Publication",
-        parentPublications: ['tcm:0-5-1'],
-        publicationUrl: "/my-new-site",
-        multimediaUrl: "/my-new-site/images",
-        locale: "en-US"
-    });
-
-Example 2: Creates a basic 'Content' Publication that inherits structure (templates and template building blocks) from tcm:0-2-1 and content/metadata schemas from tcm:0-3-1.
-    const result = await tools.createPublication({
-        title: "Corporate Master Content",
-        parentPublications: ['tcm:0-2-1', 'tcm:0-3-1'],
-        publicationType: "Content"
-    });
-
-Example 3: Creates a Publication and configures its default workflow processes.
-    const result = await tools.createPublication({
-        title: "Editorial Workflow Publication",
-        parentPublications: ['tcm:0-5-1'],
-        publicationUrl: "/editorial",
-        defaultTaskProcessId: "tcm:5-1-131074",
-        enableWorkflowProcessAssociations: true
-    });`,
+    - "RootStructureGroup": A Link object ({ IdRef, Title }) to the Publication's root Structure Group (if one exists).`,
     input: {
         title: z.string().describe("The title for the new Publication. MUST be unique across the entire system. If a Publication with this title already exists, the operation will fail."),
         parentPublications: z.array(z.string().regex(/^tcm:\d+-\d+-1$/)).optional().describe("An array of URIs for parent Publications. Use the 'getPublications' tool to find available publications. The parents must belong to the same BluePrint hierarchy. If no parent Publications are specified, a root Publication will be created."),
@@ -164,5 +137,35 @@ Example 3: Creates a Publication and configures its default workflow processes.
         } catch (error) {
             return handleAxiosError(error, "Failed to create Publication");
         }
-    }
+    },
+    examples: [
+                        {
+                            description: "Creates a new child Publication with a title, a publication URL for web content, a specific URL for multimedia items, and sets its locale to US English",
+                            payload: `const result = await tools.createPublication({
+        title: "My New Website Publication",
+        parentPublications: ['tcm:0-5-1'],
+        publicationUrl: "/my-new-site",
+        multimediaUrl: "/my-new-site/images",
+        locale: "en-US"
+    });`
+                        },
+                        {
+                            description: "Creates a basic 'Content' Publication that inherits structure (templates and template building blocks) from tcm:0-2-1 and content/metadata schemas from tcm:0-3-1",
+                            payload: `const result = await tools.createPublication({
+        title: "Corporate Master Content",
+        parentPublications: ['tcm:0-2-1', 'tcm:0-3-1'],
+        publicationType: "Content"
+    });`
+                        },
+                        {
+                            description: "Creates a Publication and configures its default workflow processes",
+                            payload: `const result = await tools.createPublication({
+        title: "Editorial Workflow Publication",
+        parentPublications: ['tcm:0-5-1'],
+        publicationUrl: "/editorial",
+        defaultTaskProcessId: "tcm:5-1-131074",
+        enableWorkflowProcessAssociations: true
+    });`
+                        }
+                    ]
 };

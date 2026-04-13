@@ -6,7 +6,7 @@ import { formatForAgent } from "../utils/fieldReordering.js";
 export const restartActivity = {
     name: "restartActivity",
     summary: "Restarts an automated workflow Activity Instance that is in a 'Failed' state.",
-    description: "Restarts an automated workflow Activity Instance that is currently in a 'Failed' state. This is highly useful for re-triggering automated scripts or system tasks that failed due to transient issues without having to restart the entire workflow process.",
+    description: `Restarts an automated workflow Activity Instance that is currently in a 'Failed' state. This is highly useful for re-triggering automated scripts or system tasks that failed due to transient issues without having to restart the entire workflow process.`,
     input: {
         activityId: z.string().regex(/^tcm:\d+-\d+-131104$/)
             .describe("The unique ID of the failed workflow Activity Instance to restart (e.g., 'tcm:1-2-131104'). Use the 'getActivities' tool (with the 'Failed' state filter) to find the correct ID."),
@@ -19,7 +19,7 @@ export const restartActivity = {
 
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
-            
+
             // Escape the TCM URI (replace ':' with '_') for the URL path
             const escapedActivityId = activityId.replace(':', '_');
             const endpoint = `/items/${escapedActivityId}/restartActivity`;
@@ -29,7 +29,7 @@ export const restartActivity = {
             if (response.status === 200) {
                 // The API returns the updated ActivityInstance
                 const formattedData = formatForAgent(response.data);
-                
+
                 return {
                     content: [{
                         type: "text",
@@ -45,5 +45,7 @@ export const restartActivity = {
         } catch (error) {
             return handleAxiosError(error, `Failed to restart activity '${activityId}'`);
         }
-    }
+    },
+    examples: [
+    ]
 };

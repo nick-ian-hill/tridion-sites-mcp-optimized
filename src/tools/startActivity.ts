@@ -5,7 +5,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 export const startActivity = {
     name: "startActivity",
     summary: "Starts a workflow activity that is currently in 'Assigned' state.",
-    description: "Starts a specified workflow activity. The activity must be in an 'Assigned' state before it can be started. Use the 'getActivities' tool to find the ID of an activity.",
+    description: `Starts a specified workflow activity. The activity must be in an 'Assigned' state before it can be started. Use the 'getActivities' tool to find the ID of an activity.`,
     input: {
         activityId: z.string().regex(/^tcm:\d+-\d+-131104$/)
             .describe("The unique ID of the workflow activity instance to start."),
@@ -20,7 +20,7 @@ export const startActivity = {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const escapedActivityId = activityId.replace(':', '_');
             const endpoint = `/items/${escapedActivityId}/startActivity`;
-            
+
             const response = await authenticatedAxios.post(endpoint);
 
             if (response.status === 200) {
@@ -41,5 +41,7 @@ export const startActivity = {
         } catch (error) {
             return handleAxiosError(error, `Failed to start activity '${activityId}'`);
         }
-    }
+    },
+    examples: [
+    ]
 };

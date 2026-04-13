@@ -13,46 +13,15 @@ export const createEmbeddedSchema = {
     summary: "Creates a Schema designed to be embedded as a reusable field group within other Schemas.",
     description: `Creates a new Content Manager System (CMS) item of type 'Schema' with a purpose of 'Embedded'.
 
-BluePrint Inheritance Note:
-The Schema will be created in the specified Folder and be automatically inherited by all descendant Publications.
-
 Embedded Schemas are reusable groups of fields that can be inserted into other Schemas (both Component and Metadata) using an 'EmbeddedSchemaFieldDefinition'.
 The 'rootElementName' is mandatory and must be a valid XML name.
-The structure of an Embedded Schema is defined using the 'fields' property.
-
-Examples:
-
-Example 1: Create an 'Author Details' Embedded Schema.
-This schema can then be used inside other schemas (like an 'Article' schema) to add author information.
-    const result = await tools.createEmbeddedSchema({
-        title: "Author Details",
-        locationId: "tcm:20-1234-2",
-        rootElementName: "AuthorDetails",
-        description: "An embeddable schema for author information.",
-        fields: [
-            {
-                "type": "SingleLineTextFieldDefinition",
-                "Name": "name",
-                "Description": "The author's full name.",
-                "MinOccurs": 1,
-                "MaxOccurs": 1
-            },
-            {
-                "type": "MultiLineTextFieldDefinition",
-                "Name": "biography",
-                "Description": "A short biography of the author.",
-                "Height": 5,
-                "MinOccurs": 0
-            }
-        ]
-    });
-    `,
+The structure of an Embedded Schema is defined using the 'fields' property.`,
     input: {
         title: z.string().nonempty().describe("The title for the new Embedded Schema."),
         locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new Schema will be created."),
-        rootElementName: xmlNameSchema.describe("The name of the root element for the XML structure. This is mandatory for Embedded Schemas."),
+        rootElementName: xmlNameSchema.describe("The name of the root element for the XML structure."),
         description: z.string().nonempty().describe("A mandatory description of the Schema."),
-        fields: z.array(fieldDefinitionSchema).optional().describe("An array of field definitions for the schema's content fields. The order of the array determines the field order."),
+        fields: z.array(fieldDefinitionSchema).optional().describe("An array of field definitions for the schema."),
         isIndexable: z.boolean().optional().describe("Specifies whether field values are indexed for searching."),
         isPublishable: z.boolean().optional().describe("Specifies whether field values are published.")
     },
@@ -113,5 +82,32 @@ This schema can then be used inside other schemas (like an 'Article' schema) to 
             await diagnoseBluePrintError(error, args, locationId, authenticatedAxios);
             return handleAxiosError(error, "Failed to create Embedded Schema");
         }
-    }
+    },
+    examples: [
+        {
+            description: "Create an 'Author Details' Embedded Schema for use within other schemas like 'Article'.",
+            payload: `const result = await tools.createEmbeddedSchema({
+        title: "Author Details",
+        locationId: "tcm:20-1234-2",
+        rootElementName: "AuthorDetails",
+        description: "An embeddable schema for author information.",
+        fields: [
+            {
+                "type": "SingleLineTextFieldDefinition",
+                "Name": "name",
+                "Description": "The author's full name.",
+                "MinOccurs": 1,
+                "MaxOccurs": 1
+            },
+            {
+                "type": "MultiLineTextFieldDefinition",
+                "Name": "biography",
+                "Description": "A short biography of the author.",
+                "Height": 5,
+                "MinOccurs": 0
+            }
+        ]
+    });`
+        }
+    ]
 };

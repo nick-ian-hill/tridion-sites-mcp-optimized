@@ -4,6 +4,7 @@ export const requestOpenInEditor = {
     name: "requestOpenInEditor",
     summary: "Opens a specific CMS item in its dedicated editor view.",
     description: "Opens a specific item in its editor view. Only use this tool when the user explicitly asks to 'open' or 'edit' an item.",
+    examples: [],
     input: {
         itemId: z.string().regex(/^tcm:\d+-\d+(-\d+)?$/).describe("The TCM URI of the item to open."),
     },

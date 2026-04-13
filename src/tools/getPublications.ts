@@ -26,7 +26,7 @@ export const getPublications = {
 
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
-            
+
             const apiDetails = 'IdAndTitleOnly';
 
             const response = await authenticatedAxios.get('/publications', {
@@ -34,9 +34,9 @@ export const getPublications = {
             });
 
             if (response.status === 200) {
-                const finalData = filterResponseData({ 
-                    responseData: response.data, 
-                    details: "IdAndTitle" 
+                const finalData = filterResponseData({
+                    responseData: response.data,
+                    details: "IdAndTitle"
                 });
                 const formattedFinalData = formatForAgent(finalData);
                 return {
@@ -51,5 +51,7 @@ export const getPublications = {
         } catch (error) {
             return handleAxiosError(error, "Failed to retrieve publications");
         }
-    }
+    },
+    examples: [
+    ]
 };

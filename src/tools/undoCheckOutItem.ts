@@ -55,5 +55,7 @@ export const undoCheckOutItem = {
         } catch (error) {
             return handleAxiosError(error, `Failed to undo check-out for item ${itemId}`);
         }
-    }
+    },
+    examples: [
+    ]
 };

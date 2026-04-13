@@ -103,240 +103,7 @@ You can use ProcessInstance history to dynamically route workflows.
 - **UI Error: "Not found" on an automated step**: This usually indicates the C# script crashed. Add a try-catch block to log errors to \`ProcessInstance.Variables["Error"]\` for easier debugging.
 - **Large Debug Output:** If you need to output logs that are too large for standard variables, use the \`((char)34).ToString()\` + folder metadata technique to dump the payload into a temporary folder's metadata.
 
-Examples:
-
-Example 1: Create a simple, two-step approval workflow.
-    const result = await tools.createProcessDefinition({
-        title: "Two-Step Approval",
-        locationId: "tcm:0-5-1",
-        description: "A simple workflow for content creation and approval.",
-        activityDefinitions: [
-          {
-            "title": "Create Content",
-            "description": "User creates the initial content.",
-            "nextActivities": ["Manager Approval"]
-          },
-          {
-            "title": "Manager Approval",
-            "description": "Manager reviews and approves the content to finish the workflow.",
-            "nextActivities": []
-          }
-        ]
-    });
-
-Example 2: Create a complex workflow using Best Practice Decision Routing (Manual Decision -> Automated Branches).
-*Note the strict avoidance of Object Initializers and the explicit LINQ casting.*
-    const result = await tools.createProcessDefinition({
-        title: "Task Process with Review",
-        locationId: "tcm:0-5-1",
-        description: "A workflow with a perform step, an automated assignment, a review decision, and automated accept/decline branches.",
-        activityDefinitions: [
-          {
-            "title": "Perform Task",
-            "description": "Perform the specified task.",
-            "assigneeId": "tcm:0-1-65568",
-            "allowOverrideDueDate": true,
-            "nextActivities": ["Assign to Process Creator"]
-          },
-          {
-            "title": "Assign to Process Creator",
-            "assigneeId": "tcm:0-3-65552",
-            "description": "Task was finished and it will be sent to the process creator.",
-            "script": \`ActivityFinishData finishData = new ActivityFinishData();
-finishData.Message = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last().FinishMessage;
-finishData.NextAssignee = new LinkToTrusteeData();
-finishData.NextAssignee.IdRef = ProcessInstance.Creator.IdRef;
-SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
-            "nextActivities": ["Review Task"]
-          },
-          {
-            "title": "Review Task",
-            "activityType": "Decision",
-            "description": "Manual review. Choose to Accept or Decline.",
-            "nextActivities": ["Decline", "Accept"]
-          },
-          {
-            "title": "Decline",
-            "assigneeId": "tcm:0-3-65552",
-            "description": "Automated routing: Sends task back to the original performer.",
-            "script": \`string performedTaskActivityDefinitionId = ProcessInstance.Activities.Cast<ActivityInstanceData>().First().ActivityDefinition.IdRef;
-ActivityFinishData finishData = new ActivityFinishData();
-finishData.Message = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last().FinishMessage;
-finishData.NextAssignee = new LinkToTrusteeData();
-finishData.NextAssignee.IdRef = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last(activity => activity.ActivityDefinition.IdRef == performedTaskActivityDefinitionId).Owner.IdRef;
-SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
-            "nextActivities": ["Perform Task"]
-          },
-          {
-            "title": "Accept",
-            "assigneeId": "tcm:0-3-65552",
-            "description": "Automated routing: The task process is complete.",
-            "script": \`ActivityFinishData finishData = new ActivityFinishData();
-finishData.Message = "Automatic Activity 'Accept' Finished";
-SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
-            "nextActivities": []
-          }
-        ]
-    });
-
-Example 3: Create a workflow with an auto-publish script.
-    const result = await tools.createProcessDefinition({
-        title: "Auto-Publish Workflow",
-        locationId: "tcm:0-5-1",
-        description: "A workflow with a review decision that automatically publishes items upon approval.",
-        activityDefinitions: [
-            {
-                "title": "Review for Publish",
-                "activityType": "Decision",
-                "description": "Review the item and decide whether to approve and publish, or reject.",
-                "nextActivities": ["Reject", "Approve and Publish"]
-            },
-            {
-                "title": "Reject",
-                "assigneeId": "tcm:0-3-65552",
-                "description": "Automated rejection routing.",
-                "script": \`ActivityFinishData finishData = new ActivityFinishData();
-finishData.Message = "Item rejected for publishing.";
-SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
-                "nextActivities": []
-            },
-            {
-                "title": "Approve and Publish",
-                "assigneeId": "tcm:0-3-65552",
-                "description": "This automated activity safely publishes the items.",
-                "script": \`if (ProcessInstance.Subjects != null && ProcessInstance.Subjects.Length > 0)
-{
-    string[] itemIds = new string[ProcessInstance.Subjects.Length];
-    for (int i = 0; i < ProcessInstance.Subjects.Length; i++)
-    {
-        string id = ProcessInstance.Subjects[i].IdRef;
-        int vIndex = id.LastIndexOf("-v");
-        itemIds[i] = (vIndex > -1) ? id.Substring(0, vIndex) : id;
-    }
-    PublishInstructionData instruction = new PublishInstructionData();
-    instruction.ResolveInstruction = new ResolveInstructionData();
-    instruction.ResolveInstruction.IncludeComponentLinks = true;
-    instruction.ResolveInstruction.IncludeDynamicVersion = true;
-    instruction.RenderInstruction = new RenderInstructionData();
-    SessionAwareCoreServiceClient.Publish(itemIds, instruction, new string[] { "tcm:0-2-65538" }, Tridion.ContentManager.CoreService.Client.PublishPriority.Normal, null);
-}
-ActivityFinishData finishData = new ActivityFinishData();
-finishData.Message = "Automated publishing initiated.";
-SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`
-            }
-        ]
-    });
-
-Example 4: Create a workflow with an automated activity that aborts the entire process.
-    const result = await tools.createProcessDefinition({
-        title: "Workflow with Abort Step",
-        locationId: "tcm:0-5-1",
-        description: "A workflow with a review step and an explicit abort option.",
-        activityDefinitions: [
-            {
-                "title": "Review",
-                "activityType": "Decision",
-                "description": "Review the item and decide to approve or abort.",
-                "nextActivities": ["Approve", "Abort Process"]
-            },
-            {
-                "title": "Approve",
-                "description": "The item is approved and the workflow finishes.",
-                "nextActivities": []
-            },
-            {
-                "title": "Abort Process",
-                "assigneeId": "tcm:0-3-65552",
-                "description": "This activity automatically aborts and deletes the entire workflow process.",
-                "script": "SessionAwareCoreServiceClient.Delete(ProcessInstance.Id);"
-            }
-        ]
-    });
-
-Example 5: Create a workflow with a timed delay. The script suspends the activity for 24 hours.
-    const result = await tools.createProcessDefinition({
-        title: "Delayed Notification Workflow",
-        locationId: "tcm:0-5-1",
-        description: "A workflow that waits for one day before proceeding.",
-        activityDefinitions: [
-            {
-                "title": "Initial Step",
-                "description": "Start the process.",
-                "nextActivities": ["Wait One Day"]
-            },
-            {
-                "title": "Wait One Day",
-                "assigneeId": "tcm:0-3-65552",
-                "description": "This automated activity pauses the workflow for 24 hours.",
-                "script": \`if (string.IsNullOrEmpty(ResumeBookmark))
-{
-    SessionAwareCoreServiceClient.SuspendActivity(CurrentActivityInstance.Id, "Suspending for 24 hours", System.DateTime.Now.AddDays(1), "ResumeAfterDelay", null);
-}
-else if (ResumeBookmark == "ResumeAfterDelay")
-{
-    ActivityFinishData finishData = new ActivityFinishData();
-    finishData.Message = "Resumed after 24 hour delay.";
-    SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);
-}\`
-            }
-        ]
-    });
-
-Example 6: Passing variables between activities using indexers.
-    const result = await tools.createProcessDefinition({
-        title: "Variable Passing Workflow",
-        locationId: "tcm:0-5-1",
-        description: "Demonstrates storing a state value in one step and reading it in another.",
-        activityDefinitions: [
-            {
-                "title": "Save State",
-                "assigneeId": "tcm:0-3-65552",
-                "description": "Saves a custom string to the Process Variables.",
-                "script": \`ProcessInstance.Variables["MyCustomKey"] = "ActionCompleted";
-ActivityFinishData finishData = new ActivityFinishData();
-finishData.Message = "Saved variable";
-SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
-                "nextActivities": ["Read State"]
-            },
-            {
-                "title": "Read State",
-                "assigneeId": "tcm:0-3-65552",
-                "description": "Retrieves the variable and uses it.",
-                "script": \`string storedVal = ProcessInstance.Variables["MyCustomKey"];
-Logger.Information("Retrieved state: " + storedVal);
-ActivityFinishData finishData = new ActivityFinishData();
-finishData.Message = "Read variable: " + storedVal;
-SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
-                "nextActivities": []
-            }
-        ]
-    });
-
-Example 7: Using Script Directives and Defining Methods.
-    const result = await tools.createProcessDefinition({
-        title: "Workflow with Custom Methods",
-        locationId: "tcm:0-5-1",
-        description: "Demonstrates using directives to import namespaces and define custom methods.",
-        activityDefinitions: [
-            {
-                "title": "Log and Finish",
-                "assigneeId": "tcm:0-3-65552",
-                "description": "Uses a custom method to generate the finish message.",
-                "script": \`<%@ Import Namespace="System.ServiceModel"%>
-<%!
-    private string FinishedMessage()
-    {
-        return "Finished " + BasicHttpSecurityMode.Message.ToString();
-    }
-%>
-Logger.Verbose("Executing C# script");
-ActivityFinishData finishData = new ActivityFinishData();
-finishData.Message = FinishedMessage();
-SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
-                "nextActivities": []
-            }
-        ]
-    });`,
+`,
     input: createProcessDefinitionInputProperties,
     execute: async (args: z.infer<typeof createProcessDefinitionInputSchema>, context: any) => {
         formatForApi(args);
@@ -432,5 +199,246 @@ SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishD
         } catch (error) {
             return handleAxiosError(error, "Failed to create Process Definition");
         }
+    },
+    examples: [
+        {
+            description: "Create a simple, two-step approval workflow.",
+            payload: `const result = await tools.createProcessDefinition({
+    title: "Two-Step Approval",
+    locationId: "tcm:0-5-1",
+    description: "A simple workflow for content creation and approval.",
+    activityDefinitions: [
+      {
+        "title": "Create Content",
+        "description": "User creates the initial content.",
+        "nextActivities": ["Manager Approval"]
+      },
+      {
+        "title": "Manager Approval",
+        "description": "Manager reviews and approves the content to finish the workflow.",
+        "nextActivities": []
+      }
+    ]
+});`
+        },
+        {
+            description: "Create a complex workflow using Best Practice Decision Routing (Manual Decision -> Automated Branches). Note the strict avoidance of Object Initializers and the explicit LINQ casting.",
+            payload: `const result = await tools.createProcessDefinition({
+    title: "Task Process with Review",
+    locationId: "tcm:0-5-1",
+    description: "A workflow with a perform step, an automated assignment, a review decision, and automated accept/decline branches.",
+    activityDefinitions: [
+      {
+        "title": "Perform Task",
+        "description": "Perform the specified task.",
+        "assigneeId": "tcm:0-1-65568",
+        "allowOverrideDueDate": true,
+        "nextActivities": ["Assign to Process Creator"]
+      },
+      {
+        "title": "Assign to Process Creator",
+        "assigneeId": "tcm:0-3-65552",
+        "description": "Task was finished and it will be sent to the process creator.",
+        "script": \`ActivityFinishData finishData = new ActivityFinishData();
+finishData.Message = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last().FinishMessage;
+finishData.NextAssignee = new LinkToTrusteeData();
+finishData.NextAssignee.IdRef = ProcessInstance.Creator.IdRef;
+SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
+        "nextActivities": ["Review Task"]
+      },
+      {
+        "title": "Review Task",
+        "activityType": "Decision",
+        "description": "Manual review. Choose to Accept or Decline.",
+        "nextActivities": ["Decline", "Accept"]
+      },
+      {
+        "title": "Decline",
+        "assigneeId": "tcm:0-3-65552",
+        "description": "Automated routing: Sends task back to the original performer.",
+        "script": \`string performedTaskActivityDefinitionId = ProcessInstance.Activities.Cast<ActivityInstanceData>().First().ActivityDefinition.IdRef;
+ActivityFinishData finishData = new ActivityFinishData();
+finishData.Message = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last().FinishMessage;
+finishData.NextAssignee = new LinkToTrusteeData();
+finishData.NextAssignee.IdRef = ProcessInstance.Activities.Cast<ActivityInstanceData>().Last(activity => activity.ActivityDefinition.IdRef == performedTaskActivityDefinitionId).Owner.IdRef;
+SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
+        "nextActivities": ["Perform Task"]
+      },
+      {
+        "title": "Accept",
+        "assigneeId": "tcm:0-3-65552",
+        "description": "Automated routing: The task process is complete.",
+        "script": \`ActivityFinishData finishData = new ActivityFinishData();
+finishData.Message = "Automatic Activity 'Accept' Finished";
+SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
+        "nextActivities": []
+      }
+    ]
+});`
+        },
+        {
+            description: "Create a workflow with an auto-publish script.",
+            payload: `const result = await tools.createProcessDefinition({
+    title: "Auto-Publish Workflow",
+    locationId: "tcm:0-5-1",
+    description: "A workflow with a review decision that automatically publishes items upon approval.",
+    activityDefinitions: [
+        {
+            "title": "Review for Publish",
+            "activityType": "Decision",
+            "description": "Review the item and decide whether to approve and publish, or reject.",
+            "nextActivities": ["Reject", "Approve and Publish"]
+        },
+        {
+            "title": "Reject",
+            "assigneeId": "tcm:0-3-65552",
+            "description": "Automated rejection routing.",
+            "script": \`ActivityFinishData finishData = new ActivityFinishData();
+finishData.Message = "Item rejected for publishing.";
+SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
+            "nextActivities": []
+        },
+        {
+            "title": "Approve and Publish",
+            "assigneeId": "tcm:0-3-65552",
+            "description": "This automated activity safely publishes the items.",
+            "script": \`if (ProcessInstance.Subjects != null && ProcessInstance.Subjects.Length > 0)
+{
+    string[] itemIds = new string[ProcessInstance.Subjects.Length];
+    for (int i = 0; i < ProcessInstance.Subjects.Length; i++)
+    {
+        string id = ProcessInstance.Subjects[i].IdRef;
+        int vIndex = id.LastIndexOf("-v");
+        itemIds[i] = (vIndex > -1) ? id.Substring(0, vIndex) : id;
     }
+    PublishInstructionData instruction = new PublishInstructionData();
+    instruction.ResolveInstruction = new ResolveInstructionData();
+    instruction.ResolveInstruction.IncludeComponentLinks = true;
+    instruction.ResolveInstruction.IncludeDynamicVersion = true;
+    instruction.RenderInstruction = new RenderInstructionData();
+    SessionAwareCoreServiceClient.Publish(itemIds, instruction, new string[] { "tcm:0-2-65538" }, Tridion.ContentManager.CoreService.Client.PublishPriority.Normal, null);
+}
+ActivityFinishData finishData = new ActivityFinishData();
+finishData.Message = "Automated publishing initiated.";
+SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`
+        }
+    ]
+});`
+        },
+        {
+            description: "Create a workflow with an automated activity that aborts the entire process.",
+            payload: `const result = await tools.createProcessDefinition({
+    title: "Workflow with Abort Step",
+    locationId: "tcm:0-5-1",
+    description: "A workflow with a review step and an explicit abort option.",
+    activityDefinitions: [
+        {
+            "title": "Review",
+            "activityType": "Decision",
+            "description": "Review the item and decide to approve or abort.",
+            "nextActivities": ["Approve", "Abort Process"]
+        },
+        {
+            "title": "Approve",
+            "description": "The item is approved and the workflow finishes.",
+            "nextActivities": []
+        },
+        {
+            "title": "Abort Process",
+            "assigneeId": "tcm:0-3-65552",
+            "description": "This activity automatically aborts and deletes the entire workflow process.",
+            "script": "SessionAwareCoreServiceClient.Delete(ProcessInstance.Id);"
+        }
+    ]
+});`
+        },
+        {
+            description: "Create a workflow with a timed delay. The script suspends the activity for 24 hours.",
+            payload: `const result = await tools.createProcessDefinition({
+    title: "Delayed Notification Workflow",
+    locationId: "tcm:0-5-1",
+    description: "A workflow that waits for one day before proceeding.",
+    activityDefinitions: [
+        {
+            "title": "Initial Step",
+            "description": "Start the process.",
+            "nextActivities": ["Wait One Day"]
+        },
+        {
+            "title": "Wait One Day",
+            "assigneeId": "tcm:0-3-65552",
+            "description": "This automated activity pauses the workflow for 24 hours.",
+            "script": \`if (string.IsNullOrEmpty(ResumeBookmark))
+{
+    SessionAwareCoreServiceClient.SuspendActivity(CurrentActivityInstance.Id, "Suspending for 24 hours", System.DateTime.Now.AddDays(1), "ResumeAfterDelay", null);
+}
+else if (ResumeBookmark == "ResumeAfterDelay")
+{
+    ActivityFinishData finishData = new ActivityFinishData();
+    finishData.Message = "Resumed after 24 hour delay.";
+    SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);
+}\`
+        }
+    ]
+});`
+        },
+        {
+            description: "Passing variables between activities using indexers.",
+            payload: `const result = await tools.createProcessDefinition({
+    title: "Variable Passing Workflow",
+    locationId: "tcm:0-5-1",
+    description: "Demonstrates storing a state value in one step and reading it in another.",
+    activityDefinitions: [
+        {
+            "title": "Save State",
+            "assigneeId": "tcm:0-3-65552",
+            "description": "Saves a custom string to the Process Variables.",
+            "script": \`ProcessInstance.Variables["MyCustomKey"] = "ActionCompleted";
+ActivityFinishData finishData = new ActivityFinishData();
+finishData.Message = "Saved variable";
+SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
+            "nextActivities": ["Read State"]
+        },
+        {
+            "title": "Read State",
+            "assigneeId": "tcm:0-3-65552",
+            "description": "Retrieves the variable and uses it.",
+            "script": \`string storedVal = ProcessInstance.Variables["MyCustomKey"];
+Logger.Information("Retrieved state: " + storedVal);
+ActivityFinishData finishData = new ActivityFinishData();
+finishData.Message = "Read variable: " + storedVal;
+SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
+            "nextActivities": []
+        }
+    ]
+});`
+        },
+        {
+            description: "Using Script Directives and Defining Methods.",
+            payload: `const result = await tools.createProcessDefinition({
+    title: "Workflow with Custom Methods",
+    locationId: "tcm:0-5-1",
+    description: "Demonstrates using directives to import namespaces and define custom methods.",
+    activityDefinitions: [
+        {
+            "title": "Log and Finish",
+            "assigneeId": "tcm:0-3-65552",
+            "description": "Uses a custom method to generate the finish message.",
+            "script": \`<%@ Import Namespace="System.ServiceModel"%>
+<%!
+    private string FinishedMessage()
+    {
+        return "Finished " + BasicHttpSecurityMode.Message.ToString();
+    }
+%>
+Logger.Verbose("Executing C# script");
+ActivityFinishData finishData = new ActivityFinishData();
+finishData.Message = FinishedMessage();
+SessionAwareCoreServiceClient.FinishActivity(CurrentActivityInstance.Id, finishData, null);\`,
+            "nextActivities": []
+        }
+    ]
+});`
+        }
+    ]
 };

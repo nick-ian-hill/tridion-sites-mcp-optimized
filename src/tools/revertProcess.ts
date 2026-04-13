@@ -5,7 +5,7 @@ import { handleAxiosError, handleUnexpectedResponse } from "../utils/errorUtils.
 export const revertProcess = {
     name: "revertProcess",
     summary: "Terminates an active Workflow Process and discards all changes, resetting items to their pre-workflow state.",
-    description: "Terminates an active Workflow Process and reverts all involved items back to the state they were in before the workflow started. This undoes any changes made during the workflow and removes the process entirely. Under the hood, this is achieved by deleting the Process Instance.",
+    description: `Terminates an active Workflow Process and reverts all involved items back to the state they were in before the workflow started. This undoes any changes made during the workflow and removes the process entirely. Under the hood, this is achieved by deleting the Process Instance.`,
     input: {
         processInstanceId: z.string().regex(/^tcm:\d+-\d+-131076$/)
             .describe("The unique ID of the workflow Process Instance to revert (e.g., 'tcm:1-2-131076'). Note: This must be the Process Instance ID, not an Activity Instance ID."),
@@ -18,7 +18,7 @@ export const revertProcess = {
 
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
-            
+
             // Escape the TCM URI (replace ':' with '_') for the URL path
             const escapedProcessId = processInstanceId.replace(':', '_');
             const endpoint = `/items/${escapedProcessId}`;
@@ -44,5 +44,7 @@ export const revertProcess = {
         } catch (error) {
             return handleAxiosError(error, `Failed to revert Workflow Process '${processInstanceId}'`);
         }
-    }
+    },
+    examples: [
+    ]
 };

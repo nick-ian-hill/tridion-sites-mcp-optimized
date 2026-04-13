@@ -14,7 +14,7 @@ const getComponentTemplateLinksSchema = z.object(getComponentTemplateLinksInputP
 export const getComponentTemplateLinks = {
     name: "getComponentTemplateLinks",
     summary: "Lists Component Templates compatible with a specific Schema.",
-    description: "Gets a list of all Component Template links that can render Components based on the specified Schema. Note that this tool returns a list of Link objects (containing 'IdRef' and 'Title'), unlike other tools that typically return an 'Id'. This is useful when constructing the 'componentPresentations' parameter for the 'createPage' or 'updatePage' tools, as it helps identify which Component Templates are compatible with a given Component (Schema) type.",
+    description: `Gets a list of all Component Template links that can render Components based on the specified Schema. Note that this tool returns a list of Link objects (containing 'IdRef' and 'Title'), unlike other tools that typically return an 'Id'. This is useful when constructing the 'componentPresentations' parameter for the 'createPage' or 'updatePage' tools, as it helps identify which Component Templates are compatible with a given Component (Schema) type.`,
 
     input: getComponentTemplateLinksInputProperties,
 
@@ -29,7 +29,7 @@ export const getComponentTemplateLinks = {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const escapedSchemaId = schemaId.replace(':', '_');
             const endpoint = `/items/${escapedSchemaId}/componentTemplateLinks`;
-            
+
             const response = await authenticatedAxios.get(endpoint, {
                 params: {
                     onlyAllowedOnPage: onlyAllowedOnPage,
@@ -37,9 +37,9 @@ export const getComponentTemplateLinks = {
             });
 
             if (response.status === 200) {
-                const finalData = filterResponseData({ 
-                    responseData: response.data, 
-                    includeProperties: ["IdRef"] 
+                const finalData = filterResponseData({
+                    responseData: response.data,
+                    includeProperties: ["IdRef"]
                 });
 
                 const formattedResponseData = formatForAgent(finalData);
@@ -55,5 +55,7 @@ export const getComponentTemplateLinks = {
         } catch (error) {
             return handleAxiosError(error, `Failed to retrieve component template links for schema '${schemaId}'`);
         }
-    }
+    },
+    examples: [
+    ]
 };

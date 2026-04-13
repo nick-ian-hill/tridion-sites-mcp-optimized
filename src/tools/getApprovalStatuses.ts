@@ -24,7 +24,7 @@ export const getApprovalStatuses = {
 
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
-            
+
             // Explicitly request the lowest detail level from the backend to save bandwidth
             const response = await authenticatedAxios.get('/approvalStatuses', {
                 params: {
@@ -34,9 +34,9 @@ export const getApprovalStatuses = {
 
             if (response.status === 200) {
                 // Ensure the output strictly conforms to the Id and Title pattern
-                const finalData = filterResponseData({ 
-                    responseData: response.data, 
-                    details: "IdAndTitle" 
+                const finalData = filterResponseData({
+                    responseData: response.data,
+                    details: "IdAndTitle"
                 });
 
                 const formattedData = formatForAgent(finalData);
@@ -52,5 +52,7 @@ export const getApprovalStatuses = {
         } catch (error) {
             return handleAxiosError(error, "Failed to retrieve approval statuses");
         }
-    }
+    },
+    examples: [
+    ]
 };

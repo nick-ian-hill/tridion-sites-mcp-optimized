@@ -13,21 +13,21 @@ export const generateContentFromPrompt = {
     - Use 'guidance' to enforce a specific voice, tone, or brand style (e.g., "Use a professional, concise tone", "Format as a LinkedIn post").
     
     This separation allows you to use the tool in loops to generate multiple variants of the same content with different guidelines.`,
-    
+
     input: {
         prompt: z.string()
             .describe("The core instruction for the content generation."),
-        
+
         sourceText: z.string().optional()
             .describe("The source text to operate on (e.g., the body of an article to be rewritten or translated)."),
-            
+
         guidance: z.string().optional()
             .describe("Stylistic instructions, brand guidelines, or formatting rules. This sets the 'persona' of the AI for this generation.")
     },
 
     async execute(
-        { prompt, sourceText, guidance }: 
-        { prompt: string; sourceText?: string; guidance?: string; },
+        { prompt, sourceText, guidance }:
+            { prompt: string; sourceText?: string; guidance?: string; },
         context: any
     ) {
         if (!GEMINI_API_KEY) {
@@ -38,7 +38,7 @@ export const generateContentFromPrompt = {
 
             // Construct a structured prompt
             const parts = [];
-            
+
             // 1. Guidance (System/Persona instruction)
             if (guidance) {
                 parts.push(`--- GUIDELINES & VOICE ---\n${guidance}\n`);
@@ -51,7 +51,7 @@ export const generateContentFromPrompt = {
 
             // 3. The Task
             parts.push(`--- INSTRUCTION ---\n${prompt}`);
-            
+
             const genAI = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
             const result = await genAI.models.generateContent({
                 model: "gemini-3-flash-preview",
@@ -78,9 +78,11 @@ export const generateContentFromPrompt = {
 
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            return { 
-                content: [{ type: "text", text: JSON.stringify({ type: 'Error', Message: `Generation failed: ${errorMessage}` }, null, 2) }] 
+            return {
+                content: [{ type: "text", text: JSON.stringify({ type: 'Error', Message: `Generation failed: ${errorMessage}` }, null, 2) }]
             };
         }
-    }
+    },
+    examples: [
+    ]
 };

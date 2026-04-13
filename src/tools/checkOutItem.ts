@@ -25,7 +25,7 @@ export const checkOutItem = {
                 "$type": "CheckOutRequest",
                 SetPermanentLock: setPermanentLock
             };
-            
+
             const response = await authenticatedAxios.post(`/items/${escapedItemId}/checkOut`, requestModel);
 
             if (response.status === 200) {
@@ -34,7 +34,7 @@ export const checkOutItem = {
                     responseData = {
                         type: response.data['$type'],
                         Id: response.data.Id,
-                        Message:`Successfully checked out ${response.data.Id}`
+                        Message: `Successfully checked out ${response.data.Id}`
                     };
                 }
                 return {
@@ -49,5 +49,7 @@ export const checkOutItem = {
         } catch (error) {
             return handleAxiosError(error, `Failed to check out item ${itemId}`);
         }
-    }
+    },
+    examples: [
+    ]
 };

@@ -34,7 +34,7 @@ export const copyItem = {
                     responseData = {
                         type: response.data['$type'],
                         Id: response.data.Id,
-                        Message:`Successfully copied ${response.data.Id}`
+                        Message: `Successfully copied ${response.data.Id}`
                     };
                 }
                 return {
@@ -50,5 +50,7 @@ export const copyItem = {
         } catch (error) {
             return handleAxiosError(error, `Failed to copy item ${itemId}`);
         }
-    }
+    },
+    examples: [
+    ]
 };

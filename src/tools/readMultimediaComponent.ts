@@ -270,5 +270,27 @@ the mapScript can iterate every row and create or update CMS Components.
         } catch (error) {
             return handleAxiosError(error, `Failed to read multimedia component ${itemId}`);
         }
-    }
+    },
+    examples: [
+        {
+            description: "Read a multimedia component, extracting plain text.",
+            payload: `const result = await tools.readMultimediaComponent({
+    itemId: "tcm:5-124"
+});`
+        },
+        {
+            description: "Read an Excel file component, limiting the output to the first 3 rows for preview.",
+            payload: `const result = await tools.readMultimediaComponent({
+    itemId: "tcm:5-125",
+    maxRows: 3
+});`
+        },
+        {
+            description: "Read an image component with a specific prompt for the vision model.",
+            payload: `const result = await tools.readMultimediaComponent({
+    itemId: "tcm:5-126",
+    prompt: "Extract all visible text from this image."
+});`
+        }
+    ]
 };

@@ -29,7 +29,7 @@ export const classify = {
 - If a Keyword to be removed is not present in any relevant field, it will be ignored.
 
 The tool will return a warning if no changes were made. For batch operations, use the 'toolOrchestrator' tool.`,
-    
+
     input: classifyInputProperties,
 
     execute: async (
@@ -65,9 +65,9 @@ The tool will return a warning if no changes were made. For batch operations, us
             const finalKeywordIdsToRemove = keywordIdsToRemove.map(keywordId =>
                 convertItemIdToContextPublication(keywordId, itemId)
             );
-            
+
             // The request body for the single-item classification endpoint.
-            const requestModel = { 
+            const requestModel = {
                 "$type": "ClassificationRequest",
                 "KeywordIdsToAdd": finalKeywordIdsToAdd,
                 "KeywordIdsToRemove": finalKeywordIdsToRemove
@@ -85,7 +85,7 @@ The tool will return a warning if no changes were made. For batch operations, us
                     const responseData = {
                         type: response.data.Item['$type'],
                         Id: response.data.Item.Id,
-                        Message:`Successfully classified ${response.data.Item.Id}`
+                        Message: `Successfully classified ${response.data.Item.Id}`
                     };
                     return {
                         content: [{
@@ -117,5 +117,7 @@ The tool will return a warning if no changes were made. For batch operations, us
             await diagnoseBluePrintError(error, input, itemId, authenticatedAxios);
             return handleAxiosError(error, `Failed to update classification for item ${itemId}`);
         }
-    }
+    },
+    examples: [
+    ]
 };

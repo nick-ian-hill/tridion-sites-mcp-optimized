@@ -21,9 +21,9 @@ This is a crucial check before using the 'createPage' or 'updatePage' tools. If 
             if (response.status === 200) {
                 const capabilities = response.data;
                 const enabledFeatures = capabilities.EnabledFeatures || [];
-                
+
                 const isRequired = enabledFeatures.includes("DisableDataPipeline");
-                
+
                 const message = isRequired
                     ? "A Component Template is mandatory for Component Presentations because data-only publishing is disabled."
                     : "A Component Template is not mandatory for Component Presentations because data-only publishing is enabled.";
@@ -44,5 +44,7 @@ This is a crucial check before using the 'createPage' or 'updatePage' tools. If 
         } catch (error) {
             return handleAxiosError(error, "Failed to retrieve system capabilities");
         }
-    }
+    },
+    examples: [
+    ]
 };

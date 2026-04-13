@@ -53,5 +53,7 @@ export const moveItem = {
         } catch (error) {
             return handleAxiosError(error, `Failed to move item ${itemId}`);
         }
-    }
+    },
+    examples: [
+    ]
 };

@@ -42,9 +42,9 @@ export const getPublishInfo = {
             const response = await authenticatedAxios.get(endpoint);
 
             if (response.status === 200) {
-                const finalData = filterResponseData({ 
-                    responseData: response.data, 
-                    includeProperties 
+                const finalData = filterResponseData({
+                    responseData: response.data,
+                    includeProperties
                 });
 
                 const formattedFinalData = formatForAgent(finalData);
@@ -61,5 +61,7 @@ export const getPublishInfo = {
         } catch (error) {
             return handleAxiosError(error, `Failed to retrieve publish info for item ${itemId}`);
         }
-    }
+    },
+    examples: [
+    ]
 };

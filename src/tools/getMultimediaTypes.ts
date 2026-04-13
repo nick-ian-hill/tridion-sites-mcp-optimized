@@ -50,15 +50,15 @@ export const getMultimediaTypes = {
                 // We MUST filter out the "$type" string property or any non-object entries 
                 // to ensure the result is a clean array of item objects.
                 // We also filter out items that failed to load based on the API's LoadInfo.ErrorType.
-                const foundItems = Object.values(response.data).filter((item: any) => 
-                    typeof item === 'object' && 
+                const foundItems = Object.values(response.data).filter((item: any) =>
+                    typeof item === 'object' &&
                     item !== null &&
                     item.LoadInfo?.ErrorType !== 'Error'
                 );
-                
-                const finalData = filterResponseData({ 
-                    responseData: foundItems, 
-                    details: "IdAndTitle" 
+
+                const finalData = filterResponseData({
+                    responseData: foundItems,
+                    details: "IdAndTitle"
                 });
 
                 const formattedFinalData = formatForAgent(finalData);
@@ -77,5 +77,7 @@ export const getMultimediaTypes = {
         } catch (error) {
             return handleAxiosError(error, `Failed to retrieve Multimedia Types`);
         }
-    }
+    },
+    examples: [
+    ]
 };

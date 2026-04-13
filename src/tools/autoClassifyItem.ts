@@ -67,22 +67,7 @@ export const autoClassifyItem = {
     - It reads text from fields marked 'UseForAutoClassification'.
     - It applies keywords only to fields marked 'AllowAutoClassification'.
     
-    If 'restrictToAutoClassifiableFields' is true, the tool will SKIP classification if the Schema does not have at least one valid source field AND one valid target keyword field.
-
-    Example:
-    const result = await tools.autoClassifyItem({
-        itemId: "tcm:5-200",
-        restrictToAutoClassifiableFields: true,
-        replaceExisting: true
-    });
-    
-    Expected Output:
-    {
-        "type": "ClassificationResult",
-        "Id": "tcm:5-200",
-        "Message": "Successfully classified tcm:5-200",
-        "AddedKeywords": ["tcm:5-1024-1024", "tcm:5-1025-1024"]
-    }`,
+    If 'restrictToAutoClassifiableFields' is true, the tool will SKIP classification if the Schema does not have at least one valid source field AND one valid target keyword field.`,
 
     input: autoClassifyItemInputProperties,
 
@@ -323,5 +308,15 @@ export const autoClassifyItem = {
         } catch (error) {
             return handleAxiosError(error, `Failed to auto-classify item ${itemId}`);
         }
-    }
+    },
+    examples: [
+        {
+            description: "Automatically classify an item, restricting analysis to auto-classifiable fields and replacing existing keywords.",
+            payload: `const result = await tools.autoClassifyItem({
+    itemId: "tcm:5-200",
+    restrictToAutoClassifiableFields: true,
+    replaceExisting: true
+});`
+        }
+    ]
 };

@@ -96,7 +96,7 @@ export const getPublishTransactions = {
 
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
-            
+
             const apiDetails = 'IdAndTitleOnly';
 
             const params = {
@@ -136,5 +136,13 @@ export const getPublishTransactions = {
         } catch (error) {
             return handleAxiosError(error, "Failed to retrieve publish transactions");
         }
-    }
+    },
+    examples: [
+        {
+            description: "Get a list of failed transactions",
+            payload: `const result = await tools.getPublishTransactions({
+    state: "Failed"
+});`
+        }
+    ]
 };

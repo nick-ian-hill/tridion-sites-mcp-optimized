@@ -8,7 +8,7 @@ import { formatForAgent } from "../utils/fieldReordering.js";
 export const getUserProfile = {
     name: "getUserProfile",
     summary: "Retrieves the profile and preferences of a specific user or the current user.",
-    description: "Retrieves the profile of a specific user or the currently logged-in user. User profiles contain information like display name, preferences (including favorites), and system runtime details. The tool automatically adds a 'LanguageName' field if a 'LanguageId' is present.",
+    description: `Retrieves the profile of a specific user or the currently logged-in user. User profiles contain information like display name, preferences (including favorites), and system runtime details. The tool automatically adds a 'LanguageName' field if a 'LanguageId' is present.`,
     input: {
         userId: z.string().regex(/^tcm:0-\d+-65552$/).optional().describe("The TCM URI of the user (e.g., 'tcm:0-20-65552'). If omitted, the profile of the currently logged-in user is retrieved."),
         includeProperties: z.array(z.string()).optional().describe(`An array of property names to include in the response object (e.g., ["DisplayName", "User.Title", "User.IsEnabled", "User.LanguageName", "Preferences.Favorites", "Runtime.IsAdministrator"]).`)
@@ -40,7 +40,7 @@ export const getUserProfile = {
                         profileData.User.LanguageName = langName;
                     }
                 }
-                
+
                 const finalData = filterResponseData({ responseData: profileData, includeProperties });
                 const formattedFinalData = formatForAgent(finalData);
 
@@ -57,5 +57,7 @@ export const getUserProfile = {
             const contextMessage = userId ? `Failed to retrieve profile for user ${userId}` : "Failed to retrieve current user's profile";
             return handleAxiosError(error, contextMessage);
         }
-    }
+    },
+    examples: [
+    ]
 };

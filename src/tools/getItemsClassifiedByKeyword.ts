@@ -38,7 +38,7 @@ To inspect item details:
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const escapedKeywordId = keywordId.replace(':', '_');
             const endpoint = `/items/${escapedKeywordId}/classifiedItems`;
-            
+
             const response = await authenticatedAxios.get(endpoint, {
                 params: {
                     useDynamicVersion: useDynamicVersion,
@@ -49,9 +49,9 @@ To inspect item details:
             });
             if (response.status === 200) {
                 // The API returns full item details, so we must filter client-side to enforce the pattern.
-                const finalData = filterResponseData({ 
-                    responseData: response.data, 
-                    details: "IdAndTitle" 
+                const finalData = filterResponseData({
+                    responseData: response.data,
+                    details: "IdAndTitle"
                 });
                 const formattedResponseData = formatForAgent(finalData);
                 return {
@@ -66,5 +66,7 @@ To inspect item details:
         } catch (error) {
             return handleAxiosError(error, `Failed to retrieve items classified by keyword '${keywordId}'`);
         }
-    }
+    },
+    examples: [
+    ]
 };

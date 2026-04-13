@@ -6,7 +6,7 @@ import { toLink, toLinkArray } from "../utils/links.js";
 export const startWorkflow = {
     name: "startWorkflow",
     summary: "Initiates a new workflow process for content review and approval.",
-    description: "Starts a new workflow process and optionally includes one or more items ('subjects') from the corresponding publication. This is commonly used to ensure changes to items go through a review and approval process.",
+    description: `Starts a new workflow process and optionally includes one or more items ('subjects') from the corresponding publication. This is commonly used to ensure changes to items go through a review and approval process.`,
     input: {
         publicationId: z.string().regex(/^tcm:0-[1-9]\d*-1$/)
             .describe("The ID of the publication where the workflow will run (e.g., 'tcm:0-5-1'). Use 'getPublications' to find the correct ID."),
@@ -26,14 +26,14 @@ export const startWorkflow = {
             .optional()
             .describe("An optional due date for the first activity in ISO 8601 format (e.g., '2025-12-31T17:00:00Z')."),
     },
-    execute: async ({ 
-        publicationId, 
-        workflowTitle, 
-        taskTitle, 
-        processDefinitionId, 
-        subjectIds, 
-        assigneeId, 
-        dueDate 
+    execute: async ({
+        publicationId,
+        workflowTitle,
+        taskTitle,
+        processDefinitionId,
+        subjectIds,
+        assigneeId,
+        dueDate
     }: {
         publicationId: string;
         workflowTitle: string;
@@ -89,5 +89,7 @@ export const startWorkflow = {
         } catch (error) {
             return handleAxiosError(error, `Failed to start workflow in publication '${publicationId}'`);
         }
-    }
+    },
+    examples: [
+    ]
 };

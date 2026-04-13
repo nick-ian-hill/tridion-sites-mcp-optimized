@@ -52,37 +52,7 @@ When populating a Component Link field (ComponentLinkFieldDefinition), the linke
 To discover all available fields within an embedded schema, including optional ones, you must inspect the schema definition. Use the following strategy:
 - Use getItem to retrieve the main Schema's definition.
 - Locate the specific EmbeddedSchemaFieldDefinition within the Fields or MetadataFields.
-- Inspect the EmbeddedFields property of that definition. This property contains a dictionary of all the fields (both mandatory and optional) that you can populate.
-
-Examples:
-
-Example 1: REPLACE 'TitleField'.
-    // Even if other fields existed, using 'replace' with ONLY TitleField will attempt to save a Component with ONLY TitleField (likely failing schema validation if other fields are mandatory).
-    // Use 'replace' when you have the FULL desired state of the component content.
-    const result = await tools.updateContent({
-        "itemId": "tcm:5-123",
-        "updateMode": "replace", 
-        "content": {
-            "TitleField": "Updated Component Title" 
-        }
-    });
-    
-Example 2: Smart Update - Updates a specific field deep inside a list of embedded schemas.
-    // Existing 'Team' list: [{ "Name": "Alice", "Role": "Dev" }, { "Name": "Bob", "Role": "QA" }]
-    const result = await tools.updateContent({
-        "itemId": "tcm:5-123",
-        "updateMode": "update",
-        "content": {
-            "Team": [
-                {
-                    // This merges into index 0 (Alice), changing her Role but keeping Name="Alice".
-                    "Role": "Lead Developer"
-                },
-                null // Index 1: PRESERVED (Bob) by passing null
-            ]
-        }
-    });
-    `,
+- Inspect the EmbeddedFields property of that definition. This property contains a dictionary of all the fields (both mandatory and optional) that you can populate.`,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-16)?)$/).describe("The unique ID of the component to update (e.g., 'tcm:5-123')."),
         content: z.record(fieldValueSchema).describe("A JSON object containing the Component's content fields to update."),
@@ -111,7 +81,7 @@ Example 2: Smart Update - Updates a specific field deep inside a list of embedde
             if (!schemaId) {
                 return handleAxiosError(new Error(`Component ${itemId} does not have an associated Schema.`), "Failed to update component");
             }
-            
+
             convertLinksRecursively(content, itemId);
 
             let newContent: Record<string, any>;
@@ -147,10 +117,38 @@ Example 2: Smart Update - Updates a specific field deep inside a list of embedde
             return {
                 content: [{ type: "text", text: JSON.stringify(responseData, null, 2) }],
             };
-            
+
         } catch (error) {
             await diagnoseBluePrintError(error, diagnosticsArgs, itemId, authenticatedAxios);
             return handleAxiosError(error, "Failed to update component");
         }
-    }
+    },
+    examples: [
+        {
+            description: "REPLACE 'TitleField'. Even if other fields existed, using 'replace' with ONLY TitleField will attempt to save a Component with ONLY TitleField (likely failing schema validation if other fields are mandatory). Use 'replace' when you have the FULL desired state of the component content.",
+            payload: `const result = await tools.updateContent({
+        "itemId": "tcm:5-123",
+        "updateMode": "replace", 
+        "content": {
+            "TitleField": "Updated Component Title" 
+        }
+    });`
+        },
+        {
+            description: "Smart Update - Updates a specific field deep inside a list of embedded schemas. Existing 'Team' list: [{ \"Name\": \"Alice\", \"Role\": \"Dev\" }, { \"Name\": \"Bob\", \"Role\": \"QA\" }].",
+            payload: `const result = await tools.updateContent({
+        "itemId": "tcm:5-123",
+        "updateMode": "update",
+        "content": {
+            "Team": [
+                {
+                    // This merges into index 0 (Alice), changing her Role but keeping Name="Alice".
+                    "Role": "Lead Developer"
+                },
+                null // Index 1: PRESERVED (Bob) by passing null
+            ]
+        }
+    });`
+        }
+    ]
 };

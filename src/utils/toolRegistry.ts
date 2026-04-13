@@ -1,11 +1,14 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { z } from "zod";
+import { zodToJsonSchema } from "zod-to-json-schema";
 
 export interface Tool {
     name: string;
     summary: string;
     description: string;
+    examples: any[];
     input: any;
     execute: (args: any, context: any) => Promise<any>;
 }
@@ -17,6 +20,7 @@ export function isTool(obj: any): obj is Tool {
         'name' in obj && typeof obj.name === 'string' &&
         'summary' in obj && typeof obj.summary === 'string' &&
         'description' in obj && typeof obj.description === 'string' &&
+        'examples' in obj && Array.isArray(obj.examples) &&
         'input' in obj &&
         'execute' in obj && typeof obj.execute === 'function'
     );
@@ -80,13 +84,73 @@ export function getToolRegistry(): Map<string, Tool> {
     return toolRegistry;
 }
 
+function extractSchemaParams(jsonSchema: any, prefix = ''): string[] {
+    const params: string[] = [];
+    if (jsonSchema && jsonSchema.properties) {
+        for (const [key, value] of Object.entries(jsonSchema.properties)) {
+            const pName = prefix ? `${prefix}.${key}` : key;
+            params.push(pName);
+            if (typeof value === "object" && value !== null && (value as any).type === "object" && (value as any).properties) {
+                 params.push(...extractSchemaParams(value, pName));
+            } else if (typeof value === "object" && value !== null && (value as any).type === "array" && (value as any).items && (value as any).items.type === "object") {
+                 params.push(...extractSchemaParams((value as any).items, pName));
+            }
+        }
+    }
+    return params;
+}
+
 /**
  * Generates a bulleted list of all available tools, extracting the first sentence of each description.
  */
 export function getToolsSummary(): string {
+    const categories: Record<string, string[]> = {
+        "Search & Discovery": ['search', 'getItemsInContainer', 'getItem', 'bulkReadItems', 'getPublications', 'getCategories', 'getSchemaLinks', 'getUsers', 'getMultimediaTypes', 'getApprovalStatuses', 'getProcessDefinitions', 'getLockedItems'],
+        "Item Management (CRUD)": ['createItem', 'createComponent', 'createPage', 'updateContent', 'updateMetadata', 'updatePage', 'updateItemProperties', 'deleteItem', 'copyItem', 'moveItem', 'classify'],
+        "Schema & System Architecture": ['createComponentSchema', 'createMetadataSchema', 'createEmbeddedSchema', 'createBundleSchema', 'createRegionSchema'],
+        "Workflow & Governance": ['checkOutItem', 'checkInItem', 'undoCheckOutItem', 'startWorkflow', 'startActivity', 'forceFinishProcess', 'getPublishTransactions', 'getPublishInfo', 'getItemHistory', 'getUsedByHistory'],
+        "BluePrint & Global Hierarchy": ['createPublication', 'updatePublication', 'createBluePrintHierarchy', 'localizeItem', 'unlocalizeItem', 'promoteItem', 'demoteItem', 'getDependencyGraph', 'getRelatedBluePrintItems'],
+        "AI & Multimedia Processing": ['autoClassifyItem', 'autoClassifyMultimediaComponent', 'createMultimediaComponentFromPrompt', 'createMultimediaComponentFromAttachment', 'createMultimediaComponentFromBase64', 'createMultimediaComponentFromUrl', 'readMultimediaComponent', 'splitWordMultimediaComponentIntoTextAndImages'],
+        "Orchestration & Automation": ['toolOrchestrator', 'readUploadedFile']
+    };
+
     const summary: string[] = [];
-    for (const [name, tool] of toolRegistry.entries()) {
-        summary.push(`- **${name}**: ${tool.summary}`);
+    const categorizedSet = new Set<string>();
+
+    for (const [categoryName, toolNames] of Object.entries(categories)) {
+        summary.push(`### ${categoryName}`);
+        let addedInCategory = false;
+        for (const name of toolNames) {
+            const tool = toolRegistry.get(name);
+            if (tool) {
+                const schema = zodToJsonSchema(z.object(tool.input));
+                const argsArr = extractSchemaParams(schema as any);
+                const argsStr = argsArr.length > 0 ? argsArr.join(', ') : 'no arguments';
+                summary.push(`- **${name}** (args: ${argsStr}): ${tool.summary}`);
+                categorizedSet.add(name);
+                addedInCategory = true;
+            }
+        }
+        if (!addedInCategory) {
+            summary.push(`(No tools matched in this category)`);
+        }
+        summary.push("");
     }
-    return summary.sort().join('\n');
+
+    const uncategorized: string[] = [];
+    for (const [name, tool] of toolRegistry.entries()) {
+        if (!categorizedSet.has(name)) {
+            const schema = zodToJsonSchema(z.object(tool.input));
+            const argsArr = extractSchemaParams(schema as any);
+            const argsStr = argsArr.length > 0 ? argsArr.join(', ') : 'no arguments';
+            uncategorized.push(`- **${name}** (args: ${argsStr}): ${tool.summary}`);
+        }
+    }
+
+    if (uncategorized.length > 0) {
+        summary.push(`### Other Tools`);
+        summary.push(...uncategorized);
+    }
+
+    return summary.join('\n');
 }

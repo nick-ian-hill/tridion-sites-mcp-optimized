@@ -18,50 +18,7 @@ Metadata Schemas define the structure for metadata fields that can be applied to
 The schema's structure is defined using the 'metadataFields' property, which is an array of field definitions.
 
 BluePrint Inheritance Note:
-The Schema will be created in the specified Folder and be automatically inherited by all descendant Publications.
-
-Examples:
-
-Example 1: Create a simple Metadata Schema for Folders.
-    const result = await tools.createMetadataSchema({
-        title: "Folder Metadata",
-        locationId: "tcm:1-2-2",
-        description: "A simple schema for folder metadata.",
-        metadataFields: [
-            {
-                "type": "SingleLineTextFieldDefinition",
-                "Name": "owner",
-                "Description": "The owner of the folder.",
-                "MaxOccurs": 1,
-                "MinOccurs": 1
-            }
-        ]
-    });
-
-Example 2: Create a Metadata Schema with a multi-value checkbox field using a predefined list of dates.
-    const result = await tools.createMetadataSchema({
-        title: "Date Selection",
-        locationId: "tcm:1-2-2",
-        description: "A metadata schema for selecting dates.",
-        metadataFields: [
-            {
-                "type": "DateFieldDefinition",
-                "Name": "availableDates",
-                "Description": "Select your preferred dates.",
-                "MaxOccurs": -1,
-                "List": {
-                    "type": "DateListDefinition",
-                    "Type": "Checkbox",
-                    "Entries": [
-                        "2025-10-15T00:00:00",
-                        "2025-10-22T00:00:00",
-                        "2025-10-29T00:00:00"
-                    ]
-                }
-            }
-        ]
-    });
-    `,
+The Schema will be created in the specified Folder and be automatically inherited by all descendant Publications.`,
     input: {
         title: z.string().nonempty().describe("The title for the new Metadata Schema."),
         locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new Schema will be created."),
@@ -83,7 +40,7 @@ Example 2: Create a Metadata Schema with a multi-value checkbox field using a pr
         } = args;
 
         const authenticatedAxios = createAuthenticatedAxios(userSessionId);
-        
+
         try {
             const processedMetadataFields = metadataFields ? await processAndOrderFieldDefinitions(metadataFields, locationId, authenticatedAxios) : undefined;
 
@@ -93,7 +50,7 @@ Example 2: Create a Metadata Schema with a multi-value checkbox field using a pr
             } catch (error: any) {
                 return handleAxiosError(error, "Failed to load default model for Schema");
             }
-            
+
             payload.Title = title;
             payload.Purpose = "Metadata";
             delete payload.RootElementName;
@@ -102,7 +59,7 @@ Example 2: Create a Metadata Schema with a multi-value checkbox field using a pr
             if (processedMetadataFields) payload.MetadataFields = processedMetadataFields;
             if (typeof isIndexable === 'boolean') payload.IsIndexable = isIndexable;
             if (typeof isPublishable === 'boolean') payload.IsPublishable = isPublishable;
-            
+
             if (!payload.LocationInfo?.OrganizationalItem?.IdRef) {
                 payload.LocationInfo = { ...payload.LocationInfo, OrganizationalItem: toLink(locationId) };
             }
@@ -128,5 +85,49 @@ Example 2: Create a Metadata Schema with a multi-value checkbox field using a pr
             await diagnoseBluePrintError(error, args, locationId, authenticatedAxios);
             return handleAxiosError(error, "Failed to create Metadata Schema");
         }
-    }
+    },
+    examples: [
+        {
+            description: "Create a simple Metadata Schema for Folders",
+            payload: `const result = await tools.createMetadataSchema({
+        title: "Folder Metadata",
+        locationId: "tcm:1-2-2",
+        description: "A simple schema for folder metadata.",
+        metadataFields: [
+            {
+                "type": "SingleLineTextFieldDefinition",
+                "Name": "owner",
+                "Description": "The owner of the folder.",
+                "MaxOccurs": 1,
+                "MinOccurs": 1
+            }
+        ]
+    });`
+        },
+        {
+            description: "Create a Metadata Schema with a multi-value checkbox field using a predefined list of dates",
+            payload: `const result = await tools.createMetadataSchema({
+        title: "Date Selection",
+        locationId: "tcm:1-2-2",
+        description: "A metadata schema for selecting dates.",
+        metadataFields: [
+            {
+                "type": "DateFieldDefinition",
+                "Name": "availableDates",
+                "Description": "Select your preferred dates.",
+                "MaxOccurs": -1,
+                "List": {
+                    "type": "DateListDefinition",
+                    "Type": "Checkbox",
+                    "Entries": [
+                        "2025-10-15T00:00:00",
+                        "2025-10-22T00:00:00",
+                        "2025-10-29T00:00:00"
+                    ]
+                }
+            }
+        ]
+    });`
+        }
+    ]
 };

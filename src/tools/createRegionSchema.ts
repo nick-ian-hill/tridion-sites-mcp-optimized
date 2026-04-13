@@ -34,64 +34,7 @@ You must first create the schemas for your nested regions, then create the main 
 Best Practice (Flexible): Create a separate Region Schema for each nested region (e.g., "Main Region", "Sidebar Region"). This allows you to define different ComponentPresentationConstraints for each.
 Simple Pattern (Shared): Create one generic Region Schema and have all NestedRegions link to it. This is faster, but all regions will share the same constraints.
 
-Examples:
-
-Example 1: Create a Region Schema with constraints on its Component Presentations.
-    const result = await tools.createRegionSchema({
-        title: "Constrained Region Schema",
-        locationId: "tcm:5-2-2",
-        description: "A Region that constrains what can be put inside it.",
-        regionDefinition: {
-            "type": "RegionDefinition",
-            "ComponentPresentationConstraints": [
-                {
-                    "type": "OccurrenceConstraint",
-                    "MaxOccurs": 5,
-                    "MinOccurs": 0
-                },
-                {
-                    "type": "TypeConstraint",
-                    "BasedOnSchema": { "type": "Link", "IdRef": "tcm:5-103-8" },
-                    "BasedOnComponentTemplate": { "type": "Link", "IdRef": "tcm:5-105-32" }
-                }
-            ]
-        }
-    });
-    
-Example 2: Create an advanced Region Schema with a nested region.
-Note the use of "type": "ExpandableLink" for the 'RegionSchema' property inside 'NestedRegions'.
-    const result = await tools.createRegionSchema({
-        title: "News Page Region",
-        locationId: "tcm:2-18-2",
-        description: "Region Schema for a News Page, including a nested region for the main article.",
-        regionDefinition: {
-            "type": "RegionDefinition",
-            "ComponentPresentationConstraints": [
-                {
-                    "type": "OccurrenceConstraint",
-                    "MaxOccurs": 3,
-                    "MinOccurs": 0
-                },
-                {
-                    "type": "TypeConstraint",
-                    "BasedOnComponentTemplate": { "type": "Link", "IdRef": "tcm:2-105-32" },
-                    "BasedOnSchema": { "type": "Link", "IdRef": "tcm:2-104-8" }
-                }
-            ],
-            "NestedRegions": [
-                {
-                    "type": "NestedRegion",
-                    "RegionName": "Article",
-                    "IsMandatory": true,
-                    "RegionSchema": {
-                        "type": "ExpandableLink",
-                        "IdRef": "tcm:2-181-8"
-                    }
-                }
-            ]
-        }
-    });
-    `,
+Simple Pattern (Shared): Create one generic Region Schema and have all NestedRegions link to it. This is faster, but all regions will share the same constraints.`,
     input: {
         title: z.string().nonempty().describe("The title for the new Region Schema."),
         locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new Schema will be created."),
@@ -168,5 +111,64 @@ Note the use of "type": "ExpandableLink" for the 'RegionSchema' property inside 
             await diagnoseBluePrintError(error, args, locationId, authenticatedAxios);
             return handleAxiosError(error, "Failed to create Region Schema");
         }
+    },
+    examples: [
+        {
+            description: "Create a Region Schema with constraints on its Component Presentations.",
+            payload: `const result = await tools.createRegionSchema({
+    title: "Constrained Region Schema",
+    locationId: "tcm:5-2-2",
+    description: "A Region that constrains what can be put inside it.",
+    regionDefinition: {
+        "type": "RegionDefinition",
+        "ComponentPresentationConstraints": [
+            {
+                "type": "OccurrenceConstraint",
+                "MaxOccurs": 5,
+                "MinOccurs": 0
+            },
+            {
+                "type": "TypeConstraint",
+                "BasedOnSchema": { "type": "Link", "IdRef": "tcm:5-103-8" },
+                "BasedOnComponentTemplate": { "type": "Link", "IdRef": "tcm:5-105-32" }
+            }
+        ]
     }
+});`
+        },
+        {
+            description: "Create an advanced Region Schema with a nested region. Note the use of \\\"type\\\": \\\"ExpandableLink\\\" for the 'RegionSchema' property inside 'NestedRegions'.",
+            payload: `const result = await tools.createRegionSchema({
+    title: "News Page Region",
+    locationId: "tcm:2-18-2",
+    description: "Region Schema for a News Page, including a nested region for the main article.",
+    regionDefinition: {
+        "type": "RegionDefinition",
+        "ComponentPresentationConstraints": [
+            {
+                "type": "OccurrenceConstraint",
+                "MaxOccurs": 3,
+                "MinOccurs": 0
+            },
+            {
+                "type": "TypeConstraint",
+                "BasedOnComponentTemplate": { "type": "Link", "IdRef": "tcm:2-105-32" },
+                "BasedOnSchema": { "type": "Link", "IdRef": "tcm:2-104-8" }
+            }
+        ],
+        "NestedRegions": [
+            {
+                "type": "NestedRegion",
+                "RegionName": "Article",
+                "IsMandatory": true,
+                "RegionSchema": {
+                    "type": "ExpandableLink",
+                    "IdRef": "tcm:2-181-8"
+                }
+            }
+        ]
+    }
+});`
+        }
+    ]
 };

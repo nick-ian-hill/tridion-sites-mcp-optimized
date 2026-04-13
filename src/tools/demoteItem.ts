@@ -50,5 +50,7 @@ Before using, it's recommended to understand the item's position in the hierarch
         } catch (error) {
             return handleAxiosError(error, `Failed to demote item ${itemId}`);
         }
-    }
+    },
+    examples: [
+    ]
 };

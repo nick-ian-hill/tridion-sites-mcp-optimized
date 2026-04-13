@@ -6,16 +6,16 @@ import { formatForAgent } from "../utils/fieldReordering.js";
 const getRelatedBluePrintItemsInputProperties = {
     itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/)
         .describe("The TCM URI of the item or Publication to analyze."),
-    
+
     relationship: z.enum([
         // Publication Structure Relationships
-        "Child", 
-        "Descendant", 
-        "Parent", 
-        "Ancestor", 
-        "Sibling", 
+        "Child",
+        "Descendant",
+        "Parent",
+        "Ancestor",
+        "Sibling",
         // Item Inheritance Relationships
-        "LocalizedIn", 
+        "LocalizedIn",
         "SharedIn",
         "SharedFrom",
         "LocalizedFrom",
@@ -62,62 +62,7 @@ This tool relies on the CMS to resolve BluePrint priority and proximity. The res
 - **Origin Tracing:** Use 'SharedFrom' or 'LocalizedFrom' to find the immediate source of the current item. For example, when wanting to check whether the item the current item is localized from was modified more recently than the localied item.
 - **Root Cause:** Use 'PrimaryItem' to find the master copy of the content. Any non-localizable fields will always inherit their values from the PrimaryItem.
 - **Debugging:** Use 'InheritancePath' to trace the exact lineage of an item to understand where properties are inherited from.
-- **Publication Navigation:** Use 'Child'/'Parent' (with a Publication ID) to navigate the repository structure.
-
-### Example 1: Publication Ancestors
-// Find all ancestors of Publication "tcm:0-12-1"
-const result = await tools.getRelatedBluePrintItems({
-    itemId: "tcm:0-12-1",
-    relationship: "Ancestor"
-});
-
-// Expected JSON Output:
-[
-  { "Id": "tcm:0-5-1", "Title": "100 Master Content", "type": "Publication" },
-  { "Id": "tcm:0-1-1", "Title": "000 Empty Root", "type": "Publication" }
-]
-
-### Example 2: Item Impact Analysis
-// Find all publications where "tcm:5-123" has been localized.
-const result = await tools.getRelatedBluePrintItems({
-    itemId: "tcm:5-123",
-    relationship: "LocalizedIn"
-});
-
-// Expected JSON Output:
-[
-  {
-    "Item": { "Id": "tcm:12-123", "Title": "About Us (Local)", "type": "Component" },
-    "Publication": { "Id": "tcm:0-12-1", "Title": "400 Website DE" },
-    "State": "Localized"
-    },
-  {
-    "Item": { "Id": "tcm:14-123", "Title": "About Us (FR)", "type": "Component" },
-    "Publication": { "Id": "tcm:0-14-1", "Title": "400 Website FR" },
-    "State": "Localized"
-  }
-]
-
-### Example 3: Inheritance Path (Upstream)
-// Trace the path of an item up to its Primary item.
-const result = await tools.getRelatedBluePrintItems({
-    itemId: "tcm:12-123",
-    relationship: "InheritancePath"
-});
-
-// Expected JSON Output:
-[
-  {
-    "Item": { "Id": "tcm:12-123", "Title": "About Us (Local)", "type": "Component" },
-    "Publication": { "Id": "tcm:0-12-1", "Title": "400 Website DE" },
-    "State": "Localized"
-  },
-  {
-    "Item": { "Id": "tcm:5-123", "Title": "About Us", "type": "Component" },
-    "Publication": { "Id": "tcm:0-5-1", "Title": "100 Master Content" },
-    "State": "Primary"
-  }
-]`,
+- **Publication Navigation:** Use 'Child'/'Parent' (with a Publication ID) to navigate the repository structure.`,
     input: getRelatedBluePrintItemsInputProperties,
     execute: async (input: z.infer<typeof getRelatedBluePrintItemsSchema>, context: any) => {
         const req = context?.request;
@@ -130,7 +75,7 @@ const result = await tools.getRelatedBluePrintItems({
         try {
             // --- Validation Logic ---
             const publicationOnlyRelationships = new Set(["Child", "Descendant", "Parent", "Ancestor", "Sibling"]);
-            const isPublicationId = itemId.endsWith("-1") && itemId.startsWith("tcm:0-"); 
+            const isPublicationId = itemId.endsWith("-1") && itemId.startsWith("tcm:0-");
 
             if (publicationOnlyRelationships.has(relationship) && !isPublicationId) {
                 // Assuming standard TCM URI format where Publications end in -1 (e.g., tcm:0-5-1)
@@ -143,7 +88,7 @@ const result = await tools.getRelatedBluePrintItems({
 
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const escapedItemId = itemId.replace(':', '_');
-            
+
             // --- OPTIMIZATION FOR PrimaryItem ---
             // If the user wants the PrimaryItem, we can check the item directly first
             // to avoid the expensive hierarchy traversal if the API provides the link.
@@ -151,10 +96,10 @@ const result = await tools.getRelatedBluePrintItems({
                 const itemResponse = await authenticatedAxios.get(`/items/${escapedItemId}`, {
                     params: { includeProperties: ["BluePrintInfo"] }
                 });
-                
+
                 if (itemResponse.status === 200 && itemResponse.data.BluePrintInfo?.PrimaryBluePrintParentItem?.IdRef) {
                     const primaryId = itemResponse.data.BluePrintInfo.PrimaryBluePrintParentItem.IdRef;
-                    
+
                     // We need to fetch the primary item's full details to match the tool's return format
                     const primaryResponse = await authenticatedAxios.get(`/items/${primaryId.replace(':', '_')}`);
                     if (primaryResponse.status === 200) {
@@ -188,7 +133,7 @@ const result = await tools.getRelatedBluePrintItems({
             // Fetch hierarchy with Contentless details.
             // We NEED BluePrintInfo to determine IsLocalized/IsShared.
             const response = await authenticatedAxios.get(`/items/${escapedItemId}/bluePrintHierarchy`, {
-                params: { details: 'Contentless' } 
+                params: { details: 'Contentless' }
             });
 
             if (response.status !== 200) {
@@ -196,13 +141,13 @@ const result = await tools.getRelatedBluePrintItems({
             }
 
             const rawItems = response.data.Items; // Array of BluePrintNodes
-            
+
             // --- 1. Graph Construction ---
             // We map Publication IDs to nodes to facilitate traversal.
             const nodeMap = new Map<string, any>();
             const childrenMap = new Map<string, Set<string>>(); // PubId -> Set<ChildPubId>
             const parentsMap = new Map<string, Set<string>>();  // PubId -> Set<ParentPubId>
-            
+
             let contextPubId = "";
 
             // Robustly extract the Publication ID from the input Item ID
@@ -221,7 +166,7 @@ const result = await tools.getRelatedBluePrintItems({
             for (const node of rawItems) {
                 const pubId = node.ContextRepositoryId;
                 nodeMap.set(pubId, node);
-                
+
                 // Identify Context Node
                 if (pubId === inputPubId) {
                     contextPubId = pubId;
@@ -237,7 +182,7 @@ const result = await tools.getRelatedBluePrintItems({
                 if (node.Parents) {
                     for (const parent of node.Parents) {
                         const parentPubId = parent.IdRef;
-                        
+
                         // Register Relationship
                         if (!childrenMap.has(parentPubId)) childrenMap.set(parentPubId, new Set());
                         childrenMap.get(parentPubId)!.add(childPubId);
@@ -282,19 +227,19 @@ const result = await tools.getRelatedBluePrintItems({
             const findRoot = (startPubId: string): string => {
                 const parents = parentsMap.get(startPubId);
                 if (!parents || parents.size === 0) return startPubId; // No parents, this is root
-                
+
                 // In a valid BluePrint for a single item, there is strictly one Primary Parent chain 
                 // that leads to the Owning Repository.
                 const firstParent = parents.values().next().value;
-                
+
                 if (!firstParent) return startPubId;
-                
+
                 // Only recurse if the parent is actually part of our known graph
                 const parentNode = nodeMap.get(firstParent);
                 if (!parentNode || !parentNode.Item) {
                     return startPubId;
                 }
-                
+
                 return findRoot(firstParent);
             };
 
@@ -304,12 +249,12 @@ const result = await tools.getRelatedBluePrintItems({
                 resultPubIds.add(current); // Include self
 
                 // Loop until we hit the top
-                while(true) {
+                while (true) {
                     const parents = parentsMap.get(current);
                     if (!parents || parents.size === 0) break;
 
                     const nextParent = parents.values().next().value;
-                    
+
                     if (!nextParent) break;
 
                     resultPubIds.add(nextParent);
@@ -379,7 +324,7 @@ const result = await tools.getRelatedBluePrintItems({
                 if (!node) continue;
 
                 const item = node.Item;
-                
+
                 // CRITICAL SAFETY CHECK: 
                 // If the graph contains nodes where the item itself is not accessible or not present in the returned data, skip it.
                 if (!item) continue;
@@ -393,15 +338,15 @@ const result = await tools.getRelatedBluePrintItems({
                 if (relationship === "LocalizedIn") {
                     // Must be downstream AND localized
                     if (!isLocalized) include = false;
-                } 
+                }
                 else if (relationship === "SharedIn") {
                     // Must be downstream AND shared (and not localized masking it)
                     if (!isShared || isLocalized) include = false;
                 }
-                
+
                 if (include) {
                     const isPublication = item.$type === "Publication" || (item.Id && item.Id.endsWith("-1"));
-                    
+
                     if (isPublication) {
                         // For Publication structure requests, we return a flat list.
                         finalItems.push({
@@ -430,7 +375,7 @@ const result = await tools.getRelatedBluePrintItems({
                         if (state) {
                             resultObject.State = state;
                         }
-                        
+
                         finalItems.push(resultObject);
                     }
                 }
@@ -449,5 +394,65 @@ const result = await tools.getRelatedBluePrintItems({
         } catch (error) {
             return handleAxiosError(error, `Failed to retrieve related BluePrint items for ${itemId}`);
         }
-    }
+    },
+    examples: [
+        {
+            description: "Publication Ancestors",
+            payload: `// Find all ancestors of Publication "tcm:0-12-1"
+const result = await tools.getRelatedBluePrintItems({
+    itemId: "tcm:0-12-1",
+    relationship: "Ancestor"
+});
+
+// Expected JSON Output:
+[
+  { "Id": "tcm:0-5-1", "Title": "100 Master Content", "type": "Publication" },
+  { "Id": "tcm:0-1-1", "Title": "000 Empty Root", "type": "Publication" }
+]`
+        },
+        {
+            description: "Item Impact Analysis",
+            payload: `// Find all publications where "tcm:5-123" has been localized.
+const result = await tools.getRelatedBluePrintItems({
+    itemId: "tcm:5-123",
+    relationship: "LocalizedIn"
+});
+
+// Expected JSON Output:
+[
+  {
+    "Item": { "Id": "tcm:12-123", "Title": "About Us (Local)", "type": "Component" },
+    "Publication": { "Id": "tcm:0-12-1", "Title": "400 Website DE" },
+    "State": "Localized"
+    },
+  {
+    "Item": { "Id": "tcm:14-123", "Title": "About Us (FR)", "type": "Component" },
+    "Publication": { "Id": "tcm:0-14-1", "Title": "400 Website FR" },
+    "State": "Localized"
+  }
+]`
+        },
+        {
+            description: "Inheritance Path (Upstream)",
+            payload: `// Trace the path of an item up to its Primary item.
+const result = await tools.getRelatedBluePrintItems({
+    itemId: "tcm:12-123",
+    relationship: "InheritancePath"
+});
+
+// Expected JSON Output:
+[
+  {
+    "Item": { "Id": "tcm:12-123", "Title": "About Us (Local)", "type": "Component" },
+    "Publication": { "Id": "tcm:0-12-1", "Title": "400 Website DE" },
+    "State": "Localized"
+  },
+  {
+    "Item": { "Id": "tcm:5-123", "Title": "About Us", "type": "Component" },
+    "Publication": { "Id": "tcm:0-5-1", "Title": "100 Master Content" },
+    "State": "Primary"
+  }
+]`
+        }
+    ]
 };

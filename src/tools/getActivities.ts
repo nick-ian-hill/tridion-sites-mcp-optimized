@@ -19,19 +19,19 @@ export const getActivities = {
         userId: z.string().regex(/^tcm:0-\d+-65552$/).optional()
             .describe("The TCM URI of a user. If specified, the tool returns activities where this user is either the owner or the assignee. The 'getUsers' tool can be used to find user IDs."),
         activityStates: z.array(z.enum([
-                "Assigned", 
-                "Started", 
-                "Finished", 
-                "Suspended", 
-                "Failed", 
-                "WaitingForWorkflowAgent"
-            ]))
+            "Assigned",
+            "Started",
+            "Finished",
+            "Suspended",
+            "Failed",
+            "WaitingForWorkflowAgent"
+        ]))
             .optional()
             .default(['Assigned'])
             .describe("An array of activity states to filter the results. Defaults to ['Assigned']."),
     },
-    execute: async ({ userId, activityStates = ['Assigned'] }: { 
-        userId?: string, 
+    execute: async ({ userId, activityStates = ['Assigned'] }: {
+        userId?: string,
         activityStates?: ("Assigned" | "Started" | "Finished" | "Suspended" | "Failed" | "WaitingForWorkflowAgent")[]
     }, context: any) => {
         const req = context?.request;
@@ -65,7 +65,7 @@ export const getActivities = {
             if (response.status === 200) {
                 const finalData = filterResponseData({
                     responseData: response.data,
-                    details: "IdAndTitle" 
+                    details: "IdAndTitle"
                 });
                 const formattedFinalData = formatForAgent(finalData);
 
@@ -81,5 +81,7 @@ export const getActivities = {
         } catch (error) {
             return handleAxiosError(error, "Failed to retrieve workflow activities");
         }
-    }
+    },
+    examples: [
+    ]
 };

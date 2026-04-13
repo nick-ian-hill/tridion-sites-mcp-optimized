@@ -60,5 +60,7 @@ export const promoteItem = {
         } catch (error) {
             return handleAxiosError(error, `Failed to promote item ${itemId}`);
         }
-    }
+    },
+    examples: [
+    ]
 };

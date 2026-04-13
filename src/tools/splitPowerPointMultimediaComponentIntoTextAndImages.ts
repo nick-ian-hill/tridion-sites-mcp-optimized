@@ -46,17 +46,17 @@ const splitPowerPointMultimediaComponentIntoTextAndImagesInputProperties = {
 const splitPowerPointMultimediaComponentIntoTextAndImagesSchema = z.object(splitPowerPointMultimediaComponentIntoTextAndImagesInputProperties);
 
 interface Relationship {
-  $: {
-    Id: string;
-    Type: string;
-    Target: string;
-  };
+    $: {
+        Id: string;
+        Type: string;
+        Target: string;
+    };
 }
 
 export const splitPowerPointMultimediaComponentIntoTextAndImages = {
     name: "splitPowerPointMultimediaComponentIntoTextAndImages",
     summary: "Extracts text/images from a PowerPoint and creates components for each image.",
-    description: "Splits a PowerPoint file into its constituent parts. It extracts all text and creates new multimedia components for each image, returning a consolidated text summary with image-to-slide mappings. Accepts either a CMS multimedia component ('itemId') or a user attachment ('attachmentId'+'fileName').",
+    description: `Splits a PowerPoint file into its constituent parts. It extracts all text and creates new multimedia components for each image, returning a consolidated text summary with image-to-slide mappings. Accepts either a CMS multimedia component ('itemId') or a user attachment ('attachmentId'+'fileName').`,
     input: splitPowerPointMultimediaComponentIntoTextAndImagesInputProperties,
     async execute(input: z.infer<typeof splitPowerPointMultimediaComponentIntoTextAndImagesSchema>, context: any) {
         const req = context?.request;
@@ -87,7 +87,7 @@ export const splitPowerPointMultimediaComponentIntoTextAndImages = {
                 if (downloadResponse.status !== 200) return handleUnexpectedResponse(downloadResponse);
                 pptxFileBuffer = Buffer.from(downloadResponse.data);
             }
-            
+
             const zip = await JSZip.loadAsync(pptxFileBuffer);
             const xmlParser = new XmlParser({ explicitArray: false, attrkey: '$' });
 
@@ -99,7 +99,7 @@ export const splitPowerPointMultimediaComponentIntoTextAndImages = {
 
             const slideDataPromises = slideFiles.map(async (slideFile) => {
                 const slideNumber = parseInt(slideFile.name.match(/\d+/)?.[0] || '0', 10);
-                
+
                 const slideXml = await slideFile.async("string");
                 const parsedSlide = await xmlParser.parseStringPromise(slideXml);
                 const textContent = extractTextFromXmlObject(parsedSlide).join("\n");
@@ -111,7 +111,7 @@ export const splitPowerPointMultimediaComponentIntoTextAndImages = {
                 if (relsFile) {
                     const relsXml = await relsFile.async("string");
                     const parsedRels = await xmlParser.parseStringPromise(relsXml);
-                    
+
                     const relsDataSource = parsedRels.Relationships.Relationship;
                     const relationships = (Array.isArray(relsDataSource)
                         ? relsDataSource
@@ -138,13 +138,13 @@ export const splitPowerPointMultimediaComponentIntoTextAndImages = {
             });
 
             const allSlidesData = await Promise.all(slideDataPromises);
-            
+
             const uniqueImagePaths = [...new Set(allSlidesData.flatMap(s => s.imagePaths))];
             const imagePathToComponentIdMap = new Map<string, string>();
             let createdImageComponents: any[] = [];
 
             if (uniqueImagePaths.length > 0) {
-                 const createdImagesPromises = uniqueImagePaths.map(async (imagePath) => {
+                const createdImagesPromises = uniqueImagePaths.map(async (imagePath) => {
                     const imageFile = zip.file(imagePath);
                     if (!imageFile) return null;
 
@@ -155,24 +155,24 @@ export const splitPowerPointMultimediaComponentIntoTextAndImages = {
                     const result = await createMultimediaComponentFromBase64.execute({
                         base64Content, title, fileName, locationId,
                     }, context);
-                    
+
                     const resultText = result.content[0].text || "";
                     let newComponentId = 'N/A';
-                    
+
                     try {
                         const jsonResult = JSON.parse(resultText);
                         newComponentId = jsonResult.Id || 'FailedToParseId';
                     } catch (e) {
-                         // Fallback for older format (if any)
+                        // Fallback for older format (if any)
                         const newIdMatch = resultText.match(/tcm:\d+-\d+/);
                         if (newIdMatch) newComponentId = newIdMatch[0];
                     }
 
                     return { imagePath, newComponentId, originalName: fileName };
                 });
-                
+
                 const createdImages = (await Promise.all(createdImagesPromises)).filter(Boolean) as { imagePath: string; newComponentId: string; originalName: string }[];
-                
+
                 createdImages.forEach(img => {
                     imagePathToComponentIdMap.set(img.imagePath, img.newComponentId);
                     createdImageComponents.push({
@@ -181,7 +181,7 @@ export const splitPowerPointMultimediaComponentIntoTextAndImages = {
                     });
                 });
             }
-           
+
             const slidesSummary = allSlidesData.map(slide => {
                 return {
                     SlideNumber: slide.slideNumber,
@@ -212,5 +212,7 @@ export const splitPowerPointMultimediaComponentIntoTextAndImages = {
         } catch (error) {
             return handleAxiosError(error, `Failed to split PowerPoint '${itemId ?? fileName}'`);
         }
-    }
+    },
+    examples: [
+    ]
 };

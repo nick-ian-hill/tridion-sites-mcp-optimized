@@ -66,12 +66,87 @@ In this scenario, you will either need to
 - create a new item in the context Publication or a parent/ancestor, or
 - promote the item(s) you are trying to reference to a parent or ancestor Publication using the 'promoteItem' tool.
 
-To find the parent Publications, call getItem on your current Publication URI (e.g., 'tcm:0-99-1') and set includeProperties to ['Parents'].
+To find the parent Publications, call getItem on your current Publication URI (e.g., 'tcm:0-99-1') and set includeProperties to ['Parents'].`,
+    input: {
+        title: z.string().nonempty().describe("The title for the new Component Schema."),
+        locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new Schema will be created. Use 'search' or 'getItemsInContainer' to find a Folder."),
+        rootElementName: xmlNameSchema.describe("The name of the root element for the XML structure defined by the Schema (e.g., 'Article', 'Content')."),
+        description: z.string().nonempty().describe("An mandatory description of the Schema."),
+        fields: z.array(fieldDefinitionSchema).optional().describe("An array of field definitions for the schema's content fields. The order of the array determines the field order."),
+        metadataFields: z.array(fieldDefinitionSchema).optional().describe("An array of metadata field definitions for the schema's metadata. The order of the array determines the field order. This is the ONLY way to define metadata for a Component."),
+        componentProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of a Process Definition to associate as the Component Process for workflow."),
+        bundleProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of a Process Definition (workflow) used for reviewing and approving changes to Components based on the schema. If specified, the item needs to be added to a bundle associated with the same workflow process."),
+        isIndexable: z.boolean().optional().describe("Specifies whether Components based on this Schema will be indexed for searching."),
+        isPublishable: z.boolean().optional().describe("Specifies whether Components based on this Schema can be resolved for data publishing."),
+    },
+    execute: async (args: any, context: any) => {
+        formatForApi(args);
+        const req = context?.request;
+        const cookieHeader = req?.headers?.cookie || '';
+        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
+        const userSessionId = match ? match[1] : null;
 
-Examples:
+        const {
+            title, locationId, rootElementName, description,
+            fields, metadataFields, componentProcessId, bundleProcessId, isIndexable,
+            isPublishable
+        } = args;
 
-Example 1: Create a simple component Schema with a single, optional text field.
-    const result = await tools.createComponentSchema({
+        const authenticatedAxios = createAuthenticatedAxios(userSessionId);
+
+        try {
+            const processedFields = fields ? await processAndOrderFieldDefinitions(fields, locationId, authenticatedAxios) : undefined;
+            const processedMetadataFields = metadataFields ? await processAndOrderFieldDefinitions(metadataFields, locationId, authenticatedAxios) : undefined;
+
+            let payload;
+            try {
+                payload = await getCachedDefaultModel("Schema", locationId, authenticatedAxios);
+            } catch (error: any) {
+                return handleAxiosError(error, "Failed to load default model for Schema");
+            }
+
+            payload.Title = title;
+            payload.Purpose = "Component";
+            payload.RootElementName = rootElementName;
+
+            if (description) payload.Description = description;
+            if (processedFields) payload.Fields = processedFields;
+            if (processedMetadataFields) payload.MetadataFields = processedMetadataFields;
+            if (componentProcessId) payload.ComponentProcess = toLink(componentProcessId);
+            if (bundleProcessId) payload.BundleProcess = toLink(bundleProcessId);
+            if (typeof isIndexable === 'boolean') payload.IsIndexable = isIndexable;
+            if (typeof isPublishable === 'boolean') payload.IsPublishable = isPublishable;
+
+            if (!payload.LocationInfo?.OrganizationalItem?.IdRef) {
+                payload.LocationInfo = { ...payload.LocationInfo, OrganizationalItem: toLink(locationId) };
+            }
+
+            const createResponse = await authenticatedAxios.post('/items', payload);
+            if (createResponse.status === 201) {
+                const responseData = {
+                    $type: createResponse.data['$type'],
+                    Id: createResponse.data.Id,
+                    Message: `Successfully created ${createResponse.data.Id}`
+                };
+                const formattedResponseData = formatForAgent(responseData);
+                return {
+                    content: [{
+                        type: "text",
+                        text: JSON.stringify(formattedResponseData, null, 2)
+                    }],
+                };
+            } else {
+                return handleUnexpectedResponse(createResponse);
+            }
+        } catch (error) {
+            await diagnoseBluePrintError(error, args, locationId, authenticatedAxios);
+            return handleAxiosError(error, "Failed to create Component Schema");
+        }
+    },
+    examples: [
+        {
+            description: "Create a simple component Schema with a single, optional text field",
+            payload: `const result = await tools.createComponentSchema({
         title: "Simple Text Schema",
         locationId: "tcm:1-2-2",
         rootElementName: "Content",
@@ -85,10 +160,11 @@ Example 1: Create a simple component Schema with a single, optional text field.
                 "MinOccurs": 0
             }
         ]
-    });
-
-Example 2: Create an 'Article' component Schema with both content fields and metadata fields.
-    const result = await tools.createComponentSchema({
+    });`
+        },
+        {
+            description: "Create an 'Article' component Schema with both content fields and metadata fields",
+            payload: `const result = await tools.createComponentSchema({
         title: "Article",
         locationId: "tcm:1-2-2",
         rootElementName: "Article",
@@ -120,10 +196,11 @@ Example 2: Create an 'Article' component Schema with both content fields and met
                 "Description": "The date the article was published."
             }
         ]
-    });
-
-Example 3: Create a Schema with an XHTML field that has custom formatting features, disabling several toolbar buttons.
-    const result = await tools.createComponentSchema({
+    });`
+        },
+        {
+            description: "Create a Schema with an XHTML field that has custom formatting features, disabling several toolbar buttons",
+            payload: `const result = await tools.createComponentSchema({
         title: "Rich Text Schema with Custom Formatting",
         locationId: "tcm:1-234-2",
         rootElementName: "RichText",
@@ -148,10 +225,11 @@ Example 3: Create a Schema with an XHTML field that has custom formatting featur
                 }
             }
         ]
-    });
-
-Example 4: Create a Schema that uses an embeddable Schema for an embedded field. First, ensure you have an 'Embeddable' Schema created (e.g., an 'Author' Schema with TCM URI tcm:1-123-8). The embeddable Schema will be referenced via the 'EmbeddedSchema' property, the value of which should be a Link.
-    const result = await tools.createComponentSchema({
+    });`
+        },
+        {
+            description: "Create a Schema that uses an embeddable Schema for an embedded field. First, ensure you have an 'Embeddable' Schema created (e.g., an 'Author' Schema with TCM URI tcm:1-123-8). The embeddable Schema will be referenced via the 'EmbeddedSchema' property, the value of which should be a Link",
+            payload: `const result = await tools.createComponentSchema({
         title: "ArticleSchema",
         locationId: "tcm:11-4567-2",
         rootElementName: "ArticleRoot",
@@ -177,10 +255,11 @@ Example 4: Create a Schema that uses an embeddable Schema for an embedded field.
                 }
             }
         ]
-    });
-
-Example 5: Create a Schema with a multi-value Component Link field. This allows linking to multiple other Components. The 'MaxOccurs' property is set to -1 for unlimited values.
-    const result = await tools.createComponentSchema({
+    });`
+        },
+        {
+            description: "Create a Schema with a multi-value Component Link field. This allows linking to multiple other Components. The 'MaxOccurs' property is set to -1 for unlimited values",
+            payload: `const result = await tools.createComponentSchema({
         title: "Linked Articles",
         locationId: "tcm:18-2-2",
         rootElementName: "Links",
@@ -199,10 +278,11 @@ Example 5: Create a Schema with a multi-value Component Link field. This allows 
                 ]
             }
         ]
-    });
-
-Example 6: Create a Schema with a multi-value Multimedia Link field. This allows linking to multiple multimedia items like images or videos.
-    const result = await tools.createComponentSchema({
+    });`
+        },
+        {
+            description: "Create a Schema with a multi-value Multimedia Link field. This allows linking to multiple multimedia items like images or videos",
+            payload: `const result = await tools.createComponentSchema({
         title: "Image Gallery",
         locationId: "tcm:1-2-2",
         rootElementName: "Gallery",
@@ -221,10 +301,11 @@ Example 6: Create a Schema with a multi-value Multimedia Link field. This allows
                 ]
             }
         ]
-    });
-
-Example 7: Create a Schema with a Keyword field for classification. This field links to a Category, allowing editors to select from a predefined list of Keywords. Use 'getCategories' to find a suitable Category to link to.
-    const result = await tools.createComponentSchema({
+    });`
+        },
+        {
+            description: "Create a Schema with a Keyword field for classification. This field links to a Category, allowing editors to select from a predefined list of Keywords. Use 'getCategories' to find a suitable Category to link to",
+            payload: `const result = await tools.createComponentSchema({
         title: "Article With Classification",
         locationId: "tcm:1-2-2",
         rootElementName: "Article",
@@ -252,10 +333,11 @@ Example 7: Create a Schema with a Keyword field for classification. This field l
                 }
             }
         ]
-    });
-
-Example 8: Create a Schema with advanced constraints.
-    const result = await tools.createComponentSchema({
+    });`
+        },
+        {
+            description: "Create a Schema with advanced constraints",
+            payload: `const result = await tools.createComponentSchema({
         title: "Data Schema With Constraints",
         locationId: "tcm:1-2-2",
         rootElementName: "RestrictedContent",
@@ -286,82 +368,7 @@ Example 8: Create a Schema with advanced constraints.
                 "FractionDigits": 2
             }
         ]
-    });
-    `,
-    input: {
-        title: z.string().nonempty().describe("The title for the new Component Schema."),
-        locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new Schema will be created. Use 'search' or 'getItemsInContainer' to find a Folder."),
-        rootElementName: xmlNameSchema.describe("The name of the root element for the XML structure defined by the Schema (e.g., 'Article', 'Content')."),
-        description: z.string().nonempty().describe("An mandatory description of the Schema."),
-        fields: z.array(fieldDefinitionSchema).optional().describe("An array of field definitions for the schema's content fields. The order of the array determines the field order."),
-        metadataFields: z.array(fieldDefinitionSchema).optional().describe("An array of metadata field definitions for the schema's metadata. The order of the array determines the field order. This is the ONLY way to define metadata for a Component."),
-        componentProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of a Process Definition to associate as the Component Process for workflow."),
-        bundleProcessId: z.string().regex(/^tcm:\d+-\d+-131074$/).optional().describe("The TCM URI of a Process Definition (workflow) used for reviewing and approving changes to Components based on the schema. If specified, the item needs to be added to a bundle associated with the same workflow process."),
-        isIndexable: z.boolean().optional().describe("Specifies whether Components based on this Schema will be indexed for searching."),
-        isPublishable: z.boolean().optional().describe("Specifies whether Components based on this Schema can be resolved for data publishing."),
-    },
-    execute: async (args: any, context: any) => {
-        formatForApi(args);
-        const req = context?.request;
-        const cookieHeader = req?.headers?.cookie || '';
-        const match = cookieHeader.match(/UserSessionID=([^;]+)/);
-        const userSessionId = match ? match[1] : null;
-
-        const {
-            title, locationId, rootElementName, description,
-            fields, metadataFields, componentProcessId, bundleProcessId, isIndexable,
-            isPublishable
-        } = args;
-
-        const authenticatedAxios = createAuthenticatedAxios(userSessionId);
-        
-        try {
-            const processedFields = fields ? await processAndOrderFieldDefinitions(fields, locationId, authenticatedAxios) : undefined;
-            const processedMetadataFields = metadataFields ? await processAndOrderFieldDefinitions(metadataFields, locationId, authenticatedAxios) : undefined;
-
-            let payload;
-            try {
-                payload = await getCachedDefaultModel("Schema", locationId, authenticatedAxios);
-            } catch (error: any) {
-                return handleAxiosError(error, "Failed to load default model for Schema");
-            }
-
-            payload.Title = title;
-            payload.Purpose = "Component";
-            payload.RootElementName = rootElementName;
-
-            if (description) payload.Description = description;
-            if (processedFields) payload.Fields = processedFields;
-            if (processedMetadataFields) payload.MetadataFields = processedMetadataFields;
-            if (componentProcessId) payload.ComponentProcess = toLink(componentProcessId);
-            if (bundleProcessId) payload.BundleProcess = toLink(bundleProcessId);
-            if (typeof isIndexable === 'boolean') payload.IsIndexable = isIndexable;
-            if (typeof isPublishable === 'boolean') payload.IsPublishable = isPublishable;
-            
-            if (!payload.LocationInfo?.OrganizationalItem?.IdRef) {
-                payload.LocationInfo = { ...payload.LocationInfo, OrganizationalItem: toLink(locationId) };
-            }
-
-            const createResponse = await authenticatedAxios.post('/items', payload);
-            if (createResponse.status === 201) {
-                const responseData = {
-                    $type: createResponse.data['$type'],
-                    Id: createResponse.data.Id,
-                    Message: `Successfully created ${createResponse.data.Id}`
-                };
-                const formattedResponseData = formatForAgent(responseData);
-                return {
-                    content: [{
-                        type: "text",
-                        text: JSON.stringify(formattedResponseData, null, 2)
-                    }],
-                };
-            } else {
-                return handleUnexpectedResponse(createResponse);
-            }
-        } catch (error) {
-            await diagnoseBluePrintError(error, args, locationId, authenticatedAxios);
-            return handleAxiosError(error, "Failed to create Component Schema");
+    });`
         }
-    }
+    ]
 };

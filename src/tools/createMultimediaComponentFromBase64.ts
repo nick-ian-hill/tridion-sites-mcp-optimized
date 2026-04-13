@@ -20,7 +20,7 @@ const createMultimediaComponentFromBase64Schema = z.object(createMultimediaCompo
 export const createMultimediaComponentFromBase64 = {
     name: "createMultimediaComponentFromBase64",
     summary: "Creates a Multimedia Component by uploading binary content as a base64 string.",
-    description: "Creates a new multimedia component by uploading a file from a base64 encoded string. If the parent Folder has a mandatory schema, it will be used automatically, so there is no need to provide a schemaId in this case. This is one of four ways to create a multimedia component, with the others being 'createMultimediaComponentFromUrl', 'createMultimediaComponentFromPrompt', and 'createMultimediaComponentFromAttachment' (for user-attached files).",
+    description: `Creates a new multimedia component by uploading a file from a base64 encoded string. If the parent Folder has a mandatory schema, it will be used automatically, so there is no need to provide a schemaId in this case. This is one of four ways to create a multimedia component, with the others being 'createMultimediaComponentFromUrl', 'createMultimediaComponentFromPrompt', and 'createMultimediaComponentFromAttachment' (for user-attached files).`,
     input: createMultimediaComponentFromBase64InputProperties,
     async execute(input: z.infer<typeof createMultimediaComponentFromBase64Schema>,
         context: any
@@ -32,7 +32,7 @@ export const createMultimediaComponentFromBase64 = {
         const userSessionId = match ? match[1] : null;
 
         const { base64Content, title, fileName, locationId, schemaId, metadata } = input;
-        
+
         const authenticatedAxios = createAuthenticatedAxios(userSessionId);
 
         try {
@@ -51,7 +51,7 @@ export const createMultimediaComponentFromBase64 = {
             if (uploadResponse.status !== 202) {
                 return handleUnexpectedResponse(uploadResponse);
             }
-            
+
             const cmsTempFileId = uploadResponse.data.TempFileId;
             console.log(`Binary uploaded successfully. CMS Temporary File ID: ${cmsTempFileId}`);
 
@@ -96,7 +96,7 @@ export const createMultimediaComponentFromBase64 = {
                 if (!defaultMultimediaSchemaId || defaultMultimediaSchemaId === 'tcm:0-0-0') {
                     throw new Error(`The Publication (${publicationId}) does not have a Default Multimedia Schema defined.`);
                 }
-                
+
                 console.log(`Using Publication's default multimedia schema: ${defaultMultimediaSchemaId}`);
                 payload.Schema = { ...payload.Schema, IdRef: defaultMultimediaSchemaId };
             }
@@ -142,5 +142,7 @@ export const createMultimediaComponentFromBase64 = {
             await diagnoseBluePrintError(error, input, locationId, authenticatedAxios);
             return handleAxiosError(error, "Failed to create multimedia component from base64");
         }
-    }
+    },
+    examples: [
+    ]
 };

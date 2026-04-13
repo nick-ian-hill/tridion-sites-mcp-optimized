@@ -46,7 +46,7 @@ export const localizeItem = {
                         Message: `Successfully localized ${response.data.Id}`
                     };
                 }
-                
+
                 return {
                     content: [{
                         type: "text",
@@ -84,5 +84,7 @@ export const localizeItem = {
             // If we are here, it wasn't an idempotency issue. Throw the original error.
             return handleAxiosError(error, `Failed to localize item ${itemId}. Check that BluePrintInfo.IsShared is true.`);
         }
-    }
+    },
+    examples: [
+    ]
 };

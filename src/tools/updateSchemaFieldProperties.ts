@@ -87,64 +87,12 @@ Field and Metadata Field definitions (the Schema structure) can ONLY be modified
 - If a Schema is inherited (Shared), you must update the item in the parent publication.
 - If a Schema is localized, you can update its Title/Description using 'updateItemProperties', but you CANNOT modify its fields here. You must update the Primary item from which it was localized.
 
-Versioning is handled automatically. If the item is not checked out, it will be checked out, updated, and then checked back in. If the item is already checked out by you, it will remain checked out after the update. The operation will be aborted if the item is checked out by another user.
-
-Example 1: Make the 'articleBody' field optional and change the description of the 'headline' field in a single operation.
-    const result = await tools.updateSchemaFieldProperties({
-        schemaId: "tcm:2-104-8",
-        fieldUpdates: [
-            {
-                fieldName: "articleBody",
-                fieldLocation: "Content",
-                propertyToUpdate: "MinOccurs",
-                newValue: 0
-            },
-            {
-                fieldName: "headline",
-                fieldLocation: "Content",
-                propertyToUpdate: "Description",
-                newValue: "The main headline for the news article."
-            }
-        ]
-    });
-    
-Example 2: Make the metadata field 'AltText' mandatory.
-    const result = await tools.updateSchemaFieldProperties({
-        schemaId: "tcm:5-213-8",
-        fieldUpdates: [
-            {
-                fieldName: "AltText",
-                fieldLocation: "Metadata",
-                propertyToUpdate: "MinOccurs",
-                newValue: 1
-            }
-        ]
-    });
-
-Example 3: Update a validation constraint on a field.
-    const result = await tools.updateSchemaFieldProperties({
-        schemaId: "tcm:1-250-8",
-        fieldUpdates: [
-            {
-                fieldName: "productCode",
-                fieldLocation: "Content",
-                propertyToUpdate: "Pattern",
-                newValue: "[A-Z]{3}[0-9]{5}"
-            },
-            {
-                fieldName: "rating",
-                fieldLocation: "Content",
-                propertyToUpdate: "MaxValue",
-                newValue: 10
-            }
-        ]
-    });
-    `,
+Versioning is handled automatically. If the item is not checked out, it will be checked out, updated, and then checked back in. If the item is already checked out by you, it will remain checked out after the update. The operation will be aborted if the item is checked out by another user.`,
 
     input: updateSchemaFieldPropertiesInputProperties,
-    
+
     execute: async (
-        params: z.infer<typeof updateSchemaFieldPropertiesSchema>, 
+        params: z.infer<typeof updateSchemaFieldPropertiesSchema>,
         context: any
     ) => {
         formatForApi(params);
@@ -183,7 +131,7 @@ Example 3: Update a validation constraint on a field.
                 }
                 const fieldToUpdate = fieldCollection[fieldName];
                 if (!fieldToUpdate) {
-                     return createJsonError(`Field '${fieldName}' not found in the '${fieldLocation}' definition of Schema ${schemaId}.
+                    return createJsonError(`Field '${fieldName}' not found in the '${fieldLocation}' definition of Schema ${schemaId}.
                          Hint: This tool can only update properties of existing fields. To add, remove, or reorder fields, you must use the 'updateItemProperties' tool and provide the complete, new 'fields' or 'metadataFields' array.`);
                 }
 
@@ -191,7 +139,7 @@ Example 3: Update a validation constraint on a field.
                 const zodSchemaForField = schemaTypeMap[fieldType];
 
                 if (!zodSchemaForField) {
-                     return createJsonError(`Validation failed: Unknown field type '${fieldType}' for field '${fieldName}'.`);
+                    return createJsonError(`Validation failed: Unknown field type '${fieldType}' for field '${fieldName}'.`);
                 }
 
                 // 1. Validate the path
@@ -206,7 +154,7 @@ Example 3: Update a validation constraint on a field.
                         }
                     }
                 } catch {
-                     return createJsonError(`Validation failed: Property path '${propertyToUpdate}' is not valid for a field of type '${fieldType}'.`);
+                    return createJsonError(`Validation failed: Property path '${propertyToUpdate}' is not valid for a field of type '${fieldType}'.`);
                 }
 
                 // 2. Validate the value against the final validator in the path
@@ -215,7 +163,7 @@ Example 3: Update a validation constraint on a field.
                     const errorMessages = validationResult.error.errors.map((e: ZodIssue) => e.message).join(', ');
                     return createJsonError(`Validation failed for '${propertyToUpdate}': ${errorMessages}`);
                 }
-                
+
                 // If validation passes, perform the update
                 setNestedProperty(fieldToUpdate, propertyToUpdate, newValue);
             }
@@ -236,13 +184,13 @@ Example 3: Update a validation constraint on a field.
             // Save the updated Schema
             const updateResponse = await authenticatedAxios.put(`/items/${restItemId}`, itemToUpdate);
             if (updateResponse.status !== 200) return handleUnexpectedResponse(updateResponse);
-            
+
             // --- Cache Invalidation ---
             // Clear the cache for this Schema so the next fetch gets the updated fields
             invalidateSchemaCache(schemaId);
 
             const updatedItem = updateResponse.data;
-            
+
             const responseData = {
                 type: updatedItem['$type'],
                 Id: updatedItem.Id,
@@ -255,11 +203,67 @@ Example 3: Update a validation constraint on a field.
 
         } catch (error) {
             await diagnoseBluePrintError(error, params, schemaId, authenticatedAxios);
-            
+
             if (error instanceof Error) {
                 return createJsonError(error.message);
             }
             return handleAxiosError(error, `Failed to update fields for Schema ${schemaId}`);
         }
-    }
+    },
+    examples: [
+        {
+            description: "Make the 'articleBody' field optional and change the description of the 'headline' field in a single operation",
+            payload: `const result = await tools.updateSchemaFieldProperties({
+        schemaId: "tcm:2-104-8",
+        fieldUpdates: [
+            {
+                fieldName: "articleBody",
+                fieldLocation: "Content",
+                propertyToUpdate: "MinOccurs",
+                newValue: 0
+            },
+            {
+                fieldName: "headline",
+                fieldLocation: "Content",
+                propertyToUpdate: "Description",
+                newValue: "The main headline for the news article."
+            }
+        ]
+    });`
+        },
+        {
+            description: "Make the metadata field 'AltText' mandatory",
+            payload: `const result = await tools.updateSchemaFieldProperties({
+        schemaId: "tcm:5-213-8",
+        fieldUpdates: [
+            {
+                fieldName: "AltText",
+                fieldLocation: "Metadata",
+                propertyToUpdate: "MinOccurs",
+                newValue: 1
+            }
+        ]
+    });`
+        },
+        {
+            description: "Update a validation constraint on a field",
+            payload: `const result = await tools.updateSchemaFieldProperties({
+        schemaId: "tcm:1-250-8",
+        fieldUpdates: [
+            {
+                fieldName: "productCode",
+                fieldLocation: "Content",
+                propertyToUpdate: "Pattern",
+                newValue: "[A-Z]{3}[0-9]{5}"
+            },
+            {
+                fieldName: "rating",
+                fieldLocation: "Content",
+                propertyToUpdate: "MaxValue",
+                newValue: 10
+            }
+        ]
+    });`
+        }
+    ]
 };

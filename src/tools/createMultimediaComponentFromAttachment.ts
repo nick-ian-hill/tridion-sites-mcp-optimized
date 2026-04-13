@@ -118,10 +118,10 @@ If the user wants to **read or analyse** the content of an attached file instead
                 console.log(`Successfully created component with ID: ${createResponse.data.Id}`);
                 const responseData = createResponse.data?.Id
                     ? {
-                          $type: createResponse.data['$type'],
-                          Id: createResponse.data.Id,
-                          Message: `Successfully created ${createResponse.data.Id}`,
-                      }
+                        $type: createResponse.data['$type'],
+                        Id: createResponse.data.Id,
+                        Message: `Successfully created ${createResponse.data.Id}`,
+                    }
                     : undefined;
                 return {
                     content: [{ type: 'text', text: JSON.stringify(formatForAgent(responseData), null, 2) }],
@@ -134,4 +134,6 @@ If the user wants to **read or analyse** the content of an attached file instead
             return handleAxiosError(error, `Failed to create multimedia component from attached file '${fileName}'`);
         }
     },
+    examples: [
+    ]
 };

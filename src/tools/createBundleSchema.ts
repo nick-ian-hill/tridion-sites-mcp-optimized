@@ -12,24 +12,7 @@ export const createBundleSchema = {
     
 Bundle Schemas define the metadata fields for Bundles. Bundles are collections of other CMS items, often used for workflow or publishing purposes.
 
-The schema's structure is defined using the 'metadataFields' property.
-
-Examples:
-
-Example 1: Create a simple Bundle Schema.
-    const result = await tools.createBundleSchema({
-        title: "Campaign Bundle Schema",
-        locationId: "tcm:1-2-2",
-        description: "A schema for campaign-related bundles.",
-        metadataFields: [
-            {
-                "type": "SingleLineTextFieldDefinition",
-                "Name": "campaignManager",
-                "Description": "The manager of this campaign."
-            }
-        ]
-    });
-    `,
+The schema's structure is defined using the 'metadataFields' property.`,
     input: {
         title: z.string().nonempty().describe("The title for the new Bundle Schema."),
         locationId: z.string().regex(/^tcm:\d+-\d+-2$/).describe("The TCM URI of the parent Folder where the new Schema will be created."),
@@ -52,7 +35,7 @@ Example 1: Create a simple Bundle Schema.
             bundleProcessId, deleteBundleOnProcessFinished,
             isIndexable, isPublishable
         } = args;
-        
+
         try {
             const authenticatedAxios = createAuthenticatedAxios(userSessionId);
             const processedMetadataFields = metadataFields ? await processAndOrderFieldDefinitions(metadataFields, locationId, authenticatedAxios) : undefined;
@@ -75,7 +58,7 @@ Example 1: Create a simple Bundle Schema.
             if (typeof deleteBundleOnProcessFinished === 'boolean') payload.DeleteBundleOnProcessFinished = deleteBundleOnProcessFinished;
             if (typeof isIndexable === 'boolean') payload.IsIndexable = isIndexable;
             if (typeof isPublishable === 'boolean') payload.IsPublishable = isPublishable;
-            
+
             if (!payload.LocationInfo?.OrganizationalItem?.IdRef) {
                 payload.LocationInfo = { ...payload.LocationInfo, OrganizationalItem: toLink(locationId) };
             }
@@ -100,5 +83,22 @@ Example 1: Create a simple Bundle Schema.
         } catch (error) {
             return handleAxiosError(error, "Failed to create Bundle Schema");
         }
-    }
+    },
+    examples: [
+        {
+            description: "Create a simple Bundle Schema",
+            payload: `const result = await tools.createBundleSchema({
+        title: "Campaign Bundle Schema",
+        locationId: "tcm:1-2-2",
+        description: "A schema for campaign-related bundles.",
+        metadataFields: [
+            {
+                "type": "SingleLineTextFieldDefinition",
+                "Name": "campaignManager",
+                "Description": "The manager of this campaign."
+            }
+        ]
+    });`
+        }
+    ]
 };

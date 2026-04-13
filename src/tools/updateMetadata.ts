@@ -49,36 +49,7 @@ When populating a Component Link field (ComponentLinkFieldDefinition), the linke
 To discover all available fields within an embedded schema, including optional ones, you must inspect the schema definition. Use the following strategy:
 - Use getItem to retrieve the main Schema's definition.
 - Locate the specific EmbeddedSchemaFieldDefinition within the Fields or MetadataFields.
-- Inspect the EmbeddedFields property of that definition. This property contains a dictionary of all the fields (both mandatory and optional) that you can populate.
-
-Examples:
-
-Example 1: REPLACE 'Keywords'.
-    // If existing metadata had "Keywords": ["Old"] and "Author": "Me".
-    // This input will result in "Keywords": ["New"] and "Author": "Me" (Author is preserved because it's a sibling, assuming "metadata" here is partial).
-    const result = await tools.updateMetadata({
-        "itemId": "tcm:5-123",
-        "updateMode": "replace", 
-        "metadata": {
-            "Keywords": ["New"] 
-        }
-    });
-    
-Example 2: Smart Update of an Embedded Schema List.
-    // Existing 'Products' list: ["A", "B", "C"]
-    // We want to change the second item ("B") to "Z", keeping "A" and "C".
-    const result = await tools.updateMetadata({
-        "itemId": "tcm:4-567-2",
-        "updateMode": "update",
-        "metadata": {
-            "Products": [
-                null, // Index 0: PRESERVED ("A")
-                "Z"   // Index 1: UPDATED ("Z")
-                      // Index 2: PRESERVED ("C") automatically
-            ]
-        }
-    });
-    `,
+- Inspect the EmbeddedFields property of that definition. This property contains a dictionary of all the fields (both mandatory and optional) that you can populate.`,
     input: {
         itemId: z.string().regex(/^(tcm:\d+-\d+(-\d+)?|ecl:[^:\s]+)$/).describe("The unique ID of the item to update (e.g., 'tcm:5-1234-64')."),
         metadata: z.record(fieldValueSchema).describe("A JSON object containing the item's metadata fields to update."),
@@ -155,5 +126,31 @@ Example 2: Smart Update of an Embedded Schema List.
             await diagnoseBluePrintError(error, diagnosticsArgs, itemId, authenticatedAxios);
             return handleAxiosError(error, "Failed to update item metadata");
         }
-    }
+    },
+    examples: [
+        {
+            description: `REPLACE 'Keywords'. If existing metadata had "Keywords": ["Old"] and "Author": "Me". This input will result in "Keywords": ["New"] and "Author": "Me" (Author is preserved because it's a sibling, assuming "metadata" here is partial).`,
+            payload: `const result = await tools.updateMetadata({
+        "itemId": "tcm:5-123",
+        "updateMode": "replace", 
+        "metadata": {
+            "Keywords": ["New"] 
+        }
+    });`
+        },
+        {
+            description: `Smart Update of an Embedded Schema List. Existing 'Products' list: ["A", "B", "C"]. We want to change the second item ("B") to "Z", keeping "A" and "C".`,
+            payload: `const result = await tools.updateMetadata({
+        "itemId": "tcm:4-567-2",
+        "updateMode": "update",
+        "metadata": {
+            "Products": [
+                null, // Index 0: PRESERVED ("A")
+                "Z"   // Index 1: UPDATED ("Z")
+                      // Index 2: PRESERVED ("C") automatically
+            ]
+        }
+    });`
+        }
+    ]
 };

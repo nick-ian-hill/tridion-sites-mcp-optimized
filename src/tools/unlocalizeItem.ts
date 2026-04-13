@@ -86,5 +86,7 @@ This action will discard all local changes and cannot be undone.`
 
             return handleAxiosError(error, `Failed to unlocalize item ${itemId}`);
         }
-    }
+    },
+    examples: [
+    ]
 };

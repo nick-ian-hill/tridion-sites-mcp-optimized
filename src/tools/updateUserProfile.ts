@@ -56,20 +56,7 @@ export const updateUserProfile = {
 There are three ways to manage favorites:
 1.  **Add/Remove (Recommended)**: Use 'addFavorites' and 'removeFavorites' to modify the existing list.
 2.  **Full Replacement**: Provide a complete list to the 'favorites' parameter to overwrite all existing favorites.
-3.  **Advanced JSON**: Provide a complete UserProfile JSON string to 'userProfileJson' to replace the entire profile.
-
-Example 1: Add a new favorite and remove an existing one for user 'tcm:0-20-65552'.
-    const result = await tools.updateUserProfile({
-        userId: "tcm:0-20-65552",
-        addFavorites: [ "tcm:5-484-2" ],
-        removeFavorites: [ "tcm:4-5-8" ]
-    });
-
-Example 2: Update the current user's language to German.
-    const result = await tools.updateUserProfile({
-        languageName: "German"
-    });
-`,
+3.  **Advanced JSON**: Provide a complete UserProfile JSON string to 'userProfileJson' to replace the entire profile.`,
     input: updateUserProfileInputProperties,
     execute: async (params: UpdateUserProfileInput, context: any) => {
         const req = context?.request;
@@ -93,9 +80,9 @@ Example 2: Update the current user's language to German.
                     return createJsonError("Error: Could not determine the current user's ID from the whoAmI response.");
                 }
             }
-            
+
             if (!userId) {
-                 return createJsonError("Error: User ID could not be determined.");
+                return createJsonError("Error: User ID could not be determined.");
             }
 
             const restUserId = userId.replace(':', '_');
@@ -123,7 +110,7 @@ Example 2: Update the current user's language to German.
                 } else if (addFavorites !== undefined || removeFavorites !== undefined) {
                     if (!userProfilePayload.Preferences) userProfilePayload.Preferences = { "$type": "UserPreferences" };
                     let currentFavorites = userProfilePayload.Preferences.Favorites || [];
-                    
+
                     if (removeFavorites) {
                         const removeIds = new Set(removeFavorites);
                         currentFavorites = currentFavorites.filter((fav: any) => !removeIds.has(fav.IdRef));
@@ -153,8 +140,8 @@ Example 2: Update the current user's language to German.
 
             const updateResponse = await authenticatedAxios.put(`/items/${restUserId}/profile`, userProfilePayload);
             if (updateResponse.status === 200) {
-                 const responseData = {
-                    type: "UserProfile", 
+                const responseData = {
+                    type: "UserProfile",
                     Id: userId,
                     Message: `Successfully updated profile for user ${userId}`,
                 };
@@ -175,5 +162,21 @@ Example 2: Update the current user's language to German.
             const userIdentifier = userId || "the current user";
             return handleAxiosError(error, `Failed to update profile for ${userIdentifier}`);
         }
-    }
+    },
+    examples: [
+        {
+            description: "Add a new favorite and remove an existing one for user 'tcm:0-20-65552'",
+            payload: `const result = await tools.updateUserProfile({
+        userId: "tcm:0-20-65552",
+        addFavorites: [ "tcm:5-484-2" ],
+        removeFavorites: [ "tcm:4-5-8" ]
+    });`
+        },
+        {
+            description: "Update the current user's language to German",
+            payload: `const result = await tools.updateUserProfile({
+        languageName: "German"
+    });`
+        }
+    ]
 };
