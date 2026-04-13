@@ -5,9 +5,6 @@
  * current context item.
  */
 export const READ_ONLY_TOOLS = [
-    'getCurrentTime',
-    'requestNavigation',
-    'requestOpenInEditor',
     'generateContentFromPrompt',
     'search',
     'getComponentTemplateLinks',
@@ -27,7 +24,6 @@ export const READ_ONLY_TOOLS = [
     'readMultimediaComponent',
     'readUploadedFile',
     'getApprovalStatuses',
-    'getBluePrintHierarchy',
     'getPublications',
     'getPublicationTypes',
     'getCategories',

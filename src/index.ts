@@ -8,14 +8,8 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { handleStartChat, handlePollChat } from './agent/agent.js';
 
-import { getCurrentTime } from './agent/uiTools/getCurrentTime.js';
-import { requestOpenInEditor } from './agent/uiTools/requestOpenInEditor.js';
-import { requestNavigation } from './agent/uiTools/requestNavigation.js';
 import { initializeToolRegistry, getToolRegistry, Tool } from './utils/toolRegistry.js';
 import { getToolDetails, callTool } from './mcp/metaTools.js';
-
-// Set this to false to hide UI-specific tools from the LLM
-const ENABLE_UI_ASSISTANT_TOOLS = true;
 
 // We'll use the isTool from toolRegistry.ts instead
 import { isTool } from './utils/toolRegistry.js';
@@ -43,14 +37,7 @@ async function startServer() {
     const sessions = new Map<string, StreamableHTTPServerTransport>();
 
     // 1. Initialize the tool registry
-    const manualTools: Tool[] = [];
-    if (ENABLE_UI_ASSISTANT_TOOLS) {
-        manualTools.push(getCurrentTime as Tool);
-        manualTools.push(requestOpenInEditor as Tool);
-        manualTools.push(requestNavigation as Tool);
-    }
-
-    await initializeToolRegistry(manualTools);
+    await initializeToolRegistry([]);
     const registry = getToolRegistry();
 
     // 2. Define the tools to be exposed via MCP (only the meta-tools)
