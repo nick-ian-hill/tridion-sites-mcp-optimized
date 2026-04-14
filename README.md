@@ -2,6 +2,15 @@
 
 This repository contains a Model Context Protocol (MCP) server designed to integrate Tridion Sites with AI assistants like GitHub Copilot and Gemini. By running this server locally, you enable your AI assistant to securely interact with the Tridion Sites Content Management (CM) REST API, providing context-aware completions, tool executions, and content generation.
 
+## Optimized Architecture: Meta-Tools
+
+Unlike traditional MCP servers that expose every tool in the system prompt (which can consume thousands of tokens), this server uses a **discovery-based architecture** consisting of two specialized "Meta-Tools":
+
+1.  **`getToolDetails`**: Allows the AI assistant to browse a lightweight summary of all 83 tools and "fetch" the full documentation and JSON schema for only the tools it needs for the current task.
+2.  **`callTool`**: A single, validated execution point for all CMS operations.
+
+This approach ensures the system prompt stays small and efficient, leaving more room in the context window for actual content and reasoning.
+
 ## Capabilities
 
 This server exposes over 80 tools covering all major areas of Tridion Sites content management. The table below summarises what the AI assistant can do on your behalf once connected.
@@ -60,14 +69,14 @@ To get the MCP server running on your machine, follow these steps:
    *(Note: The URLs below are examples and should be updated to match your target CMS environment).*
 
    ```env
-   CORE_API_URL=http://10.100.92.199:81/api/v3.0
-   AUTH_TOKEN_URL=http://external-dxui-dev-sites-stg.ted.nl.sdldev.net/access-management/connect/token
+   CORE_API_URL=http://your-cms-host/api/v3.0
+   AUTH_TOKEN_URL=http://your-auth-host/access-management/connect/token
    AUTH_CLIENT_ID=<your-client-id>
    AUTH_CLIENT_SECRET=<your-client-secret>
    GEMINI_API_KEY=<your-gemini-api-key>
    ```
 
-   > **Note on `GEMINI_API_KEY`:** This key is only required if you intend to use the AI-powered tools (`autoClassifyItem`, `autoClassifyMultimediaComponent`, `generateContentFromPrompt`, `createMultimediaComponentFromPrompt`, `updateMultimediaComponentFromPrompt`) or the built-in agent API. It is also required by `readMultimediaComponent` and `readUploadedFile` when reading **image** files (the vision model is used to analyse the image content; non-image formats such as Word, Excel, and PDF do not require the key). All other tools work without it. Obtain a key from [Google AI Studio](https://aistudio.google.com/).
+   > **Note on `GEMINI_API_KEY`:** This key is only required if you intend to use the AI-powered tools (`autoClassifyItem`, `autoClassifyMultimediaComponent`, `generateContentFromPrompt`, `createMultimediaComponentFromPrompt`, `updateMultimediaComponentFromPrompt`). It is also required by `readMultimediaComponent` and `readUploadedFile` when reading **image** files (the vision model is used to analyse the image content; non-image formats such as Word, Excel, and PDF do not require the key). All other tools work without it. Obtain a key from [Google AI Studio](https://aistudio.google.com/).
 
    > **Windows tip:** To set variables persistently (so they survive terminal sessions and reboots), use **System Properties** instead of setting them in the terminal:
    > 1. Open **Start**, search for **"Edit the system environment variables"**, and open it.
@@ -83,10 +92,19 @@ To get the MCP server running on your machine, follow these steps:
    > ```
 
 5. **Start the server:**
+   
+   The server supports two transport modes.
+
+   **For Stdio mode (Standard / Recommended for Claude Desktop & Gemini CLI):**
    ```bash
-   npm run start
+   MCP_TRANSPORT=stdio npm start
    ```
-   *The server will start and listen locally on port 8090. No separate build or compile step is required — the server runs TypeScript directly using `tsx`.*
+
+   **For Streamable HTTP mode (Web integrations / Backward compatibility):**
+   ```bash
+   MCP_TRANSPORT=http npm start
+   ```
+   *The Streamable HTTP server will start and listen locally on port 8090. No separate build or compile step is required — the server runs TypeScript directly using `tsx`.*
 
 ---
 
@@ -94,100 +112,138 @@ To get the MCP server running on your machine, follow these steps:
 
 ```
 src/
-├── index.ts              # HTTP server entry point. Dynamically loads all tools from tools/,
-│                         # registers them with the MCP server, and exposes the agent API endpoints.
+├── index.ts              # Server entry point. Dynamically loads all tools from tools/,
+│                         # registers the getToolDetails and callTool handlers.
 ├── tools/                # One file per MCP tool. Each file exports a single object with a name,
 │                         # description, Zod input schema, and an execute function.
 ├── schemas/              # Reusable Zod schemas shared across multiple tools (e.g. search query
 │                         # parameters, link structures, field value shapes, XML name rules).
-├── utils/                # Shared helper modules used by tools:
-│   ├── axios.ts          # Authenticated Axios instance. Handles OAuth token acquisition and
-│   │                     # caching, and injects the correct Authorization header on every request.
-│   ├── errorUtils.ts     # Standardises error responses returned from tool execute functions.
-│   ├── responseFiltering.ts  # Trims large CMS responses to keep LLM context usage low.
-│   └── ...               # Other helpers for page layout, link resolution, language handling, etc.
-└── agent/                # Gemini-powered MCP client for web applications. Provides an async
-                          # chat API with long-polling. See src/agent/README.md for details.
+└── utils/                # Shared helper modules used by tools:
+    ├── axios.ts          # Authenticated Axios instance. Handles OAuth token acquisition and
+    │                     # caching, and injects the correct Authorization header on every request.
+    ├── errorUtils.ts     # Standardises error responses returned from tool execute functions.
+    ├── responseFiltering.ts  # Trims large CMS responses to keep LLM context usage low.
+    └── ...               # Other helpers for page layout, link resolution, language handling, etc.
+```
+
+## 3. Integration Examples
+
+The Tridion Sites MCP server can be integrated into various AI environments. Each environment supports both **Stdio** (local subprocess) and **HTTP** (network service) transports.
+
+### VS Code (GitHub Copilot)
+VS Code uses an `mcp.json` file (either globally in your user profile or locally in a `.vscode/` folder).
+
+#### Stdio Mode (Process)
+```json
+{
+  "mcpServers": {
+    "tridion": {
+      "command": "npx",
+      "args": ["tsx", "/absolute/path/to/src/index.ts"],
+      "env": {
+        "MCP_TRANSPORT": "stdio",
+        "CORE_API_URL": "...",
+        "AUTH_CLIENT_ID": "...",
+        "AUTH_CLIENT_SECRET": "...",
+        "AUTH_TOKEN_URL": "..."
+      }
+    }
+  }
+}
+```
+
+#### HTTP Mode (Streamable)
+Ensure the server is running locally first (`MCP_TRANSPORT=http npm start`).
+```json
+{
+  "mcpServers": {
+    "tridion": {
+      "url": "http://localhost:8090"
+    }
+  }
+}
 ```
 
 ---
 
-## 3. Usage with GitHub Copilot (VS Code)
+### Gemini CLI
+Gemini CLI uses a `settings.json` file to register MCP servers.
+Note: you may need to use absolute paths for the command arguments.
 
-To use the MCP server as context for testing inside VS Code, follow these steps:
+#### Stdio Mode (Process)
+```json
+{
+  "mcpServers": {
+    "tridion": {
+      "command": "npx",
+      "args": [
+        "tsx",
+        "/Users/YOUR_USER/path/to/src/index.ts"
+      ],
+      "env": {
+        "MCP_TRANSPORT": "stdio",
+        "CORE_API_URL": "...",
+        "AUTH_CLIENT_ID": "..."
+      }
+    }
+  }
+}
+```
 
-1. **Create a workspace:** Create a new folder on your machine that you want to use as the context for testing, and open this folder in VS Code.
-2. **Create the MCP configuration:**
-   * Inside this folder, create a `.vscode` directory.
-   * Inside the `.vscode` directory, create a file named `mcp.json`.
-3. **Add the server reference:** Paste the following configuration into `mcp.json` to point VS Code to your local MCP server:
-   ```json
-   {
-     "servers": {
-       "tridion-sites-mcp-server": {
-         "url": "http://localhost:8090"
-       }
-     }
-   }
-   ```
-4. **Connect VS Code to the server:** Open the `mcp.json` file in VS Code. You will see a UI overlay (CodeLens) above the `"tridion-sites-mcp-server"` line. Click **Start** to connect VS Code to your already-running local server. Note that this button only establishes the connection — it does not start the HTTP server itself. `npm run start` must already be running before you click it.
-5. **Open Chat:** Go to **View > Chat** in the VS Code menu to open the agent chat window.
-6. **Ask Questions:** From the chat window, you can select your preferred model (e.g., Gemini Pro) from the dropdown and start submitting prompts. The assistant will now route relevant Tridion Sites queries through your local MCP server.
-
----
-
-## 4. Usage with Google Antigravity
-
-To register the MCP server with Google Antigravity, you need to update its `mcp_config.json` file.
-
-1. **Locate your MCP config file:** The configuration file is typically located at `~/.gemini/antigravity/mcp_config.json` on macOS/Linux.
-2. **Update the `mcpServers` block:** Add the following configuration to point Antigravity to your local server. You can also disable specific tools if preferred:
-   ```json
-   {
-     "mcpServers": {
-       "tridion": {
-         "serverUrl": "http://localhost:8090",
-         "disabled": false,
-         "disabledTools": [
-           "autoClassifyItem",
-           "autoClassifyMultimediaComponent"
-         ]
-       }
-     }
-   }
-   ```
+#### HTTP Mode (Streamable)
+```json
+{
+  "mcpServers": {
+    "tridion": {
+      "httpUrl": "http://localhost:8090"
+    }
+  }
+}
+```
 
 ---
 
-## 5. Usage with Gemini CLI/Environment
+### Google Antigravity
+Antigravity uses an `mcp_config.json` file.
 
-If you are running the MCP server directly with a Gemini environment, you must configure your settings file to register the server and exclude specific tools if necessary.
+#### Stdio Mode (Process)
+```json
+{
+  "mcpServers": {
+    "tridion": {
+      "command": "/opt/homebrew/bin/node",
+      "args": [
+        "--import",
+        "/Users/YOUR_USER/path/to/node_modules/tsx/dist/loader.mjs",
+        "/Users/YOUR_USER/path/to/src/index.ts"
+      ],
+      "env": {
+        "MCP_TRANSPORT": "stdio",
+        "CORE_API_URL": "...",
+        "AUTH_CLIENT_ID": "..."
+      }
+    }
+  }
+}
+```
 
-1. **Locate your settings file:** Find your Gemini settings configuration (for example, `C:\ProgramData\gemini-cli\settings.json` on Windows).
-2. **Update the `mcpServers` block:** Add the following configuration. This points Gemini to your local server and explicitly excludes tools that you may not want the model to access in this context:
-   ```json
-   {
-     "mcpServers": {
-       "tridion-sites-mcp-server": {
-         "httpUrl": "http://localhost:8090",
-         "excludeTools": [
-           "autoClassifyItem",
-           "autoClassifyMultimediaComponent",
-           "generateContentFromPrompt",
-           "createMultimediaComponentFromPrompt",
-           "readMultimediaComponent",
-           "readUploadedFile",
-           "updateMultimediaComponentFromPrompt"
-         ]
-       }
-     }
-   }
-   ```
-3. **Restart your Gemini interface:** Save the file and restart your Gemini application. It will connect to `localhost:8090` and utilize the available tools.
+#### HTTP Mode (Streamable)
+```json
+{
+  "mcpServers": {
+    "tridion": {
+      "serverUrl": "http://localhost:8090"
+    }
+  }
+}
+```
 
 ---
 
-## 6. Troubleshooting
+## 4. Troubleshooting
+
+### "Connection closed" or "Disconnected" in Stdio Mode
+If the server fails to connect in Gemini CLI or Claude Desktop ensure the path to `src/index.ts` in your config is absolute (e.g., `/Users/name/...`). Relative paths often fail because the CLI launches from its own application directory.
 
 ### The AI Assistant returns an `invalid_client` authentication error
 If the MCP server is running but the assistant reports that calls to the CMS are failing with an `invalid_client` error, the Tridion authentication server is rejecting your credentials. Check the following:
@@ -204,7 +260,7 @@ If the MCP server is running but the assistant reports that calls to the CMS are
 
 ### The server fails to start: `EADDRINUSE` (port already in use)
 
-If `npm run start` exits immediately with an `EADDRINUSE` error, another process is already using port 8090 (often a previous server instance that was not cleanly stopped).
+If `MCP_TRANSPORT=http npm run start` exits immediately with an `EADDRINUSE` error, another process is already using port 8090 (often a previous server instance that was not cleanly stopped).
 
 * **Kill the conflicting process** (PowerShell):
   ```powershell
@@ -236,4 +292,4 @@ If `npm run start` exits immediately with an `EADDRINUSE` error, another process
 
 Gemini CLI attempts to connect to all configured MCP servers **once at startup**. If the server was not running at the time the CLI was launched, the connection fails for that session.
 
-**Fix:** Start `npm run start` first and then launch Gemini CLI, or — if the CLI is already open — start the server and then run `/mcp reload` in the Gemini CLI chat to reconnect without restarting.
+**Fix:** Start `MCP_TRANSPORT=http npm run start` first and then launch Gemini CLI, or — if the CLI is already open — start the server and then run `/mcp reload` in the Gemini CLI chat to reconnect without restarting.

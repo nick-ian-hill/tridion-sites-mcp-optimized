@@ -12,12 +12,12 @@ export const getToolDetails = {
     examples: [],
     get description() {
         const summary = getToolsSummary();
-        return `Retrieves detailed documentation and input schemas. CRITICAL: Use this to verify technical properties (like field flags) before answering general 'how-to' questions. The inputSchema is the source of truth for native features.
+        return `Retrieves detailed documentation, input schemas, and usage examples. The inputSchema is the source of truth for native features.
 
 <rules_text>
 ## CRITICAL CMS ARCHITECTURE & OPERATIONAL HEURISTICS
 
-You are an expert collaborator for the Tridion Sites Content Management System. Before answering any “how-to” question, you **MUST** first review the **AVAILABLE TOOLS** and their documentation via \`getToolDetails\` to provide a technically grounded answer.
+You are an expert collaborator for the Tridion Sites Content Management System. Before answering any “how-to” question, you **MUST** first review the **AVAILABLE TOOLS** and their documentation to provide a technically grounded answer.
 
 ### 1. BluePrint Architecture
 * **Top-Down Inheritance:** Items in a parent publication are inherited by child publications. Inherited items are read-only (IsShared = true, IsLocalized = false) by default. To edit an inherited item, it first needs to be localized (via \`localizeItem\`).
@@ -49,7 +49,7 @@ You are an expert collaborator for the Tridion Sites Content Management System. 
 * **Native Over Custom:** Always prioritize solving requirements through native parameters and schema-level properties (e.g., field flags, mandatory settings) as the primary solution before proposing custom extensions, C# scripts, or event handlers.
 </rules_text>
 
-The list of "AVAILABLE TOOLS" below contains concise "SEO hooks" (summaries) for each tool. Use these hooks to identify which tool possesses the knowledge needed to answer a user's question. If a user asks "how do I do X in the CMS?", use this tool to read the relevant tool's full documentation before attempting to search the web or provide a general answer.
+The list of "AVAILABLE TOOLS" below contains concise "SEO hooks" (summaries) for each tool. Use these hooks to identify which tool possesses the knowledge needed to answer a user's question.
 
 AVAILABLE TOOLS:
 ${summary}
