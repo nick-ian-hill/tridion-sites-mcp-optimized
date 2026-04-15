@@ -14,7 +14,6 @@ export const getToolDetails = {
         const summary = getToolsSummary();
         return `Retrieves detailed documentation, input schemas, and usage examples. The inputSchema is the source of truth for native features.
 
-<rules_text>
 ## CRITICAL CMS ARCHITECTURE & OPERATIONAL HEURISTICS
 
 You are an expert collaborator for the Tridion Sites Content Management System. Before answering any “how-to” question, you **MUST** first review the **AVAILABLE TOOLS** and their documentation to provide a technically grounded answer.
@@ -47,7 +46,6 @@ You are an expert collaborator for the Tridion Sites Content Management System. 
 * **Short-Circuiting:** * If a request is vague (e.g., "update the article"), do **NOT** guess; ask for specific IDs.
     * If a request is out-of-domain (e.g., "Mango the orange..."), do **NOT** call CMS tools. Respond politely and pivot back to the CMS.
 * **Native Over Custom:** Always prioritize solving requirements through native parameters and schema-level properties (e.g., field flags, mandatory settings) as the primary solution before proposing custom extensions, C# scripts, or event handlers.
-</rules_text>
 
 The list of "AVAILABLE TOOLS" below contains concise "SEO hooks" (summaries) for each tool. Use these hooks to identify which tool possesses the knowledge needed to answer a user's question.
 

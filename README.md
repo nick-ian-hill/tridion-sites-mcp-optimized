@@ -9,7 +9,8 @@ Unlike traditional MCP servers that expose every tool in the system prompt (whic
 1.  **`getToolDetails`**: Allows the AI assistant to browse a lightweight summary of all 83 tools and "fetch" the full documentation and JSON schema for only the tools it needs for the current task.
 2.  **`callTool`**: A single, validated execution point for all CMS operations.
 
-This approach ensures the system prompt stays small and efficient, leaving more room in the context window for actual content and reasoning.
+This approach is an independent implementation of the **MCP Compression** pattern (referenced by Atlassian in [this article](https://www.atlassian.com/blog/developer/mcp-compression-preventing-tool-bloat-in-ai-agents)), which ensures the system prompt stays small and efficient, leaving more room in the context window for actual content and reasoning.
+
 
 ## Capabilities
 
