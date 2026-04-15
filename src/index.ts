@@ -34,20 +34,14 @@ import { initializeToolRegistry, Tool } from './utils/toolRegistry.js';
 import { getToolDetails, callTool } from './mcp/metaTools.js';
 
 /**
- * Creates and configures an McpServer instance.
+ * Creates and configures an McpServer instance with registered meta-tools.
  */
 function createMcpServer(): McpServer {
-    return new McpServer({
+    const server = new McpServer({
         name: "tridion-sites-mcp-server",
         version: "0.1.0"
     });
-}
 
-/**
- * Registers the meta-tools on the server.
- * This should be called AFTER initializeToolRegistry to ensure tool summaries are populated.
- */
-function registerMetaTools(server: McpServer) {
     const mcpTools = [getToolDetails as Tool, callTool as Tool];
 
     for (const tool of mcpTools) {
@@ -62,6 +56,8 @@ function registerMetaTools(server: McpServer) {
             }
         );
     }
+
+    return server;
 }
 
 /**
@@ -77,12 +73,9 @@ async function startServer() {
     // Our global stdout interception ensures this internal logging doesn't break Stdio.
     await initializeToolRegistry([]);
 
-    // 2. Create the server and register meta-tools
-    const server = createMcpServer();
-    registerMetaTools(server);
-
     if (transportType === 'stdio') {
         // --- Stdio Transport (Standard for CLI and Desktop integrations) ---
+        const server = createMcpServer();
         const transport = new StdioServerTransport();
 
         console.error("Connecting Tridion Sites MCP Server (Stdio)...");
@@ -121,8 +114,10 @@ async function startServer() {
                     }
 
                     if (sessionId && sessions.has(sessionId)) {
+                        // Existing session
                         await sessions.get(sessionId)!.handleRequest(req, res, parsed);
                     } else if (isInitializeRequest(parsed)) {
+                        // New session
                         const transport = new StreamableHTTPServerTransport({
                             sessionIdGenerator: () => randomUUID(),
                             onsessioninitialized: (newSessionId) => {
@@ -133,6 +128,16 @@ async function startServer() {
                             const sid = transport.sessionId;
                             if (sid) sessions.delete(sid);
                         };
+                        const server = createMcpServer();
+                        await server.connect(transport);
+                        await transport.handleRequest(req, res, parsed);
+                    } else if (sessionId && !sessions.has(sessionId)) {
+                        // Stale session ID with a non-initialize request (e.g. after server restart).
+                        // Handle statelessly so clients don't need to reinitialize manually.
+                        const transport = new StreamableHTTPServerTransport({
+                            sessionIdGenerator: undefined, // stateless: no session ID assigned or stored
+                        });
+                        const server = createMcpServer();
                         await server.connect(transport);
                         await transport.handleRequest(req, res, parsed);
                     } else {
@@ -143,9 +148,13 @@ async function startServer() {
             } else if (req.method === 'GET' || req.method === 'DELETE') {
                 if (sessionId && sessions.has(sessionId)) {
                     await sessions.get(sessionId)!.handleRequest(req, res);
-                } else {
+                } else if (sessionId && !sessions.has(sessionId)) {
+                    // Stale session ID — 404 signals clients to re-initialize
                     res.writeHead(404, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ error: 'Session not found' }));
+                } else {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'Bad request: missing session ID' }));
                 }
             } else {
                 res.writeHead(405, { 'Content-Type': 'application/json' });
