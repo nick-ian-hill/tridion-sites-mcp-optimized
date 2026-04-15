@@ -1,6 +1,6 @@
 # Tridion Sites MCP Server
 
-This repository contains a Model Context Protocol (MCP) server designed to integrate Tridion Sites with AI assistants like GitHub Copilot and Gemini. By running this server locally, you enable your AI assistant to securely interact with the Tridion Sites Content Management (CM) REST API, providing context-aware completions, tool executions, and content generation.
+This repository contains a Model Context Protocol (MCP) server designed to integrate Tridion Sites with AI assistants like GitHub Copilot and Gemini CLI. By running this server, you transform your AI assistant into a BluePrint-aware collaborator capable of navigating complex content hierarchies, executing system administration tasks, and orchestrating batch operations via the Tridion Sites Core Service REST API.
 
 ## Optimized Architecture: Meta-Tools
 
