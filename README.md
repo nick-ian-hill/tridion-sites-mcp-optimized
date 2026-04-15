@@ -101,7 +101,7 @@ To get the MCP server running on your machine, follow these steps:
    MCP_TRANSPORT=stdio npm start
    ```
 
-   **For Streamable HTTP mode (Web integrations / Backward compatibility):**
+   **For Streamable HTTP mode (Web integrations & support for multiple clients):**
    ```bash
    MCP_TRANSPORT=http npm start
    ```
