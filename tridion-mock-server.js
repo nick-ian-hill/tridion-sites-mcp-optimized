@@ -100,11 +100,31 @@ const lockState = new Map();
 /** Keyword classification: Map<tcmUri, Set<keywordUri>> */
 const classificationState = new Map();
 
+/** Activity instances: Map<id, { ...activityData }> */
+const activityInstances = new Map();
+
+const seedActivities = () => {
+    const actId = 'tcm:0-5001-131072';
+    activityInstances.set(actId, {
+        Id: actId,
+        Title: 'Review About Us Changes',
+        ActivityInstanceStatus: 'Assigned',
+        ActivityType: 'Manual',
+        Assignee: { '$type': 'Link', IdRef: 'tcm:0-1-65546', Title: 'Administrator' },
+        Owner: { '$type': 'Link', IdRef: 'tcm:0-1-65546', Title: 'Administrator' },
+        WorkItem: { '$type': 'Link', IdRef: 'tcm:10-123-16', Title: 'About Us' },
+        WorkflowProcess: { '$type': 'Link', IdRef: 'tcm:0-1-131072', Title: 'Default Workflow' },
+        CreationDate: now()
+    });
+};
+
 // ============================================================
 // --- FACTORY HELPERS ---
 // ============================================================
 
 const now = () => new Date().toISOString();
+
+seedActivities();
 
 const createBaseItem = (id, typeNum, title, pubId, extra = {}) => ({
     '$type': ITEM_TYPE_NAME[typeNum] || 'Item',  // Real API uses $type for polymorphism
@@ -145,45 +165,76 @@ const dbPut = (itemId, typeNum, owningPub, localizationsObj) => {
 // ============================================================
 
 const initDb = () => {
-    // Root Folders (owned by System Master, shared down)
+    // 1. Root Folders (owned by System Master, shared down)
     dbPut(2, 2, '1', {
         '1': createBaseItem(2, 2, 'Root Folder', '1'),
     });
 
-    // Root Structure Groups
+    // 2. Root Structure Groups
     dbPut(4, 4, '1', {
         '1': createBaseItem(4, 4, 'Root SG', '1'),
     });
 
-    // Content Folder in Content Master
-    dbPut(10, 2, '5', {
-        '5': createBaseItem(10, 2, 'Building Blocks', '5'),
+    // 3. Embedded Schema: Address
+    dbPut(102, 8, '5', {
+        '5': createBaseItem(102, 8, 'Address', '5', {
+            SchemaPurpose: 'Embedded',
+            RootElementName: 'Address',
+            Fields: {
+                '$type': 'FieldsDefinitionDictionary',
+                'Street': { '$type': 'SingleLineTextFieldDefinition', Name: 'Street', MinOccurs: 1, MaxOccurs: 1 },
+                'City':   { '$type': 'SingleLineTextFieldDefinition', Name: 'City',   MinOccurs: 1, MaxOccurs: 1 },
+                'Zip':    { '$type': 'SingleLineTextFieldDefinition', Name: 'Zip',    MinOccurs: 0, MaxOccurs: 1 },
+            }
+        })
     });
 
-    // Structure Group in Website
+    // 4. Content Folder in Content Master
+    dbPut(10, 2, '5', {
+        '5': createBaseItem(10, 2, 'Building Blocks', '5', {
+            MetadataSchema: { '$type': 'Link', IdRef: 'tcm:5-101-8', Title: 'SEO Metadata' },
+            Metadata: {
+                MetaTitle: 'Building Blocks Metadata',
+                MetaDescription: 'A container for content master items.',
+                Priority: 10,
+                ExpiryDate: '2026-12-31T00:00:00Z'
+            }
+        }),
+    });
+
+    // 5. Structure Group in Website
     dbPut(20, 4, '10', {
         '10': createBaseItem(20, 4, 'Home', '10', { StructureGroupId: 'tcm:10-20-4' }),
     });
 
-    // Article Schema
+    // 6. Article Schema (Enhanced with Embedded and Diverse Types)
     dbPut(100, 8, '5', {
         '5': createBaseItem(100, 8, 'Article', '5', {
             SchemaPurpose: 'Component',
             RootElementName: 'Article',
             Fields: {
                 '$type': 'FieldsDefinitionDictionary',
-                'Headline': { '$type': 'SingleLineTextFieldDefinition', Name: 'Headline', MinOccurs: 1, MaxOccurs: 1 },
-                'Body': { '$type': 'MultiLineTextFieldDefinition', Name: 'Body', MinOccurs: 0, MaxOccurs: 1 },
-                'Image': {
-                    '$type': 'MultimediaLinkFieldDefinition', Name: 'Image', MinOccurs: 0, MaxOccurs: 1,
-                    AllowedMimeTypes: ['image/jpeg', 'image/png']
-                },
+                'Headline':    { '$type': 'SingleLineTextFieldDefinition', Name: 'Headline', MinOccurs: 1, MaxOccurs: 1 },
+                'Body':        { '$type': 'MultiLineTextFieldDefinition',  Name: 'Body',     MinOccurs: 0, MaxOccurs: 1 },
+                'Image':       { '$type': 'MultimediaLinkFieldDefinition', Name: 'Image',    MinOccurs: 0, MaxOccurs: 1,
+                                 AllowedMimeTypes: ['image/jpeg', 'image/png'] },
+                'AuthorInfo':  { '$type': 'EmbeddedSchemaFieldDefinition', Name: 'AuthorInfo', MinOccurs: 0, MaxOccurs: 1, 
+                                 EmbeddedSchema: { '$type': 'Link', IdRef: 'tcm:5-102-8', Title: 'Address' },
+                                 EmbeddedFields: {
+                                    '$type': 'FieldsDefinitionDictionary',
+                                    'Street': { '$type': 'SingleLineTextFieldDefinition', Name: 'Street' },
+                                    'City':   { '$type': 'SingleLineTextFieldDefinition', Name: 'City' },
+                                    'Zip':    { '$type': 'SingleLineTextFieldDefinition', Name: 'Zip' },
+                                 }
+                               },
+                'PageCount':   { '$type': 'NumberFieldDefinition', Name: 'PageCount', MinOccurs: 0, MaxOccurs: 1 },
+                'CreatedDate': { '$type': 'DateFieldDefinition',   Name: 'CreatedDate', MinOccurs: 0, MaxOccurs: 1 },
             },
             MetadataFields: { '$type': 'FieldsDefinitionDictionary' },
         }),
     });
 
-    // SEO Metadata Schema
+    // 7. SEO Metadata Schema (Enhanced)
     dbPut(101, 8, '5', {
         '5': createBaseItem(101, 8, 'SEO Metadata', '5', {
             SchemaPurpose: 'Metadata',
@@ -191,13 +242,27 @@ const initDb = () => {
             Fields: { '$type': 'FieldsDefinitionDictionary' },
             MetadataFields: {
                 '$type': 'FieldsDefinitionDictionary',
-                'MetaTitle': { '$type': 'SingleLineTextFieldDefinition', Name: 'MetaTitle', MinOccurs: 0, MaxOccurs: 1 },
-                'MetaDescription': { '$type': 'MultiLineTextFieldDefinition', Name: 'MetaDescription', MinOccurs: 0, MaxOccurs: 1 },
+                'MetaTitle':       { '$type': 'SingleLineTextFieldDefinition', Name: 'MetaTitle',       MinOccurs: 0, MaxOccurs: 1 },
+                'MetaDescription': { '$type': 'MultiLineTextFieldDefinition',  Name: 'MetaDescription', MinOccurs: 0, MaxOccurs: 1 },
+                'Priority':        { '$type': 'NumberFieldDefinition',         Name: 'Priority',        MinOccurs: 0, MaxOccurs: 1 },
+                'ExpiryDate':      { '$type': 'DateFieldDefinition',          Name: 'ExpiryDate',      MinOccurs: 0, MaxOccurs: 1 },
             },
         }),
     });
 
-    // Page Template
+    // 8. Multimedia Schema: Image Asset
+    dbPut(103, 8, '5', {
+        '5': createBaseItem(103, 8, 'Image Asset', '5', {
+            SchemaPurpose: 'Multimedia',
+            RootElementName: 'ImageAsset',
+            IsMultimedia: true,
+            AllowedMultimediaTypes: [{ '$type': 'Link', IdRef: 'tcm:0-1-197', Title: 'JPEG Image' }],
+            Fields: { '$type': 'FieldsDefinitionDictionary' },
+            MetadataFields: { '$type': 'FieldsDefinitionDictionary' },
+        })
+    });
+
+    // 9. Page Template (Enhanced with Region Schema simulation)
     dbPut(99, 128, '5', {
         '5': createBaseItem(99, 128, 'Standard Page', '5', {
             OutputFormat: 'HTML Fragment',
@@ -205,7 +270,7 @@ const initDb = () => {
         }),
     });
 
-    // Component Template
+    // 10. Component Template
     dbPut(98, 32, '5', {
         '5': createBaseItem(98, 32, 'Article CT', '5', {
             OutputFormat: 'HTML Fragment',
@@ -213,7 +278,26 @@ const initDb = () => {
         }),
     });
 
-    // Component: About Us (owned by Content Master, inherited by Website)
+    // 11. Multimedia Component: Banner
+    dbPut(500, 16, '5', {
+        '5': createBaseItem(500, 16, 'Hero Banner', '5', {
+            Schema: { '$type': 'Link', IdRef: 'tcm:5-103-8', Title: 'Image Asset' },
+            LocationInfo: {
+                ContextRepository: { '$type': 'Link', IdRef: 'tcm:0-5-1' },
+                OrganizationalItem: { '$type': 'Link', IdRef: 'tcm:5-10-2' },
+            },
+            BinaryContent: {
+                '$type': 'BinaryContent',
+                FileSize: 102400,
+                MimeType: 'image/jpeg',
+                FileName: 'banner.jpg',
+                FileExtension: 'jpg',
+                MultimediaType: { '$type': 'Link', IdRef: 'tcm:0-1-197', Title: 'JPEG Image' }
+            }
+        })
+    });
+
+    // 12. Component: About Us
     dbPut(123, 16, '5', {
         '5': createBaseItem(123, 16, 'About Us', '5', {
             Schema: { '$type': 'Link', IdRef: 'tcm:5-100-8', Title: 'Article' },
@@ -224,11 +308,18 @@ const initDb = () => {
             Content: {
                 Headline: 'Welcome to our Master site',
                 Body: 'This is the master body text.',
+                PageCount: 1,
+                CreatedDate: '2026-04-15T00:00:00Z',
+                AuthorInfo: {
+                    Street: 'Main St',
+                    City: 'Amsterdam',
+                    Zip: '1011'
+                }
             },
         }),
     });
 
-    // Component: News Item (also in Content Master)
+    // 13. Component: News Item
     dbPut(124, 16, '5', {
         '5': createBaseItem(124, 16, 'News Item', '5', {
             Schema: { '$type': 'Link', IdRef: 'tcm:5-100-8', Title: 'Article' },
@@ -239,11 +330,13 @@ const initDb = () => {
             Content: {
                 Headline: 'Breaking News',
                 Body: 'News body text.',
+                PageCount: 5,
+                CreatedDate: '2026-04-14T10:00:00Z'
             },
         }),
     });
 
-    // Page: Home Page (owned by Website)
+    // 14. Page: Home Page (Enhanced with Recursive Regions)
     dbPut(456, 64, '10', {
         '10': createBaseItem(456, 64, 'Home Page', '10', {
             FileName: 'index.html',
@@ -252,22 +345,47 @@ const initDb = () => {
                 OrganizationalItem: { '$type': 'Link', IdRef: 'tcm:10-20-4', Title: 'Home' },
             },
             PageTemplate: { '$type': 'Link', IdRef: 'tcm:5-99-128', Title: 'Standard Page' },
-            ComponentPresentations: [
+            ComponentPresentations: [],
+            Regions: [
                 {
-                    '$type': 'ComponentPresentation',
-                    Component: { '$type': 'Link', IdRef: 'tcm:10-123-16', Title: 'About Us' },
-                    ComponentTemplate: { '$type': 'Link', IdRef: 'tcm:5-98-32', Title: 'Article CT' }
+                    '$type': 'EmbeddedRegion',
+                    RegionName: 'Main',
+                    ComponentPresentations: [
+                        {
+                            '$type': 'ComponentPresentation',
+                            Component: { '$type': 'Link', IdRef: 'tcm:10-123-16', Title: 'About Us' },
+                            ComponentTemplate: { '$type': 'Link', IdRef: 'tcm:5-98-32', Title: 'Article CT' }
+                        }
+                    ],
+                    Regions: [
+                        {
+                            '$type': 'EmbeddedRegion',
+                            RegionName: 'Feature',
+                            ComponentPresentations: [
+                                {
+                                    '$type': 'ComponentPresentation',
+                                    Component: { '$type': 'Link', IdRef: 'tcm:10-124-16', Title: 'News Item' },
+                                    ComponentTemplate: { '$type': 'Link', IdRef: 'tcm:5-98-32', Title: 'Article CT' }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    '$type': 'EmbeddedRegion',
+                    RegionName: 'Sidebar',
+                    ComponentPresentations: []
                 }
             ],
         }),
     });
 
-    // Category: Regions
+    // 15. Category: Regions
     dbPut(200, 512, '1', {
         '1': createBaseItem(200, 512, 'Regions', '1'),
     });
 
-    // Keywords inside Category "Regions"
+    // 16. Keywords inside Category "Regions"
     dbPut(201, 1024, '1', {
         '1': createBaseItem(201, 1024, 'EMEA', '1', {
             ParentKeywords: [],
@@ -281,6 +399,7 @@ const initDb = () => {
         }),
     });
 };
+
 
 initDb();
 
@@ -498,9 +617,19 @@ const router = async (req, res) => {
         }
 
         if (path.match(/^\/api\/v3\.0\/users\/[^/]+$/) && method === 'GET') {
-            const userId = path.split('/').pop();
-            const user = users.find(u => u.Id === userId.replace(/_/g, ':').replace(/tcm-/, 'tcm:')) || users[0];
+            const userId = path.split('/').pop().replace(/_/g, ':');
+            const user = users.find(u => u.Id === userId) || users[0];
             return handleResponse(res, 200, user);
+        }
+
+        // ── 7a. ACTIVITY INSTANCES ────────────────────────────
+        if (path === '/api/v3.0/activityInstances' && method === 'GET') {
+            const statusFilter = qs.getAll('activityStates').flatMap(v => v.split(','));
+            let results = Array.from(activityInstances.values());
+            if (statusFilter.length > 0) {
+                results = results.filter(a => statusFilter.includes(a.ActivityInstanceStatus));
+            }
+            return handleResponse(res, 200, results);
         }
 
         // ── 8. SEARCH ─────────────────────────────────────────
@@ -512,6 +641,7 @@ const router = async (req, res) => {
             const filterTypes = query.ItemTypes; // e.g. ['Component']
             const searchInUri = query.SearchIn;
             const schemaFilter = query.BasedOnSchemas; // [{ schemaUri, fieldFilter }]
+            const authorFilter = query.Author;
 
             const results = [];
             for (const [key, record] of db.entries()) {
@@ -519,14 +649,11 @@ const router = async (req, res) => {
                 const typeName = ITEM_TYPE_NAME[parseInt(typeNum)];
                 if (!typeName) continue;
 
-                // Type filter
-                if (filterTypes && filterTypes.length > 0 && !filterTypes.includes(typeName)) continue;
-
-                // Skip non-content items for content searches
-                if ([1, 512, 1024].includes(parseInt(typeNum)) && filterTypes && !filterTypes.includes(typeName)) continue;
-
                 const item = record.localizations[record.owningPub];
                 if (!item) continue;
+
+                // Type filter
+                if (filterTypes && filterTypes.length > 0 && !filterTypes.includes(typeName)) continue;
 
                 // Title filter
                 if (searchTitle && !item.Title.toLowerCase().includes(searchTitle)) continue;
@@ -538,8 +665,12 @@ const router = async (req, res) => {
                     if (!schemaMatch) continue;
                 }
 
+                // Author filter
+                if (authorFilter && item.VersionInfo?.CheckOutUser?.IdRef !== authorFilter) continue;
+
                 results.push({ Id: item.Id, Title: item.Title, type: typeName });
             }
+
             return handleResponse(res, 200, results);
         }
 
@@ -792,6 +923,7 @@ const router = async (req, res) => {
                 if (!item) return handleResponse(res, 404, { Message: `Item ${tcmUri} not found` });
 
                 const versions = [];
+                // Return actual current version and simulated history
                 for (let v = item.VersionInfo.Version; v >= 1; v--) {
                     versions.push({
                         Id: `${tcmUri}-v${v}`,
@@ -799,11 +931,13 @@ const router = async (req, res) => {
                         Revision: 0,
                         CreationDate: item.VersionInfo.CreationDate,
                         RevisionDate: item.VersionInfo.RevisionDate,
-                        Author: { Title: 'Administrator' },
+                        Creator: item.VersionInfo.Creator || { IdRef: 'tcm:0-1-65546', Title: 'Administrator' },
+                        Owner: item.VersionInfo.Owner || { IdRef: 'tcm:0-1-65546', Title: 'Administrator' }
                     });
                 }
                 return handleResponse(res, 200, versions);
             }
+
 
             // ── 16g. PUBLISH INFO ─────────────────────────────
             if (subPath === '/publishedItems' && method === 'GET') {
@@ -988,21 +1122,63 @@ const router = async (req, res) => {
                 const update = await readBody(req);
                 const key = `${parts.itemId}-${parts.itemType}`;
                 const record = db.get(key);
-                const item = record?.localizations[parts.pubId];
+                if (!record) return handleResponse(res, 404, { Message: 'Item not found in DB' });
 
-                if (!item) return handleResponse(res, 403, { Message: 'Cannot update a shared item. Localize it first.' });
+                // ── BLUEPRINT SAFETY ──────────────────────
+                const item = resolveItem(parts.pubId, parts.itemId, parts.itemType);
+                if (!item) return handleResponse(res, 404, { Message: 'Item not found in Blueprint' });
+                
+                if (item.BluePrintInfo.IsShared) {
+                    return handleResponse(res, 403, { 
+                        Message: `Cannot update inherited item ${tcmUri}. Localize it first.` 
+                    });
+                }
 
-                // Deep merge Content and Metadata, shallow merge everything else
-                if (update.Content) item.Content = { ...(item.Content || {}), ...update.Content };
-                if (update.Metadata) item.Metadata = { ...(item.Metadata || {}), ...update.Metadata };
-                if (update.Title) item.Title = update.Title;
-                if (update.FileName) item.FileName = update.FileName;
-                if (update.ComponentPresentations) item.ComponentPresentations = update.ComponentPresentations;
+                // ── LOCK & VERSION LOGIC ──────────────────
+                const currentLock = lockState.get(tcmUri);
+                const isLockedToOther = currentLock && currentLock.LockType !== 'None' && currentLock.LockUser?.IdRef !== 'tcm:0-1-65546';
+                
+                if (isLockedToOther) {
+                    return handleResponse(res, 403, { Message: `Item is locked by ${currentLock.LockUser.Title}` });
+                }
 
-                item.VersionInfo.Revision += 1;
-                item.VersionInfo.RevisionDate = now();
-                return handleResponse(res, 200, item);
+                // Simulate Auto-Checkout/In behaviour
+                const targetPub = record.localizations[parts.pubId];
+                if (targetPub) {
+                    if (!currentLock || currentLock.LockType === 'None') {
+                        // Not checked out: Increment major version
+                        targetPub.VersionInfo.Version += 1;
+                        targetPub.VersionInfo.Revision = 0;
+                    } else {
+                        // Checked out to us: Increment revision
+                        targetPub.VersionInfo.Revision += 1;
+                    }
+                    
+                    // Deep merge Content and Metadata, shallow merge everything else
+                    if (update.Content) targetPub.Content = { ...(targetPub.Content || {}), ...update.Content };
+                    if (update.Metadata) targetPub.Metadata = { ...(targetPub.Metadata || {}), ...update.Metadata };
+                    if (update.Title) targetPub.Title = update.Title;
+                    if (update.FileName) targetPub.FileName = update.FileName;
+                    if (update.ComponentPresentations) targetPub.ComponentPresentations = update.ComponentPresentations;
+                    if (update.Regions) targetPub.Regions = update.Regions;
+
+                    targetPub.VersionInfo.RevisionDate = now();
+                    return handleResponse(res, 200, targetPub);
+                }
+                
+                return handleResponse(res, 500, { Message: 'Unexpected localization state' });
             }
+
+            // ── 16w. FINISH ACTIVITY ──────────────────────────
+            if (subPath === '/finish' && method === 'POST') {
+                const activity = activityInstances.get(tcmUri);
+                if (!activity) return handleResponse(res, 404, { Message: 'Activity instance not found' });
+                
+                activity.ActivityInstanceStatus = 'Finished';
+                activity.FinishDate = now();
+                return handleResponse(res, 200, activity);
+            }
+
 
             // ── 16w. DELETE ───────────────────────────────────
             if (method === 'DELETE') {
