@@ -27,9 +27,9 @@ const updatePageInputProperties = {
     pageTemplateId: z.string().regex(/^tcm:\d+-\d+-128$/).optional().describe("The TCM URI of the Page Template to be associated with the Page. Use 'search' or 'getItemsInContainer' to find available templates. If not provided, the page will use the Page Template defined by the parent Structure Group. In addition to defining how the page should be rendered (via Template Building Blocks), the Page Template can also specify a Region Schema which can define the structure of the Page."),
     metadataSchemaId: z.string().regex(/^(tcm:\d+-\d+-8|tcm:0-0-0)$/).optional().describe("The TCM URI of a Schema for the Page's metadata. Replaces the existing schema. If the Page Template defines a Region Schema, that Region Schema can be used here. Pass 'tcm:0-0-0' to remove the metadata schema."),
     metadata: z.record(fieldValueSchema).optional().describe("A JSON object for the Page's metadata fields. Can be provided alongside 'metadataSchemaId'. Replaces existing metadata."),
-    componentPresentations: z.array(componentPresentationSchemaForTyping).optional().describe("A complete array of Component Presentation objects to REPLACE the existing ones on the top-level of the page. WARNING: This overwrites the entire list."),
-    regions: z.array(regionSchemaForTyping).optional().describe("A complete array of Region objects to replace the existing region data. WARNING: This overwrites the entire region structure."),
-    componentPresentationUpdates: z.array(componentPresentationUpdateOperationSchema).optional().describe("A list of atomic operations to Add or Remove Component Presentations from the Page or specific Regions. Use this for safe updates in loops or partial modifications."),
+    componentPresentations: z.array(componentPresentationSchemaForTyping).optional().describe("A complete array of Component Presentation objects to REPLACE the existing ones on the top-level of the page. Note: Modern sites often use Regions exclusively; check both top-level and Regions when auditing content. WARNING: This overwrites the entire list."),
+    regions: z.array(regionSchemaForTyping).optional().describe("A complete array of Region objects to replace the existing region structure. This is the primary location for content in modern layout-driven pages. WARNING: This overwrites the entire region structure."),
+    componentPresentationUpdates: z.array(componentPresentationUpdateOperationSchema).optional().describe("A list of atomic add/remove operations for Component Presentations. Use this for moving items between regions, adding new content, or removing specific items without overwriting the entire Page structure. This is the SAFEST way to manage distributed content across both top-level and regions."),
     overrideRegionOrder: z.boolean().optional().describe("If true, the regions will be ordered exactly as provided in the 'regions' array. If false or omitted, the tool preserves the page's EXISTING region order (unlike createPage, which follows schema order by default).")
 };
 
@@ -44,9 +44,9 @@ const updatePageInputSchema = z.object(updatePageInputProperties).refine(
 type UpdatePageInput = z.infer<typeof updatePageInputSchema>;
 
 function applyUpdatesToList(
-    currentList: any[], 
-    additions: any[] | undefined, 
-    removals: any[] | undefined, 
+    currentList: any[],
+    additions: any[] | undefined,
+    removals: any[] | undefined,
     contextId: string
 ): any[] {
     let updatedList = [...(currentList || [])];
@@ -63,7 +63,7 @@ function applyUpdatesToList(
             return !targetsToRemove.some((target: any) => {
                 const compMatch = target.compId === cp.Component.IdRef;
                 // If template is specified in removal, strict match. If not, match only component.
-                const tempMatch = target.tempId 
+                const tempMatch = target.tempId
                     ? target.tempId === cp.ComponentTemplate?.IdRef
                     : true;
                 return compMatch && tempMatch;
@@ -110,8 +110,9 @@ export const updatePage = {
     description: `Updates an existing Page in the Content Management System (CMS).
 This tool can modify various aspects of a Page, including its title, file name, metadata, Component Presentations, and Regions.
 Versioning is handled automatically. If the item is not checked out, it will be checked out, updated, and then checked back in. If the item is already checked out by you, it will remain checked out after the update. The operation will be aborted if the item is checked out by another user.
-
-STRATEGIES FOR UPDATING CONTENT:
+A Page holds content using Component Presentations (CPs). A CP consists of a Component (content) and an optional Component Template (presentation); a Page can contain the same Component multiple times with different Templates (e.g., as a 'Teaser' and a 'Full' view). While traditional sites require a Template for HTML generation, Headless sites may omit it; you MUST verify this requirement using the 'getIsComponentTemplateRequired' tool.
+ 
+ STRATEGIES FOR UPDATING CONTENT:
 1. Full Replacement: Use 'componentPresentations' (for top-level) or 'regions' (for nested content). This completely overwrites the existing data with what you provide. 
    *Region Order Note:* When using full replacement for regions, the tool will automatically preserve the page's EXISTING region order. Any new mandatory regions added to the Schema since the page was last updated will be appended to the end.
 2. Atomic Updates (Recommended): Use 'componentPresentationUpdates'. This allows you to Add or Remove specific items from the Page or specific Regions without touching the rest of the content.
@@ -230,7 +231,7 @@ If called from the toolOrchestrator, consider auditing one or more updated pages
         }
     ],
     input: updatePageInputProperties,
-    
+
     execute: async (params: UpdatePageInput, context: any) => {
         // Validate Zod schema first to catch conflicting parameters
         try {
@@ -247,7 +248,7 @@ If called from the toolOrchestrator, consider auditing one or more updated pages
 
         formatForApi(params);
         const diagnosticsArgs = JSON.parse(JSON.stringify(params));
-        
+
         const req = context?.request;
         const cookieHeader = req?.headers?.cookie || '';
         const match = cookieHeader.match(/UserSessionID=([^;]+)/);
@@ -287,29 +288,29 @@ If called from the toolOrchestrator, consider auditing one or more updated pages
 
             if (updates.metadata && updates.metadataSchemaId !== 'tcm:0-0-0') {
                 let schemaIdForMetadata = updates.metadataSchemaId;
-                
+
                 if (!schemaIdForMetadata) {
-                     schemaIdForMetadata = itemToUpdate.MetadataSchema?.IdRef;
+                    schemaIdForMetadata = itemToUpdate.MetadataSchema?.IdRef;
                 }
-                
+
                 if (!schemaIdForMetadata || schemaIdForMetadata === 'tcm:0-0-0') {
                     const pageTemplateId = itemToUpdate.PageTemplate?.IdRef;
                     if (pageTemplateId) {
-                         try {
-                             const ptResponse = await authenticatedAxios.get(`/items/${pageTemplateId.replace(':', '_')}`);
-                             if (ptResponse.data?.PageSchema?.IdRef) {
+                        try {
+                            const ptResponse = await authenticatedAxios.get(`/items/${pageTemplateId.replace(':', '_')}`);
+                            if (ptResponse.data?.PageSchema?.IdRef) {
                                 schemaIdForMetadata = ptResponse.data.PageSchema.IdRef;
-                             }
-                         } catch (e) {
-                             console.warn(`Could not load Page Template ${pageTemplateId} to check for Region Schema fallback.`);
-                         }
+                            }
+                        } catch (e) {
+                            console.warn(`Could not load Page Template ${pageTemplateId} to check for Region Schema fallback.`);
+                        }
                     }
                 }
-                
+
                 if (!schemaIdForMetadata || schemaIdForMetadata === 'tcm:0-0-0') {
                     throw new Error(`Could not determine a valid Schema for the metadata fields of item ${itemId}.`);
                 }
-                
+
                 convertLinksRecursively(updates.metadata, itemId);
                 const orderedMetadata = await reorderFieldsBySchema(updates.metadata, schemaIdForMetadata, 'metadata', authenticatedAxios);
                 itemToUpdate.Metadata = orderedMetadata;
@@ -323,16 +324,16 @@ If called from the toolOrchestrator, consider auditing one or more updated pages
                 if (!pageTemplateId) {
                     throw new Error(`Could not determine the Page Template for Page ${itemId} to process regions.`);
                 }
-                
+
                 // Extract the existing regions to preserve their custom order
                 const existingRegions = itemToUpdate.Regions || [];
-                
+
                 // Pass existingRegions as the final parameter
                 itemToUpdate.Regions = await processRegions(
-                    updates.regions as RegionForTyping[], 
-                    itemId, 
-                    pageTemplateId, 
-                    authenticatedAxios, 
+                    updates.regions as RegionForTyping[],
+                    itemId,
+                    pageTemplateId,
+                    authenticatedAxios,
                     updates.overrideRegionOrder,
                     existingRegions
                 );
@@ -350,7 +351,7 @@ If called from the toolOrchestrator, consider auditing one or more updated pages
                             removeComponentPresentations,
                             itemId
                         );
-                    } 
+                    }
                     // Case B: Region Level
                     else {
                         const pathParts = regionPath.split('/');

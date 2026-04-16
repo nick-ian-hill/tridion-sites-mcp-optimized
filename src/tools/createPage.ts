@@ -36,7 +36,7 @@ The Page will be created in the specified Structure Group and be automatically i
 
 IMPORTANT: Regions are optional. If you omit the 'regions' parameter entirely, the tool will automatically pre-populate the page with all regions defined in the Page Template's schema as empty structures. This is the recommended approach when creating a fresh page with no initial content. If you want to create a page with specific content already in a region, provide the 'regions' array with only the regions you want to populate — the tool will auto-fill the rest.
 
-A Page holds content using Component Presentations (CPs). These CPs can be placed in two locations:
+A Page holds content using Component Presentations (CPs). A CP consists of a Component (content) and an optional Component Template (presentation); a Page can contain the same Component multiple times with different Templates (e.g., as a 'Teaser' and a 'Full' view). While traditional sites require a Template for HTML generation, Headless sites may omit it; you MUST verify this requirement using the 'getIsComponentTemplateRequired' tool. These CPs can be placed in two locations:
 1.  Directly on the Page: Use the top-level 'componentPresentations' property for this. These CPs are not associated with any specific Region.
 2.  Inside a Region: Use the 'regions' property. Each Region object within the 'regions' array can have its own 'ComponentPresentations' array.
 

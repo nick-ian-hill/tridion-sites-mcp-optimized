@@ -73,8 +73,8 @@ You can limit the response to combinations of the following properties by provid
 * **Page**:
     * **FileName**: The filename (e.g., 'index.html').
     * **PageTemplate**: Link to the associated Page Template.
-    * **ComponentPresentations**: Array of CPs on the page.
-    * **Regions**: Array of regions and their content.
+    * **ComponentPresentations**: Array of top-level Component Presentations on the page.
+    * **Regions**: Array of regions and their Component Presentations. This is the recommended location for content in modern layouts.
     * **LocationInfo** (Page-Specific):
         * **PublishLocationUrl**: The calculated URL of the page (e.g., "/en/news/index.html").
         * **PublishPath**: The physical path on the server.
