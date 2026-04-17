@@ -6,6 +6,8 @@
   "type": "module",
   "scripts": {
     "start": "tsx src/index.ts",
+    "start:http": "tsx src/index.ts --http",
+    "start:stdio": "tsx src/index.ts --stdio",
     "orchestrator": "tsx src/runOrchestratorTest.ts"
   },
   "keywords": [],

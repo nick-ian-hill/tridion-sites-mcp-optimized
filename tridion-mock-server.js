@@ -56,17 +56,22 @@ const ITEM_TYPE_NAME = Object.fromEntries(Object.entries(ITEM_TYPE).map(([k, v])
 const publications = [
     {
         Id: 'tcm:0-1-1', Title: '010 System Master', type: 'Publication',
-        RootFolder: { IdRef: 'tcm:1-2-2' }, RootStructureGroup: { IdRef: 'tcm:1-4-4' },
+        RootFolder: { '$type': 'Link', IdRef: 'tcm:1-2-2', Title: 'Root Folder' },
+        RootStructureGroup: { '$type': 'Link', IdRef: 'tcm:1-4-4', Title: 'Root SG' },
         BluePrintInfo: { IsShared: false, IsLocalized: false, OwningRepository: { IdRef: 'tcm:0-1-1' } }
     },
     {
         Id: 'tcm:0-5-1', Title: '050 Content Master', type: 'Publication',
-        Parents: [{ IdRef: 'tcm:0-1-1' }], RootFolder: { IdRef: 'tcm:5-2-2' }, RootStructureGroup: { IdRef: 'tcm:5-4-4' },
+        Parents: [{ '$type': 'Link', IdRef: 'tcm:0-1-1', Title: '010 System Master' }],
+        RootFolder: { '$type': 'Link', IdRef: 'tcm:5-2-2', Title: 'Root Folder' },
+        RootStructureGroup: { '$type': 'Link', IdRef: 'tcm:5-4-4', Title: 'Root SG' },
         BluePrintInfo: { IsShared: false, IsLocalized: false, OwningRepository: { IdRef: 'tcm:0-5-1' } }
     },
     {
         Id: 'tcm:0-10-1', Title: '100 Website EN', type: 'Publication',
-        Parents: [{ IdRef: 'tcm:0-5-1' }], RootFolder: { IdRef: 'tcm:10-2-2' }, RootStructureGroup: { IdRef: 'tcm:10-4-4' },
+        Parents: [{ '$type': 'Link', IdRef: 'tcm:0-5-1', Title: '050 Content Master' }],
+        RootFolder: { '$type': 'Link', IdRef: 'tcm:10-2-2', Title: 'Root Folder' },
+        RootStructureGroup: { '$type': 'Link', IdRef: 'tcm:10-4-4', Title: 'Root SG' },
         BluePrintInfo: { IsShared: false, IsLocalized: false, OwningRepository: { IdRef: 'tcm:0-10-1' } }
     },
 ];
@@ -398,6 +403,21 @@ const initDb = () => {
             Category: { '$type': 'Link', IdRef: 'tcm:1-200-512', Title: 'Regions' }
         }),
     });
+
+    // 17. Publications (Type 1) - Support discovery and hierarchy tracing
+    publications.forEach(pub => {
+        const pubIdNum = pub.Id.match(/tcm:0-(\d+)-1/)?.[1];
+        if (pubIdNum) {
+            // Seed publications into the primary database map
+            dbPut(pubIdNum, 1, '0', {
+                '0': {
+                    ...pub,
+                    '$type': 'Publication',
+                    ItemType: 1
+                }
+            });
+        }
+    });
 };
 
 
@@ -470,13 +490,15 @@ const toTcmUri = (parts) =>
     `tcm:${parts.pubId}-${parts.itemId}-${parts.itemType}${parts.version ? '-v' + parts.version : ''}`;
 
 const resolveItem = (pubId, itemId, itemType) => {
+    // If it's a Publication (Type 1), the context pubId is always '0' in the DB key
+    const effectivePubId = itemType === '1' ? '0' : pubId;
     const key = `${itemId}-${itemType}`;
     const record = db.get(key);
     if (!record) return null;
 
-    // Own localization?
-    if (record.localizations[pubId]) {
-        const item = JSON.parse(JSON.stringify(record.localizations[pubId]));
+    // Own localization? (For publications, this is the primary record under '0')
+    if (record.localizations[effectivePubId]) {
+        const item = JSON.parse(JSON.stringify(record.localizations[effectivePubId]));
         // Attach current lock state
         const tcmUri = `tcm:${pubId}-${itemId}-${itemType}`;
         const lock = lockState.get(tcmUri);

@@ -1,9 +1,22 @@
+const args = process.argv.slice(2);
+const forceHttp = args.includes('--http');
+const forceStdio = args.includes('--stdio');
+
+// Dynamic detection: defaults to HTTP in terminal, Stdio when piped/spawned by agent
+const defaultTransport = process.stdin.isTTY ? 'http' : 'stdio';
+const transportType = (process.env.MCP_TRANSPORT || (forceHttp ? 'http' : (forceStdio ? 'stdio' : defaultTransport))).toLowerCase();
+const isStdio = transportType === 'stdio';
+
+// Optional: toggle parameter inclusion via CLI flags
+if (args.includes('--no-params')) process.env.MCP_INCLUDE_PARAMETERS = 'false';
+if (args.includes('--with-params')) process.env.MCP_INCLUDE_PARAMETERS = 'true';
+
 /**
  * In Stdio mode, stdout MUST be reserved for MCP JSON-RPC protocol messages.
  * We intercept all writes to process.stdout and only allow valid JSON-RPC
  * messages through. Everything else is redirected to stderr.
  */
-if (process.env.MCP_TRANSPORT === 'stdio') {
+if (isStdio) {
     const originalStdoutWrite = process.stdout.write;
     // @ts-ignore
     process.stdout.write = (chunk, encoding, callback) => {
@@ -45,10 +58,11 @@ function createMcpServer(): McpServer {
     const mcpTools = [getToolDetails as Tool, callTool as Tool];
 
     for (const tool of mcpTools) {
+        const fullDescription = `${tool.summary}\n\n${tool.description}`;
         server.registerTool(
             tool.name,
             {
-                description: tool.description,
+                description: fullDescription,
                 inputSchema: tool.input,
             },
             (args: any, context: any) => {
@@ -62,10 +76,9 @@ function createMcpServer(): McpServer {
 
 /**
  * Main entry point. Supports Stdio and Streamable HTTP transports.
- * Configure via MCP_TRANSPORT environment variable ('stdio' or 'http').
+ * Automatically detects transport based on TTY status (Stdio when piped).
  */
 async function startServer() {
-    const transportType = (process.env.MCP_TRANSPORT || 'http').toLowerCase();
 
     // 1. Initialize the tool registry (loads all tools from src/tools/)
     // This takes ~2-3s but MUST happen before we register capabilities/connect

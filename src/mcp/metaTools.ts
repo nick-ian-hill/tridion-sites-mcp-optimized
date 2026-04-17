@@ -11,8 +11,9 @@ export const getToolDetails = {
     summary: "Meta-tool to look up API documentation and business rules for the CMS.",
     examples: [],
     get description() {
-        const summary = getToolsSummary();
-        return `Retrieves detailed documentation, input schemas, and usage examples. The inputSchema is the source of truth for native features.
+        const includeParams = process.env.MCP_INCLUDE_PARAMETERS !== 'false';
+        const summaryString = getToolsSummary(includeParams);
+        return `${this.summary}\n\nRetrieves detailed documentation, input schemas, and usage examples. The inputSchema is the source of truth for native features.
 
 ## CRITICAL CMS ARCHITECTURE & OPERATIONAL HEURISTICS
 
@@ -50,19 +51,23 @@ You are an expert collaborator for the Tridion Sites Content Management System. 
 * **Native Over Custom:** Always prioritize solving requirements through native parameters and schema-level properties (e.g., field flags, mandatory settings) as the primary solution before proposing custom extensions, C# scripts, or event handlers.
 * **Scripting API Integrity:** When using \`toolOrchestrator\`, the \`context.tools\` object exposes ONLY the tools listed in this documentation. You **MUST** call \`getToolDetails\` for any tool you intend to use in a script to verify its exact name and parameter schema.
 
+### 6. Execution & Verification Protocol
+* **Mandatory Discovery (No Guessing):** You are strictly forbidden from guessing tool parameters or capabilities. Before executing a tool via \`callTool\`, formulating a multi-step plan, writing a \`toolOrchestrator\` script, or answering a user's question about how to perform a task, you **MUST** first invoke \`getToolDetails\` to review the exact JSON schema and ground your response in factual documentation.
+* **Trust but Verify (Read-After-Write):** A successful tool execution (HTTP 200) does not guarantee the CMS state changed as intended. After calling any mutation tool (e.g., \`createComponent\`, \`updateContent\`, \`updateMetadata\`, \`localizeItem\`, \`moveItem\`), you **MUST NOT** report the task as complete to the user. You must first independently verify the state change by fetching the updated item using \`getItem\` or verifying its location using \`getItemsInContainer\`.
+* **Autonomous Self-Correction:** If your verification step reveals the state did not change as expected, analyze the delta, formulate a hypothesis (e.g., "Item is locked in a parent publication"), and attempt an automated correction **exactly once** (e.g., calling \`localizeItem\` before retrying an update).
+* **Graceful Escalation:** Do not get stuck in infinite loops. If your self-correction attempt fails, if a task appears structurally impossible, or if you require architectural clarification, **STOP**. Clearly explain the blocker, the exact errors received, your hypothesis, and ask the user for guidance.
+
 The list of "AVAILABLE TOOLS" below contains concise "SEO hooks" (summaries) for each tool. Use these hooks to identify which tool possesses the knowledge needed to answer a user's question.
 
 AVAILABLE TOOLS:
-${summary}
+${summaryString}
 
-Note: If you encounter validation errors or need to see exact payload structures, call this tool again with 'includeExamples: true'.
 If a tool's description mentions using another tool, you must access that referenced tool via \`callTool\`.`;
     },
     input: {
-        toolNames: z.array(z.string()).describe("An array of exact tool names to retrieve documentation for. You can request multiple tools at once."),
-        includeExamples: z.boolean().default(false).optional().describe("If true, returns exact payload templates and examples for the requested tools.")
+        toolNames: z.array(z.string()).describe("An array of exact tool names to retrieve documentation for. You can request multiple tools at once.")
     },
-    execute: async ({ toolNames, includeExamples = false }: { toolNames: string[], includeExamples?: boolean }) => {
+    execute: async ({ toolNames }: { toolNames: string[] }) => {
         const registry = getToolRegistry();
         const results = toolNames.map(name => {
             const tool = registry.get(name);
@@ -84,12 +89,9 @@ If a tool's description mentions using another tool, you must access that refere
                 toolName: tool.name,
                 summary: tool.summary,
                 description: tool.description,
-                inputSchema: jsonSchema
+                inputSchema: jsonSchema,
+                examples: tool.examples
             };
-
-            if (includeExamples) {
-                result.examples = tool.examples;
-            }
 
             return result;
         });

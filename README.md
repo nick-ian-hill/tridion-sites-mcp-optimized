@@ -94,18 +94,32 @@ To get the MCP server running on your machine, follow these steps:
 
 5. **Start the server:**
    
-   The server supports two transport modes.
+   The server automatically detects the correct transport mode.
 
-   **For Stdio mode (Standard / Recommended for Claude Desktop & Gemini CLI):**
+   **Standard Mode (Stdio):**
+   Automatically used when the server is launched by an AI agent (Gemini CLI, Claude, VS Code). To force this mode in a terminal for testing:
    ```bash
-   MCP_TRANSPORT=stdio npm start
+   npm run start:stdio
    ```
 
-   **For Streamable HTTP mode (Web integrations & support for multiple clients):**
+   **Streamable HTTP Mode:**
+   Automatically used when the server is run directly in a terminal for manual testing:
    ```bash
-   MCP_TRANSPORT=http npm start
+   npm run start:http
    ```
-   *The Streamable HTTP server will start and listen locally on port 8090. No separate build or compile step is required — the server runs TypeScript directly using `tsx`.*
+   *(Note: You can also just run `npm start`; it will automatically detect the interactive terminal and default to HTTP).*
+
+    **Configuration Toggles:**
+    You can toggle features via CLI flags, environment variables, or a local `.env` file. When using `npm start`, remember to use the `--` separator to pass flags through to the underlying process:
+
+    *   **Tool Parameter Inclusion (Default: Enabled)**
+        By default, the `getToolDetails` summary includes a comma-separated list of top-level arguments for every tool. This helps the AI assistant identify the correct tool more accurately before fetching full details.
+        *   Disable: `npm start -- --no-params` or `MCP_INCLUDE_PARAMETERS=false`
+        *   Enable: `npm start -- --with-params` or `MCP_INCLUDE_PARAMETERS=true`
+
+    *   **Transport Mode Override**
+        *   Force HTTP: `npm start -- --http` or `MCP_TRANSPORT=http`
+        *   Force Stdio: `npm start -- --stdio` or `MCP_TRANSPORT=stdio`
 
 ---
 
@@ -142,7 +156,6 @@ VS Code uses an `mcp.json` file (either globally in your user profile or locally
       "command": "npx",
       "args": ["tsx", "/absolute/path/to/src/index.ts"],
       "env": {
-        "MCP_TRANSPORT": "stdio",
         "CORE_API_URL": "...",
         "AUTH_CLIENT_ID": "...",
         "AUTH_CLIENT_SECRET": "...",
@@ -154,7 +167,7 @@ VS Code uses an `mcp.json` file (either globally in your user profile or locally
 ```
 
 #### HTTP Mode (Streamable)
-Ensure the server is running locally first (`MCP_TRANSPORT=http npm start`).
+Ensure the server is running locally first (`npm start`).
 ```json
 {
   "mcpServers": {
@@ -182,7 +195,6 @@ Note: you may need to use absolute paths for the command arguments.
         "/Users/YOUR_USER/path/to/src/index.ts"
       ],
       "env": {
-        "MCP_TRANSPORT": "stdio",
         "CORE_API_URL": "...",
         "AUTH_CLIENT_ID": "..."
       }
@@ -219,7 +231,6 @@ Antigravity uses an `mcp_config.json` file.
         "/Users/YOUR_USER/path/to/src/index.ts"
       ],
       "env": {
-        "MCP_TRANSPORT": "stdio",
         "CORE_API_URL": "...",
         "AUTH_CLIENT_ID": "..."
       }
@@ -261,7 +272,7 @@ If the MCP server is running but the assistant reports that calls to the CMS are
 
 ### The server fails to start: `EADDRINUSE` (port already in use)
 
-If `MCP_TRANSPORT=http npm run start` exits immediately with an `EADDRINUSE` error, another process is already using port 8090 (often a previous server instance that was not cleanly stopped).
+If `npm start` exits immediately with an `EADDRINUSE` error, another process is already using port 8090 (often a previous server instance that was not cleanly stopped).
 
 * **Kill the conflicting process** (PowerShell):
   ```powershell
@@ -293,4 +304,4 @@ If `MCP_TRANSPORT=http npm run start` exits immediately with an `EADDRINUSE` err
 
 Gemini CLI attempts to connect to all configured MCP servers **once at startup**. If the server was not running at the time the CLI was launched, the connection fails for that session.
 
-**Fix:** Start `MCP_TRANSPORT=http npm run start` first and then launch Gemini CLI, or — if the CLI is already open — start the server and then run `/mcp reload` in the Gemini CLI chat to reconnect without restarting.
+**Fix:** Start `npm start` first and then launch Gemini CLI, or — if the CLI is already open — start the server and then run `/mcp reload` in the Gemini CLI chat to reconnect without restarting.

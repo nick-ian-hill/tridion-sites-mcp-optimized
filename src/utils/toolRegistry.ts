@@ -84,34 +84,23 @@ export function getToolRegistry(): Map<string, Tool> {
     return toolRegistry;
 }
 
-function extractSchemaParams(jsonSchema: any, prefix = ''): string[] {
-    const params: string[] = [];
-    if (jsonSchema && jsonSchema.properties) {
-        for (const [key, value] of Object.entries(jsonSchema.properties)) {
-            const pName = prefix ? `${prefix}.${key}` : key;
-            params.push(pName);
-            if (typeof value === "object" && value !== null && (value as any).type === "object" && (value as any).properties) {
-                 params.push(...extractSchemaParams(value, pName));
-            } else if (typeof value === "object" && value !== null && (value as any).type === "array" && (value as any).items && (value as any).items.type === "object") {
-                 params.push(...extractSchemaParams((value as any).items, pName));
-            }
-        }
-    }
-    return params;
-}
 
 /**
- * Generates a bulleted list of all available tools, extracting the first sentence of each description.
+ * Generates a bulleted list of all available tools, optionally including their parameter lists.
  */
-export function getToolsSummary(): string {
+export function getToolsSummary(includeParams: boolean = true): string {
     const categories: Record<string, string[]> = {
-        "Search & Discovery": ['search', 'getItemsInContainer', 'getItem', 'bulkReadItems', 'getPublications', 'getCategories', 'getSchemaLinks', 'getUsers', 'getMultimediaTypes', 'getApprovalStatuses', 'getProcessDefinitions', 'getLockedItems'],
-        "Item Management (CRUD)": ['createItem', 'createComponent', 'createPage', 'updateContent', 'updateMetadata', 'updatePage', 'updateItemProperties', 'deleteItem', 'copyItem', 'moveItem', 'classify'],
-        "Schema & System Architecture": ['createComponentSchema', 'createMetadataSchema', 'createEmbeddedSchema', 'createBundleSchema', 'createRegionSchema'],
-        "Workflow & Governance": ['checkOutItem', 'checkInItem', 'undoCheckOutItem', 'startWorkflow', 'startActivity', 'forceFinishProcess', 'getPublishTransactions', 'getPublishInfo', 'getItemHistory', 'getUsedByHistory'],
-        "BluePrint & Global Hierarchy": ['createPublication', 'updatePublication', 'createBluePrintHierarchy', 'localizeItem', 'unlocalizeItem', 'promoteItem', 'demoteItem', 'getDependencyGraph', 'getRelatedBluePrintItems'],
-        "AI & Multimedia Processing": ['autoClassifyItem', 'autoClassifyMultimediaComponent', 'createMultimediaComponentFromPrompt', 'createMultimediaComponentFromAttachment', 'createMultimediaComponentFromBase64', 'createMultimediaComponentFromUrl', 'readMultimediaComponent', 'splitWordMultimediaComponentIntoTextAndImages'],
-        "Orchestration & Automation": ['toolOrchestrator', 'readUploadedFile']
+        "Search & Discovery": ['search', 'getItemsInContainer', 'getItem', 'bulkReadItems', 'getLockedItems'],
+        "Item Management (CRUD)": ['createItem', 'createComponent', 'createPage', 'updateContent', 'updateMetadata', 'updatePage', 'updateItemProperties', 'deleteItem', 'copyItem', 'moveItem'],
+        "Taxonomy & Classification": ['getCategories', 'getClassificationKeywordsForCategory', 'getItemsClassifiedByKeyword', 'classify'],
+        "Schema & System Architecture": ['createComponentSchema', 'createMetadataSchema', 'createEmbeddedSchema', 'createBundleSchema', 'createRegionSchema', 'createMultimediaSchema', 'updateSchemaFieldProperties', 'updateSchemaFieldStructure', 'getComponentTemplateLinks', 'getIsComponentTemplateRequired', 'getSchemaLinks'],
+        "Versioning & History": ['checkOutItem', 'checkInItem', 'undoCheckOutItem', 'rollbackItem', 'getItemHistory', 'getUsedByHistory', 'getUsesForVersion'],
+        "Workflow & Tasks": ['startWorkflow', 'getActivities', 'startActivity', 'finishActivity', 'reassignActivity', 'restartActivity', 'forceFinishProcess', 'revertProcess', 'createProcessDefinition', 'updateProcessDefinition', 'getProcessDefinitions', 'getApprovalStatuses'],
+        "Publishing & Delivery": ['publish', 'unpublish', 'getPublishTransactions', 'getPublishInfo', 'getTargetTypes'],
+        "BluePrint & Global Hierarchy": ['createPublication', 'updatePublication', 'getPublications', 'getPublicationTypes', 'createBluePrintHierarchy', 'createRootStructureGroup', 'localizeItem', 'unlocalizeItem', 'promoteItem', 'demoteItem', 'getDependencyGraph', 'getRelatedBluePrintItems'],
+        "AI & Multimedia Processing": ['autoClassifyItem', 'autoClassifyMultimediaComponent', 'createMultimediaComponentFromPrompt', 'createMultimediaComponentFromAttachment', 'createMultimediaComponentFromBase64', 'createMultimediaComponentFromUrl', 'readMultimediaComponent', 'splitWordMultimediaComponentIntoTextAndImages', 'splitPowerPointMultimediaComponentIntoTextAndImages', 'generateContentFromPrompt', 'updateMultimediaComponentFromPrompt', 'getMultimediaTypes'],
+        "Orchestration & Automation": ['toolOrchestrator', 'readUploadedFile'],
+        "System & User Administration": ['getUserProfile', 'updateUserProfile', 'getUsers']
     };
 
     const summary: string[] = [];
@@ -123,10 +112,13 @@ export function getToolsSummary(): string {
         for (const name of toolNames) {
             const tool = toolRegistry.get(name);
             if (tool) {
-                const schema = zodToJsonSchema(z.object(tool.input));
-                const argsArr = extractSchemaParams(schema as any);
-                const argsStr = argsArr.length > 0 ? argsArr.join(', ') : 'no arguments';
-                summary.push(`- **${name}** (args: ${argsStr}): ${tool.summary}`);
+                let argsStr = 'no arguments';
+                if (includeParams) {
+                    const topLevelArgs = Object.keys(tool.input);
+                    if (topLevelArgs.length > 0) argsStr = topLevelArgs.join(', ');
+                }
+                const argsDisplay = includeParams ? ` (args: ${argsStr})` : '';
+                summary.push(`- **${name}**: ${tool.summary}${argsDisplay}`);
                 categorizedSet.add(name);
                 addedInCategory = true;
             }
@@ -140,10 +132,13 @@ export function getToolsSummary(): string {
     const uncategorized: string[] = [];
     for (const [name, tool] of toolRegistry.entries()) {
         if (!categorizedSet.has(name)) {
-            const schema = zodToJsonSchema(z.object(tool.input));
-            const argsArr = extractSchemaParams(schema as any);
-            const argsStr = argsArr.length > 0 ? argsArr.join(', ') : 'no arguments';
-            uncategorized.push(`- **${name}** (args: ${argsStr}): ${tool.summary}`);
+            let argsStr = 'no arguments';
+            if (includeParams) {
+                const topLevelArgs = Object.keys(tool.input);
+                if (topLevelArgs.length > 0) argsStr = topLevelArgs.join(', ');
+            }
+            const argsDisplay = includeParams ? ` (args: ${argsStr})` : '';
+            uncategorized.push(`- **${name}**: ${tool.summary}${argsDisplay}`);
         }
     }
 
