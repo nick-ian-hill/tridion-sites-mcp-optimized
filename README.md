@@ -11,6 +11,16 @@ Unlike traditional MCP servers that expose every tool in the system prompt (whic
 
 This approach is an independent implementation of the **MCP Compression** pattern (referenced by Atlassian in [this article](https://www.atlassian.com/blog/developer/mcp-compression-preventing-tool-bloat-in-ai-agents)), which ensures the system prompt stays small and efficient, leaving more room in the context window for actual content and reasoning.
 
+### Mandatory Tool Access Protocol (Discovery-First Handshake)
+
+To ensure operational safety and context accuracy, this server enforces a **Discovery-First Handshake** protocol. AI agents cannot execute tools based on guesswork or historical knowledge.
+
+1.  **Handshake Requirement**: Before any tool can be executed via `callTool`, the agent **MUST** first call `getToolDetails` for that specific tool.
+2.  **Access GUID**: The `getToolDetails` response includes a unique, deterministic **Access GUID** for the requested tool.
+3.  **Validated Execution**: The `callTool` function requires this `accessGuid` as a mandatory parameter. If the GUID is missing or incorrect, the execution is rejected.
+
+This protocol ensures that the AI assistant always reviews the JSON schema, business rules, and "Heuristics" provided in the tool's extended description before attempting a mutation, significantly reducing the risk of hallucinations or invalid CMS operations.
+
 
 ## Capabilities
 
@@ -159,7 +169,8 @@ VS Code uses an `mcp.json` file (either globally in your user profile or locally
         "CORE_API_URL": "...",
         "AUTH_CLIENT_ID": "...",
         "AUTH_CLIENT_SECRET": "...",
-        "AUTH_TOKEN_URL": "..."
+        "AUTH_TOKEN_URL": "...",
+        "MCP_INCLUDE_PARAMETERS": "true"
       }
     }
   }
@@ -196,7 +207,8 @@ Note: you may need to use absolute paths for the command arguments.
       ],
       "env": {
         "CORE_API_URL": "...",
-        "AUTH_CLIENT_ID": "..."
+        "AUTH_CLIENT_ID": "...",
+        "MCP_INCLUDE_PARAMETERS": "true"
       }
     }
   }
@@ -232,7 +244,8 @@ Antigravity uses an `mcp_config.json` file.
       ],
       "env": {
         "CORE_API_URL": "...",
-        "AUTH_CLIENT_ID": "..."
+        "AUTH_CLIENT_ID": "...",
+        "MCP_INCLUDE_PARAMETERS": "true"
       }
     }
   }
@@ -252,7 +265,42 @@ Antigravity uses an `mcp_config.json` file.
 
 ---
 
-## 4. Troubleshooting
+---
+
+## 4. Development & Testing (Mock Server)
+
+This repository includes a standalone **Tridion Mock Server** (`tridion-mock-server.js`) that allows you to develop and test MCP tool configurations without requiring a live Tridion Sites environment.
+
+### Starting the Mock Server
+
+To launch the mock server on your local machine:
+
+```bash
+node tridion-mock-server.js 8081
+```
+
+Once started, the mock server provides a simulated CM REST API and Access Management endpoint at `http://localhost:8081`.
+
+### Mock Server Configuration
+
+To point your MCP server at the mock instance, use the following environment variable configuration in your `mcp.json` or `.env` file:
+
+```json
+"env": {
+    "CORE_API_URL": "http://localhost:8081/api/v3.0",
+    "AUTH_TOKEN_URL": "http://localhost:8081/access-management/connect/token",
+    "MCP_INCLUDE_PARAMETERS": "true",
+    "AUTH_CLIENT_ID": "any-id",
+    "AUTH_CLIENT_SECRET": "any-secret"
+}
+```
+
+> [!TIP]
+> The mock server is stateless and accepts any Client ID/Secret. It is pre-seeded with a basic BluePrint hierarchy (System Master, Content Master, Website EN) and several common schemas (Article, Address, etc.) to facilitate immediate tool testing.
+
+---
+
+## 5. Troubleshooting
 
 ### "Connection closed" or "Disconnected" in Stdio Mode
 If the server fails to connect in Gemini CLI or Claude Desktop ensure the path to `src/index.ts` in your config is absolute (e.g., `/Users/name/...`). Relative paths often fail because the CLI launches from its own application directory.

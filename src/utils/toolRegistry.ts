@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
+import crypto from 'node:crypto';
 
 export interface Tool {
     name: string;
@@ -11,6 +12,7 @@ export interface Tool {
     examples: any[];
     input: any;
     execute: (args: any, context: any) => Promise<any>;
+    guid?: string;
 }
 
 export function isTool(obj: any): obj is Tool {
@@ -24,6 +26,15 @@ export function isTool(obj: any): obj is Tool {
         'input' in obj &&
         'execute' in obj && typeof obj.execute === 'function'
     );
+}
+
+/**
+ * Generates a stable GUID for a tool name.
+ */
+function generateToolGuid(name: string): string {
+    const hash = crypto.createHash('sha256').update(`tridion-mcp-salt-${name}`).digest('hex');
+    // Format as 8-4-4-4-12 (GUID/UUID format)
+    return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`.toUpperCase();
 }
 
 let toolRegistry: Map<string, Tool> = new Map();
@@ -41,6 +52,7 @@ export async function initializeToolRegistry(manualTools: Tool[] = []): Promise<
     // 1. Manually add tools (like UI assistant tools)
     for (const tool of manualTools) {
         if (isTool(tool)) {
+            tool.guid = generateToolGuid(tool.name);
             loadedToolsMap.set(tool.name, tool);
         }
     }
@@ -61,6 +73,7 @@ export async function initializeToolRegistry(manualTools: Tool[] = []): Promise<
 
                 if (potentialTool) {
                     if (!loadedToolsMap.has(potentialTool.name)) {
+                        potentialTool.guid = generateToolGuid(potentialTool.name);
                         loadedToolsMap.set(potentialTool.name, potentialTool);
                     }
                 } else {

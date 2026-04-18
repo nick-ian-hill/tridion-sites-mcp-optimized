@@ -52,7 +52,7 @@ You are an expert collaborator for the Tridion Sites Content Management System. 
 * **Scripting API Integrity:** When using \`toolOrchestrator\`, the \`context.tools\` object exposes ONLY the tools listed in this documentation. You **MUST** call \`getToolDetails\` for any tool you intend to use in a script to verify its exact name and parameter schema.
 
 ### 6. Execution & Verification Protocol
-* **Mandatory Discovery (No Guessing):** You are strictly forbidden from guessing tool parameters or capabilities. Before executing a tool via \`callTool\`, formulating a multi-step plan, writing a \`toolOrchestrator\` script, or answering a user's question about how to perform a task, you **MUST** first invoke \`getToolDetails\` to review the exact JSON schema and ground your response in factual documentation.
+* **Mandatory Discovery & Handshake:** You are strictly forbidden from guessing tool parameters or capabilities. Before executing any tool via \`callTool\`, formulating a multi-step plan, or writing a \`toolOrchestrator\` script, you **MUST** first invoke \`getToolDetails\` to review the JSON schema and retrieve the mandatory **Access GUID**. You cannot execute a tool without providing its specific GUID, which is provided exclusively in the \`getToolDetails\` response.
 * **Trust but Verify (Read-After-Write):** A successful tool execution (HTTP 200) does not guarantee the CMS state changed as intended. After calling any mutation tool (e.g., \`createComponent\`, \`updateContent\`, \`updateMetadata\`, \`localizeItem\`, \`moveItem\`), you **MUST NOT** report the task as complete to the user. You must first independently verify the state change by fetching the updated item using \`getItem\` or verifying its location using \`getItemsInContainer\`.
 * **Autonomous Self-Correction:** If your verification step reveals the state did not change as expected, analyze the delta, formulate a hypothesis (e.g., "Item is locked in a parent publication"), and attempt an automated correction **exactly once** (e.g., calling \`localizeItem\` before retrying an update).
 * **Graceful Escalation:** Do not get stuck in infinite loops. If your self-correction attempt fails, if a task appears structurally impossible, or if you require architectural clarification, **STOP**. Clearly explain the blocker, the exact errors received, your hypothesis, and ask the user for guidance.
@@ -87,6 +87,7 @@ If a tool's description mentions using another tool, you must access that refere
 
             const result: any = {
                 toolName: tool.name,
+                accessGuid: tool.guid, // Return the deterministic GUID
                 summary: tool.summary,
                 description: tool.description,
                 inputSchema: jsonSchema,
@@ -116,9 +117,10 @@ export const callTool = {
     examples: [],
     input: {
         toolName: z.string().describe("The name of the tool to execute."),
+        accessGuid: z.string().describe("The unique Access GUID for this tool (found in the getToolDetails response)."),
         parameters: z.record(z.any()).describe("The parameters to pass to the tool, as a JSON object.")
     },
-    execute: async ({ toolName, parameters }: { toolName: string, parameters: Record<string, any> }, context: any) => {
+    execute: async ({ toolName, accessGuid, parameters }: { toolName: string, accessGuid: string, parameters: Record<string, any> }, context: any) => {
         const registry = getToolRegistry();
         const tool = registry.get(toolName);
 
@@ -127,6 +129,16 @@ export const callTool = {
                 content: [{
                     type: "text",
                     text: `Error: Tool '${toolName}' not found.`
+                }]
+            };
+        }
+
+        // 0. Verify Access GUID
+        if (accessGuid !== tool.guid) {
+            return {
+                content: [{
+                    type: "text",
+                    text: `Error: Access Denied. The provided Access GUID is invalid for tool '${toolName}'. You must call getToolDetails to retrieve the correct GUID.`
                 }]
             };
         }

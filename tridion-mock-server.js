@@ -131,6 +131,34 @@ const now = () => new Date().toISOString();
 
 seedActivities();
 
+/**
+ * Hydrates a Schema item's fields and metadata fields with default boolean properties
+ * to ensure verbose responses (IsLocalizable, IsPublishable, IsIndexable).
+ */
+const hydrateSchemaFields = (schema) => {
+    const hydrateFields = (fieldsDict) => {
+        if (!fieldsDict || typeof fieldsDict !== 'object') return;
+        
+        // Dictionary structure: { '$type': '...', 'FieldName': { ...fieldData } }
+        for (const fieldName in fieldsDict) {
+            if (fieldName.startsWith('$')) continue;
+            
+            const field = fieldsDict[fieldName];
+            if (field && typeof field === 'object') {
+                if (field.IsLocalizable === undefined) field.IsLocalizable = true;
+                if (field.IsPublishable === undefined) field.IsPublishable = true;
+                if (field.IsIndexable === undefined) field.IsIndexable = true;
+                
+                // Recursively handle embedded fields
+                if (field.EmbeddedFields) hydrateFields(field.EmbeddedFields);
+            }
+        }
+    };
+
+    if (schema.Fields) hydrateFields(schema.Fields);
+    if (schema.MetadataFields) hydrateFields(schema.MetadataFields);
+};
+
 const createBaseItem = (id, typeNum, title, pubId, extra = {}) => ({
     '$type': ITEM_TYPE_NAME[typeNum] || 'Item',  // Real API uses $type for polymorphism
     Id: `tcm:${pubId}-${id}-${typeNum}`,
@@ -187,9 +215,9 @@ const initDb = () => {
             RootElementName: 'Address',
             Fields: {
                 '$type': 'FieldsDefinitionDictionary',
-                'Street': { '$type': 'SingleLineTextFieldDefinition', Name: 'Street', MinOccurs: 1, MaxOccurs: 1 },
-                'City':   { '$type': 'SingleLineTextFieldDefinition', Name: 'City',   MinOccurs: 1, MaxOccurs: 1 },
-                'Zip':    { '$type': 'SingleLineTextFieldDefinition', Name: 'Zip',    MinOccurs: 0, MaxOccurs: 1 },
+                'Street': { '$type': 'SingleLineTextFieldDefinition', Name: 'Street', MinOccurs: 1, MaxOccurs: 1, IsLocalizable: true, IsPublishable: true, IsIndexable: true },
+                'City':   { '$type': 'SingleLineTextFieldDefinition', Name: 'City',   MinOccurs: 1, MaxOccurs: 1, IsLocalizable: true, IsPublishable: true, IsIndexable: true },
+                'Zip':    { '$type': 'SingleLineTextFieldDefinition', Name: 'Zip',    MinOccurs: 0, MaxOccurs: 1, IsLocalizable: true, IsPublishable: true, IsIndexable: true },
             }
         })
     });
@@ -219,21 +247,21 @@ const initDb = () => {
             RootElementName: 'Article',
             Fields: {
                 '$type': 'FieldsDefinitionDictionary',
-                'Headline':    { '$type': 'SingleLineTextFieldDefinition', Name: 'Headline', MinOccurs: 1, MaxOccurs: 1 },
-                'Body':        { '$type': 'MultiLineTextFieldDefinition',  Name: 'Body',     MinOccurs: 0, MaxOccurs: 1 },
-                'Image':       { '$type': 'MultimediaLinkFieldDefinition', Name: 'Image',    MinOccurs: 0, MaxOccurs: 1,
+                'Headline':    { '$type': 'SingleLineTextFieldDefinition', Name: 'Headline', MinOccurs: 1, MaxOccurs: 1, IsLocalizable: true, IsPublishable: true, IsIndexable: true },
+                'Body':        { '$type': 'MultiLineTextFieldDefinition',  Name: 'Body',     MinOccurs: 0, MaxOccurs: 1, IsLocalizable: true, IsPublishable: true, IsIndexable: true },
+                'Image':       { '$type': 'MultimediaLinkFieldDefinition', Name: 'Image',    MinOccurs: 0, MaxOccurs: 1, IsLocalizable: true, IsPublishable: true, IsIndexable: true,
                                  AllowedMimeTypes: ['image/jpeg', 'image/png'] },
-                'AuthorInfo':  { '$type': 'EmbeddedSchemaFieldDefinition', Name: 'AuthorInfo', MinOccurs: 0, MaxOccurs: 1, 
+                'AuthorInfo':  { '$type': 'EmbeddedSchemaFieldDefinition', Name: 'AuthorInfo', MinOccurs: 0, MaxOccurs: 1, IsLocalizable: true, IsPublishable: true, IsIndexable: true,
                                  EmbeddedSchema: { '$type': 'Link', IdRef: 'tcm:5-102-8', Title: 'Address' },
                                  EmbeddedFields: {
                                     '$type': 'FieldsDefinitionDictionary',
-                                    'Street': { '$type': 'SingleLineTextFieldDefinition', Name: 'Street' },
-                                    'City':   { '$type': 'SingleLineTextFieldDefinition', Name: 'City' },
-                                    'Zip':    { '$type': 'SingleLineTextFieldDefinition', Name: 'Zip' },
+                                    'Street': { '$type': 'SingleLineTextFieldDefinition', Name: 'Street', IsLocalizable: true, IsPublishable: true, IsIndexable: true },
+                                    'City':   { '$type': 'SingleLineTextFieldDefinition', Name: 'City', IsLocalizable: true, IsPublishable: true, IsIndexable: true },
+                                    'Zip':    { '$type': 'SingleLineTextFieldDefinition', Name: 'Zip', IsLocalizable: true, IsPublishable: true, IsIndexable: true },
                                  }
                                },
-                'PageCount':   { '$type': 'NumberFieldDefinition', Name: 'PageCount', MinOccurs: 0, MaxOccurs: 1 },
-                'CreatedDate': { '$type': 'DateFieldDefinition',   Name: 'CreatedDate', MinOccurs: 0, MaxOccurs: 1 },
+                'PageCount':   { '$type': 'NumberFieldDefinition', Name: 'PageCount', MinOccurs: 0, MaxOccurs: 1, IsLocalizable: true, IsPublishable: true, IsIndexable: true },
+                'CreatedDate': { '$type': 'DateFieldDefinition',   Name: 'CreatedDate', MinOccurs: 0, MaxOccurs: 1, IsLocalizable: true, IsPublishable: true, IsIndexable: true },
             },
             MetadataFields: { '$type': 'FieldsDefinitionDictionary' },
         }),
@@ -247,10 +275,10 @@ const initDb = () => {
             Fields: { '$type': 'FieldsDefinitionDictionary' },
             MetadataFields: {
                 '$type': 'FieldsDefinitionDictionary',
-                'MetaTitle':       { '$type': 'SingleLineTextFieldDefinition', Name: 'MetaTitle',       MinOccurs: 0, MaxOccurs: 1 },
-                'MetaDescription': { '$type': 'MultiLineTextFieldDefinition',  Name: 'MetaDescription', MinOccurs: 0, MaxOccurs: 1 },
-                'Priority':        { '$type': 'NumberFieldDefinition',         Name: 'Priority',        MinOccurs: 0, MaxOccurs: 1 },
-                'ExpiryDate':      { '$type': 'DateFieldDefinition',          Name: 'ExpiryDate',      MinOccurs: 0, MaxOccurs: 1 },
+                'MetaTitle':       { '$type': 'SingleLineTextFieldDefinition', Name: 'MetaTitle',       MinOccurs: 0, MaxOccurs: 1, IsLocalizable: true, IsPublishable: true, IsIndexable: true },
+                'MetaDescription': { '$type': 'MultiLineTextFieldDefinition',  Name: 'MetaDescription', MinOccurs: 0, MaxOccurs: 1, IsLocalizable: true, IsPublishable: true, IsIndexable: true },
+                'Priority':        { '$type': 'NumberFieldDefinition',         Name: 'Priority',        MinOccurs: 0, MaxOccurs: 1, IsLocalizable: true, IsPublishable: true, IsIndexable: true },
+                'ExpiryDate':      { '$type': 'DateFieldDefinition',          Name: 'ExpiryDate',      MinOccurs: 0, MaxOccurs: 1, IsLocalizable: true, IsPublishable: true, IsIndexable: true },
             },
         }),
     });
@@ -499,6 +527,10 @@ const resolveItem = (pubId, itemId, itemType) => {
     // Own localization? (For publications, this is the primary record under '0')
     if (record.localizations[effectivePubId]) {
         const item = JSON.parse(JSON.stringify(record.localizations[effectivePubId]));
+        
+        // Hydrate verbose properties for Schemas (Type 8)
+        if (item.ItemType === 8) hydrateSchemaFields(item);
+
         // Attach current lock state
         const tcmUri = `tcm:${pubId}-${itemId}-${itemType}`;
         const lock = lockState.get(tcmUri);
@@ -521,6 +553,10 @@ const resolveItem = (pubId, itemId, itemType) => {
                 ...inherited.LocationInfo,
                 ContextRepository: { IdRef: `tcm:0-${pubId}-1` }
             };
+
+            // Hydrate verbose properties for Schemas (Type 8)
+            if (inherited.ItemType === 8) hydrateSchemaFields(inherited);
+
             return inherited;
         }
     }
@@ -819,14 +855,15 @@ const router = async (req, res) => {
             const typeNum = typeMap[itemTypeStr] || 2;
             const newItemId = generateId();
 
-            const extra = {};
-            if (input.Metadata) extra.Metadata = input.Metadata;
-            if (input.ParentKeywords) extra.ParentKeywords = input.ParentKeywords;
-            if (typeNum === 512) extra.Category = { IdRef: `tcm:${parentParts.pubId}-${newItemId}-512` };
-            if (typeNum === 1024 && input.ParentKeywords) extra.ParentKeywords = input.ParentKeywords;
+            const contextPubId = resolveContextPubId(parentParts);
+            const extra = { ...input };
+            delete extra.Title;
+            delete extra['$type'];
+            delete extra.locationId;
+            delete extra.itemType;
 
-            const newItem = createBaseItem(newItemId, typeNum, input.Title, parentParts.pubId, extra);
-            dbPut(newItemId, typeNum, parentParts.pubId, { [parentParts.pubId]: newItem });
+            const newItem = createBaseItem(newItemId, typeNum, input.Title, contextPubId, extra);
+            dbPut(newItemId, typeNum, contextPubId, { [contextPubId]: newItem });
             return handleResponse(res, 201, newItem);
         }
 
